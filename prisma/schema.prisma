@@ -1,0 +1,247 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  OPERATOR
+}
+
+enum RelintStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MessageType {
+  TEXT
+  FILE
+  IMAGE
+  SYSTEM
+}
+
+enum Classification {
+  RESERVADO
+  CONFIDENCIAL
+  SECRETO
+  ULTRA_SECRETO
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  phone        String?   @unique
+  passwordHash String
+  role         UserRole  @default(OPERATOR)
+  groupId      String?
+  group        Group?    @relation(fields: [groupId], references: [id])
+  isActive     Boolean   @default(true)
+  avatar       String?
+  lastLogin    DateTime?
+  lastLocation Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  relints          Relint[]
+  sentMessages     ChatMessage[]   @relation("SentMessages")
+  receivedMessages ChatMessage[]   @relation("ReceivedMessages")
+  auditLogs        AuditLog[]
+  aiQueries        AIQuery[]
+  uploadedFiles    ReceivedRelint[]
+  locations        UserLocation[]
+
+  @@map("users")
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String?  @default("#6172f3")
+  icon        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users           User[]
+  relints         Relint[]
+  messages        ChatMessage[]
+  receivedRelints ReceivedRelint[]
+
+  @@map("groups")
+}
+
+model Relint {
+  id             String         @id @default(cuid())
+  number         String         @unique
+  date           DateTime
+  subject        String
+  diffusion      String
+  content        Json
+  status         RelintStatus   @default(DRAFT)
+  classification Classification @default(RESERVADO)
+  authorId       String
+  author         User           @relation(fields: [authorId], references: [id])
+  groupId        String
+  group          Group          @relation(fields: [groupId], references: [id])
+  templateId     String?
+  template       RelintTemplate? @relation(fields: [templateId], references: [id])
+  driveFileId    String?
+  pdfPath        String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  attachments Attachment[]
+
+  @@index([groupId])
+  @@index([authorId])
+  @@index([status])
+  @@map("relints")
+}
+
+model RelintTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  fields      Json
+  layout      Json
+  headerHtml  String?  @db.Text
+  footerHtml  String?  @db.Text
+  logoUrl     String?
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  relints Relint[]
+
+  @@map("relint_templates")
+}
+
+model ReceivedRelint {
+  id             String         @id @default(cuid())
+  title          String
+  filename       String
+  originalName   String
+  source         String
+  fileType       String
+  fileSize       Int
+  driveFileId    String?
+  localPath      String?
+  classification Classification @default(RESERVADO)
+  uploadedById   String
+  uploadedBy     User           @relation(fields: [uploadedById], references: [id])
+  groupId        String?
+  group          Group?         @relation(fields: [groupId], references: [id])
+  notes          String?        @db.Text
+  tags           String[]
+  createdAt      DateTime       @default(now())
+
+  @@index([groupId])
+  @@map("received_relints")
+}
+
+model ChatMessage {
+  id         String      @id @default(cuid())
+  content    String      @db.Text
+  type       MessageType @default(TEXT)
+  fileUrl    String?
+  fileName   String?
+  fileSize   Int?
+  senderId   String
+  sender     User        @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId String?
+  receiver   User?       @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  groupId    String?
+  group      Group?      @relation(fields: [groupId], references: [id])
+  readBy     String[]    @default([])
+  isDeleted  Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([groupId])
+  @@index([createdAt])
+  @@map("chat_messages")
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  relintId     String
+  relint       Relint   @relation(fields: [relintId], references: [id], onDelete: Cascade)
+  filename     String
+  originalName String
+  fileType     String
+  fileSize     Int
+  driveFileId  String?
+  localPath    String?
+  createdAt    DateTime @default(now())
+
+  @@map("attachments")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String?
+  entityId  String?
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  description String?
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_configs")
+}
+
+model AIQuery {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  query     String   @db.Text
+  response  String   @db.Text
+  provider  String
+  model     String?
+  tokens    Int?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("ai_queries")
+}
+
+model UserLocation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  lat       Float
+  lng       Float
+  accuracy  Float?
+  address   String?
+  timestamp DateTime @default(now())
+
+  @@index([userId, timestamp])
+  @@map("user_locations")
+}

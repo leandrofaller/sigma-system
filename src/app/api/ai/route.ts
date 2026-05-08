@@ -1,0 +1,27 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { queryAI } from '@/lib/ai';
+import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit';
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+  const user = session.user as any;
+  const body = await req.json();
+
+  if (!body.query?.trim()) {
+    return NextResponse.json({ error: 'Consulta vazia' }, { status: 400 });
+  }
+
+  const response = await queryAI(user.id, body.query, body.context);
+
+  await createAuditLog({
+    userId: user.id,
+    action: AUDIT_ACTIONS.AI_QUERY,
+    details: { queryLength: body.query.length },
+    request: req,
+  });
+
+  return NextResponse.json({ response });
+}
