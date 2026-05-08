@@ -15,7 +15,6 @@ export async function GET(req: NextRequest) {
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: 'desc' },
-    include: { group: true },
     select: {
       id: true, name: true, email: true, phone: true, role: true,
       isActive: true, createdAt: true, lastLogin: true,
