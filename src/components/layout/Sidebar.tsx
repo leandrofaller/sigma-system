@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, Shield, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -98,7 +98,14 @@ export function Sidebar({ user }: SidebarProps) {
 
       {/* User */}
       <div className="px-3 py-4 border-t border-gray-800">
-        <div className={cn('flex items-center gap-3 px-3 py-2 rounded-lg', collapsed && 'justify-center')}>
+        <Link
+          href="/perfil"
+          className={cn(
+            'flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors',
+            collapsed && 'justify-center'
+          )}
+          title={collapsed ? 'Meu Perfil' : undefined}
+        >
           <div className="w-8 h-8 bg-sigma-600/30 border border-sigma-500/30 rounded-lg flex items-center justify-center flex-shrink-0 text-sigma-400 text-xs font-bold">
             {user.name?.charAt(0).toUpperCase()}
           </div>
@@ -108,11 +115,12 @@ export function Sidebar({ user }: SidebarProps) {
               <p className="text-gray-500 text-xs truncate">{user.role?.replace('_', ' ')}</p>
             </div>
           )}
-        </div>
+          {!collapsed && <UserCircle className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />}
+        </Link>
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
           className={cn(
-            'mt-2 flex items-center gap-2 px-3 py-2 rounded-lg w-full text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors text-sm',
+            'mt-1 flex items-center gap-2 px-3 py-2 rounded-lg w-full text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors text-sm',
             collapsed && 'justify-center'
           )}
         >
