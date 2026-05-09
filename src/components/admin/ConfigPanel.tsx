@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, Loader2, Key, Palette, Brain, MapPin, HardDrive, Shield } from 'lucide-react';
+import { Save, Loader2, Palette, Brain, MapPin, HardDrive } from 'lucide-react';
 
 interface Props {
   configs: Record<string, any>;
@@ -34,12 +34,12 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
   };
 
   const SectionCard = ({ icon: Icon, title, children }: any) => (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-      <div className="flex items-center gap-2 mb-5 pb-4 border-b border-gray-50">
-        <div className="w-8 h-8 bg-sigma-50 rounded-lg flex items-center justify-center">
-          <Icon className="w-4 h-4 text-sigma-600" />
+    <div className="card p-6">
+      <div className="flex items-center gap-2 mb-5 pb-4 card-header">
+        <div className="w-8 h-8 icon-badge-sigma rounded-lg flex items-center justify-center">
+          <Icon className="w-4 h-4" />
         </div>
-        <h3 className="font-semibold text-gray-900">{title}</h3>
+        <h3 className="font-semibold text-title">{title}</h3>
       </div>
       <div className="space-y-4">{children}</div>
     </div>
@@ -47,26 +47,23 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
 
   const Field = ({ label, children }: any) => (
     <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1.5">{label}</label>
+      <label className="block text-xs font-medium text-subtle mb-1.5">{label}</label>
       {children}
     </div>
   );
 
-  const Input = (props: any) => (
-    <input {...props} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sigma-400 focus:ring-2 focus:ring-sigma-400/10" />
-  );
+  const inputCls = 'w-full input-base px-3 py-2';
 
+  const Input = (props: any) => <input {...props} className={inputCls} />;
   const Select = ({ children, ...props }: any) => (
-    <select {...props} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sigma-400 bg-white">
-      {children}
-    </select>
+    <select {...props} className={inputCls}>{children}</select>
   );
 
   const Toggle = ({ checked, onChange, label }: any) => (
     <div className="flex items-center justify-between py-1">
-      <span className="text-sm text-gray-700">{label}</span>
+      <span className="text-sm text-body">{label}</span>
       <button onClick={() => onChange(!checked)}
-        className={`relative w-11 h-6 rounded-full transition-colors ${checked ? 'bg-sigma-500' : 'bg-gray-200'}`}>
+        className={`relative w-11 h-6 rounded-full transition-colors ${checked ? 'bg-sigma-500' : 'bg-gray-200 dark:bg-gray-700'}`}>
         <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${checked ? 'left-6' : 'left-1'}`} />
       </button>
     </div>
@@ -75,7 +72,6 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
   return (
     <div className="space-y-6">
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* IA */}
         <SectionCard icon={Brain} title="Inteligência Artificial">
           <Field label="Provedor Padrão">
             <Select value={configs.ai_provider?.provider || 'openai'}
@@ -96,7 +92,6 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
           </Field>
         </SectionCard>
 
-        {/* Tema */}
         <SectionCard icon={Palette} title="Aparência / História de Cobertura">
           <Field label="Modo de Exibição Pública">
             <Select value={configs.system_theme?.mode || 'cover'}
@@ -120,7 +115,6 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
           </Field>
         </SectionCard>
 
-        {/* Backup */}
         <SectionCard icon={HardDrive} title="Backup & Armazenamento">
           <Toggle checked={configs.backup_enabled?.enabled || false}
             label="Backup automático no Google Drive"
@@ -137,7 +131,6 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
           </Field>
         </SectionCard>
 
-        {/* Segurança */}
         <SectionCard icon={MapPin} title="Monitoramento & Segurança">
           <Toggle checked={configs.geolocation_enabled?.enabled !== false}
             label="Rastreamento de geolocalização de usuários"

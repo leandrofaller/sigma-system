@@ -27,8 +27,8 @@ export default async function UsuariosPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Gerenciar Usuários</h1>
-        <p className="text-gray-500 text-sm mt-1">
+        <h1 className="text-2xl font-bold text-title">Gerenciar Usuários</h1>
+        <p className="text-body text-sm mt-1">
           {users.length} usuário{users.length !== 1 ? 's' : ''} cadastrado{users.length !== 1 ? 's' : ''}
         </p>
       </div>

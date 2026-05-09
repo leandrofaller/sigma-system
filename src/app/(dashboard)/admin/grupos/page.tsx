@@ -23,8 +23,8 @@ export default async function GruposPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Grupos / Setores</h1>
-        <p className="text-gray-500 text-sm mt-1">
+        <h1 className="text-2xl font-bold text-title">Grupos / Setores</h1>
+        <p className="text-body text-sm mt-1">
           {groups.length} grupo{groups.length !== 1 ? 's' : ''} configurado{groups.length !== 1 ? 's' : ''}
         </p>
       </div>

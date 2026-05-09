@@ -28,8 +28,8 @@ export default async function RelintsRecebidosPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">RELINTs Recebidos</h1>
-        <p className="text-gray-500 text-sm mt-1">
+        <h1 className="text-2xl font-bold text-title">RELINTs Recebidos</h1>
+        <p className="text-body text-sm mt-1">
           Arquivos recebidos de outras agências — {files.length} arquivo{files.length !== 1 ? 's' : ''}
         </p>
       </div>
