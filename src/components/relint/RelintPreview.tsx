@@ -1,8 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { formatDate } from '@/lib/utils';
 import { Printer } from 'lucide-react';
-import Image from 'next/image';
 
 interface FormData {
   number: string;
@@ -33,6 +33,15 @@ const classColors: Record<string, string> = {
 };
 
 export function RelintPreview({ form }: Props) {
+  const [badgeSizes, setBadgeSizes] = useState({ sejus: 72, aip: 80, policiaPenal: 72 });
+
+  useEffect(() => {
+    fetch('/api/relint-config')
+      .then((r) => r.json())
+      .then((d) => setBadgeSizes((prev) => ({ ...prev, ...d })))
+      .catch(() => {});
+  }, []);
+
   const handlePrint = () => window.print();
   const color = classColors[form.classification] || '#b91c1c';
   const classLabel = form.classification.replace('_', ' ');
@@ -94,13 +103,10 @@ export function RelintPreview({ form }: Props) {
           gap: '8px',
         }}>
           {/* Coluna esquerda – logo SEJUS */}
-          <div style={{ width: '80px', flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <img
-              src="/logos/badge-sejus.png"
-              alt="SEJUS"
-              style={{ width: '72px', height: 'auto' }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
+          <div style={{ width: badgeSizes.sejus + 8, flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <img src="/logos/badge-sejus.png" alt="SEJUS"
+              style={{ width: badgeSizes.sejus, height: 'auto' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
 
           {/* Coluna central – texto institucional */}
@@ -114,22 +120,16 @@ export function RelintPreview({ form }: Props) {
             <p style={{ fontWeight: 'bold', fontSize: '12pt', margin: '2px 0 8px', textTransform: 'uppercase' }}>
               AIP/SEJUS/RO
             </p>
-            <img
-              src="/logos/badge-aip.png"
-              alt="AIP/SEJUS/RO"
-              style={{ width: '80px', height: 'auto' }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
+            <img src="/logos/badge-aip.png" alt="AIP/SEJUS/RO"
+              style={{ width: badgeSizes.aip, height: 'auto' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
 
           {/* Coluna direita – logo Polícia Penal */}
-          <div style={{ width: '80px', flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <img
-              src="/logos/badge-policia-penal.png"
-              alt="Polícia Penal RO"
-              style={{ width: '72px', height: 'auto' }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
+          <div style={{ width: badgeSizes.policiaPenal + 8, flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <img src="/logos/badge-policia-penal.png" alt="Polícia Penal RO"
+              style={{ width: badgeSizes.policiaPenal, height: 'auto' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
         </div>
 

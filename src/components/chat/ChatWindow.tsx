@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Users, User, Hash, Loader2, Search, Paperclip, X, Download, FileText, Image as ImageIcon } from 'lucide-react';
+import { Send, Users, User, Hash, Loader2, Search, Paperclip, Download, FileText, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 
 interface Contact {
@@ -75,6 +75,7 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
   const [search, setSearch] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<string | null>(null);
@@ -172,6 +173,22 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
     const file = e.target.files?.[0];
     if (file) uploadFile(file);
     e.target.value = '';
+  };
+
+  const clearConversation = async () => {
+    if (!activeChannel) return;
+    if (!confirm('Limpar toda a conversa? Esta ação não pode ser desfeita.')) return;
+    setClearing(true);
+    try {
+      const params = new URLSearchParams();
+      if (activeChannel.type === 'group') params.set('groupId', activeChannel.id);
+      else params.set('receiverId', activeChannel.id);
+      await fetch(`/api/chat/messages?${params}`, { method: 'DELETE' });
+      setMessages([]);
+      lastMessageRef.current = null;
+    } finally {
+      setClearing(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -279,6 +296,17 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
               <div>
                 <p className="text-sm font-semibold text-title">{activeChannel.name}</p>
                 <p className="text-xs text-subtle">{activeChannel.type === 'group' ? 'Canal de grupo' : 'Mensagem direta'}</p>
+              </div>
+              <div className="ml-auto">
+                <button
+                  onClick={clearConversation}
+                  disabled={clearing || messages.length === 0}
+                  title="Limpar conversa"
+                  className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                >
+                  {clearing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  Limpar
+                </button>
               </div>
             </div>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Pencil, X, Loader2, Users, FileText } from 'lucide-react';
+import { Plus, Pencil, X, Loader2, Users, FileText, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface Props {
@@ -17,6 +17,7 @@ export function GroupsTable({ groups: initialGroups }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
   const openCreate = () => {
@@ -29,6 +30,21 @@ export function GroupsTable({ groups: initialGroups }: Props) {
     setEditingGroup(group);
     setForm({ name: group.name, description: group.description || '', color: group.color || COLORS[0] });
     setShowForm(true);
+  };
+
+  const handleDelete = async (group: any) => {
+    if (!confirm(`Excluir o grupo "${group.name}"? Os usuários vinculados não serão apagados.`)) return;
+    setDeleting(group.id);
+    try {
+      const res = await fetch(`/api/groups/${group.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setGroups((prev) => prev.filter((g) => g.id !== group.id));
+      } else {
+        alert('Erro ao excluir grupo.');
+      }
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const handleSubmit = async () => {
@@ -133,10 +149,20 @@ export function GroupsTable({ groups: initialGroups }: Props) {
                   {group.description && <p className="text-xs text-subtle mt-0.5">{group.description}</p>}
                 </div>
               </div>
-              <button onClick={() => openEdit(group)}
-                className="opacity-0 group-hover/card:opacity-100 p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all">
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-all">
+                <button onClick={() => openEdit(group)}
+                  className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                  title="Editar">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => handleDelete(group)} disabled={deleting === group.id}
+                  className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-40"
+                  title="Excluir">
+                  {deleting === group.id
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Trash2 className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
             <div className="flex gap-4 text-sm text-body">
               <span className="flex items-center gap-1.5">

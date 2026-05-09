@@ -79,3 +79,32 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(message, { status: 201 });
 }
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+  const user = session.user as any;
+  const { searchParams } = new URL(req.url);
+  const groupId = searchParams.get('groupId');
+  const receiverId = searchParams.get('receiverId');
+
+  if (!groupId && !receiverId) {
+    return NextResponse.json({ error: 'Canal não especificado' }, { status: 400 });
+  }
+
+  let where: any;
+  if (groupId) {
+    where = { groupId, senderId: user.id };
+  } else {
+    where = {
+      OR: [
+        { senderId: user.id, receiverId },
+        { senderId: receiverId, receiverId: user.id },
+      ],
+    };
+  }
+
+  await prisma.chatMessage.updateMany({ where, data: { isDeleted: true } });
+  return NextResponse.json({ success: true });
+}
