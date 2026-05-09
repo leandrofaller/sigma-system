@@ -14,7 +14,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Consulta vazia' }, { status: 400 });
   }
 
-  const response = await queryAI(user.id, body.query, body.context);
+  let response: string;
+  try {
+    response = await queryAI(user.id, body.query, body.context);
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    // Surface API errors directly so the user knows what went wrong
+    return NextResponse.json(
+      { response: `Erro ao consultar IA: ${msg}` },
+      { status: 200 }
+    );
+  }
 
   await createAuditLog({
     userId: user.id,

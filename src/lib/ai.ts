@@ -28,12 +28,18 @@ export async function queryAI(userId: string, query: string, context?: string): 
     });
     response = msg.content[0].type === 'text' ? msg.content[0].text : 'Sem resposta';
     tokens = msg.usage.input_tokens + msg.usage.output_tokens;
+
   } else if (config.provider === 'gemini' && process.env.GEMINI_API_KEY) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: config.model || 'gemini-1.5-pro' });
-    const result = await model.generateContent(`${fullSystemPrompt}\n\nPergunta: ${query}`);
+    const modelName = config.model || 'gemini-1.5-flash';
+    const geminiModel = genAI.getGenerativeModel({ model: modelName });
+    const result = await geminiModel.generateContent([
+      { text: fullSystemPrompt },
+      { text: `Pergunta: ${query}` },
+    ]);
     response = result.response.text();
-  } else if (process.env.OPENAI_API_KEY) {
+
+  } else if (config.provider === 'openai' && process.env.OPENAI_API_KEY) {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const completion = await openai.chat.completions.create({
       model: config.model || 'gpt-4o',
@@ -45,8 +51,17 @@ export async function queryAI(userId: string, query: string, context?: string): 
     });
     response = completion.choices[0]?.message?.content ?? 'Sem resposta';
     tokens = completion.usage?.total_tokens ?? 0;
+
   } else {
-    response = 'Nenhum provedor de IA configurado. Adicione a chave ANTHROPIC_API_KEY nas variáveis de ambiente do Coolify.';
+    const providerKey: Record<string, string> = {
+      anthropic: 'ANTHROPIC_API_KEY',
+      gemini: 'GEMINI_API_KEY',
+      openai: 'OPENAI_API_KEY',
+    };
+    const key = providerKey[config.provider] || 'uma chave de API';
+    throw new Error(
+      `Provedor "${config.provider}" selecionado mas a variável ${key} não está configurada no Coolify.`
+    );
   }
 
   await prisma.aIQuery.create({
