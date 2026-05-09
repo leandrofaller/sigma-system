@@ -1,137 +1,280 @@
 'use client';
 
-import { getClassificationColor, formatDate } from '@/lib/utils';
-import { Download } from 'lucide-react';
+import { formatDate } from '@/lib/utils';
+import { Printer } from 'lucide-react';
+import Image from 'next/image';
 
-interface Props {
-  form: {
-    number: string;
-    date: string;
-    subject: string;
-    diffusion: string;
-    classification: string;
-    content: {
-      introduction: string;
-      body: string;
-      conclusion: string;
-      recommendations: string;
-    };
+interface FormData {
+  number: string;
+  date: string;
+  subject: string;
+  diffusion: string;
+  classification: string;
+  content: {
+    introduction: string;
+    body: string;
+    conclusion: string;
+    recommendations: string;
+    diffusionPrev?: string;
+    reference?: string;
+    annexes?: string;
   };
 }
 
+interface Props {
+  form: FormData;
+}
+
+const classColors: Record<string, string> = {
+  RESERVADO: '#b91c1c',
+  CONFIDENCIAL: '#c2410c',
+  SECRETO: '#991b1b',
+  ULTRA_SECRETO: '#6d28d9',
+};
+
 export function RelintPreview({ form }: Props) {
   const handlePrint = () => window.print();
+  const color = classColors[form.classification] || '#b91c1c';
+  const classLabel = form.classification.replace('_', ' ');
 
-  const classColors: Record<string, string> = {
-    RESERVADO: '#d97706',
-    CONFIDENCIAL: '#ea580c',
-    SECRETO: '#dc2626',
-    ULTRA_SECRETO: '#7c3aed',
-  };
-
-  const color = classColors[form.classification] || '#d97706';
+  const diffusionPrev = form.content.diffusionPrev ?? '***';
+  const reference = form.content.reference ?? '***';
+  const annexes = form.content.annexes ?? '***';
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      {/* Preview toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
-        <span className="text-xs font-medium text-gray-500">Pré-visualização do Documento</span>
-        <button onClick={handlePrint}
-          className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 font-medium px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-white transition-colors no-print">
-          <Download className="w-3.5 h-3.5" /> Imprimir / PDF
+    <div className="bg-white rounded-2xl border border-gray-200 shadow overflow-hidden">
+      {/* Toolbar - não aparece na impressão */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-100 no-print">
+        <span className="text-xs font-medium text-gray-500">Pré-visualização — A4</span>
+        <button
+          onClick={handlePrint}
+          className="flex items-center gap-1.5 text-xs font-medium text-gray-700 border border-gray-300 bg-white px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+        >
+          <Printer className="w-3.5 h-3.5" /> Imprimir / PDF
         </button>
       </div>
 
-      {/* Document */}
-      <div className="p-8 relint-preview">
-        {/* Classification header */}
-        <div className="text-center mb-6">
-          <span className="classification-stamp" style={{ color, borderColor: color }}>
-            {form.classification.replace('_', ' ')}
+      {/* Página A4 */}
+      <div
+        id="relint-print-area"
+        className="relint-preview relative bg-white text-black"
+        style={{
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '11pt',
+          lineHeight: '1.5',
+          padding: '1.8cm 2cm 1.5cm',
+          minHeight: '27cm',
+          width: '100%',
+        }}
+      >
+        {/* ── Carimbo de classificação topo ── */}
+        <div className="text-center mb-3">
+          <span
+            style={{
+              color,
+              border: `2px solid ${color}`,
+              fontWeight: 'bold',
+              fontSize: '12pt',
+              letterSpacing: '0.15em',
+              padding: '2px 18px',
+              display: 'inline-block',
+            }}
+          >
+            {classLabel}
           </span>
         </div>
 
-        {/* Header */}
-        <div className="text-center mb-8 border-b-2 border-gray-800 pb-6">
-          <p className="font-bold text-sm uppercase">SECRETARIA DE ESTADO DA JUSTIÇA DE RONDÔNIA</p>
-          <p className="font-bold text-sm uppercase">AGÊNCIA DE INTELIGÊNCIA PENAL</p>
-          <p className="font-bold text-lg uppercase mt-1">AIP/SEJUS/RO</p>
+        {/* ── Cabeçalho 3 colunas ── */}
+        <table
+          style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}
+        >
+          <tbody>
+            <tr>
+              {/* Coluna esquerda – logo SEJUS */}
+              <td style={{ width: '18%', textAlign: 'center', verticalAlign: 'middle' }}>
+                <img
+                  src="/logos/badge-sejus.png"
+                  alt="SEJUS"
+                  style={{ width: '72px', height: 'auto' }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </td>
+
+              {/* Coluna central – texto institucional */}
+              <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '0 8px' }}>
+                <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>
+                  SECRETARIA DE ESTADO DA JUSTIÇA DE RONDÔNIA
+                </p>
+                <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>
+                  AGÊNCIA DE INTELIGÊNCIA PENAL
+                </p>
+                <p style={{ fontWeight: 'bold', fontSize: '12pt', margin: '2px 0 8px', textTransform: 'uppercase' }}>
+                  AIP/SEJUS/RO
+                </p>
+                <img
+                  src="/logos/badge-aip.png"
+                  alt="AIP/SEJUS/RO"
+                  style={{ width: '80px', height: 'auto' }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </td>
+
+              {/* Coluna direita – logo Polícia Penal */}
+              <td style={{ width: '18%', textAlign: 'center', verticalAlign: 'middle' }}>
+                <img
+                  src="/logos/badge-policia-penal.png"
+                  alt="Polícia Penal RO"
+                  style={{ width: '72px', height: 'auto' }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* ── Linha separadora ── */}
+        <hr style={{ borderTop: '1.5px solid #000', margin: '8px 0 10px' }} />
+
+        {/* ── Campos de identificação ── */}
+        <div style={{ marginBottom: '14px' }}>
+          <p style={{ margin: '0 0 3px', fontSize: '11pt' }}>
+            <strong><u>{form.number || 'RELINT Nº___/20__/AIP/SEJUS/RO'}</u></strong>
+          </p>
+          <p style={{ margin: '0 0 3px', fontSize: '11pt' }}>
+            <strong>Data:</strong>&nbsp;
+            {form.date ? formatDate(new Date(form.date + 'T12:00:00')) : '__/__/____'}
+          </p>
+          <p style={{ margin: '0 0 3px', fontSize: '11pt' }}>
+            <strong>Assunto:</strong>&nbsp;
+            {form.subject || '_______________________________________________'}
+          </p>
+          <p style={{ margin: '0 0 3px', fontSize: '11pt' }}>
+            <strong>Difusão:</strong>&nbsp;
+            {form.diffusion || '_______________________________________________'}
+          </p>
+          <p style={{ margin: '0 0 3px', fontSize: '11pt' }}>
+            <strong>Difusão anterior:</strong>&nbsp;{diffusionPrev}
+          </p>
+          <p style={{ margin: '0 0 3px', fontSize: '11pt' }}>
+            <strong>Referência:</strong>&nbsp;{reference}
+          </p>
+          <p style={{ margin: '0 0 3px', fontSize: '11pt' }}>
+            <strong>Anexo(s):</strong>{annexes}
+          </p>
         </div>
 
-        {/* Identification */}
-        <div className="mb-6 space-y-1">
-          <p className="text-sm">
-            <span className="font-bold underline">{form.number || 'RELINT Nº ___/20__/AIP/SEJUS/RO'}</span>
-          </p>
-          <p className="text-sm">
-            <strong>Data:</strong> {form.date ? formatDate(new Date(form.date)) : '__/__/____'}
-          </p>
-          <p className="text-sm">
-            <strong>Assunto:</strong> {form.subject || '___________________________________________'}
-          </p>
-          <p className="text-sm">
-            <strong>Difusão:</strong> {form.diffusion || '___________________________________________'}
-          </p>
+        {/* ── Linha separadora ── */}
+        <hr style={{ borderTop: '1px solid #666', margin: '0 0 14px' }} />
+
+        {/* ── Conteúdo do documento ── */}
+        <div style={{ flex: 1 }}>
+          {form.content.introduction && (
+            <div
+              style={{
+                textAlign: 'justify',
+                fontSize: '11pt',
+                lineHeight: '1.6',
+                marginBottom: '12px',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {form.content.introduction}
+            </div>
+          )}
+
+          {form.content.body && (
+            <div
+              style={{
+                textAlign: 'justify',
+                fontSize: '11pt',
+                lineHeight: '1.6',
+                marginBottom: '12px',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {form.content.body}
+            </div>
+          )}
+
+          {form.content.conclusion && (
+            <div style={{ marginBottom: '12px' }}>
+              <p style={{ fontWeight: 'bold', fontSize: '11pt', textTransform: 'uppercase', marginBottom: '4px' }}>
+                Conclusão
+              </p>
+              <div
+                style={{
+                  textAlign: 'justify',
+                  fontSize: '11pt',
+                  lineHeight: '1.6',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {form.content.conclusion}
+              </div>
+            </div>
+          )}
+
+          {form.content.recommendations && (
+            <div style={{ marginBottom: '12px' }}>
+              <p style={{ fontWeight: 'bold', fontSize: '11pt', textTransform: 'uppercase', marginBottom: '4px' }}>
+                Recomendações
+              </p>
+              <div
+                style={{
+                  textAlign: 'justify',
+                  fontSize: '11pt',
+                  lineHeight: '1.6',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {form.content.recommendations}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Separator */}
-        <hr className="border-gray-400 mb-6" />
-
-        {/* Content sections */}
-        {form.content.introduction && (
-          <div className="mb-6 text-justify text-sm leading-relaxed whitespace-pre-wrap">
-            {form.content.introduction}
-          </div>
-        )}
-
-        {form.content.body && (
-          <div className="mb-6 text-justify text-sm leading-relaxed whitespace-pre-wrap">
-            {form.content.body}
-          </div>
-        )}
-
-        {form.content.conclusion && (
-          <div className="mb-6">
-            <p className="font-bold text-sm uppercase mb-2">Conclusão</p>
-            <div className="text-justify text-sm leading-relaxed whitespace-pre-wrap">
-              {form.content.conclusion}
-            </div>
-          </div>
-        )}
-
-        {form.content.recommendations && (
-          <div className="mb-6">
-            <p className="font-bold text-sm uppercase mb-2">Recomendações</p>
-            <div className="text-justify text-sm leading-relaxed whitespace-pre-wrap">
-              {form.content.recommendations}
-            </div>
-          </div>
-        )}
-
-        {/* Signature area */}
-        <div className="mt-12 pt-6 border-t border-gray-300">
-          <div className="flex justify-end">
-            <div className="text-center">
-              <div className="w-48 border-b border-gray-800 mb-1" />
-              <p className="text-xs font-medium">Elaborado por</p>
-              <p className="text-xs text-gray-500">Agência de Inteligência Penal</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Classification footer */}
-        <div className="text-center mt-6">
-          <span className="classification-stamp text-xs" style={{ color, borderColor: color }}>
-            {form.classification.replace('_', ' ')}
+        {/* ── Carimbo de classificação rodapé ── */}
+        <div style={{ textAlign: 'center', marginTop: '30px', marginBottom: '10px' }}>
+          <span
+            style={{
+              color,
+              border: `2px solid ${color}`,
+              fontWeight: 'bold',
+              fontSize: '11pt',
+              letterSpacing: '0.15em',
+              padding: '2px 18px',
+              display: 'inline-block',
+            }}
+          >
+            {classLabel}
           </span>
         </div>
 
-        {/* Legal disclaimer */}
-        <div className="mt-6 pt-4 border-t border-gray-200">
-          <p className="text-[9px] text-gray-500 text-justify leading-tight">
+        {/* ── Aviso legal ── */}
+        <div style={{ borderTop: '1px solid #ccc', paddingTop: '8px', marginTop: '4px' }}>
+          <p
+            style={{
+              fontSize: '7.5pt',
+              color: '#333',
+              textAlign: 'justify',
+              lineHeight: '1.3',
+              margin: 0,
+            }}
+          >
             "O teor sigiloso deste documento é protegido e controlado pela Lei nº 12.527, de 18.11.2011,
             que restringe o acesso, a divulgação e o tratamento deste documento a pessoa devidamente
-            credenciadas que tenham necessidade de conhecê-lo."
+            credenciadas que tenham necessidade de conhecê-lo. A divulgação, a revelação, o fornecimento,
+            a utilização ou a reprodução desautorizada das informações e conhecimentos utilizados, contidos
+            ou veiculados por meio deste documento, a qualquer tempo, meio e modo, inclusive mediante acesso
+            ou facilitação de acessos indevidos, caracterizam os crimes de violação de sigilo funcional ou
+            de divulgação de segredo tipificados no Código Penal, bem como configuram condutas de
+            improbidade administrativa."
           </p>
         </div>
       </div>

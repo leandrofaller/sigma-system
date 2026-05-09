@@ -38,6 +38,9 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
       body: initialData?.content?.body || '',
       conclusion: initialData?.content?.conclusion || '',
       recommendations: initialData?.content?.recommendations || '',
+      diffusionPrev: initialData?.content?.diffusionPrev ?? '***',
+      reference: initialData?.content?.reference ?? '***',
+      annexes: initialData?.content?.annexes ?? '***',
     },
   });
 
@@ -120,7 +123,25 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Difusão *</label>
             <input value={form.diffusion} onChange={(e) => update('diffusion', e.target.value)}
-              placeholder="Ex: SECRETÁRIO DE JUSTIÇA"
+              placeholder="Ex: DIP/SEAP/DF"
+              className={`${inputCls} uppercase`} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Difusão anterior</label>
+            <input value={(form.content as any).diffusionPrev} onChange={(e) => updateContent('diffusionPrev', e.target.value)}
+              placeholder="*** ou preencha"
+              className={`${inputCls} uppercase`} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Referência</label>
+            <input value={(form.content as any).reference} onChange={(e) => updateContent('reference', e.target.value)}
+              placeholder="*** ou número do documento"
+              className={`${inputCls} uppercase`} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Anexo(s)</label>
+            <input value={(form.content as any).annexes} onChange={(e) => updateContent('annexes', e.target.value)}
+              placeholder="*** ou descreva os anexos"
               className={`${inputCls} uppercase`} />
           </div>
           <div>
