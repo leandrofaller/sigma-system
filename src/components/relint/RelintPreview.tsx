@@ -85,58 +85,53 @@ export function RelintPreview({ form }: Props) {
         </div>
 
         {/* ── Cabeçalho 3 colunas ── */}
-        <table
-          style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}
-        >
-          <tbody>
-            <tr>
-              {/* Coluna esquerda – logo SEJUS */}
-              <td style={{ width: '18%', textAlign: 'center', verticalAlign: 'middle' }}>
-                <img
-                  src="/logos/badge-sejus.png"
-                  alt="SEJUS"
-                  style={{ width: '72px', height: 'auto' }}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              </td>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '10px',
+          gap: '8px',
+        }}>
+          {/* Coluna esquerda – logo SEJUS */}
+          <div style={{ width: '80px', flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <img
+              src="/logos/badge-sejus.png"
+              alt="SEJUS"
+              style={{ width: '72px', height: 'auto' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          </div>
 
-              {/* Coluna central – texto institucional */}
-              <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '0 8px' }}>
-                <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>
-                  SECRETARIA DE ESTADO DA JUSTIÇA DE RONDÔNIA
-                </p>
-                <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>
-                  AGÊNCIA DE INTELIGÊNCIA PENAL
-                </p>
-                <p style={{ fontWeight: 'bold', fontSize: '12pt', margin: '2px 0 8px', textTransform: 'uppercase' }}>
-                  AIP/SEJUS/RO
-                </p>
-                <img
-                  src="/logos/badge-aip.png"
-                  alt="AIP/SEJUS/RO"
-                  style={{ width: '80px', height: 'auto' }}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              </td>
+          {/* Coluna central – texto institucional */}
+          <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>
+              SECRETARIA DE ESTADO DA JUSTIÇA DE RONDÔNIA
+            </p>
+            <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>
+              AGÊNCIA DE INTELIGÊNCIA PENAL
+            </p>
+            <p style={{ fontWeight: 'bold', fontSize: '12pt', margin: '2px 0 8px', textTransform: 'uppercase' }}>
+              AIP/SEJUS/RO
+            </p>
+            <img
+              src="/logos/badge-aip.png"
+              alt="AIP/SEJUS/RO"
+              style={{ width: '80px', height: 'auto' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          </div>
 
-              {/* Coluna direita – logo Polícia Penal */}
-              <td style={{ width: '18%', textAlign: 'center', verticalAlign: 'middle' }}>
-                <img
-                  src="/logos/badge-policia-penal.png"
-                  alt="Polícia Penal RO"
-                  style={{ width: '72px', height: 'auto' }}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              </td>
-            </tr>
-          </tbody>
-        </table>
+          {/* Coluna direita – logo Polícia Penal */}
+          <div style={{ width: '80px', flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <img
+              src="/logos/badge-policia-penal.png"
+              alt="Polícia Penal RO"
+              style={{ width: '72px', height: 'auto' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          </div>
+        </div>
 
         {/* ── Linha separadora ── */}
         <hr style={{ borderTop: '1.5px solid #000', margin: '8px 0 10px' }} />
