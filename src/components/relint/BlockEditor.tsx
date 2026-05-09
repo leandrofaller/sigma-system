@@ -1,10 +1,17 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Type, ImagePlus, X, Loader2 } from 'lucide-react';
+import { Type, ImagePlus, X, Loader2, ChevronUp, ChevronDown, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 
 export type TextBlock = { type: 'text'; id: string; content: string };
-export type ImageBlock = { type: 'image'; id: string; url: string; caption: string };
+export type ImageBlock = {
+  type: 'image';
+  id: string;
+  url: string;
+  caption: string;
+  align?: 'left' | 'center' | 'right';
+  width?: number; // 25 | 50 | 75 | 100
+};
 export type Block = TextBlock | ImageBlock;
 
 interface InsertBarProps {
@@ -68,7 +75,7 @@ export function BlockEditor({ blocks, onChange }: Props) {
       const data = await res.json();
       if (!res.ok) { alert(data.error || 'Erro ao enviar imagem.'); return; }
       const next = [...blocks];
-      next.splice(idx, 0, { type: 'image', id: newId(), url: data.url, caption: '' });
+      next.splice(idx, 0, { type: 'image', id: newId(), url: data.url, caption: '', align: 'center', width: 100 });
       onChange(next);
     } finally {
       setUploading(false);
@@ -87,12 +94,30 @@ export function BlockEditor({ blocks, onChange }: Props) {
     if (file) insertImageAt(file, idx);
   };
 
-  const updateBlock = (id: string, patch: Partial<Block>) => {
+  const updateBlock = (id: string, patch: Record<string, any>) => {
     onChange(blocks.map((b) => (b.id === id ? { ...b, ...patch } as Block : b)));
   };
 
   const removeBlock = (id: string) => {
     onChange(blocks.filter((b) => b.id !== id));
+  };
+
+  const moveBlock = (idx: number, dir: 'up' | 'down') => {
+    const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= blocks.length) return;
+    const next = [...blocks];
+    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+    onChange(next);
+  };
+
+  const alignBtn = (id: string, cur: string | undefined, val: 'left' | 'center' | 'right') => {
+    const active = (cur ?? 'center') === val;
+    return (
+      <button type="button" onClick={() => updateBlock(id, { align: val })}
+        className={`p-1 rounded transition-colors ${active ? 'bg-sigma-100 dark:bg-sigma-900/40 text-sigma-600 dark:text-sigma-400' : 'text-subtle hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+        {val === 'left' ? <AlignLeft className="w-4 h-4" /> : val === 'center' ? <AlignCenter className="w-4 h-4" /> : <AlignRight className="w-4 h-4" />}
+      </button>
+    );
   };
 
   return (
@@ -121,24 +146,84 @@ export function BlockEditor({ blocks, onChange }: Props) {
                 rows={5}
                 spellCheck
                 lang="pt-BR"
-                className="w-full input-base px-4 py-3 resize-none leading-relaxed"
+                className="w-full input-base px-4 py-3 resize-none leading-relaxed pr-20"
               />
-              {blocks.length > 1 && (
-                <button type="button" onClick={() => removeBlock(block.id)}
-                  className="absolute top-2 right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors opacity-0 group-hover/block:opacity-100">
-                  <X className="w-3 h-3" />
-                </button>
-              )}
+              <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover/block:opacity-100 transition-opacity">
+                {i > 0 && (
+                  <button type="button" onClick={() => moveBlock(i, 'up')}
+                    title="Mover para cima"
+                    className="w-5 h-5 bg-gray-600 text-white rounded flex items-center justify-center hover:bg-sigma-600 transition-colors">
+                    <ChevronUp className="w-3 h-3" />
+                  </button>
+                )}
+                {i < blocks.length - 1 && (
+                  <button type="button" onClick={() => moveBlock(i, 'down')}
+                    title="Mover para baixo"
+                    className="w-5 h-5 bg-gray-600 text-white rounded flex items-center justify-center hover:bg-sigma-600 transition-colors">
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                )}
+                {blocks.length > 1 && (
+                  <button type="button" onClick={() => removeBlock(block.id)}
+                    title="Remover bloco"
+                    className="w-5 h-5 bg-red-500 text-white rounded flex items-center justify-center hover:bg-red-600 transition-colors">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
-            <div className="relative border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-              <img src={(block as ImageBlock).url} alt={(block as ImageBlock).caption || 'Imagem'}
-                className="w-full max-h-64 object-contain bg-gray-50 dark:bg-gray-900" />
-              <button type="button" onClick={() => removeBlock(block.id)}
-                className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors">
-                <X className="w-3 h-3" />
-              </button>
-              <div className="p-2">
+            <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+              <div className="relative group/imgblock">
+                <img src={(block as ImageBlock).url} alt={(block as ImageBlock).caption || 'Imagem'}
+                  className="w-full max-h-64 object-contain bg-gray-50 dark:bg-gray-900" />
+                <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover/imgblock:opacity-100 transition-opacity">
+                  {i > 0 && (
+                    <button type="button" onClick={() => moveBlock(i, 'up')}
+                      title="Mover para cima"
+                      className="w-6 h-6 bg-gray-700 text-white rounded flex items-center justify-center hover:bg-sigma-600 transition-colors">
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {i < blocks.length - 1 && (
+                    <button type="button" onClick={() => moveBlock(i, 'down')}
+                      title="Mover para baixo"
+                      className="w-6 h-6 bg-gray-700 text-white rounded flex items-center justify-center hover:bg-sigma-600 transition-colors">
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button type="button" onClick={() => removeBlock(block.id)}
+                    title="Remover imagem"
+                    className="w-6 h-6 bg-red-500 text-white rounded flex items-center justify-center hover:bg-red-600 transition-colors">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Formatting controls */}
+              <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800/50 space-y-2">
+                <div className="flex items-center gap-4">
+                  {/* Alignment */}
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-subtle mr-1">Posição:</span>
+                    {alignBtn(block.id, (block as ImageBlock).align, 'left')}
+                    {alignBtn(block.id, (block as ImageBlock).align, 'center')}
+                    {alignBtn(block.id, (block as ImageBlock).align, 'right')}
+                  </div>
+                  {/* Width */}
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-subtle mr-1">Largura:</span>
+                    {[25, 50, 75, 100].map((w) => {
+                      const cur = (block as ImageBlock).width ?? 100;
+                      return (
+                        <button key={w} type="button" onClick={() => updateBlock(block.id, { width: w })}
+                          className={`text-xs px-2 py-0.5 rounded border transition-colors ${cur === w ? 'border-sigma-400 bg-sigma-50 dark:bg-sigma-900/30 text-sigma-600 dark:text-sigma-400' : 'border-gray-300 dark:border-gray-600 text-subtle hover:border-sigma-300 dark:hover:border-sigma-700'}`}>
+                          {w}%
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <input value={(block as ImageBlock).caption}
                   onChange={(e) => updateBlock(block.id, { caption: e.target.value })}
                   placeholder="Legenda da imagem (opcional)..."
@@ -148,7 +233,7 @@ export function BlockEditor({ blocks, onChange }: Props) {
           )}
 
           <InsertBar idx={i + 1} onText={insertTextAt} onImage={triggerImagePicker}
-            active={dragOverIdx === i + 1 || (uploading && insertIdxRef.current === i + 1)}
+            active={dragOverIdx === i + 1}
             onDragEnter={() => setDragOverIdx(i + 1)}
             onDragLeave={() => setDragOverIdx(null)}
             onDrop={handleFileDrop} />
@@ -166,9 +251,7 @@ export function BlockEditor({ blocks, onChange }: Props) {
 
 export function initBlocks(bodyData: any): Block[] {
   if (!bodyData) return [{ type: 'text', id: crypto.randomUUID(), content: '' }];
-  if (typeof bodyData === 'string') {
-    return [{ type: 'text', id: crypto.randomUUID(), content: bodyData }];
-  }
+  if (typeof bodyData === 'string') return [{ type: 'text', id: crypto.randomUUID(), content: bodyData }];
   if (Array.isArray(bodyData) && bodyData.length > 0) return bodyData as Block[];
   return [{ type: 'text', id: crypto.randomUUID(), content: '' }];
 }

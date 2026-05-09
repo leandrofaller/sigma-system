@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, Loader2, Palette, Brain, MapPin, HardDrive } from 'lucide-react';
+import { Save, Loader2, Palette, Brain, MapPin, HardDrive, FileText } from 'lucide-react';
 
 interface Props {
   configs: Record<string, any>;
@@ -90,9 +90,10 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
                 <option value="claude-opus-4-7">Claude Opus 4.7 (mais capaz)</option>
               </optgroup>
               <optgroup label="Google — Gemini">
-                <option value="gemini-2.0-flash">Gemini 2.0 Flash (rápido)</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash (econômico)</option>
+                <option value="gemini-2.0-flash">Gemini 2.0 Flash (mais rápido)</option>
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash (rápido)</option>
                 <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash Latest</option>
+                <option value="gemini-pro">Gemini Pro 1.0 (compatível)</option>
               </optgroup>
               <optgroup label="OpenAI — GPT">
                 <option value="gpt-4o">GPT-4o</option>
@@ -120,10 +121,29 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
             <Input value={configs.organization_name?.name || ''}
               onChange={(e: any) => update('organization_name', { name: e.target.value })} />
           </Field>
-          <Field label="Prefixo dos Relatórios">
+        </SectionCard>
+
+        <SectionCard icon={FileText} title="Numeração de Relatórios">
+          <Field label="Prefixo (ex: RELINT)">
             <Input value={configs.relint_prefix?.prefix || 'RELINT'}
               onChange={(e: any) => update('relint_prefix', { prefix: e.target.value })} />
           </Field>
+          <Field label="Sufixo (ex: AIP/SEJUS/RO)">
+            <Input value={configs.relint_suffix?.suffix || 'AIP/SEJUS/RO'}
+              onChange={(e: any) => update('relint_suffix', { suffix: e.target.value })} />
+          </Field>
+          <Field label="Próximo número (reiniciar contador)">
+            <Input type="number" min="1"
+              value={configs.relint_counter?.next || 1}
+              onChange={(e: any) => update('relint_counter', {
+                ...configs.relint_counter,
+                next: parseInt(e.target.value) || 1,
+                year: new Date().getFullYear(),
+              })} />
+          </Field>
+          <p className="text-xs text-subtle">
+            O número gerado seguirá o formato: <span className="font-mono">{configs.relint_prefix?.prefix || 'RELINT'} Nº 001/{new Date().getFullYear()}/{configs.relint_suffix?.suffix || 'AIP/SEJUS/RO'}</span>
+          </p>
         </SectionCard>
 
         <SectionCard icon={HardDrive} title="Backup & Armazenamento">

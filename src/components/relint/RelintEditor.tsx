@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Save, Send, Edit3, Loader2, Sparkles } from 'lucide-react';
-import { generateRelintNumber } from '@/lib/utils';
 import { RelintPreview } from './RelintPreview';
 import { BlockEditor, Block, initBlocks } from './BlockEditor';
 
@@ -16,6 +15,17 @@ interface Props {
   initialData?: any;
 }
 
+function getInitialBody(initialData: any): Block[] {
+  const intro: string = initialData?.content?.introduction || '';
+  const body = initialData?.content?.body;
+  const bodyBlocks = initBlocks(body);
+  // Migrate old documents: prepend introduction as first text block
+  if (intro && !Array.isArray(body)) {
+    return [{ type: 'text', id: crypto.randomUUID(), content: intro }, ...bodyBlocks];
+  }
+  return bodyBlocks;
+}
+
 export function RelintEditor({ templates, groups, userId, userRole, defaultGroupId, initialData }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -23,9 +33,10 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
   const [activeView, setActiveView] = useState<'split' | 'edit' | 'preview'>('split');
 
   const defaultTemplate = templates.find((t) => t.isDefault) || templates[0];
+  const isNew = !initialData?.id;
 
   const [form, setForm] = useState({
-    number: initialData?.number || generateRelintNumber('RELINT'),
+    number: initialData?.number || '',
     date: initialData?.date ? new Date(initialData.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     subject: initialData?.subject || '',
     diffusion: initialData?.diffusion || '',
@@ -34,8 +45,7 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
     templateId: initialData?.templateId || defaultTemplate?.id || '',
     status: initialData?.status || 'DRAFT',
     content: {
-      introduction: initialData?.content?.introduction || '',
-      body: initBlocks(initialData?.content?.body) as any,
+      body: getInitialBody(initialData) as any,
       conclusion: initialData?.content?.conclusion || '',
       recommendations: initialData?.content?.recommendations || '',
       diffusionPrev: initialData?.content?.diffusionPrev ?? '***',
@@ -43,6 +53,22 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
       annexes: initialData?.content?.annexes ?? '***',
     },
   });
+
+  // Fetch sequential number for new documents
+  useEffect(() => {
+    if (isNew) {
+      fetch('/api/relints/next-number', { method: 'POST' })
+        .then((r) => r.json())
+        .then((d) => { if (d.number) setForm((prev) => ({ ...prev, number: d.number })); })
+        .catch(() => {
+          setForm((prev) => ({
+            ...prev,
+            number: `RELINT Nº 001/${new Date().getFullYear()}/AIP/SEJUS/RO`,
+          }));
+        });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const update = useCallback((field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -62,10 +88,7 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: prompt,
-          context: `Assunto do relatório: ${form.subject}. ${field === 'body' ? `Introdução: ${form.content.introduction}` : ''}`,
-        }),
+        body: JSON.stringify({ query: prompt, context: `Assunto do relatório: ${form.subject}` }),
       });
       const data = await res.json();
       if (field === 'body') {
@@ -104,6 +127,14 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
 
   const inputCls = 'w-full input-base px-3 py-2 text-sm';
 
+  const aiBtn = (field: string, prompt: string) => (
+    <button onClick={() => handleAI(field, prompt)} disabled={!!aiLoading}
+      className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
+      {aiLoading === field ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+      Gerar com IA
+    </button>
+  );
+
   const editor = (
     <div className="space-y-5">
       {/* Identificação */}
@@ -112,15 +143,25 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
           <Edit3 className="w-4 h-4" /> Identificação
         </h3>
         <div className="grid grid-cols-2 gap-4">
-          <div>
+          <div className="col-span-2">
             <label className="block text-xs font-medium text-subtle mb-1.5">Número do Relatório</label>
             <input value={form.number} onChange={(e) => update('number', e.target.value)}
+              placeholder="Aguardando geração automática..."
               className={`${inputCls} font-mono`} />
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Data</label>
             <input type="date" value={form.date} onChange={(e) => update('date', e.target.value)}
               className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Classificação</label>
+            <select value={form.classification} onChange={(e) => update('classification', e.target.value)}
+              className={inputCls}>
+              {['RESERVADO', 'CONFIDENCIAL', 'SECRETO', 'ULTRA_SECRETO'].map((c) => (
+                <option key={c} value={c}>{c.replace('_', ' ')}</option>
+              ))}
+            </select>
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-subtle mb-1.5">Assunto *</label>
@@ -153,15 +194,6 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
               className={`${inputCls} uppercase`} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-subtle mb-1.5">Classificação</label>
-            <select value={form.classification} onChange={(e) => update('classification', e.target.value)}
-              className={inputCls}>
-              {['RESERVADO', 'CONFIDENCIAL', 'SECRETO', 'ULTRA_SECRETO'].map((c) => (
-                <option key={c} value={c}>{c.replace('_', ' ')}</option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Grupo / Setor *</label>
             <select value={form.groupId} onChange={(e) => update('groupId', e.target.value)}
               className={inputCls}>
@@ -179,40 +211,13 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
         </div>
       </div>
 
-      {/* Introdução */}
-      <div className="card p-6">
-        <div className="flex items-center justify-between mb-3">
-          <label className="text-sm font-semibold text-title">Introdução</label>
-          <button onClick={() => handleAI('introduction', `Escreva uma introdução profissional para um relatório de inteligência sobre: ${form.subject}`)}
-            disabled={!!aiLoading}
-            className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
-            {aiLoading === 'introduction' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-            Gerar com IA
-          </button>
-        </div>
-        <textarea
-          value={form.content.introduction}
-          onChange={(e) => updateContent('introduction', e.target.value)}
-          placeholder="Descreva o contexto e objetivo do relatório..."
-          rows={4}
-          spellCheck
-          lang="pt-BR"
-          className="w-full input-base px-4 py-3 resize-none leading-relaxed"
-        />
-      </div>
-
-      {/* Corpo do Relatório — block editor */}
+      {/* Corpo do Relatório */}
       <div className="card p-6">
         <div className="flex items-center justify-between mb-3">
           <label className="text-sm font-semibold text-title">Corpo do Relatório</label>
-          <button onClick={() => handleAI('body', `Escreva o corpo de um relatório de inteligência sobre: ${form.subject}. Inclua análise técnica e pontos críticos.`)}
-            disabled={!!aiLoading}
-            className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
-            {aiLoading === 'body' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-            Gerar com IA
-          </button>
+          {aiBtn('body', `Escreva o corpo de um relatório de inteligência sobre: ${form.subject}. Inclua análise técnica e pontos críticos.`)}
         </div>
-        <p className="text-xs text-subtle mb-3">Use os botões entre os blocos para inserir texto ou imagens em qualquer posição.</p>
+        <p className="text-xs text-subtle mb-3">Use os botões entre os blocos para inserir textos ou imagens em qualquer posição. Passe o mouse sobre um bloco para ver as opções de mover e remover.</p>
         <BlockEditor
           blocks={(form.content as any).body as Block[]}
           onChange={updateBodyBlocks}
@@ -223,44 +228,26 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
       <div className="card p-6">
         <div className="flex items-center justify-between mb-3">
           <label className="text-sm font-semibold text-title">Conclusão</label>
-          <button onClick={() => handleAI('conclusion', `Escreva uma conclusão para um relatório de inteligência sobre: ${form.subject}`)}
-            disabled={!!aiLoading}
-            className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
-            {aiLoading === 'conclusion' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-            Gerar com IA
-          </button>
+          {aiBtn('conclusion', `Escreva uma conclusão para um relatório de inteligência sobre: ${form.subject}`)}
         </div>
-        <textarea
-          value={form.content.conclusion}
+        <textarea value={form.content.conclusion}
           onChange={(e) => updateContent('conclusion', e.target.value)}
           placeholder="Apresente as conclusões baseadas nas informações..."
-          rows={4}
-          spellCheck
-          lang="pt-BR"
-          className="w-full input-base px-4 py-3 resize-none leading-relaxed"
-        />
+          rows={4} spellCheck lang="pt-BR"
+          className="w-full input-base px-4 py-3 resize-none leading-relaxed" />
       </div>
 
       {/* Recomendações */}
       <div className="card p-6">
         <div className="flex items-center justify-between mb-3">
           <label className="text-sm font-semibold text-title">Recomendações (Opcional)</label>
-          <button onClick={() => handleAI('recommendations', `Escreva recomendações técnicas para um relatório de inteligência sobre: ${form.subject}`)}
-            disabled={!!aiLoading}
-            className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
-            {aiLoading === 'recommendations' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-            Gerar com IA
-          </button>
+          {aiBtn('recommendations', `Escreva recomendações técnicas para um relatório de inteligência sobre: ${form.subject}`)}
         </div>
-        <textarea
-          value={form.content.recommendations}
+        <textarea value={form.content.recommendations}
           onChange={(e) => updateContent('recommendations', e.target.value)}
           placeholder="Liste as recomendações e medidas sugeridas..."
-          rows={4}
-          spellCheck
-          lang="pt-BR"
-          className="w-full input-base px-4 py-3 resize-none leading-relaxed"
-        />
+          rows={4} spellCheck lang="pt-BR"
+          className="w-full input-base px-4 py-3 resize-none leading-relaxed" />
       </div>
     </div>
   );

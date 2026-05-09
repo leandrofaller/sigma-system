@@ -11,7 +11,6 @@ interface FormData {
   diffusion: string;
   classification: string;
   content: {
-    introduction: string;
     body: any; // string (legacy) | Block[]
     conclusion: string;
     recommendations: string;
@@ -90,7 +89,10 @@ export function RelintPreview({ form }: Props) {
   const reference = form.content.reference ?? '***';
   const annexes = form.content.annexes ?? '***';
 
-  const bodyBlocks: Array<{ type: string; id?: string; content?: string; url?: string; caption?: string }> =
+  const bodyBlocks: Array<{
+    type: string; id?: string; content?: string;
+    url?: string; caption?: string; align?: string; width?: number;
+  }> =
     typeof form.content.body === 'string'
       ? (form.content.body ? [{ type: 'text', content: form.content.body }] : [])
       : (Array.isArray(form.content.body) ? form.content.body : []);
@@ -161,25 +163,28 @@ export function RelintPreview({ form }: Props) {
 
         <hr style={{ margin: '0 0 14px', borderTop: '1px solid #666', borderBottom: 'none', borderLeft: 'none', borderRight: 'none' }} />
 
-        {/* Conteúdo */}
-        {form.content.introduction && <div style={para}>{form.content.introduction}</div>}
-
         {/* Corpo do relatório — blocos de texto e imagens intercalados */}
-        {bodyBlocks.map((block, i) =>
-          block.type === 'text' ? (
-            block.content ? <div key={i} style={para}>{block.content}</div> : null
-          ) : (
-            <div key={i} style={{ marginBottom: '14px', textAlign: 'center' }}>
-              <img src={block.url} alt={block.caption || `Imagem ${i + 1}`}
-                style={{ maxWidth: '100%', maxHeight: '280px', objectFit: 'contain' }} />
-              {block.caption && (
-                <p style={{ fontSize: '8pt', color: '#555', marginTop: '4px', textAlign: 'center' }}>
-                  {block.caption}
-                </p>
-              )}
+        {bodyBlocks.map((block, i) => {
+          if (block.type === 'text') {
+            return block.content ? <div key={i} style={para}>{block.content}</div> : null;
+          }
+          const align = block.align || 'center';
+          const width = block.width || 100;
+          const marginH = align === 'left' ? '0 auto 0 0' : align === 'right' ? '0 0 0 auto' : '0 auto';
+          return (
+            <div key={i} style={{ marginBottom: '14px' }}>
+              <div style={{ width: `${width}%`, margin: marginH }}>
+                <img src={block.url} alt={block.caption || `Imagem ${i + 1}`}
+                  style={{ width: '100%', height: 'auto', objectFit: 'contain', display: 'block' }} />
+                {block.caption && (
+                  <p style={{ fontSize: '8pt', color: '#555', marginTop: '3px', textAlign: align as any }}>
+                    {block.caption}
+                  </p>
+                )}
+              </div>
             </div>
-          )
-        )}
+          );
+        })}
 
         {form.content.conclusion && (
           <div style={{ marginBottom: '12px' }}>

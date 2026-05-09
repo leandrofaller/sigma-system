@@ -1,6 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { prisma } from './db';
 
 async function getAIConfig() {
@@ -30,14 +29,29 @@ export async function queryAI(userId: string, query: string, context?: string): 
     tokens = msg.usage.input_tokens + msg.usage.output_tokens;
 
   } else if (config.provider === 'gemini' && process.env.GEMINI_API_KEY) {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const modelName = (config.model === 'gemini-1.5-pro' ? 'gemini-1.5-flash' : config.model) || 'gemini-1.5-flash';
-    const geminiModel = genAI.getGenerativeModel({ model: modelName });
-    const result = await geminiModel.generateContent([
-      { text: fullSystemPrompt },
-      { text: `Pergunta: ${query}` },
-    ]);
-    response = result.response.text();
+    const modelName = config.model || 'gemini-1.5-flash';
+    // Gemini 1.0 (gemini-pro) doesn't support system_instruction
+    const supportsSystemInstruction = modelName.includes('1.5') || modelName.includes('2.');
+    const requestBody = supportsSystemInstruction
+      ? {
+          system_instruction: { parts: [{ text: fullSystemPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: query }] }],
+          generationConfig: { maxOutputTokens: 2000 },
+        }
+      : {
+          contents: [{ role: 'user', parts: [{ text: `${fullSystemPrompt}\n\nPergunta: ${query}` }] }],
+          generationConfig: { maxOutputTokens: 2000 },
+        };
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }
+    );
+    if (!geminiRes.ok) {
+      const errJson = await geminiRes.json().catch(() => ({}));
+      throw new Error(`Gemini (${modelName}): ${errJson.error?.message || geminiRes.statusText}`);
+    }
+    const geminiData = await geminiRes.json();
+    response = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Sem resposta';
 
   } else if (config.provider === 'openai' && process.env.OPENAI_API_KEY) {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
