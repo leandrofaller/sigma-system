@@ -30,12 +30,12 @@ export function formatFileSize(bytes: number): string {
 
 export function getClassificationColor(classification: string): string {
   const colors: Record<string, string> = {
-    RESERVADO: 'text-yellow-600 bg-yellow-50 border-yellow-200',
-    CONFIDENCIAL: 'text-orange-600 bg-orange-50 border-orange-200',
-    SECRETO: 'text-red-600 bg-red-50 border-red-200',
-    ULTRA_SECRETO: 'text-purple-600 bg-purple-50 border-purple-200',
+    RESERVADO:    'text-yellow-700 bg-yellow-50 border-yellow-300 dark:text-yellow-300 dark:bg-yellow-900/25 dark:border-yellow-700',
+    CONFIDENCIAL: 'text-orange-700 bg-orange-50 border-orange-300 dark:text-orange-300 dark:bg-orange-900/25 dark:border-orange-700',
+    SECRETO:      'text-red-700 bg-red-50 border-red-300 dark:text-red-300 dark:bg-red-900/25 dark:border-red-700',
+    ULTRA_SECRETO:'text-purple-700 bg-purple-50 border-purple-300 dark:text-purple-300 dark:bg-purple-900/25 dark:border-purple-700',
   };
-  return colors[classification] || 'text-gray-600 bg-gray-50 border-gray-200';
+  return colors[classification] || 'text-gray-600 bg-gray-50 border-gray-200 dark:text-gray-400 dark:bg-gray-800 dark:border-gray-600';
 }
 
 export function getRoleName(role: string): string {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, Loader2, Palette, Brain, MapPin, HardDrive, FileText } from 'lucide-react';
+import { Save, Loader2, Palette, Brain, MapPin, HardDrive, FileText, Eye, EyeOff, CheckCircle } from 'lucide-react';
 
 interface Props {
   configs: Record<string, any>;
@@ -11,9 +11,40 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
   const [configs, setConfigs] = useState(initialConfigs);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [testingAI, setTestingAI] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const update = (key: string, value: any) => {
     setConfigs((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const testAI = async () => {
+    setTestingAI(true);
+    setTestResult(null);
+    // Save current config first so the test uses the latest key
+    try {
+      await fetch('/api/admin/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(configs),
+      });
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'Responda apenas: OK' }),
+      });
+      const data = await res.json();
+      if (data.response && !data.response.startsWith('Erro')) {
+        setTestResult({ ok: true, msg: 'Conexão bem-sucedida!' });
+      } else {
+        setTestResult({ ok: false, msg: data.response || 'Falha na conexão.' });
+      }
+    } catch {
+      setTestResult({ ok: false, msg: 'Erro de rede ao testar.' });
+    } finally {
+      setTestingAI(false);
+    }
   };
 
   const handleSave = async () => {
@@ -75,10 +106,13 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
         <SectionCard icon={Brain} title="Inteligência Artificial">
           <Field label="Provedor Padrão">
             <Select value={configs.ai_provider?.provider || 'anthropic'}
-              onChange={(e: any) => update('ai_provider', { ...configs.ai_provider, provider: e.target.value })}>
-              <option value="anthropic">Anthropic (Claude) — chave: ANTHROPIC_API_KEY</option>
-              <option value="gemini">Google Gemini — chave: GEMINI_API_KEY</option>
-              <option value="openai">OpenAI (GPT) — chave: OPENAI_API_KEY</option>
+              onChange={(e: any) => {
+                update('ai_provider', { ...configs.ai_provider, provider: e.target.value });
+                setTestResult(null);
+              }}>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="openai">OpenAI (GPT)</option>
             </Select>
           </Field>
           <Field label="Modelo">
@@ -102,6 +136,48 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
               </optgroup>
             </Select>
           </Field>
+          {/* API Key field — saved in DB, no need to touch Coolify */}
+          <Field label={`Chave de API — ${(configs.ai_provider?.provider || 'anthropic').toUpperCase()}`}>
+            <div className="relative">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={(() => {
+                  const provider = configs.ai_provider?.provider || 'anthropic';
+                  return configs[`${provider}_api_key`]?.key || '';
+                })()}
+                onChange={(e: any) => {
+                  const provider = configs.ai_provider?.provider || 'anthropic';
+                  update(`${provider}_api_key`, { key: e.target.value });
+                  setTestResult(null);
+                }}
+                placeholder={
+                  ({ anthropic: 'sk-ant-...', gemini: 'AIza...', openai: 'sk-...' } as Record<string, string>)[
+                    configs.ai_provider?.provider || 'anthropic'
+                  ] || 'Cole sua chave aqui'
+                }
+                className={`${inputCls} pr-10 font-mono text-sm`}
+              />
+              <button type="button" onClick={() => setShowKey((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-subtle hover:text-body transition-colors">
+                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-subtle mt-1">
+              A chave é armazenada no banco de dados e tem prioridade sobre variáveis de ambiente.
+            </p>
+          </Field>
+          <div className="flex items-center gap-3">
+            <button onClick={testAI} disabled={testingAI}
+              className="flex items-center gap-2 text-sm font-medium border border-gray-200 dark:border-gray-700 px-4 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50">
+              {testingAI ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              Testar Conexão
+            </button>
+            {testResult && (
+              <span className={`text-sm font-medium ${testResult.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {testResult.ok ? '✓' : '✗'} {testResult.msg}
+              </span>
+            )}
+          </div>
         </SectionCard>
 
         <SectionCard icon={Palette} title="Aparência / História de Cobertura">

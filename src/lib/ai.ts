@@ -7,6 +7,19 @@ async function getAIConfig() {
   return (config?.value as any) ?? { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' };
 }
 
+async function getAPIKey(provider: string): Promise<string | undefined> {
+  // DB key (set via admin panel) takes priority over env vars
+  const cfg = await prisma.systemConfig.findUnique({ where: { key: `${provider}_api_key` } });
+  const dbKey = (cfg?.value as any)?.key?.trim();
+  if (dbKey) return dbKey;
+  const envMap: Record<string, string | undefined> = {
+    anthropic: process.env.ANTHROPIC_API_KEY,
+    gemini: process.env.GEMINI_API_KEY,
+    openai: process.env.OPENAI_API_KEY,
+  };
+  return envMap[provider];
+}
+
 const systemPrompt = `Você é um assistente de inteligência especializado em análise de informações,
 elaboração de relatórios e apoio operacional. Responda sempre em português brasileiro de forma
 profissional, objetiva e precisa.`;
@@ -17,8 +30,10 @@ export async function queryAI(userId: string, query: string, context?: string): 
   let tokens = 0;
   const fullSystemPrompt = context ? `${systemPrompt}\n\nContexto: ${context}` : systemPrompt;
 
-  if (config.provider === 'anthropic' && process.env.ANTHROPIC_API_KEY) {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const apiKey = await getAPIKey(config.provider);
+
+  if (config.provider === 'anthropic' && apiKey) {
+    const client = new Anthropic({ apiKey });
     const msg = await client.messages.create({
       model: config.model || 'claude-haiku-4-5-20251001',
       max_tokens: 2000,
@@ -28,9 +43,8 @@ export async function queryAI(userId: string, query: string, context?: string): 
     response = msg.content[0].type === 'text' ? msg.content[0].text : 'Sem resposta';
     tokens = msg.usage.input_tokens + msg.usage.output_tokens;
 
-  } else if (config.provider === 'gemini' && process.env.GEMINI_API_KEY) {
+  } else if (config.provider === 'gemini' && apiKey) {
     const modelName = config.model || 'gemini-1.5-flash';
-    // Gemini 1.0 (gemini-pro) doesn't support system_instruction
     const supportsSystemInstruction = modelName.includes('1.5') || modelName.includes('2.');
     const requestBody = supportsSystemInstruction
       ? {
@@ -43,7 +57,7 @@ export async function queryAI(userId: string, query: string, context?: string): 
           generationConfig: { maxOutputTokens: 2000 },
         };
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }
     );
     if (!geminiRes.ok) {
@@ -53,8 +67,8 @@ export async function queryAI(userId: string, query: string, context?: string): 
     const geminiData = await geminiRes.json();
     response = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Sem resposta';
 
-  } else if (config.provider === 'openai' && process.env.OPENAI_API_KEY) {
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  } else if (config.provider === 'openai' && apiKey) {
+    const openai = new OpenAI({ apiKey });
     const completion = await openai.chat.completions.create({
       model: config.model || 'gpt-4o',
       messages: [
@@ -67,14 +81,9 @@ export async function queryAI(userId: string, query: string, context?: string): 
     tokens = completion.usage?.total_tokens ?? 0;
 
   } else {
-    const providerKey: Record<string, string> = {
-      anthropic: 'ANTHROPIC_API_KEY',
-      gemini: 'GEMINI_API_KEY',
-      openai: 'OPENAI_API_KEY',
-    };
-    const key = providerKey[config.provider] || 'uma chave de API';
+    const where = apiKey ? 'a chave está configurada mas o provedor é desconhecido' : 'nenhuma chave de API encontrada';
     throw new Error(
-      `Provedor "${config.provider}" selecionado mas a variável ${key} não está configurada no Coolify.`
+      `Provedor "${config.provider}" não pôde ser usado: ${where}. Configure a chave em Configurações → Inteligência Artificial.`
     );
   }
 
