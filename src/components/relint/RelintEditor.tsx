@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Save, Send, Eye, Edit3, Plus, Trash2, FileDown, Loader2, Sparkles } from 'lucide-react';
+import { Save, Send, Edit3, Loader2, Sparkles } from 'lucide-react';
 import { generateRelintNumber, formatDate, getClassificationColor } from '@/lib/utils';
 import { RelintPreview } from './RelintPreview';
 
@@ -76,96 +76,96 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
     try {
       const method = initialData?.id ? 'PUT' : 'POST';
       const url = initialData?.id ? `/api/relints/${initialData.id}` : '/api/relints';
-
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, status }),
       });
-
       if (!res.ok) throw new Error('Erro ao salvar');
       router.push('/relints');
       router.refresh();
-    } catch (err) {
+    } catch {
       alert('Erro ao salvar relatório.');
     } finally {
       setSaving(false);
     }
   };
 
+  const inputCls = 'w-full input-base px-3 py-2 text-sm';
+
   const editor = (
     <div className="space-y-5">
-      {/* Cabeçalho */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+      {/* Identificação */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-title mb-4 flex items-center gap-2">
           <Edit3 className="w-4 h-4" /> Identificação
         </h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Número do Relatório</label>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Número do Relatório</label>
             <input value={form.number} onChange={(e) => update('number', e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sigma-400 focus:ring-2 focus:ring-sigma-400/10 font-mono" />
+              className={`${inputCls} font-mono`} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Data</label>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Data</label>
             <input type="date" value={form.date} onChange={(e) => update('date', e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sigma-400 focus:ring-2 focus:ring-sigma-400/10" />
+              className={inputCls} />
           </div>
           <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Assunto *</label>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Assunto *</label>
             <input value={form.subject} onChange={(e) => update('subject', e.target.value)}
               placeholder="Ex: IMPLEMENTAÇÃO DE VISITAÇÃO EM UNIDADE PRISIONAL"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sigma-400 focus:ring-2 focus:ring-sigma-400/10 uppercase" />
+              className={`${inputCls} uppercase`} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Difusão *</label>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Difusão *</label>
             <input value={form.diffusion} onChange={(e) => update('diffusion', e.target.value)}
               placeholder="Ex: SECRETÁRIO DE JUSTIÇA"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sigma-400 focus:ring-2 focus:ring-sigma-400/10 uppercase" />
+              className={`${inputCls} uppercase`} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Classificação</label>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Classificação</label>
             <select value={form.classification} onChange={(e) => update('classification', e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sigma-400 focus:ring-2 focus:ring-sigma-400/10">
+              className={inputCls}>
               {['RESERVADO', 'CONFIDENCIAL', 'SECRETO', 'ULTRA_SECRETO'].map((c) => (
                 <option key={c} value={c}>{c.replace('_', ' ')}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Grupo / Setor *</label>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Grupo / Setor *</label>
             <select value={form.groupId} onChange={(e) => update('groupId', e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sigma-400 focus:ring-2 focus:ring-sigma-400/10">
+              className={inputCls}>
               <option value="">Selecione...</option>
               {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Template</label>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Template</label>
             <select value={form.templateId} onChange={(e) => update('templateId', e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-sigma-400 focus:ring-2 focus:ring-sigma-400/10">
+              className={inputCls}>
               {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
         </div>
       </div>
 
-      {/* Corpo */}
+      {/* Seções de texto */}
       {[
-        { key: 'introduction', label: 'Introdução', placeholder: 'Descreva o contexto e objetivo do relatório...',
+        { key: 'introduction', label: 'Introdução', rows: 4, placeholder: 'Descreva o contexto e objetivo do relatório...',
           aiPrompt: `Escreva uma introdução profissional para um relatório de inteligência sobre: ${form.subject}` },
-        { key: 'body', label: 'Corpo do Relatório', placeholder: 'Descreva os fatos, análises e informações coletadas...',
+        { key: 'body', label: 'Corpo do Relatório', rows: 8, placeholder: 'Descreva os fatos, análises e informações coletadas...',
           aiPrompt: `Escreva o corpo de um relatório de inteligência sobre: ${form.subject}. Inclua análise técnica e pontos críticos.` },
-        { key: 'conclusion', label: 'Conclusão', placeholder: 'Apresente as conclusões baseadas nas informações...',
+        { key: 'conclusion', label: 'Conclusão', rows: 4, placeholder: 'Apresente as conclusões baseadas nas informações...',
           aiPrompt: `Escreva uma conclusão para um relatório de inteligência sobre: ${form.subject}` },
-        { key: 'recommendations', label: 'Recomendações (Opcional)', placeholder: 'Liste as recomendações e medidas sugeridas...',
+        { key: 'recommendations', label: 'Recomendações (Opcional)', rows: 4, placeholder: 'Liste as recomendações e medidas sugeridas...',
           aiPrompt: `Escreva recomendações técnicas para um relatório de inteligência sobre: ${form.subject}` },
-      ].map(({ key, label, placeholder, aiPrompt }) => (
-        <div key={key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      ].map(({ key, label, rows, placeholder, aiPrompt }) => (
+        <div key={key} className="card p-6">
           <div className="flex items-center justify-between mb-3">
-            <label className="text-sm font-semibold text-gray-700">{label}</label>
+            <label className="text-sm font-semibold text-title">{label}</label>
             <button onClick={() => handleAI(key, aiPrompt)} disabled={!!aiLoading}
-              className="flex items-center gap-1.5 text-xs text-sigma-600 hover:text-sigma-700 font-medium bg-sigma-50 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 transition-colors disabled:opacity-50">
+              className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
               {aiLoading === key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
               Gerar com IA
             </button>
@@ -174,8 +174,8 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
             value={(form.content as any)[key]}
             onChange={(e) => updateContent(key, e.target.value)}
             placeholder={placeholder}
-            rows={key === 'body' ? 8 : 4}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-sigma-400 focus:ring-2 focus:ring-sigma-400/10 resize-none leading-relaxed"
+            rows={rows}
+            className="w-full input-base px-4 py-3 resize-none leading-relaxed"
           />
         </div>
       ))}
@@ -185,18 +185,21 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
   return (
     <div className="flex flex-col gap-4">
       {/* Toolbar */}
-      <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
-        <div className="flex items-center gap-1 bg-gray-50 rounded-xl p-1">
+      <div className="card px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 rounded-xl p-1">
           {([['split', 'Lado a Lado'], ['edit', 'Edição'], ['preview', 'Visualização']] as const).map(([view, label]) => (
             <button key={view} onClick={() => setActiveView(view)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${activeView === view ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all
+                ${activeView === view
+                  ? 'bg-white dark:bg-gray-700 text-title shadow-sm'
+                  : 'text-subtle hover:text-body'}`}>
               {label}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => handleSave('DRAFT')} disabled={saving}
-            className="flex items-center gap-2 text-sm font-medium text-gray-700 border border-gray-200 px-4 py-2 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50">
+            className="flex items-center gap-2 text-sm font-medium text-body border border-gray-200 dark:border-gray-700 px-4 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Salvar Rascunho
           </button>
@@ -208,7 +211,7 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
         </div>
       </div>
 
-      {/* Content */}
+      {/* Conteúdo */}
       <div className={`${activeView === 'split' ? 'grid lg:grid-cols-2 gap-4' : ''}`}>
         {(activeView === 'edit' || activeView === 'split') && (
           <div className={activeView === 'split' ? 'overflow-y-auto max-h-[calc(100vh-14rem)]' : ''}>

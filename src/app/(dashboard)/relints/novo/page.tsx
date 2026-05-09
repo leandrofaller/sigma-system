@@ -25,8 +25,8 @@ export default async function NovoRelintPage() {
   return (
     <div className="animate-fade-in">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Novo Relatório de Inteligência</h1>
-        <p className="text-gray-500 text-sm mt-1">
+        <h1 className="text-2xl font-bold text-title">Novo Relatório de Inteligência</h1>
+        <p className="text-body text-sm mt-1">
           Preencha os campos e visualize o documento em tempo real
         </p>
       </div>
