@@ -31,7 +31,7 @@ export async function queryAI(userId: string, query: string, context?: string): 
 
   } else if (config.provider === 'gemini' && process.env.GEMINI_API_KEY) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const modelName = config.model || 'gemini-1.5-flash';
+    const modelName = (config.model === 'gemini-1.5-pro' ? 'gemini-1.5-flash' : config.model) || 'gemini-1.5-flash';
     const geminiModel = genAI.getGenerativeModel({ model: modelName });
     const result = await geminiModel.generateContent([
       { text: fullSystemPrompt },

@@ -4,8 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { formatDate } from '@/lib/utils';
 import { Printer } from 'lucide-react';
 
-interface RelintImage { url: string; caption: string; }
-
 interface FormData {
   number: string;
   date: string;
@@ -14,13 +12,12 @@ interface FormData {
   classification: string;
   content: {
     introduction: string;
-    body: string;
+    body: any; // string (legacy) | Block[]
     conclusion: string;
     recommendations: string;
     diffusionPrev?: string;
     reference?: string;
     annexes?: string;
-    images?: RelintImage[];
   };
 }
 
@@ -92,7 +89,11 @@ export function RelintPreview({ form }: Props) {
   const diffusionPrev = form.content.diffusionPrev ?? '***';
   const reference = form.content.reference ?? '***';
   const annexes = form.content.annexes ?? '***';
-  const images: RelintImage[] = form.content.images ?? [];
+
+  const bodyBlocks: Array<{ type: string; id?: string; content?: string; url?: string; caption?: string }> =
+    typeof form.content.body === 'string'
+      ? (form.content.body ? [{ type: 'text', content: form.content.body }] : [])
+      : (Array.isArray(form.content.body) ? form.content.body : []);
 
   /* ── Estilos reutilizados ── */
   const stamp = {
@@ -162,26 +163,22 @@ export function RelintPreview({ form }: Props) {
 
         {/* Conteúdo */}
         {form.content.introduction && <div style={para}>{form.content.introduction}</div>}
-        {form.content.body && <div style={para}>{form.content.body}</div>}
 
-        {/* Imagens do relatório */}
-        {images.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
-            <p style={{ fontWeight: 'bold', fontSize: '11pt', textTransform: 'uppercase', marginBottom: '8px' }}>Registro Fotográfico</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-              {images.map((img, i) => (
-                <div key={i} style={{ textAlign: 'center', maxWidth: '45%' }}>
-                  <img src={img.url} alt={img.caption || `Foto ${i + 1}`}
-                    style={{ maxWidth: '100%', maxHeight: '200px', objectFit: 'contain', border: '1px solid #ccc' }} />
-                  {img.caption && (
-                    <p style={{ fontSize: '8pt', color: '#555', marginTop: '4px', textAlign: 'center' }}>
-                      Foto {i + 1}: {img.caption}
-                    </p>
-                  )}
-                </div>
-              ))}
+        {/* Corpo do relatório — blocos de texto e imagens intercalados */}
+        {bodyBlocks.map((block, i) =>
+          block.type === 'text' ? (
+            block.content ? <div key={i} style={para}>{block.content}</div> : null
+          ) : (
+            <div key={i} style={{ marginBottom: '14px', textAlign: 'center' }}>
+              <img src={block.url} alt={block.caption || `Imagem ${i + 1}`}
+                style={{ maxWidth: '100%', maxHeight: '280px', objectFit: 'contain' }} />
+              {block.caption && (
+                <p style={{ fontSize: '8pt', color: '#555', marginTop: '4px', textAlign: 'center' }}>
+                  {block.caption}
+                </p>
+              )}
             </div>
-          </div>
+          )
         )}
 
         {form.content.conclusion && (

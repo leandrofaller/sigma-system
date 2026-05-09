@@ -92,7 +92,7 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
               <optgroup label="Google — Gemini">
                 <option value="gemini-2.0-flash">Gemini 2.0 Flash (rápido)</option>
                 <option value="gemini-1.5-flash">Gemini 1.5 Flash (econômico)</option>
-                <option value="gemini-1.5-pro">Gemini 1.5 Pro (avançado)</option>
+                <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash Latest</option>
               </optgroup>
               <optgroup label="OpenAI — GPT">
                 <option value="gpt-4o">GPT-4o</option>

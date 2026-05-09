@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Save, Send, Edit3, Loader2, Sparkles, ImagePlus, X, Image as ImageIcon } from 'lucide-react';
-import { generateRelintNumber, formatDate, getClassificationColor } from '@/lib/utils';
+import { Save, Send, Edit3, Loader2, Sparkles } from 'lucide-react';
+import { generateRelintNumber } from '@/lib/utils';
 import { RelintPreview } from './RelintPreview';
+import { BlockEditor, Block, initBlocks } from './BlockEditor';
 
 interface Props {
   templates: any[];
@@ -21,9 +21,6 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState('');
   const [activeView, setActiveView] = useState<'split' | 'edit' | 'preview'>('split');
-  const [imgDragging, setImgDragging] = useState(false);
-  const [imgUploading, setImgUploading] = useState(false);
-  const imgInputRef = useRef<HTMLInputElement>(null);
 
   const defaultTemplate = templates.find((t) => t.isDefault) || templates[0];
 
@@ -38,13 +35,12 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
     status: initialData?.status || 'DRAFT',
     content: {
       introduction: initialData?.content?.introduction || '',
-      body: initialData?.content?.body || '',
+      body: initBlocks(initialData?.content?.body) as any,
       conclusion: initialData?.content?.conclusion || '',
       recommendations: initialData?.content?.recommendations || '',
       diffusionPrev: initialData?.content?.diffusionPrev ?? '***',
       reference: initialData?.content?.reference ?? '***',
       annexes: initialData?.content?.annexes ?? '***',
-      images: initialData?.content?.images ?? [],
     },
   });
 
@@ -54,6 +50,10 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
 
   const updateContent = useCallback((field: string, value: string) => {
     setForm((prev) => ({ ...prev, content: { ...prev.content, [field]: value } }));
+  }, []);
+
+  const updateBodyBlocks = useCallback((blocks: Block[]) => {
+    setForm((prev) => ({ ...prev, content: { ...prev.content, body: blocks as any } }));
   }, []);
 
   const handleAI = async (field: string, prompt: string) => {
@@ -68,7 +68,11 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
         }),
       });
       const data = await res.json();
-      updateContent(field, data.response);
+      if (field === 'body') {
+        updateBodyBlocks([{ type: 'text', id: crypto.randomUUID(), content: data.response }]);
+      } else {
+        updateContent(field, data.response);
+      }
     } finally {
       setAiLoading('');
     }
@@ -96,37 +100,6 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
     } finally {
       setSaving(false);
     }
-  };
-
-  const uploadImage = async (file: File) => {
-    if (!file.type.startsWith('image/')) { alert('Apenas imagens são permitidas.'); return; }
-    setImgUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/relints/upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (res.ok) {
-        const images = [...((form.content as any).images ?? []), { url: data.url, caption: '' }];
-        updateContent('images', images as any);
-      } else {
-        alert(data.error || 'Erro ao enviar imagem.');
-      }
-    } finally {
-      setImgUploading(false);
-    }
-  };
-
-  const removeImage = (idx: number) => {
-    const images = [...((form.content as any).images ?? [])];
-    images.splice(idx, 1);
-    updateContent('images', images as any);
-  };
-
-  const updateCaption = (idx: number, caption: string) => {
-    const images = [...((form.content as any).images ?? [])];
-    images[idx] = { ...images[idx], caption };
-    updateContent('images', images as any);
   };
 
   const inputCls = 'w-full input-base px-3 py-2 text-sm';
@@ -206,96 +179,88 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
         </div>
       </div>
 
-      {/* Seções de texto */}
-      {[
-        { key: 'introduction', label: 'Introdução', rows: 4, placeholder: 'Descreva o contexto e objetivo do relatório...',
-          aiPrompt: `Escreva uma introdução profissional para um relatório de inteligência sobre: ${form.subject}` },
-        { key: 'body', label: 'Corpo do Relatório', rows: 8, placeholder: 'Descreva os fatos, análises e informações coletadas...',
-          aiPrompt: `Escreva o corpo de um relatório de inteligência sobre: ${form.subject}. Inclua análise técnica e pontos críticos.` },
-        { key: 'conclusion', label: 'Conclusão', rows: 4, placeholder: 'Apresente as conclusões baseadas nas informações...',
-          aiPrompt: `Escreva uma conclusão para um relatório de inteligência sobre: ${form.subject}` },
-        { key: 'recommendations', label: 'Recomendações (Opcional)', rows: 4, placeholder: 'Liste as recomendações e medidas sugeridas...',
-          aiPrompt: `Escreva recomendações técnicas para um relatório de inteligência sobre: ${form.subject}` },
-      ].map(({ key, label, rows, placeholder, aiPrompt }) => (
-        <div key={key} className="card p-6">
-          <div className="flex items-center justify-between mb-3">
-            <label className="text-sm font-semibold text-title">{label}</label>
-            <button onClick={() => handleAI(key, aiPrompt)} disabled={!!aiLoading}
-              className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
-              {aiLoading === key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-              Gerar com IA
-            </button>
-          </div>
-          <textarea
-            value={(form.content as any)[key]}
-            onChange={(e) => updateContent(key, e.target.value)}
-            placeholder={placeholder}
-            rows={rows}
-            spellCheck
-            lang="pt-BR"
-            className="w-full input-base px-4 py-3 resize-none leading-relaxed"
-          />
-        </div>
-      ))}
-      {/* ── Seção de Imagens ── */}
+      {/* Introdução */}
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <label className="text-sm font-semibold text-title flex items-center gap-2">
-            <ImageIcon className="w-4 h-4" /> Registro Fotográfico
-          </label>
-          <span className="text-xs text-subtle">{((form.content as any).images ?? []).length} foto(s)</span>
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-sm font-semibold text-title">Introdução</label>
+          <button onClick={() => handleAI('introduction', `Escreva uma introdução profissional para um relatório de inteligência sobre: ${form.subject}`)}
+            disabled={!!aiLoading}
+            className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
+            {aiLoading === 'introduction' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+            Gerar com IA
+          </button>
         </div>
+        <textarea
+          value={form.content.introduction}
+          onChange={(e) => updateContent('introduction', e.target.value)}
+          placeholder="Descreva o contexto e objetivo do relatório..."
+          rows={4}
+          spellCheck
+          lang="pt-BR"
+          className="w-full input-base px-4 py-3 resize-none leading-relaxed"
+        />
+      </div>
 
-        {/* Drop zone */}
-        <div
-          onDragOver={(e) => { e.preventDefault(); setImgDragging(true); }}
-          onDragLeave={() => setImgDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault(); setImgDragging(false);
-            const file = e.dataTransfer.files?.[0];
-            if (file) uploadImage(file);
-          }}
-          onClick={() => imgInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors mb-4 ${
-            imgDragging
-              ? 'border-sigma-400 bg-sigma-50 dark:bg-sigma-900/20'
-              : 'border-gray-200 dark:border-gray-700 hover:border-sigma-300 dark:hover:border-sigma-700'
-          }`}
-        >
-          <input ref={imgInputRef} type="file" accept="image/*" className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f); e.target.value = ''; }} />
-          {imgUploading
-            ? <Loader2 className="w-6 h-6 animate-spin text-sigma-400 mx-auto mb-1" />
-            : <ImagePlus className="w-6 h-6 text-gray-300 dark:text-gray-600 mx-auto mb-1" />}
-          <p className="text-xs text-subtle">
-            {imgUploading ? 'Enviando...' : 'Arraste uma foto aqui ou clique para selecionar'}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">PNG, JPG, WEBP — aparecerá no relatório</p>
+      {/* Corpo do Relatório — block editor */}
+      <div className="card p-6">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-sm font-semibold text-title">Corpo do Relatório</label>
+          <button onClick={() => handleAI('body', `Escreva o corpo de um relatório de inteligência sobre: ${form.subject}. Inclua análise técnica e pontos críticos.`)}
+            disabled={!!aiLoading}
+            className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
+            {aiLoading === 'body' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+            Gerar com IA
+          </button>
         </div>
+        <p className="text-xs text-subtle mb-3">Use os botões entre os blocos para inserir texto ou imagens em qualquer posição.</p>
+        <BlockEditor
+          blocks={(form.content as any).body as Block[]}
+          onChange={updateBodyBlocks}
+        />
+      </div>
 
-        {/* Thumbnails */}
-        {((form.content as any).images ?? []).length > 0 && (
-          <div className="grid grid-cols-2 gap-3">
-            {((form.content as any).images as any[]).map((img: any, i: number) => (
-              <div key={i} className="relative border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-                <img src={img.url} alt={`Foto ${i + 1}`}
-                  className="w-full h-32 object-cover" />
-                <button onClick={() => removeImage(i)}
-                  className="absolute top-1.5 right-1.5 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors">
-                  <X className="w-3 h-3" />
-                </button>
-                <div className="p-2">
-                  <input
-                    value={img.caption}
-                    onChange={(e) => updateCaption(i, e.target.value)}
-                    placeholder={`Legenda da foto ${i + 1}...`}
-                    className="w-full input-base px-2 py-1 text-xs"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Conclusão */}
+      <div className="card p-6">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-sm font-semibold text-title">Conclusão</label>
+          <button onClick={() => handleAI('conclusion', `Escreva uma conclusão para um relatório de inteligência sobre: ${form.subject}`)}
+            disabled={!!aiLoading}
+            className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
+            {aiLoading === 'conclusion' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+            Gerar com IA
+          </button>
+        </div>
+        <textarea
+          value={form.content.conclusion}
+          onChange={(e) => updateContent('conclusion', e.target.value)}
+          placeholder="Apresente as conclusões baseadas nas informações..."
+          rows={4}
+          spellCheck
+          lang="pt-BR"
+          className="w-full input-base px-4 py-3 resize-none leading-relaxed"
+        />
+      </div>
+
+      {/* Recomendações */}
+      <div className="card p-6">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-sm font-semibold text-title">Recomendações (Opcional)</label>
+          <button onClick={() => handleAI('recommendations', `Escreva recomendações técnicas para um relatório de inteligência sobre: ${form.subject}`)}
+            disabled={!!aiLoading}
+            className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
+            {aiLoading === 'recommendations' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+            Gerar com IA
+          </button>
+        </div>
+        <textarea
+          value={form.content.recommendations}
+          onChange={(e) => updateContent('recommendations', e.target.value)}
+          placeholder="Liste as recomendações e medidas sugeridas..."
+          rows={4}
+          spellCheck
+          lang="pt-BR"
+          className="w-full input-base px-4 py-3 resize-none leading-relaxed"
+        />
       </div>
     </div>
   );
