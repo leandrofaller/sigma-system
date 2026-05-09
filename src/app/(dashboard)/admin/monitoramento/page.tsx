@@ -12,18 +12,32 @@ export default async function MonitoramentoPage() {
   const user = session.user as any;
   if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') redirect('/dashboard');
 
-  const [locations, allUsers] = await Promise.all([
-    prisma.userLocation.findMany({
-      orderBy: { timestamp: 'desc' },
-      take: 500,
-      include: { user: { select: { id: true, name: true, email: true } } },
-    }),
-    prisma.user.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, email: true },
-      orderBy: { name: 'asc' },
-    }),
-  ]);
+  let locations: any[] = [];
+  let allUsers: any[] = [];
+  let tablesMissing = false;
+
+  try {
+    const [locs, users] = await Promise.all([
+      prisma.userLocation.findMany({
+        orderBy: { timestamp: 'desc' },
+        take: 500,
+        include: { user: { select: { id: true, name: true, email: true } } },
+      }),
+      prisma.user.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, email: true },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+    locations = locs;
+    allUsers = users;
+  } catch (err: any) {
+    if (err?.code === 'P2021' || err?.message?.includes('does not exist')) {
+      tablesMissing = true;
+    } else {
+      throw err;
+    }
+  }
 
   // Serialize dates
   const serialized = locations.map((l) => ({
@@ -39,10 +53,18 @@ export default async function MonitoramentoPage() {
           Visualize em tempo real a última posição registrada de cada usuário. Os dados são coletados no login com permissão do navegador.
         </p>
       </div>
-      <GeoMonitorPanel
-        locations={serialized as any}
-        allUsers={allUsers as any}
-      />
+      {tablesMissing ? (
+        <div className="rounded-xl border border-amber-700/40 bg-amber-900/20 p-6 text-amber-300 text-sm space-y-2">
+          <p className="font-semibold">Tabela de localização não encontrada no banco de dados.</p>
+          <p className="text-amber-400/80">Execute a migração do Prisma para criar a tabela <code className="bg-amber-900/40 px-1 rounded">user_locations</code>:</p>
+          <pre className="bg-gray-900 text-gray-300 rounded-lg p-3 text-xs overflow-x-auto">npx prisma migrate deploy</pre>
+        </div>
+      ) : (
+        <GeoMonitorPanel
+          locations={serialized as any}
+          allUsers={allUsers as any}
+        />
+      )}
     </div>
   );
 }

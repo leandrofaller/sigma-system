@@ -29,11 +29,11 @@ const classColors: Record<string, string> = {
   ULTRA_SECRETO: '#6d28d9',
 };
 
+const LEGAL_TEXT = `"O teor sigiloso deste documento é protegido e controlado pela Lei nº 12.527, de 18.11.2011, que restringe o acesso, a divulgação e o tratamento deste documento a pessoa devidamente credenciadas que tenham necessidade de conhecê-lo. A divulgação, a revelação, o fornecimento, a utilização ou a reprodução desautorizada das informações e conhecimentos utilizados, contidos ou veiculados por meio deste documento, a qualquer tempo, meio e modo, inclusive mediante acesso ou facilitação de acessos indevidos, caracterizam os crimes de violação de sigilo funcional ou de divulgação de segredo tipificados no Código Penal, bem como configuram condutas de improbidade administrativa."`;
+
 function buildPrintHtml(
   contentHtml: string,
-  title: string,
-  color: string,
-  classLabel: string
+  title: string
 ): string {
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -41,7 +41,7 @@ function buildPrintHtml(
 <meta charset="UTF-8">
 <title>${title}</title>
 <style>
-  @page { size: A4 portrait; margin: 0; }
+  @page { size: A4 portrait; margin: 0 0 2.4cm 0; }
   * { box-sizing: border-box; }
   body {
     font-family: Arial, sans-serif;
@@ -49,7 +49,7 @@ function buildPrintHtml(
     line-height: 1.5;
     color: #000;
     background: white;
-    padding: 1.8cm 2cm 1.5cm;
+    padding: 1.8cm 2cm 0.5cm;
     margin: 0;
     width: 210mm;
     min-height: 297mm;
@@ -57,9 +57,30 @@ function buildPrintHtml(
   img { max-width: 100%; }
   p { margin: 0 0 3px; }
   hr { border: none; border-top: 1.5px solid #000; margin: 8px 0 10px; }
+  [data-print-footer] { display: none !important; }
+  .fixed-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 5px 2cm 6px;
+    border-top: 1px solid #ccc;
+    background: white;
+  }
+  .fixed-footer p {
+    font-size: 7.5pt;
+    color: #333;
+    text-align: justify;
+    line-height: 1.3;
+    margin: 0;
+  }
 </style>
 </head>
-<body>${contentHtml}<script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script></body>
+<body>
+${contentHtml}
+<div class="fixed-footer"><p>${LEGAL_TEXT}</p></div>
+<script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script>
+</body>
 </html>`;
 }
 
@@ -79,7 +100,7 @@ export function RelintPreview({ form }: Props) {
     if (!html) return;
     const win = window.open('', '_blank', 'width=900,height=700');
     if (!win) { alert('Permita pop-ups para imprimir.'); return; }
-    win.document.write(buildPrintHtml(html, form.number, color, classLabel));
+    win.document.write(buildPrintHtml(html, form.number));
     win.document.close();
   };
 
@@ -204,17 +225,10 @@ export function RelintPreview({ form }: Props) {
           <span style={{ ...stamp, fontSize: '11pt' }}>{classLabel}</span>
         </div>
 
-        {/* Aviso legal */}
-        <div style={{ borderTop: '1px solid #ccc', paddingTop: '8px' }}>
+        {/* Aviso legal — visível na tela, substituído por rodapé fixo no print */}
+        <div data-print-footer="true" style={{ borderTop: '1px solid #ccc', paddingTop: '8px' }}>
           <p style={{ fontSize: '7.5pt', color: '#333', textAlign: 'justify', lineHeight: '1.3', margin: 0 }}>
-            "O teor sigiloso deste documento é protegido e controlado pela Lei nº 12.527, de 18.11.2011,
-            que restringe o acesso, a divulgação e o tratamento deste documento a pessoa devidamente
-            credenciadas que tenham necessidade de conhecê-lo. A divulgação, a revelação, o fornecimento,
-            a utilização ou a reprodução desautorizada das informações e conhecimentos utilizados, contidos
-            ou veiculados por meio deste documento, a qualquer tempo, meio e modo, inclusive mediante acesso
-            ou facilitação de acessos indevidos, caracterizam os crimes de violação de sigilo funcional ou
-            de divulgação de segredo tipificados no Código Penal, bem como configuram condutas de
-            improbidade administrativa."
+            {LEGAL_TEXT}
           </p>
         </div>
       </div>
