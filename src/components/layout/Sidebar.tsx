@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, Shield, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
 const adminItems: NavItem[] = [
   { label: 'Usuários', href: '/admin/usuarios', icon: Users },
   { label: 'Grupos / Setores', href: '/admin/grupos', icon: FolderOpen, roles: ['SUPER_ADMIN'] },
+  { label: 'Monitoramento', href: '/admin/monitoramento', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Auditoria', href: '/auditoria', icon: ClipboardList },
   { label: 'Configurações', href: '/admin/configuracoes', icon: Settings, roles: ['SUPER_ADMIN'] },
 ];

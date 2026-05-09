@@ -10,7 +10,10 @@
       "Bash(npx tsc *)",
       "Bash(npx prisma *)",
       "Bash(npm install *)",
-      "Bash(mkdir -p \"f:\\\\relatorio_claude\\\\public\\\\logos\" && echo done)"
+      "Bash(mkdir -p \"f:\\\\relatorio_claude\\\\public\\\\logos\" && echo done)",
+      "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -File -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -First 50)",
+      "Bash(xargs grep -l \"map\\\\|Map\\\\|leaflet\\\\|mapbox\\\\|geom\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
