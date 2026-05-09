@@ -4,7 +4,7 @@ import { authConfig } from './auth.config';
 const { auth } = NextAuth(authConfig);
 
 const publicRoutes = ['/', '/login', '/rastreamento', '/sobre', '/contato'];
-const apiPublicRoutes = ['/api/auth', '/api/health'];
+const apiPublicRoutes = ['/api/auth', '/api/health', '/api/access-requests'];
 
 export default auth((req) => {
   const { nextUrl } = req;
