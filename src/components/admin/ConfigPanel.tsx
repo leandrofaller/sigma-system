@@ -74,20 +74,31 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
       <div className="grid lg:grid-cols-2 gap-6">
         <SectionCard icon={Brain} title="Inteligência Artificial">
           <Field label="Provedor Padrão">
-            <Select value={configs.ai_provider?.provider || 'openai'}
+            <Select value={configs.ai_provider?.provider || 'anthropic'}
               onChange={(e: any) => update('ai_provider', { ...configs.ai_provider, provider: e.target.value })}>
-              <option value="openai">OpenAI (GPT)</option>
-              <option value="gemini">Google Gemini</option>
+              <option value="anthropic">Anthropic (Claude) — chave: ANTHROPIC_API_KEY</option>
+              <option value="gemini">Google Gemini — chave: GEMINI_API_KEY</option>
+              <option value="openai">OpenAI (GPT) — chave: OPENAI_API_KEY</option>
             </Select>
           </Field>
           <Field label="Modelo">
-            <Select value={configs.ai_provider?.model || 'gpt-4o'}
+            <Select value={configs.ai_provider?.model || 'claude-haiku-4-5-20251001'}
               onChange={(e: any) => update('ai_provider', { ...configs.ai_provider, model: e.target.value })}>
-              <option value="gpt-4o">GPT-4o (OpenAI)</option>
-              <option value="gpt-4-turbo">GPT-4 Turbo (OpenAI)</option>
-              <option value="gpt-3.5-turbo">GPT-3.5 Turbo (OpenAI)</option>
-              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-              <option value="gemini-pro">Gemini Pro</option>
+              <optgroup label="Anthropic — Claude">
+                <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (rápido e econômico)</option>
+                <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (equilibrado)</option>
+                <option value="claude-opus-4-7">Claude Opus 4.7 (mais capaz)</option>
+              </optgroup>
+              <optgroup label="Google — Gemini">
+                <option value="gemini-2.0-flash">Gemini 2.0 Flash (rápido)</option>
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash (econômico)</option>
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro (avançado)</option>
+              </optgroup>
+              <optgroup label="OpenAI — GPT">
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                <option value="gpt-3.5-turbo">GPT-3.5 Turbo (econômico)</option>
+              </optgroup>
             </Select>
           </Field>
         </SectionCard>
