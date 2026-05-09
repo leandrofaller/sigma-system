@@ -9,10 +9,12 @@
       "Bash(mkdir -p \"f:\\\\relatorio_claude\\\\src\\\\app\\\\api\\\\uploads\\\\[...path]\" 2>/dev/null; echo done)",
       "Bash(npx tsc *)",
       "Bash(npx prisma *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(mkdir -p \"f:\\\\relatorio_claude\\\\public\\\\logos\" && echo done)"
     ],
     "additionalDirectories": [
-      "f:\\relatorio_claude\\src\\app\\api\\uploads"
+      "f:\\relatorio_claude\\src\\app\\api\\uploads",
+      "f:\\relatorio_claude\\public"
     ]
   }
 }
