@@ -55,9 +55,9 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          Bem-vindo, <span className="font-medium text-gray-700">{user.name}</span> —{' '}
+        <h1 className="text-2xl font-bold text-title">Dashboard</h1>
+        <p className="text-body text-sm mt-1">
+          Bem-vindo, <span className="font-medium text-gray-700 dark:text-gray-300">{user.name}</span> —{' '}
           {formatDate(new Date())}
         </p>
       </div>

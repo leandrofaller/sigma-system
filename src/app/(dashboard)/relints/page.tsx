@@ -20,8 +20,8 @@ export default async function RelintsPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Relatórios de Inteligência</h1>
-          <p className="text-gray-500 text-sm mt-1">
+          <h1 className="text-2xl font-bold text-title">Relatórios de Inteligência</h1>
+          <p className="text-body text-sm mt-1">
             {relints.length} relatório{relints.length !== 1 ? 's' : ''} encontrado{relints.length !== 1 ? 's' : ''}
           </p>
         </div>

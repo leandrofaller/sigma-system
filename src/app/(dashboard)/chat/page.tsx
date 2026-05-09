@@ -30,8 +30,8 @@ export default async function ChatPage() {
   return (
     <div className="animate-fade-in h-[calc(100vh-10rem)]">
       <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">Chat Interno</h1>
-        <p className="text-gray-500 text-sm mt-1">Comunicação segura e compartimentada</p>
+        <h1 className="text-2xl font-bold text-title">Chat Interno</h1>
+        <p className="text-body text-sm mt-1">Comunicação segura e compartimentada</p>
       </div>
       <ChatWindow
         currentUser={user}

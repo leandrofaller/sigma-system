@@ -29,25 +29,26 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 237 87% 64%;
+    color-scheme: dark;
+    --background: 15 15% 8%;
+    --foreground: 210 40% 92%;
+    --card: 220 16% 12%;
+    --card-foreground: 210 40% 92%;
+    --popover: 220 16% 12%;
+    --popover-foreground: 210 40% 92%;
+    --primary: 237 80% 68%;
     --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --secondary: 220 16% 18%;
+    --secondary-foreground: 210 40% 92%;
+    --muted: 220 16% 18%;
+    --muted-foreground: 215 20% 60%;
+    --accent: 220 16% 18%;
+    --accent-foreground: 210 40% 92%;
+    --destructive: 0 55% 40%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 237 87% 64%;
+    --border: 220 16% 20%;
+    --input: 220 16% 20%;
+    --ring: 237 80% 68%;
   }
 }
 
@@ -58,6 +59,7 @@
 }
 
 @layer components {
+  /* Navegação lateral */
   .sidebar-item {
     @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer;
   }
@@ -67,8 +69,47 @@
   .sidebar-item-inactive {
     @apply text-muted-foreground hover:bg-muted hover:text-foreground;
   }
+
+  /* Card padrão adaptado ao tema */
+  .card {
+    @apply bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm;
+  }
+  .card-header {
+    @apply border-b border-gray-100 dark:border-gray-800;
+  }
+  .card-divide {
+    @apply divide-y divide-gray-100 dark:divide-gray-800;
+  }
+  .card-row-hover {
+    @apply hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors;
+  }
+
+  /* Textos adaptativos */
+  .text-title {
+    @apply text-gray-900 dark:text-gray-100;
+  }
+  .text-body {
+    @apply text-gray-600 dark:text-gray-400;
+  }
+  .text-subtle {
+    @apply text-gray-400 dark:text-gray-500;
+  }
+
+  /* Inputs */
+  .input-base {
+    @apply bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-sigma-400 focus:bg-white dark:focus:bg-gray-700 transition-all;
+  }
+
+  /* Badges de ícone */
+  .icon-badge-blue  { @apply bg-blue-50   dark:bg-blue-900/20   text-blue-600   dark:text-blue-400; }
+  .icon-badge-green { @apply bg-green-50  dark:bg-green-900/20  text-green-600  dark:text-green-400; }
+  .icon-badge-yellow{ @apply bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400; }
+  .icon-badge-purple{ @apply bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400; }
+  .icon-badge-sigma { @apply bg-sigma-50  dark:bg-sigma-900/20  text-sigma-600  dark:text-sigma-400; }
+
+  /* Outros */
   .card-glass {
-    @apply bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl rounded-2xl;
+    @apply bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-white/20 dark:border-gray-700/40 shadow-xl rounded-2xl;
   }
   .gradient-sigma {
     @apply bg-gradient-to-br from-sigma-600 via-sigma-700 to-sigma-900;
@@ -90,17 +131,14 @@
   }
 }
 
-/* Scrollbar customization */
+/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { @apply bg-transparent; }
 ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
 ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground/30; }
 
-/* Print styles for RELINT */
+/* Print styles */
 @media print {
   .no-print { display: none !important; }
-  .relint-preview {
-    padding: 2cm;
-    font-size: 12pt;
-  }
+  .relint-preview { padding: 2cm; font-size: 12pt; }
 }
