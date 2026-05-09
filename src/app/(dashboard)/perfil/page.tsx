@@ -20,7 +20,7 @@ export default function PerfilPage() {
   const roleLabel: Record<string, string> = {
     SUPER_ADMIN: 'Super Administrador',
     ADMIN: 'Administrador',
-    REGULAR: 'Operador',
+    OPERATOR: 'Operador',
   };
 
   async function handleChangePassword(e: React.FormEvent) {

@@ -19,7 +19,7 @@ export async function createAuditLog({
   request,
 }: AuditParams): Promise<void> {
   try {
-    const headersList = request ? Object.fromEntries(request.headers) : {};
+    const headersList = request ? Object.fromEntries(Array.from(request.headers.entries())) : {};
     const ipAddress =
       headersList['x-forwarded-for']?.split(',')[0] ||
       headersList['x-real-ip'] ||

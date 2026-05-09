@@ -15,7 +15,7 @@ async function getGroups() {
   return prisma.group.findMany({ where: { isActive: true } });
 }
 
-export default async function RelıntsRecebidosPage() {
+export default async function RelintsRecebidosPage() {
   const session = await auth();
   const user = session!.user as any;
   const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
