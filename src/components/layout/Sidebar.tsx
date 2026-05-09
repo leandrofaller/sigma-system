@@ -118,7 +118,7 @@ export function Sidebar({ user }: SidebarProps) {
           {!collapsed && <UserCircle className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />}
         </Link>
         <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={async () => { await signOut({ redirect: false }); window.location.href = '/login'; }}
           className={cn(
             'mt-1 flex items-center gap-2 px-3 py-2 rounded-lg w-full text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-colors text-sm',
             collapsed && 'justify-center'

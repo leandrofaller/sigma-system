@@ -31,9 +31,11 @@ Thumbs.db
 *.swp
 *.swo
 
-# Uploads
+# Uploads (runtime files, not source code)
 uploads/
 public/uploads/
+# But keep the API route for serving uploaded files
+!src/app/api/uploads/
 
 # Prisma
 prisma/migrations/

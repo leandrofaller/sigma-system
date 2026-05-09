@@ -232,6 +232,20 @@ model AIQuery {
   @@map("ai_queries")
 }
 
+model AccessRequest {
+  id         String    @id @default(cuid())
+  name       String
+  email      String
+  message    String?   @db.Text
+  status     String    @default("PENDING")
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([status])
+  @@map("access_requests")
+}
+
 model UserLocation {
   id        String   @id @default(cuid())
   userId    String

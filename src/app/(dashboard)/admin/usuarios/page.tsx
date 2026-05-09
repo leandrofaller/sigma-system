@@ -2,16 +2,19 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { UsersTable } from '@/components/admin/UsersTable';
+import { AccessRequestsPanel } from '@/components/admin/AccessRequestsPanel';
+import { AdminUsersTabs } from '@/components/admin/AdminUsersTabs';
 
 async function getData() {
-  const [users, groups] = await Promise.all([
+  const [users, groups, requests] = await Promise.all([
     prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       include: { group: true },
     }),
     prisma.group.findMany({ where: { isActive: true } }),
+    prisma.accessRequest.findMany({ orderBy: { createdAt: 'desc' } }),
   ]);
-  return { users, groups };
+  return { users, groups, requests };
 }
 
 export default async function UsuariosPage() {
@@ -22,7 +25,8 @@ export default async function UsuariosPage() {
     redirect('/dashboard');
   }
 
-  const { users, groups } = await getData();
+  const { users, groups, requests } = await getData();
+  const pendingCount = requests.filter((r: { status: string }) => r.status === 'PENDING').length;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -30,9 +34,16 @@ export default async function UsuariosPage() {
         <h1 className="text-2xl font-bold text-title">Gerenciar Usuários</h1>
         <p className="text-body text-sm mt-1">
           {users.length} usuário{users.length !== 1 ? 's' : ''} cadastrado{users.length !== 1 ? 's' : ''}
+          {pendingCount > 0 && ` · ${pendingCount} solicitação${pendingCount !== 1 ? 'ões' : ''} pendente${pendingCount !== 1 ? 's' : ''}`}
         </p>
       </div>
-      <UsersTable users={users as any} groups={groups} currentUserRole={user.role} />
+      <AdminUsersTabs
+        users={users as any}
+        groups={groups}
+        requests={requests as any}
+        currentUserRole={user.role}
+        pendingCount={pendingCount}
+      />
     </div>
   );
 }

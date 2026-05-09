@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Users, User, Hash, Loader2, Search } from 'lucide-react';
+import { Send, Users, User, Hash, Loader2, Search, Paperclip, X, Download, FileText, Image as ImageIcon } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 
 interface Contact {
@@ -24,15 +24,61 @@ type Channel =
   | { type: 'group'; id: string; name: string }
   | { type: 'direct'; id: string; name: string };
 
+function FileMessage({ msg, isOwn }: { msg: any; isOwn: boolean }) {
+  const isImage = msg.type === 'IMAGE';
+  const fileUrl = msg.fileUrl;
+  const fileName = msg.fileName || msg.content;
+  const fileSize = msg.fileSize ? `${(msg.fileSize / 1024).toFixed(1)} KB` : '';
+
+  if (isImage) {
+    return (
+      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block">
+        <img
+          src={fileUrl}
+          alt={fileName}
+          className="max-w-xs rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity"
+          style={{ maxHeight: 240 }}
+        />
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={fileUrl}
+      download={fileName}
+      className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-colors ${
+        isOwn
+          ? 'bg-sigma-400/30 hover:bg-sigma-400/40'
+          : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+      }`}
+    >
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+        isOwn ? 'bg-white/20' : 'bg-sigma-100 dark:bg-sigma-900/20'
+      }`}>
+        <FileText className={`w-4 h-4 ${isOwn ? 'text-white' : 'text-sigma-600 dark:text-sigma-400'}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-xs font-medium truncate ${isOwn ? 'text-white' : 'text-body'}`}>{fileName}</p>
+        {fileSize && <p className={`text-xs ${isOwn ? 'text-white/70' : 'text-subtle'}`}>{fileSize}</p>}
+      </div>
+      <Download className={`w-3.5 h-3.5 flex-shrink-0 ${isOwn ? 'text-white/70' : 'text-subtle'}`} />
+    </a>
+  );
+}
+
 export function ChatWindow({ currentUser, contacts, groups }: Props) {
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchMessages = useCallback(async () => {
     if (!activeChannel) return;
@@ -102,12 +148,69 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
     }
   };
 
+  const uploadFile = async (file: File) => {
+    if (!activeChannel) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (activeChannel.type === 'group') formData.append('groupId', activeChannel.id);
+      else formData.append('receiverId', activeChannel.id);
+
+      const res = await fetch('/api/chat/upload', { method: 'POST', body: formData });
+      const msg = await res.json();
+      if (res.ok) {
+        setMessages((prev) => [...prev, msg]);
+        lastMessageRef.current = msg.createdAt;
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+    e.target.value = '';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && activeChannel) uploadFile(file);
+  };
+
   const filteredContacts = contacts.filter((c) =>
     !search || c.name.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div className="flex h-full card overflow-hidden">
+    <div
+      className="flex h-full card overflow-hidden relative"
+      onDragOver={(e) => { e.preventDefault(); if (activeChannel) setIsDragging(true); }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      <AnimatePresence>
+        {isDragging && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl"
+            style={{ background: 'rgba(99,102,241,0.15)', border: '2px dashed rgba(99,102,241,0.5)' }}
+          >
+            <ImageIcon className="w-10 h-10 text-sigma-400 mb-2" />
+            <p className="text-sm font-semibold text-sigma-400">Solte o arquivo aqui</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hidden file input */}
+      <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileInput} />
+
       {/* Sidebar */}
       <div className="w-64 border-r border-gray-100 dark:border-gray-800 flex flex-col flex-shrink-0">
         <div className="p-3 border-b border-gray-100 dark:border-gray-800">
@@ -165,6 +268,7 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
           <div className="flex-1 flex flex-col items-center justify-center text-subtle">
             <Users className="w-12 h-12 text-gray-200 dark:text-gray-700 mb-3" />
             <p className="text-sm font-medium">Selecione um canal ou contato</p>
+            <p className="text-xs text-subtle mt-1">Arquivos podem ser enviados via arrastar & soltar</p>
           </div>
         ) : (
           <>
@@ -181,6 +285,7 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.map((msg) => {
                 const isOwn = msg.senderId === currentUser.id;
+                const isFile = msg.type === 'FILE' || msg.type === 'IMAGE';
                 return (
                   <motion.div key={msg.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
                     className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : ''}`}>
@@ -191,12 +296,16 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
                     )}
                     <div className={`max-w-[70%] flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
                       {!isOwn && <p className="text-xs text-subtle mb-1 ml-1">{msg.sender?.name}</p>}
-                      <div className={`rounded-2xl px-3.5 py-2.5 text-sm
-                        ${isOwn
-                          ? 'bg-sigma-500 text-white rounded-tr-sm'
-                          : 'bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-body rounded-tl-sm'}`}>
-                        {msg.content}
-                      </div>
+                      {isFile ? (
+                        <FileMessage msg={msg} isOwn={isOwn} />
+                      ) : (
+                        <div className={`rounded-2xl px-3.5 py-2.5 text-sm
+                          ${isOwn
+                            ? 'bg-sigma-500 text-white rounded-tr-sm'
+                            : 'bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-body rounded-tl-sm'}`}>
+                          {msg.content}
+                        </div>
+                      )}
                       <span className="text-xs text-subtle mt-1">{formatDateTime(msg.createdAt)}</span>
                     </div>
                   </motion.div>
@@ -207,9 +316,17 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
 
             <div className="p-3 border-t border-gray-100 dark:border-gray-800">
               <div className="flex gap-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="p-2.5 rounded-xl text-subtle hover:text-body hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-40"
+                  title="Enviar arquivo"
+                >
+                  {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+                </button>
                 <input value={input} onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                  placeholder="Digite uma mensagem..."
+                  placeholder="Digite uma mensagem ou arraste um arquivo..."
                   className="flex-1 px-4 py-2.5 input-base" />
                 <button onClick={sendMessage} disabled={!input.trim() || sending}
                   className="bg-sigma-500 hover:bg-sigma-600 disabled:opacity-40 text-white p-2.5 rounded-xl transition-colors">
