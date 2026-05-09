@@ -6,14 +6,22 @@ import { AccessRequestsPanel } from '@/components/admin/AccessRequestsPanel';
 import { AdminUsersTabs } from '@/components/admin/AdminUsersTabs';
 
 async function getData() {
-  const [users, groups, requests] = await Promise.all([
+  const [users, groups] = await Promise.all([
     prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       include: { group: true },
     }),
     prisma.group.findMany({ where: { isActive: true } }),
-    prisma.accessRequest.findMany({ orderBy: { createdAt: 'desc' } }),
   ]);
+
+  // Table may not exist yet if prisma db push hasn't run on the VPS
+  let requests: any[] = [];
+  try {
+    requests = await prisma.accessRequest.findMany({ orderBy: { createdAt: 'desc' } });
+  } catch {
+    // access_requests table not yet created — silently skip
+  }
+
   return { users, groups, requests };
 }
 
