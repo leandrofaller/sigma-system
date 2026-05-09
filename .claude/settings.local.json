@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -File | Where-Object { $_.FullName -notmatch 'node_modules' } | Sort-Object FullName | Select-Object -ExpandProperty FullName)"
+      "PowerShell(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -File | Where-Object { $_.FullName -notmatch 'node_modules' } | Sort-Object FullName | Select-Object -ExpandProperty FullName)",
+      "Bash(ls -la \"f:\\\\relatorio_claude\\\\src\\\\app\\\\\\\\\")",
+      "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\\\\src\\\\app\" -Directory)",
+      "Bash(Select-Object Name)",
+      "PowerShell(ls -Recurse \"f:\\\\relatorio_claude\\\\src\\\\app\\\\\\(dashboard\\)\" -File 2>$null | ForEach-Object { $_.FullName })"
     ]
   }
 }
