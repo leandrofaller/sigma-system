@@ -17,31 +17,36 @@ export async function POST(req: NextRequest) {
 
   if (!file) return NextResponse.json({ error: 'Arquivo obrigatório' }, { status: 400 });
 
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-  const ext = file.name.split('.').pop() || 'bin';
-  const filename = `${randomUUID()}.${ext}`;
-  const uploadDir = join(process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads'), 'chat');
+  try {
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const ext = file.name.split('.').pop() || 'bin';
+    const filename = `${randomUUID()}.${ext}`;
+    const uploadDir = join(process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads'), 'chat');
 
-  await mkdir(uploadDir, { recursive: true });
-  await writeFile(join(uploadDir, filename), buffer);
+    await mkdir(uploadDir, { recursive: true });
+    await writeFile(join(uploadDir, filename), buffer);
 
-  const isImage = file.type.startsWith('image/');
-  const fileUrl = `/api/uploads/chat/${filename}`;
+    const isImage = file.type.startsWith('image/');
+    const fileUrl = `/api/uploads/chat/${filename}`;
 
-  const message = await prisma.chatMessage.create({
-    data: {
-      content: file.name,
-      type: isImage ? 'IMAGE' : 'FILE',
-      fileUrl,
-      fileName: file.name,
-      fileSize: file.size,
-      senderId: user.id,
-      groupId: groupId || null,
-      receiverId: receiverId || null,
-    },
-    include: { sender: true },
-  });
+    const message = await prisma.chatMessage.create({
+      data: {
+        content: file.name,
+        type: isImage ? 'IMAGE' : 'FILE',
+        fileUrl,
+        fileName: file.name,
+        fileSize: file.size,
+        senderId: user.id,
+        groupId: groupId || null,
+        receiverId: receiverId || null,
+      },
+      include: { sender: true },
+    });
 
-  return NextResponse.json(message, { status: 201 });
+    return NextResponse.json(message, { status: 201 });
+  } catch (err: any) {
+    console.error('[chat/upload POST]', err);
+    return NextResponse.json({ error: err?.message || 'Erro ao enviar arquivo.' }, { status: 500 });
+  }
 }

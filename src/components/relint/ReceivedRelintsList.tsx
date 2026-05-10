@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion } from 'framer-motion';
-import { Upload, File, Search, Loader2, X } from 'lucide-react';
+import { Upload, File, Search, Loader2, X, Download, Eye } from 'lucide-react';
 import { formatDate, formatFileSize, getClassificationColor } from '@/lib/utils';
 
 interface Props {
@@ -38,12 +38,16 @@ export function ReceivedRelintsList({ files: initialFiles, groups, userId, role 
 
       const res = await fetch('/api/received-relints', { method: 'POST', body: fd });
       const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Erro ao importar arquivo.');
+        return;
+      }
       setFiles((prev) => [data, ...prev]);
       setShowForm(false);
       setSelectedFile(null);
       setForm({ title: '', source: '', groupId: '', notes: '', classification: 'RESERVADO' });
-    } catch {
-      alert('Erro ao enviar arquivo.');
+    } catch (err: any) {
+      alert('Erro ao conectar ao servidor.');
     } finally {
       setUploading(false);
     }
@@ -156,10 +160,22 @@ export function ReceivedRelintsList({ files: initialFiles, groups, userId, role 
                 </span>
               )}
             </div>
-            <div className="flex items-center justify-between text-xs text-subtle">
+            <div className="flex items-center justify-between text-xs text-subtle mb-3">
               <span>{formatDate(file.createdAt)} · {formatFileSize(file.fileSize)}</span>
               <span>por {file.uploadedBy?.name}</span>
             </div>
+            {file.localPath && (
+              <div className="flex gap-2">
+                <a href={file.localPath} target="_blank" rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 text-body hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                  <Eye className="w-3.5 h-3.5" /> Visualizar
+                </a>
+                <a href={file.localPath} download={file.originalName}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 text-body hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                  <Download className="w-3.5 h-3.5" /> Baixar
+                </a>
+              </div>
+            )}
           </motion.div>
         ))}
       </div>

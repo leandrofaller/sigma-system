@@ -2,6 +2,7 @@
 echo "Criando diretórios de upload..."
 mkdir -p "${UPLOAD_DIR:-/app/uploads}/relints"
 mkdir -p "${UPLOAD_DIR:-/app/uploads}/chat"
+mkdir -p "${UPLOAD_DIR:-/app/uploads}/received"
 
 echo "Executando migrações do banco de dados..."
 node_modules/.bin/prisma db push --skip-generate || npx prisma db push --skip-generate
