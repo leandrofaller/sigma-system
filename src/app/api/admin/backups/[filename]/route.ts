@@ -24,9 +24,10 @@ export async function GET(_: Request, { params }: { params: { filename: string }
   if (!existsSync(filepath)) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
 
   const data = readFileSync(filepath);
+  const mimeType = safe.endsWith('.zip') ? 'application/zip' : 'application/octet-stream';
   return new NextResponse(data, {
     headers: {
-      'Content-Type': 'application/octet-stream',
+      'Content-Type': mimeType,
       'Content-Disposition': `attachment; filename="${safe}"`,
     },
   });

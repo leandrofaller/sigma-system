@@ -10,7 +10,7 @@ function getLocalBackups() {
   try {
     mkdirSync(dir, { recursive: true });
     return readdirSync(dir)
-      .filter((f) => f.endsWith('.sql'))
+      .filter((f) => f.endsWith('.sql') || f.endsWith('.zip'))
       .map((f) => {
         const stat = statSync(join(dir, f));
         return { name: f, size: stat.size, createdAt: stat.mtime.toISOString() };

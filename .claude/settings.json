@@ -17,7 +17,10 @@
       "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -Directory)",
       "PowerShell(head -30)",
       "Bash(mkdir -p \"f:/relatorio_claude/src/app/api/debriefings/next-number\" && mkdir -p \"f:/relatorio_claude/src/app/api/debriefings/[id]\")",
-      "Bash(mkdir -p \"f:/relatorio_claude/src/app/\\(dashboard\\)/debriefings/novo\" && mkdir -p \"f:/relatorio_claude/src/app/\\(dashboard\\)/debriefings/[id]/editar\")"
+      "Bash(mkdir -p \"f:/relatorio_claude/src/app/\\(dashboard\\)/debriefings/novo\" && mkdir -p \"f:/relatorio_claude/src/app/\\(dashboard\\)/debriefings/[id]/editar\")",
+      "Bash(node -e \"require\\('archiver'\\)\")",
+      "Bash(node -e \"require\\('adm-zip'\\)\")",
+      "Bash(node -e \"require\\('jszip'\\)\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",

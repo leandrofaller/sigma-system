@@ -17,7 +17,7 @@ const BACKUP_DIR = join(process.env.UPLOAD_DIR || '/app/uploads', 'backups');
 function listLocalBackups() {
   mkdirSync(BACKUP_DIR, { recursive: true });
   return readdirSync(BACKUP_DIR)
-    .filter((f) => f.endsWith('.sql'))
+    .filter((f) => f.endsWith('.sql') || f.endsWith('.zip'))
     .map((f) => {
       const stat = statSync(join(BACKUP_DIR, f));
       return { name: f, size: stat.size, createdAt: stat.mtime.toISOString() };

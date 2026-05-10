@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   Database, Download, Trash2, Loader2, HardDrive,
-  AlertCircle, Cloud, CloudOff, CloudUpload, CheckCircle2,
+  AlertCircle, Cloud, CloudOff, CloudUpload, CheckCircle2, FolderArchive, FileCode2,
 } from 'lucide-react';
 import type { CloudEntry, CloudProvider } from '@/lib/cloud-backup';
 
@@ -41,6 +41,7 @@ export function BackupPanel({ initialBackups, initialCloudIndex, cloudProvider }
   const [backups, setBackups] = useState(initialBackups);
   const [cloudIndex, setCloudIndex] = useState(initialCloudIndex);
   const [creating, setCreating] = useState(false);
+  const [creatingZip, setCreatingZip] = useState(false);
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const [uploadingName, setUploadingName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +91,22 @@ export function BackupPanel({ initialBackups, initialCloudIndex, cloudProvider }
     }
   };
 
+  const createZipBackup = async () => {
+    setCreatingZip(true);
+    setError(null);
+    setCloudWarning(null);
+    try {
+      const res = await fetch('/api/admin/backups/zip', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao gerar ZIP');
+      setBackups((prev) => [{ name: data.name, size: data.size, createdAt: data.createdAt }, ...prev]);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setCreatingZip(false);
+    }
+  };
+
   const deleteBackup = async (name: string) => {
     if (!confirm(`Excluir backup "${name}"? Esta ação não pode ser desfeita.`)) return;
     setDeletingName(name);
@@ -134,14 +151,25 @@ export function BackupPanel({ initialBackups, initialCloudIndex, cloudProvider }
             </p>
           </div>
         </div>
-        <button
-          onClick={createBackup}
-          disabled={creating}
-          className="flex-shrink-0 flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors"
-        >
-          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
-          {creating ? 'Gerando backup...' : 'Criar Backup Agora'}
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={createZipBackup}
+            disabled={creatingZip}
+            className="flex items-center gap-2 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 text-body px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+            title="Gera um ZIP com todos os arquivos enviados (imagens, documentos, anexos)"
+          >
+            {creatingZip ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderArchive className="w-4 h-4" />}
+            {creatingZip ? 'Compactando...' : 'Backup de Arquivos (ZIP)'}
+          </button>
+          <button
+            onClick={createBackup}
+            disabled={creating}
+            className="flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors"
+          >
+            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+            {creating ? 'Gerando backup...' : 'Backup do Banco (SQL)'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -191,10 +219,19 @@ export function BackupPanel({ initialBackups, initialCloudIndex, cloudProvider }
                   <tr key={backup.name} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40 transition-colors">
                     <td className="px-6 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-sigma-50 dark:bg-sigma-900/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                          <Database className="w-4 h-4 text-sigma-600 dark:text-sigma-400" />
+                        {backup.name.endsWith('.zip') ? (
+                          <div className="w-8 h-8 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <FolderArchive className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 bg-sigma-50 dark:bg-sigma-900/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <FileCode2 className="w-4 h-4 text-sigma-600 dark:text-sigma-400" />
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-sm font-mono text-body">{backup.name}</span>
+                          <p className="text-xs text-subtle">{backup.name.endsWith('.zip') ? 'Arquivos (ZIP)' : 'Banco de dados (SQL)'}</p>
                         </div>
-                        <span className="text-sm font-mono text-body">{backup.name}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-sm text-subtle">{formatSize(backup.size)}</td>
