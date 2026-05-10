@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Bot, User, Loader2, Sparkles, Trash2, Copy,
-  CheckCheck, ChevronDown, ChevronRight, Zap,
+  CheckCheck, ChevronDown, ChevronRight, Zap, MapPin, Lock,
 } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 
@@ -206,8 +206,28 @@ export default function IAPage() {
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [modelInfo, setModelInfo] = useState<{ provider: string; model: string } | null>(null);
+  const [geoStatus, setGeoStatus] = useState<'checking' | 'granted' | 'denied'>('checking');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Geolocation permission gate
+  useEffect(() => {
+    if (!navigator.geolocation) { setGeoStatus('denied'); return; }
+    const request = () =>
+      navigator.geolocation.getCurrentPosition(
+        () => setGeoStatus('granted'),
+        () => setGeoStatus('denied'),
+        { timeout: 10000 },
+      );
+    if (!navigator.permissions) { request(); return; }
+    navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((result) => {
+      if (result.state === 'granted') { setGeoStatus('granted'); return; }
+      if (result.state === 'denied') { setGeoStatus('denied'); return; }
+      request();
+      result.addEventListener('change', () =>
+        setGeoStatus(result.state === 'granted' ? 'granted' : 'denied'));
+    }).catch(request);
+  }, []);
 
   useEffect(() => {
     fetch('/api/ai')
@@ -284,6 +304,57 @@ export default function IAPage() {
     textareaRef.current?.focus();
     setTimeout(adjustTextarea, 10);
   };
+
+  // Geolocation blocked state
+  if (geoStatus === 'checking') {
+    return (
+      <div className="animate-fade-in flex h-[calc(100vh-7.5rem)] items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-subtle">
+          <Loader2 className="w-8 h-8 animate-spin text-sigma-400" />
+          <p className="text-sm">Verificando permissão de localização…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (geoStatus === 'denied') {
+    return (
+      <div className="animate-fade-in flex h-[calc(100vh-7.5rem)] items-center justify-center">
+        <div className="card p-10 max-w-md w-full flex flex-col items-center text-center gap-5">
+          <div className="w-16 h-16 rounded-3xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center border border-red-100 dark:border-red-800">
+            <Lock className="w-7 h-7 text-red-500 dark:text-red-400" />
+          </div>
+          <div>
+            <h2 className="text-title font-bold text-lg mb-2">Acesso Restrito</h2>
+            <p className="text-subtle text-sm leading-relaxed">
+              A Consulta IA exige que a <strong>permissão de geolocalização</strong> esteja ativa.
+              Autorize o acesso à sua localização no navegador e recarregue a página.
+            </p>
+          </div>
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3 w-full text-left space-y-1.5">
+            <p className="text-xs font-semibold text-subtle uppercase tracking-wider">Como habilitar</p>
+            <p className="text-xs text-body">1. Clique no ícone de cadeado na barra de endereço</p>
+            <p className="text-xs text-body">2. Localize <strong>Localização</strong> e mude para <strong>Permitir</strong></p>
+            <p className="text-xs text-body">3. Recarregue a página</p>
+          </div>
+          <button
+            onClick={() => {
+              setGeoStatus('checking');
+              navigator.geolocation.getCurrentPosition(
+                () => setGeoStatus('granted'),
+                () => setGeoStatus('denied'),
+                { timeout: 10000 },
+              );
+            }}
+            className="flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+          >
+            <MapPin className="w-4 h-4" />
+            Solicitar Permissão
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in flex h-[calc(100vh-7.5rem)] overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { existsSync } from 'fs';
 
 const MIME_TYPES: Record<string, string> = {
@@ -26,10 +26,16 @@ export async function GET(
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const uploadsBase = process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads');
-  const filePath = join(uploadsBase, ...params.path);
+  const uploadsBase = resolve(process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads'));
+  const filePath = resolve(join(uploadsBase, ...params.path));
+
+  // Prevent path traversal
+  if (!filePath.startsWith(uploadsBase)) {
+    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+  }
 
   if (!existsSync(filePath)) {
+    console.error(`[uploads] File not found: ${filePath} (UPLOAD_DIR=${process.env.UPLOAD_DIR}, cwd=${process.cwd()})`);
     return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 });
   }
 

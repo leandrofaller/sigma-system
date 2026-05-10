@@ -401,10 +401,10 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
                           </div>
                         )}
 
-                        {/* Emoji trigger — appears on hover */}
+                        {/* Emoji trigger */}
                         <button
                           onClick={(e) => openEmojiPicker(e, msg.id)}
-                          className="opacity-0 group-hover/msg:opacity-100 transition-opacity p-1 rounded-full text-gray-300 hover:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex-shrink-0 mb-0.5"
+                          className="opacity-30 hover:opacity-100 transition-opacity p-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex-shrink-0 mb-0.5"
                           title="Reagir"
                         >
                           <SmilePlus className="w-3.5 h-3.5" />
