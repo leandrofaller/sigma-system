@@ -26,11 +26,26 @@ function getInitialBody(initialData: any): Block[] {
   return bodyBlocks;
 }
 
+const DOC_TYPES = ['RELINT', 'PEDIDO DE BUSCA'] as const;
+type DocType = typeof DOC_TYPES[number];
+
+function detectDocType(number: string): DocType {
+  return number.startsWith('PEDIDO DE BUSCA') ? 'PEDIDO DE BUSCA' : 'RELINT';
+}
+
+function swapPrefix(number: string, newType: DocType): string {
+  // Replace whatever prefix precedes " Nº " with the new type
+  return number.replace(/^.+?(?= Nº )/, newType);
+}
+
 export function RelintEditor({ templates, groups, userId, userRole, defaultGroupId, initialData }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState('');
   const [activeView, setActiveView] = useState<'split' | 'edit' | 'preview'>('split');
+  const [docType, setDocType] = useState<DocType>(() =>
+    detectDocType(initialData?.number || '')
+  );
 
   const defaultTemplate = templates.find((t) => t.isDefault) || templates[0];
   const isNew = !initialData?.id;
@@ -72,6 +87,14 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
 
   const update = useCallback((field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleDocTypeChange = useCallback((type: DocType) => {
+    setDocType(type);
+    setForm((prev) => ({
+      ...prev,
+      number: prev.number.includes(' Nº ') ? swapPrefix(prev.number, type) : prev.number,
+    }));
   }, []);
 
   const updateContent = useCallback((field: string, value: string) => {
@@ -144,7 +167,20 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
         </h3>
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
-            <label className="block text-xs font-medium text-subtle mb-1.5">Número do Relatório</label>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Tipo de Documento</label>
+            <div className="flex gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit mb-2">
+              {DOC_TYPES.map((type) => (
+                <button key={type} type="button" onClick={() => handleDocTypeChange(type)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                    docType === type
+                      ? 'bg-white dark:bg-gray-700 text-title shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}>
+                  {type}
+                </button>
+              ))}
+            </div>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Número</label>
             <input value={form.number} onChange={(e) => update('number', e.target.value)}
               placeholder="Aguardando geração automática..."
               className={`${inputCls} font-mono`} />

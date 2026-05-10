@@ -5,6 +5,7 @@ import { GroupsTable } from '@/components/admin/GroupsTable';
 
 async function getGroups() {
   return prisma.group.findMany({
+    where: { isActive: true },
     orderBy: { createdAt: 'desc' },
     include: { _count: { select: { users: true, relints: true } } },
   });
