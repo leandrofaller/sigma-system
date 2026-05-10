@@ -210,7 +210,7 @@ export default function CoverPage() {
             {[
               { title: 'Serviços', links: ['Entrega Expressa', 'Carga Fracionada', 'Logística Nacional', 'Carga Especial'] },
               { title: 'Empresa', links: ['Sobre Nós', 'Carreiras', 'Parceiros', 'Imprensa'] },
-              { title: 'Contato', links: ['(69) 3000-0000', 'contato@logitrack.com.br', 'Mogi Mirim — SP', 'Atendimento 24h'] },
+              { title: 'Contato', links: ['(11) 3000-0000', 'contato@logitrack.com.br', 'Mogi Mirim — SP', 'Atendimento 24h'] },
             ].map((col) => (
               <div key={col.title}>
                 <h4 className="text-white font-semibold mb-4">{col.title}</h4>
