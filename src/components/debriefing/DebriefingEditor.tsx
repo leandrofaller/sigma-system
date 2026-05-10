@@ -21,6 +21,8 @@ function getInitialBody(initialData: any): Block[] {
 
 const OPERATION_TYPES = [
   'Vigilância / Monitoramento',
+  'Monitoramento',
+  'Viagem',
   'Coleta de Informações',
   'Infiltração',
   'Interceptação',
@@ -158,15 +160,9 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
               className={`${inputCls} uppercase`} />
           </div>
           <div className="col-span-2">
-            <label className="block text-xs font-medium text-subtle mb-1.5">Agente(s) Envolvido(s)</label>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Policiais Envolvidos</label>
             <input value={form.operatives} onChange={(e) => update('operatives', e.target.value)}
-              placeholder="Nomes ou codinomes dos agentes"
-              className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-subtle mb-1.5">Oficial Controlador / Handler</label>
-            <input value={form.handler} onChange={(e) => update('handler', e.target.value)}
-              placeholder="Nome do oficial responsável"
+              placeholder="Nomes dos policiais envolvidos na operação"
               className={inputCls} />
           </div>
           <div>

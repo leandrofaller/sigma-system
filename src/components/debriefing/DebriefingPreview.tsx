@@ -200,10 +200,7 @@ export function DebriefingPreview({ form }: Props) {
           )}
           <p style={fieldRow}><strong>Assunto:</strong>&nbsp;{form.subject || '_______________'}</p>
           {form.operatives && (
-            <p style={fieldRow}><strong>Agente(s):</strong>&nbsp;{form.operatives}</p>
-          )}
-          {form.handler && (
-            <p style={fieldRow}><strong>Oficial Controlador:</strong>&nbsp;{form.handler}</p>
+            <p style={fieldRow}><strong>Policiais Envolvidos:</strong>&nbsp;{form.operatives}</p>
           )}
           <p style={fieldRow}><strong>Difusão:</strong>&nbsp;{form.diffusion || '_______________'}</p>
         </div>
