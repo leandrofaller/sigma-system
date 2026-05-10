@@ -18,7 +18,8 @@ RUN npm run build
 
 # Stage 3: Runner
 FROM node:20-alpine AS runner
-RUN apk add --no-cache openssl
+# su-exec permite dropar privilégios após acertar permissões do volume montado
+RUN apk add --no-cache openssl su-exec
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -40,17 +41,14 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/start.sh ./start.sh
 RUN chmod +x start.sh
 
-# Cria o diretório de uploads e garante permissões antes de trocar para nextjs
-RUN mkdir -p /app/uploads/relints /app/uploads/chat && \
-    chown -R nextjs:nodejs /app
-
-# Caminho fixo para uploads — monte um volume persistente aqui no Coolify
+# Caminho fixo para uploads
 ENV UPLOAD_DIR=/app/uploads
 
-# Declara o volume para que orquestradores saibam que este caminho é persistente
+# Declara o volume — Coolify deve montar aqui para persistência
 VOLUME ["/app/uploads"]
 
-USER nextjs
+# Roda como root para que o entrypoint possa corrigir permissões do volume montado
+# start.sh usa su-exec para dropar para nextjs antes de iniciar o servidor
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
