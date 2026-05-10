@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { FileText, CheckCircle, Clock, Users, Inbox, TrendingUp } from 'lucide-react';
+import { FileText, CheckCircle, Clock, Users, Inbox, TrendingUp, BookOpen } from 'lucide-react';
 
 interface Props {
   totalRelints: number;
@@ -9,10 +9,11 @@ interface Props {
   draftRelints: number;
   totalUsers: number;
   receivedRelints: number;
+  totalDebriefings: number;
   role: string;
 }
 
-export function DashboardCards({ totalRelints, publishedRelints, draftRelints, totalUsers, receivedRelints, role }: Props) {
+export function DashboardCards({ totalRelints, publishedRelints, draftRelints, totalUsers, receivedRelints, totalDebriefings, role }: Props) {
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
 
   const cards = [
@@ -20,6 +21,7 @@ export function DashboardCards({ totalRelints, publishedRelints, draftRelints, t
     { title: 'Publicados',         value: publishedRelints, icon: CheckCircle,  badge: 'icon-badge-green',  trend: '+8%'  },
     { title: 'Rascunhos',          value: draftRelints,     icon: Clock,        badge: 'icon-badge-yellow', trend: ''     },
     { title: 'RELINTs Recebidos',  value: receivedRelints,  icon: Inbox,        badge: 'icon-badge-purple', trend: ''     },
+    { title: 'Debriefings',        value: totalDebriefings, icon: BookOpen,     badge: 'icon-badge-orange', trend: ''     },
     ...(isAdmin ? [{ title: 'Usuários Ativos', value: totalUsers, icon: Users,  badge: 'icon-badge-sigma',  trend: ''     }] : []),
   ];
 

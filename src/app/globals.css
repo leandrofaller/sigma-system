@@ -106,6 +106,7 @@
   .icon-badge-yellow{ @apply bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400; }
   .icon-badge-purple{ @apply bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400; }
   .icon-badge-sigma { @apply bg-sigma-50  dark:bg-sigma-900/20  text-sigma-600  dark:text-sigma-400; }
+  .icon-badge-orange{ @apply bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400; }
 
   /* Outros */
   .card-glass {

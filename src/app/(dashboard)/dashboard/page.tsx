@@ -10,7 +10,7 @@ async function getDashboardData(userId: string, role: string, groupId?: string) 
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
   const groupFilter = isAdmin ? {} : { groupId: groupId ?? 'none' };
 
-  const [totalRelints, publishedRelints, draftRelints, totalUsers, recentRelints, receivedRelints] =
+  const [totalRelints, publishedRelints, draftRelints, totalUsers, recentRelints, receivedRelints, totalDebriefings] =
     await Promise.all([
       prisma.relint.count({ where: groupFilter }),
       prisma.relint.count({ where: { ...groupFilter, status: 'PUBLISHED' } }),
@@ -23,6 +23,7 @@ async function getDashboardData(userId: string, role: string, groupId?: string) 
         include: { author: true, group: true },
       }),
       prisma.receivedRelint.count({ where: isAdmin ? {} : { groupId: groupId ?? 'none' } }),
+      prisma.debriefing.count({ where: groupFilter }),
     ]);
 
   const relintsPerMonth = await prisma.$queryRaw<{ month: string; count: bigint }[]>`
@@ -39,6 +40,7 @@ async function getDashboardData(userId: string, role: string, groupId?: string) 
     draftRelints,
     totalUsers,
     receivedRelints,
+    totalDebriefings,
     recentRelints,
     relintsPerMonth: relintsPerMonth.map((r) => ({
       month: r.month,
@@ -68,6 +70,7 @@ export default async function DashboardPage() {
         draftRelints={data.draftRelints}
         totalUsers={data.totalUsers}
         receivedRelints={data.receivedRelints}
+        totalDebriefings={data.totalDebriefings}
         role={user.role}
       />
 
