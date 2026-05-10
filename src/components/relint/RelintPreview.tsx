@@ -49,10 +49,9 @@ function buildPrintHtml(
     line-height: 1.5;
     color: #000;
     background: white;
-    padding: 1.8cm 2cm 0.5cm;
+    padding: 1.8cm 2cm 0;
     margin: 0;
     width: 210mm;
-    min-height: 297mm;
   }
   img { max-width: 100%; }
   p { margin: 0 0 3px; }

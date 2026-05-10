@@ -1,10 +1,25 @@
 import NextAuth from 'next-auth';
 import { authConfig } from './auth.config';
+import type { NextRequest } from 'next/server';
 
 const { auth } = NextAuth(authConfig);
 
 const publicRoutes = ['/', '/login', '/rastreamento', '/sobre', '/contato'];
 const apiPublicRoutes = ['/api/auth', '/api/health', '/api/access-requests'];
+
+// Resolve o host público real quando a app roda atrás de um reverse proxy (Coolify/nginx).
+// O proxy injeta x-forwarded-host com o domínio/IP que o cliente usou;
+// sem isso, nextUrl.host seria o endereço interno do container.
+function buildRedirect(req: NextRequest, path: string): URL {
+  const proto =
+    req.headers.get('x-forwarded-proto')?.split(',')[0].trim() ||
+    req.nextUrl.protocol.replace(':', '');
+  const host =
+    req.headers.get('x-forwarded-host') ||
+    req.headers.get('host') ||
+    req.nextUrl.host;
+  return new URL(path, `${proto}://${host}`);
+}
 
 export default auth((req) => {
   const { nextUrl } = req;
@@ -24,11 +39,11 @@ export default auth((req) => {
   }
 
   if (!isLoggedIn && !isPublicRoute) {
-    return Response.redirect(new URL('/login', nextUrl));
+    return Response.redirect(buildRedirect(req, '/login'));
   }
 
   if (isLoggedIn && nextUrl.pathname === '/login') {
-    return Response.redirect(new URL('/dashboard', nextUrl));
+    return Response.redirect(buildRedirect(req, '/dashboard'));
   }
 });
 
