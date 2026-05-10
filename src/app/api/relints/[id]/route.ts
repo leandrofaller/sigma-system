@@ -72,7 +72,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   
   const relint = await prisma.relint.findUnique({
     where: { id: params.id },
-    select: { authorId: true }
+    select: { authorId: true, status: true }
   });
 
   if (!relint) {
