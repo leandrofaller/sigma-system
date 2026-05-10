@@ -168,7 +168,7 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
   // Group by source agency
   const grouped: Record<string, any[]> = {};
   for (const file of filtered) {
-    const key = file.source?.trim() || 'Sem Agência';
+    const key = file.folder?.name || file.source?.trim() || 'Sem Agência';
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(file);
   }
