@@ -32,11 +32,15 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 
-# Copia o Prisma CLI e client completo para o runner
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+# Copia o Prisma client e CLI completos para o runner
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+
+# Cria symlink correto para o CLI — copiar o arquivo diretamente quebra __dirname
+# e o CLI passa a procurar o .wasm na pasta .bin/ em vez de prisma/build/
+RUN mkdir -p ./node_modules/.bin && \
+    ln -sf ../prisma/build/index.js ./node_modules/.bin/prisma
 
 COPY --from=builder /app/start.sh ./start.sh
 RUN chmod +x start.sh
