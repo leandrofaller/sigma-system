@@ -2,9 +2,19 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { prisma } from './db';
 
+const DEPRECATED_MODELS: Record<string, string> = {
+  'gemini-pro': 'gemini-1.5-flash',
+  'gemini-1.0-pro': 'gemini-1.5-flash',
+  'text-bison-001': 'gemini-1.5-flash',
+};
+
 async function getAIConfig() {
   const config = await prisma.systemConfig.findUnique({ where: { key: 'ai_provider' } });
-  return (config?.value as any) ?? { provider: 'groq', model: 'llama-3.3-70b-versatile' };
+  const value = (config?.value as any) ?? { provider: 'groq', model: 'llama-3.3-70b-versatile' };
+  if (value.model && DEPRECATED_MODELS[value.model]) {
+    value.model = DEPRECATED_MODELS[value.model];
+  }
+  return value;
 }
 
 async function getAPIKey(provider: string): Promise<string | undefined> {

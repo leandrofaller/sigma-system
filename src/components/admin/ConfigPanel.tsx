@@ -173,11 +173,20 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
               A chave é armazenada no banco de dados e tem prioridade sobre variáveis de ambiente.
             </p>
           </Field>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <button onClick={testAI} disabled={testingAI}
               className="flex items-center gap-2 text-sm font-medium border border-gray-200 dark:border-gray-700 px-4 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50">
               {testingAI ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
               Testar Conexão
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                update('ai_provider', { provider: 'groq', model: 'llama-3.3-70b-versatile' });
+                setTestResult(null);
+              }}
+              className="text-xs text-subtle hover:text-body underline underline-offset-2 transition-colors">
+              Redefinir para Groq
             </button>
             {testResult && (
               <span className={`text-sm font-medium ${testResult.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
