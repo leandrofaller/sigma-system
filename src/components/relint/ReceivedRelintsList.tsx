@@ -64,7 +64,15 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (accepted) => { if (accepted[0]) setSelectedFile(accepted[0]); },
+    onDrop: (accepted) => {
+      if (accepted[0]) {
+        const file = accepted[0];
+        setSelectedFile(file);
+        // Remove extensão do nome do arquivo e define como título inicial
+        const fileNameNoExt = file.name.replace(/\.[^/.]+$/, "");
+        setForm(prev => ({ ...prev, title: fileNameNoExt }));
+      }
+    },
     accept: { 'application/pdf': ['.pdf'], 'image/*': ['.jpg', '.png'], 'application/msword': ['.doc', '.docx'] },
     maxFiles: 1,
   });
