@@ -7,7 +7,7 @@ async function getReceivedRelints(role: string, groupId?: string) {
   return prisma.receivedRelint.findMany({
     where: isAdmin ? {} : { groupId: groupId ?? 'none' },
     orderBy: { createdAt: 'desc' },
-    include: { uploadedBy: true, group: true },
+    include: { uploadedBy: true, group: true, folder: true },
   });
 }
 
@@ -15,14 +15,19 @@ async function getGroups() {
   return prisma.group.findMany({ where: { isActive: true } });
 }
 
+async function getFolders() {
+  return prisma.receivedRelintFolder.findMany({ orderBy: { name: 'asc' } });
+}
+
 export default async function RelintsRecebidosPage() {
   const session = await auth();
   const user = session!.user as any;
   const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
 
-  const [files, groups] = await Promise.all([
+  const [files, groups, folders] = await Promise.all([
     getReceivedRelints(user.role, user.groupId),
     isAdmin ? getGroups() : [],
+    getFolders(),
   ]);
 
   return (
@@ -36,6 +41,7 @@ export default async function RelintsRecebidosPage() {
       <ReceivedRelintsList
         files={files}
         groups={groups}
+        folders={folders}
         userId={user.id}
         role={user.role}
       />

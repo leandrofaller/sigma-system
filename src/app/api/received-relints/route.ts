@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const files = await prisma.receivedRelint.findMany({
       where: isAdmin ? {} : { groupId: user.groupId ?? 'none' },
       orderBy: { createdAt: 'desc' },
-      include: { uploadedBy: { select: { name: true } }, group: { select: { name: true } } },
+      include: { uploadedBy: { select: { name: true } }, group: { select: { name: true } }, folder: true },
     });
     return NextResponse.json(files);
   } catch (err: any) {
@@ -74,6 +74,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const folderId = (formData.get('folderId') as string) || null;
+
     const record = await prisma.receivedRelint.create({
       data: {
         title,
@@ -87,9 +89,10 @@ export async function POST(req: NextRequest) {
         classification: classification as any,
         uploadedById: user.id,
         groupId: groupId || null,
+        folderId: folderId || null,
         notes,
       },
-      include: { uploadedBy: { select: { name: true } }, group: { select: { name: true } } },
+      include: { uploadedBy: { select: { name: true } }, group: { select: { name: true } }, folder: true },
     });
 
     await createAuditLog({

@@ -126,6 +126,16 @@ model RelintTemplate {
   @@map("relint_templates")
 }
 
+model ReceivedRelintFolder {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  files ReceivedRelint[]
+
+  @@map("received_relint_folders")
+}
+
 model ReceivedRelint {
   id             String         @id @default(cuid())
   title          String
@@ -141,11 +151,14 @@ model ReceivedRelint {
   uploadedBy     User           @relation(fields: [uploadedById], references: [id])
   groupId        String?
   group          Group?         @relation(fields: [groupId], references: [id])
+  folderId       String?
+  folder         ReceivedRelintFolder? @relation(fields: [folderId], references: [id])
   notes          String?        @db.Text
   tags           String[]
   createdAt      DateTime       @default(now())
 
   @@index([groupId])
+  @@index([folderId])
   @@map("received_relints")
 }
 
