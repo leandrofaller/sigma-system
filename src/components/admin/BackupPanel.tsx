@@ -105,8 +105,8 @@ export function BackupPanel({ initialBackups, initialCloudIndex, cloudProvider }
       if (data.counts) {
         const { relints, debriefings, dirs } = data.counts;
         const parts = [];
-        if (relints > 0) parts.push(`${relints} RELINT${relints !== 1 ? 's' : ''}`);
-        if (debriefings > 0) parts.push(`${debriefings} debriefing${debriefings !== 1 ? 's' : ''}`);
+        if (relints > 0) parts.push(`${relints} PDF${relints !== 1 ? 's' : ''} de RELINT`);
+        if (debriefings > 0) parts.push(`${debriefings} PDF${debriefings !== 1 ? 's' : ''} de Debriefing`);
         if (dirs?.length > 0) parts.push(`arquivos de ${dirs.join(', ')}`);
         if (parts.length > 0) {
           setCloudWarning(`ZIP gerado com: ${parts.join(', ')}.`);
