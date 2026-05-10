@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { mkdirSync, statSync, existsSync, unlinkSync } from 'fs';
+import { mkdirSync, statSync, existsSync, unlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { prisma } from '@/lib/db';
 
 const execAsync = promisify(exec);
 
@@ -22,33 +23,56 @@ export async function POST() {
   const filename = `files_${ts}.zip`;
   const filepath = join(BACKUP_DIR, filename);
 
-  // Collect subdirectories that actually exist
-  const foundDirs = INCLUDE_DIRS.filter((d) => existsSync(join(UPLOAD_ROOT, d)));
+  const tmpFiles: string[] = [];
 
   try {
+    // ── 1. Export published RELINTs from the database ─────────────────────
+    const [relints, debriefings] = await Promise.all([
+      prisma.relint.findMany({
+        where: { status: { in: ['PUBLISHED', 'ARCHIVED'] } },
+        include: { author: { select: { id: true, name: true } }, group: true },
+        orderBy: { date: 'desc' },
+      }),
+      prisma.debriefing.findMany({
+        where: { status: { in: ['PUBLISHED', 'ARCHIVED'] } },
+        include: { author: { select: { id: true, name: true } }, group: true },
+        orderBy: { date: 'desc' },
+      }),
+    ]);
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      relints: {
+        total: relints.length,
+        items: relints,
+      },
+      debriefings: {
+        total: debriefings.length,
+        items: debriefings,
+      },
+    };
+
+    const jsonPath = join(BACKUP_DIR, `_dados_${ts}.json`);
+    writeFileSync(jsonPath, JSON.stringify(exportData, null, 2), 'utf-8');
+    tmpFiles.push(jsonPath);
+
+    // ── 2. Build the ZIP ──────────────────────────────────────────────────
+    // Start with the JSON export (always present)
+    await execAsync(`zip "${filepath}" "${jsonPath}"`, { timeout: 30_000 });
+
+    // Add upload directories if they exist
+    const foundDirs = INCLUDE_DIRS.filter((d) => existsSync(join(UPLOAD_ROOT, d)));
     if (foundDirs.length > 0) {
-      // zip -r <output> <dir1> <dir2> ... executed from UPLOAD_ROOT
-      const dirs = foundDirs.join(' ');
+      const dirs = foundDirs.map((d) => `"${d}"`).join(' ');
       await execAsync(`zip -r "${filepath}" ${dirs}`, {
         cwd: UPLOAD_ROOT,
         timeout: 300_000,
       });
-    } else {
-      // Produce a valid ZIP with an info file when no upload dirs exist yet
-      const infoText = [
-        'BACKUP DE ARQUIVOS — SIAIP',
-        `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
-        `Diretório base: ${UPLOAD_ROOT}`,
-        '',
-        'Nenhuma subpasta de uploads encontrada.',
-        `Pastas esperadas: ${INCLUDE_DIRS.join(', ')}`,
-      ].join('\n');
+    }
 
-      const tmpInfo = join(BACKUP_DIR, `_info_${ts}.txt`);
-      const { writeFileSync } = await import('fs');
-      writeFileSync(tmpInfo, infoText);
-      await execAsync(`zip "${filepath}" "${tmpInfo}"`, { timeout: 30_000 });
-      unlinkSync(tmpInfo);
+    // ── 3. Cleanup temp files ─────────────────────────────────────────────
+    for (const f of tmpFiles) {
+      try { unlinkSync(f); } catch {}
     }
 
     const stat = statSync(filepath);
@@ -56,9 +80,10 @@ export async function POST() {
       name: filename,
       size: stat.size,
       createdAt: stat.mtime.toISOString(),
-      dirs: foundDirs,
+      counts: { relints: relints.length, debriefings: debriefings.length, dirs: foundDirs },
     });
   } catch (err: any) {
+    for (const f of tmpFiles) { try { unlinkSync(f); } catch {} }
     try { if (existsSync(filepath)) unlinkSync(filepath); } catch {}
     return NextResponse.json(
       { error: 'Falha ao gerar ZIP', detail: err?.stderr || err?.message || String(err) },

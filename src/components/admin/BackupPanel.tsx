@@ -102,8 +102,15 @@ export function BackupPanel({ initialBackups, initialCloudIndex, cloudProvider }
       try { data = JSON.parse(text); } catch { throw new Error(`Resposta inválida do servidor: ${text.slice(0, 300)}`); }
       if (!res.ok) throw new Error(data.detail || data.error || 'Erro ao gerar ZIP');
       setBackups((prev) => [{ name: data.name, size: data.size, createdAt: data.createdAt }, ...prev]);
-      if (data.dirs && data.dirs.length === 0) {
-        setCloudWarning('ZIP gerado, mas nenhuma pasta de uploads foi encontrada. O arquivo contém apenas um INFO.txt.');
+      if (data.counts) {
+        const { relints, debriefings, dirs } = data.counts;
+        const parts = [];
+        if (relints > 0) parts.push(`${relints} RELINT${relints !== 1 ? 's' : ''}`);
+        if (debriefings > 0) parts.push(`${debriefings} debriefing${debriefings !== 1 ? 's' : ''}`);
+        if (dirs?.length > 0) parts.push(`arquivos de ${dirs.join(', ')}`);
+        if (parts.length > 0) {
+          setCloudWarning(`ZIP gerado com: ${parts.join(', ')}.`);
+        }
       }
     } catch (e: any) {
       setError(e.message);
