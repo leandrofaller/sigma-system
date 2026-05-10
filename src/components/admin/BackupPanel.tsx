@@ -99,9 +99,12 @@ export function BackupPanel({ initialBackups, initialCloudIndex, cloudProvider }
       const res = await fetch('/api/admin/backups/zip', { method: 'POST' });
       const text = await res.text();
       let data: any = {};
-      try { data = JSON.parse(text); } catch { throw new Error(`Resposta inválida do servidor: ${text.slice(0, 200)}`); }
+      try { data = JSON.parse(text); } catch { throw new Error(`Resposta inválida do servidor: ${text.slice(0, 300)}`); }
       if (!res.ok) throw new Error(data.detail || data.error || 'Erro ao gerar ZIP');
       setBackups((prev) => [{ name: data.name, size: data.size, createdAt: data.createdAt }, ...prev]);
+      if (data.dirs && data.dirs.length === 0) {
+        setCloudWarning('ZIP gerado, mas nenhuma pasta de uploads foi encontrada. O arquivo contém apenas um INFO.txt.');
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {

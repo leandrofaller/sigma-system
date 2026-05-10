@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { mkdirSync, statSync, existsSync, createWriteStream } from 'fs';
+import { mkdirSync, statSync, existsSync, createWriteStream, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
+import { createRequire } from 'module';
+
+// Use createRequire to load the CommonJS archiver without ES module interop issues
+const _require = createRequire(import.meta.url);
+const archiver = _require('archiver') as typeof import('archiver');
 
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || '/app/uploads';
 const BACKUP_DIR = join(UPLOAD_ROOT, 'backups');
-const INCLUDE_DIRS = ['relints', 'chat', 'received'];
+// Subdirectories to include (excludes /backups to avoid recursion)
+const INCLUDE_DIRS = ['relints', 'chat', 'received', 'debriefings'];
 
 export async function POST() {
   const session = await auth();
@@ -19,8 +25,12 @@ export async function POST() {
   const filepath = join(BACKUP_DIR, filename);
 
   try {
-    // Dynamic import to avoid webpack bundling issues
-    const archiver = (await import('archiver')).default;
+    // Scan what actually exists under UPLOAD_ROOT
+    const foundDirs: string[] = [];
+    for (const dir of INCLUDE_DIRS) {
+      const dirPath = join(UPLOAD_ROOT, dir);
+      if (existsSync(dirPath)) foundDirs.push(dir);
+    }
 
     await new Promise<void>((resolve, reject) => {
       const output = createWriteStream(filepath);
@@ -29,40 +39,41 @@ export async function POST() {
       output.on('close', resolve);
       output.on('error', reject);
       archive.on('error', reject);
-      archive.on('warning', (err) => {
+      archive.on('warning', (err: any) => {
         if (err.code !== 'ENOENT') reject(err);
       });
 
       archive.pipe(output);
 
-      let addedAny = false;
-      for (const dir of INCLUDE_DIRS) {
-        const dirPath = join(UPLOAD_ROOT, dir);
-        if (existsSync(dirPath)) {
-          archive.directory(dirPath, dir);
-          addedAny = true;
+      if (foundDirs.length > 0) {
+        for (const dir of foundDirs) {
+          archive.directory(join(UPLOAD_ROOT, dir), dir);
         }
-      }
-
-      if (!addedAny) {
-        // Create an empty zip with a readme if no files found
-        archive.append('Nenhum arquivo de upload encontrado.', { name: 'README.txt' });
+      } else {
+        // Always produce a valid (non-empty) ZIP
+        const uploadInfo = [
+          `BACKUP DE ARQUIVOS — SIAIP`,
+          `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+          `Diretório base: ${UPLOAD_ROOT}`,
+          ``,
+          `Nenhuma subpasta de uploads foi encontrada.`,
+          `Pastas esperadas: ${INCLUDE_DIRS.join(', ')}`,
+        ].join('\n');
+        archive.append(uploadInfo, { name: 'INFO.txt' });
       }
 
       archive.finalize();
     });
 
     const stat = statSync(filepath);
-    return NextResponse.json({ name: filename, size: stat.size, createdAt: stat.mtime.toISOString() });
+    return NextResponse.json({
+      name: filename,
+      size: stat.size,
+      createdAt: stat.mtime.toISOString(),
+      dirs: foundDirs,
+    });
   } catch (err: any) {
-    // Clean up partial file if it exists
-    try {
-      if (existsSync(filepath)) {
-        const { unlinkSync } = await import('fs');
-        unlinkSync(filepath);
-      }
-    } catch {}
-
+    try { if (existsSync(filepath)) unlinkSync(filepath); } catch {}
     return NextResponse.json(
       { error: 'Falha ao gerar ZIP', detail: err?.message || String(err) },
       { status: 500 }
