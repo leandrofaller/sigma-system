@@ -97,8 +97,10 @@ export function BackupPanel({ initialBackups, initialCloudIndex, cloudProvider }
     setCloudWarning(null);
     try {
       const res = await fetch('/api/admin/backups/zip', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao gerar ZIP');
+      const text = await res.text();
+      let data: any = {};
+      try { data = JSON.parse(text); } catch { throw new Error(`Resposta inválida do servidor: ${text.slice(0, 200)}`); }
+      if (!res.ok) throw new Error(data.detail || data.error || 'Erro ao gerar ZIP');
       setBackups((prev) => [{ name: data.name, size: data.size, createdAt: data.createdAt }, ...prev]);
     } catch (e: any) {
       setError(e.message);

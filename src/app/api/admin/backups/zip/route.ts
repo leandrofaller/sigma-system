@@ -1,14 +1,10 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { mkdirSync, statSync, existsSync } from 'fs';
+import { mkdirSync, statSync, existsSync, createWriteStream } from 'fs';
 import { join } from 'path';
-import archiver from 'archiver';
-import { createWriteStream } from 'fs';
 
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || '/app/uploads';
 const BACKUP_DIR = join(UPLOAD_ROOT, 'backups');
-
-// Subpastas de arquivos para incluir no ZIP (exclui /backups para evitar recursão)
 const INCLUDE_DIRS = ['relints', 'chat', 'received'];
 
 export async function POST() {
@@ -22,24 +18,54 @@ export async function POST() {
   const filename = `files_${ts}.zip`;
   const filepath = join(BACKUP_DIR, filename);
 
-  await new Promise<void>((resolve, reject) => {
-    const output = createWriteStream(filepath);
-    const archive = archiver('zip', { zlib: { level: 6 } });
+  try {
+    // Dynamic import to avoid webpack bundling issues
+    const archiver = (await import('archiver')).default;
 
-    output.on('close', resolve);
-    archive.on('error', reject);
-    archive.pipe(output);
+    await new Promise<void>((resolve, reject) => {
+      const output = createWriteStream(filepath);
+      const archive = archiver('zip', { zlib: { level: 6 } });
 
-    for (const dir of INCLUDE_DIRS) {
-      const dirPath = join(UPLOAD_ROOT, dir);
-      if (existsSync(dirPath)) {
-        archive.directory(dirPath, dir);
+      output.on('close', resolve);
+      output.on('error', reject);
+      archive.on('error', reject);
+      archive.on('warning', (err) => {
+        if (err.code !== 'ENOENT') reject(err);
+      });
+
+      archive.pipe(output);
+
+      let addedAny = false;
+      for (const dir of INCLUDE_DIRS) {
+        const dirPath = join(UPLOAD_ROOT, dir);
+        if (existsSync(dirPath)) {
+          archive.directory(dirPath, dir);
+          addedAny = true;
+        }
       }
-    }
 
-    archive.finalize();
-  });
+      if (!addedAny) {
+        // Create an empty zip with a readme if no files found
+        archive.append('Nenhum arquivo de upload encontrado.', { name: 'README.txt' });
+      }
 
-  const stat = statSync(filepath);
-  return NextResponse.json({ name: filename, size: stat.size, createdAt: stat.mtime.toISOString() });
+      archive.finalize();
+    });
+
+    const stat = statSync(filepath);
+    return NextResponse.json({ name: filename, size: stat.size, createdAt: stat.mtime.toISOString() });
+  } catch (err: any) {
+    // Clean up partial file if it exists
+    try {
+      if (existsSync(filepath)) {
+        const { unlinkSync } = await import('fs');
+        unlinkSync(filepath);
+      }
+    } catch {}
+
+    return NextResponse.json(
+      { error: 'Falha ao gerar ZIP', detail: err?.message || String(err) },
+      { status: 500 }
+    );
+  }
 }
