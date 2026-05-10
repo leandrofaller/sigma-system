@@ -197,6 +197,24 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
             <Input value={configs.organization_name?.name || ''}
               onChange={(e: any) => update('organization_name', { name: e.target.value })} />
           </Field>
+          <Field label="Tamanho do logotipo na barra lateral (px)">
+            <div className="space-y-2">
+              <Select
+                value={configs.sidebar_logo_size?.px || 36}
+                onChange={(e: any) => update('sidebar_logo_size', { px: parseInt(e.target.value) })}
+              >
+                <option value={24}>Pequeno — 24px</option>
+                <option value={32}>Médio pequeno — 32px</option>
+                <option value={36}>Médio — 36px (padrão)</option>
+                <option value={48}>Grande — 48px</option>
+                <option value={56}>Extra grande — 56px</option>
+                <option value={64}>Máximo — 64px</option>
+              </Select>
+              <p className="text-xs text-subtle">
+                Tamanho atual: <span className="font-mono font-medium">{configs.sidebar_logo_size?.px || 36}px</span>. Salve e recarregue a página para ver o efeito.
+              </p>
+            </div>
+          </Field>
         </SectionCard>
 
         <SectionCard icon={FileText} title="Numeração de Relatórios">

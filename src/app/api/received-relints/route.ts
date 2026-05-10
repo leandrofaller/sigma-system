@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const notes = formData.get('notes') as string;
     const classification = (formData.get('classification') as string) || 'RESERVADO';
 
-    if (!file || !title || !source) {
+    if (!file || !title) {
       return NextResponse.json({ error: 'Dados obrigatórios faltando' }, { status: 400 });
     }
 
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     const record = await prisma.receivedRelint.create({
       data: {
         title,
-        source,
+        source: source || '',
         filename: uniqueName,
         originalName: file.name,
         fileType: file.type,

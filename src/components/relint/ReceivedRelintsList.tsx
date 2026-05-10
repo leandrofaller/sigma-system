@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, File, Search, Loader2, X, Download, Eye,
-  Building2, ChevronDown, FolderOpen, FolderPlus, Folder,
+  Building2, ChevronDown, FolderOpen, Folder,
   Trash2, Pencil, Check, Plus, FolderX, MoreVertical,
 } from 'lucide-react';
 import { formatDate, formatFileSize, getClassificationColor } from '@/lib/utils';
@@ -27,7 +28,7 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
   const [activeFolder, setActiveFolder] = useState<string>('all');
   const [uploading, setUploading] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: '', source: '', groupId: '', folderId: '', notes: '', classification: 'RESERVADO' });
+  const [form, setForm] = useState({ title: '', groupId: '', folderId: '', notes: '', classification: 'RESERVADO' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [showNewFolder, setShowNewFolder] = useState(false);
@@ -42,7 +43,7 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
   });
 
   const handleUpload = async () => {
-    if (!selectedFile || !form.title || !form.source) return;
+    if (!selectedFile || !form.title) return;
     setUploading(true);
     try {
       const fd = new FormData();
@@ -54,7 +55,7 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
       setFiles((prev) => [data, ...prev]);
       setShowForm(false);
       setSelectedFile(null);
-      setForm({ title: '', source: '', groupId: '', folderId: '', notes: '', classification: 'RESERVADO' });
+      setForm({ title: '', groupId: '', folderId: '', notes: '', classification: 'RESERVADO' });
     } catch { alert('Erro ao conectar ao servidor.'); }
     finally { setUploading(false); }
   };
@@ -270,14 +271,9 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
               <button onClick={() => setShowForm(false)} className="text-subtle hover:text-body"><X className="w-4 h-4" /></button>
             </div>
             <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
+              <div className="col-span-2">
                 <label className="block text-xs font-medium text-subtle mb-1.5">Título *</label>
                 <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-subtle mb-1.5">Agência de Origem *</label>
-                <input value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}
-                  placeholder="Ex: SESP/RO, DEPEN, etc." className={inputCls} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-subtle mb-1.5">Classificação</label>
@@ -316,7 +312,7 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
                 className="px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl text-body hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                 Cancelar
               </button>
-              <button onClick={handleUpload} disabled={uploading || !selectedFile || !form.title || !form.source}
+              <button onClick={handleUpload} disabled={uploading || !selectedFile || !form.title}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-sigma-600 hover:bg-sigma-700 text-white rounded-xl transition-colors disabled:opacity-50">
                 {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 Importar
@@ -424,15 +420,28 @@ function FileCard({ file, index, folders, isAdmin, onMove, onDelete }: {
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [moving, setMoving] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState({ top: 0, right: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        btnRef.current && !btnRef.current.contains(e.target as Node)
+      ) setMenuOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  const handleOpenMenu = () => {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setMenuStyle({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    }
+    setMenuOpen((v) => !v);
+  };
 
   const handleMove = async (folderId: string | null) => {
     setMoving(true);
@@ -448,49 +457,57 @@ function FileCard({ file, index, folders, isAdmin, onMove, onDelete }: {
       transition={{ delay: index * 0.04 }}
       className="card p-5 hover:shadow-md transition-shadow relative group/card"
     >
-      {/* Admin controls */}
+      {/* Admin controls — button stays in card, dropdown rendered via portal */}
       {isAdmin && (
-        <div ref={menuRef} className="absolute top-3 right-3">
+        <>
           <button
-            onClick={() => setMenuOpen((v) => !v)}
-            className="opacity-0 group-hover/card:opacity-100 transition-opacity p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            ref={btnRef}
+            onClick={handleOpenMenu}
+            className="absolute top-3 right-3 opacity-0 group-hover/card:opacity-100 transition-opacity p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
           >
             {moving ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
           </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-20 overflow-hidden py-1">
-              <div className="px-3 py-1.5 border-b border-gray-100 dark:border-gray-800">
-                <p className="text-xs font-medium text-subtle">Mover para pasta</p>
+          {menuOpen && typeof document !== 'undefined' && createPortal(
+            <div
+              ref={dropdownRef}
+              style={{ position: 'fixed', top: menuStyle.top, right: menuStyle.right, zIndex: 9999 }}
+              className="w-52 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden"
+            >
+              <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                <p className="text-xs font-semibold text-subtle uppercase tracking-wider">Mover para pasta</p>
               </div>
-              <button
-                onClick={() => handleMove(null)}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${!file.folderId ? 'text-sigma-600 font-medium' : 'text-body'}`}
-              >
-                <FolderX className="w-3.5 h-3.5 flex-shrink-0 text-subtle" />
-                Sem pasta
-              </button>
-              {folders.map((f) => (
+              <div className="max-h-48 overflow-y-auto">
                 <button
-                  key={f.id}
-                  onClick={() => handleMove(f.id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${file.folderId === f.id ? 'text-sigma-600 font-medium' : 'text-body'}`}
+                  onClick={() => handleMove(null)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${!file.folderId ? 'text-sigma-600 dark:text-sigma-400 font-medium' : 'text-body'}`}
                 >
-                  <Folder className="w-3.5 h-3.5 flex-shrink-0 text-subtle" />
-                  <span className="truncate">{f.name}</span>
+                  <FolderX className="w-3.5 h-3.5 flex-shrink-0 text-subtle" />
+                  Sem pasta
                 </button>
-              ))}
-              <div className="border-t border-gray-100 dark:border-gray-800 mt-1 pt-1">
+                {folders.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => handleMove(f.id)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${file.folderId === f.id ? 'text-sigma-600 dark:text-sigma-400 font-medium' : 'text-body'}`}
+                  >
+                    <Folder className="w-3.5 h-3.5 flex-shrink-0 text-subtle" />
+                    <span className="truncate">{f.name}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="border-t border-gray-100 dark:border-gray-800">
                 <button
                   onClick={() => { setMenuOpen(false); onDelete(file.id); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium"
                 >
                   <Trash2 className="w-3.5 h-3.5 flex-shrink-0" />
                   Excluir arquivo
                 </button>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
-        </div>
+        </>
       )}
 
       <div className="flex items-start gap-3 mb-3">

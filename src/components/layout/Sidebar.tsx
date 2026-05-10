@@ -40,9 +40,10 @@ const adminItems: NavItem[] = [
 
 interface SidebarProps {
   user: SessionUser;
+  logoSize?: number;
 }
 
-export function Sidebar({ user }: SidebarProps) {
+export function Sidebar({ user, logoSize = 36 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
@@ -62,13 +63,14 @@ export function Sidebar({ user }: SidebarProps) {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-800">
-        <div className="w-9 h-9 flex items-center justify-center flex-shrink-0">
+        <div className="flex items-center justify-center flex-shrink-0" style={{ width: logoSize, height: logoSize }}>
           <Image
-            src="/logos/badge-policia-penal.png"
-            alt="Polícia Penal"
-            width={36}
-            height={36}
-            className="w-9 h-9 object-contain"
+            src="/logos/badge-aip.png"
+            alt="AIP"
+            width={64}
+            height={64}
+            className="object-contain"
+            style={{ width: logoSize, height: logoSize }}
           />
         </div>
         <AnimatePresence>
