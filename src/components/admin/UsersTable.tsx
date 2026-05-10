@@ -2,16 +2,17 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Pencil, X, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Pencil, X, Loader2, CheckCircle, XCircle, Trash2 } from 'lucide-react';
 import { formatDate, getRoleName } from '@/lib/utils';
 
 interface Props {
   users: any[];
   groups: any[];
   currentUserRole: string;
+  currentUserId: string;
 }
 
-export function UsersTable({ users: initialUsers, groups, currentUserRole }: Props) {
+export function UsersTable({ users: initialUsers, groups, currentUserRole, currentUserId }: Props) {
   const [users, setUsers] = useState(initialUsers);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -48,6 +49,16 @@ export function UsersTable({ users: initialUsers, groups, currentUserRole }: Pro
       alert('Erro ao salvar usuário.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (user: any) => {
+    if (!confirm(`Excluir "${user.name}"? Esta ação não pode ser desfeita.`)) return;
+    const res = await fetch(`/api/users/${user.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setUsers((prev) => prev.filter((u) => u.id !== user.id));
+    } else {
+      alert('Erro ao excluir usuário.');
     }
   };
 
@@ -179,6 +190,13 @@ export function UsersTable({ users: initialUsers, groups, currentUserRole }: Pro
                       className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
                       <Pencil className="w-4 h-4" />
                     </button>
+                    {currentUserRole === 'SUPER_ADMIN' && user.id !== currentUserId && (
+                      <button onClick={() => handleDeleteUser(user)}
+                        className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title="Excluir usuário">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

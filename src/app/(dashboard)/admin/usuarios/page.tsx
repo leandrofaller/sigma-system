@@ -50,6 +50,7 @@ export default async function UsuariosPage() {
         groups={groups}
         requests={requests as any}
         currentUserRole={user.role}
+        currentUserId={user.id}
         pendingCount={pendingCount}
       />
     </div>

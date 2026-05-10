@@ -10,10 +10,11 @@ interface Props {
   groups: any[];
   requests: any[];
   currentUserRole: string;
+  currentUserId: string;
   pendingCount: number;
 }
 
-export function AdminUsersTabs({ users, groups, requests, currentUserRole, pendingCount }: Props) {
+export function AdminUsersTabs({ users, groups, requests, currentUserRole, currentUserId, pendingCount }: Props) {
   const [tab, setTab] = useState<'users' | 'requests'>('users');
 
   return (
@@ -49,7 +50,7 @@ export function AdminUsersTabs({ users, groups, requests, currentUserRole, pendi
       </div>
 
       {tab === 'users' ? (
-        <UsersTable users={users} groups={groups} currentUserRole={currentUserRole} />
+        <UsersTable users={users} groups={groups} currentUserRole={currentUserRole} currentUserId={currentUserId} />
       ) : (
         <AccessRequestsPanel requests={requests} groups={groups} />
       )}

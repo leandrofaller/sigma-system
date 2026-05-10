@@ -3,10 +3,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Users, User, Hash, Loader2, Search, Paperclip, Download, FileText, Image as ImageIcon, Trash2, SmilePlus } from 'lucide-react';
+import { Send, Users, User, Hash, Loader2, Search, Paperclip, Download, FileText, Image as ImageIcon, Trash2, SmilePlus, Smile } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 
 const EMOJI_LIST = ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥', '✅', '👀', '🙏', '😊', '💪', '🎉', '⚠️', '❓'];
+
+const EMOJI_INSERT_LIST = [
+  '😀', '😂', '😍', '🥰', '😎', '😢', '😡', '🤔',
+  '👍', '👎', '❤️', '🔥', '✅', '⚠️', '🎉', '💪',
+  '👀', '🙏', '😊', '💯', '🤝', '👏', '🚨', '📋',
+  '🔒', '📌', '⏰', '🗂️', '📍', '✍️',
+];
 
 interface Contact {
   id: string;
@@ -80,11 +87,14 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
   const [uploading, setUploading] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [emojiPicker, setEmojiPicker] = useState<{ msgId: string; top: number; left: number } | null>(null);
+  const [showEmojiInput, setShowEmojiInput] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const emojiInputRef = useRef<HTMLDivElement>(null);
 
   // Close emoji picker on outside click
   useEffect(() => {
@@ -92,10 +102,27 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) {
         setEmojiPicker(null);
       }
+      if (emojiInputRef.current && !emojiInputRef.current.contains(e.target as Node)) {
+        setShowEmojiInput(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  const insertEmoji = (emoji: string) => {
+    const el = inputRef.current;
+    if (!el) { setInput((prev) => prev + emoji); setShowEmojiInput(false); return; }
+    const start = el.selectionStart ?? input.length;
+    const end = el.selectionEnd ?? input.length;
+    const newVal = input.slice(0, start) + emoji + input.slice(end);
+    setInput(newVal);
+    setShowEmojiInput(false);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  };
 
   const fetchMessages = useCallback(async () => {
     if (!activeChannel) return;
@@ -457,7 +484,32 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
                 >
                   {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                 </button>
-                <input value={input} onChange={(e) => setInput(e.target.value)}
+                <div ref={emojiInputRef} className="relative flex-shrink-0">
+                  <button
+                    onClick={() => setShowEmojiInput((v) => !v)}
+                    className={`p-2.5 rounded-xl transition-colors ${showEmojiInput ? 'bg-sigma-50 dark:bg-sigma-900/20 text-sigma-500' : 'text-subtle hover:text-body hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                    title="Inserir emoji"
+                  >
+                    <Smile className="w-4 h-4" />
+                  </button>
+                  {showEmojiInput && (
+                    <div className="absolute bottom-full mb-2 left-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-2.5 z-10">
+                      <p className="text-xs text-subtle font-medium px-1 pb-1.5">Inserir emoji</p>
+                      <div className="grid grid-cols-8 gap-0.5">
+                        {EMOJI_INSERT_LIST.map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => insertEmoji(emoji)}
+                            className="w-8 h-8 flex items-center justify-center text-lg rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors hover:scale-110 active:scale-95"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                   placeholder="Digite uma mensagem ou arraste um arquivo..."
                   className="flex-1 px-4 py-2.5 input-base" />

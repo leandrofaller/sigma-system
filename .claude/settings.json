@@ -10,7 +10,10 @@
       "Bash(xargs grep -l \"ai\\\\|AI\")",
       "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Force)",
       "Bash(Select-Object Name, PSIsContainer)",
-      "Bash(xargs grep -l \"relints\")"
+      "Bash(xargs grep -l \"relints\")",
+      "Bash(git log *)",
+      "Bash(grep -i \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(xargs grep -l \"reaction\\\\|emoji\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
