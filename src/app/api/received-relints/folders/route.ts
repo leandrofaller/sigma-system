@@ -21,9 +21,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
-  const { name } = await req.json();
+  const { name, color } = await req.json();
   if (!name?.trim()) return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 });
 
-  const folder = await prisma.receivedRelintFolder.create({ data: { name: name.trim() } });
+  const folder = await prisma.receivedRelintFolder.create({
+    data: { name: name.trim(), color: color || '#6172f3' },
+  });
   return NextResponse.json(folder, { status: 201 });
 }

@@ -11,12 +11,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
-  const { name } = await req.json();
-  if (!name?.trim()) return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 });
+  const { name, color } = await req.json();
+  const updateData: { name?: string; color?: string } = {};
+  if (name?.trim()) updateData.name = name.trim();
+  if (color) updateData.color = color;
+  if (Object.keys(updateData).length === 0) {
+    return NextResponse.json({ error: 'Nenhum campo para atualizar' }, { status: 400 });
+  }
 
   const folder = await prisma.receivedRelintFolder.update({
     where: { id: params.id },
-    data: { name: name.trim() },
+    data: updateData,
   });
   return NextResponse.json(folder);
 }

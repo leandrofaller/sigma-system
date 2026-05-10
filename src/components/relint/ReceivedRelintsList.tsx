@@ -11,7 +11,32 @@ import {
 } from 'lucide-react';
 import { formatDate, formatFileSize, getClassificationColor } from '@/lib/utils';
 
-interface RRFolder { id: string; name: string }
+const FOLDER_COLORS = [
+  '#6172f3', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#06b6d4', '#f97316', '#ec4899', '#84cc16', '#64748b',
+];
+
+function ColorPalette({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1 mt-1.5">
+      {FOLDER_COLORS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => onChange(c)}
+          className="w-5 h-5 rounded-full transition-all hover:scale-110 flex-shrink-0"
+          style={{
+            background: c,
+            outline: value === c ? `2px solid ${c}` : 'none',
+            outlineOffset: '2px',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface RRFolder { id: string; name: string; color?: string | null }
 
 interface Props {
   files: any[];
@@ -31,9 +56,11 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
   const [form, setForm] = useState({ title: '', groupId: '', folderId: '', notes: '', classification: 'RESERVADO' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderColor, setNewFolderColor] = useState(FOLDER_COLORS[0]);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
+  const [renameColor, setRenameColor] = useState('');
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -65,12 +92,13 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
     const res = await fetch('/api/received-relints/folders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newFolderName.trim() }),
+      body: JSON.stringify({ name: newFolderName.trim(), color: newFolderColor }),
     });
     if (res.ok) {
       const folder = await res.json();
       setFolders((prev) => [...prev, folder].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
       setNewFolderName('');
+      setNewFolderColor(FOLDER_COLORS[0]);
       setShowNewFolder(false);
     }
   };
@@ -80,10 +108,12 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
     const res = await fetch(`/api/received-relints/folders/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: renameName.trim() }),
+      body: JSON.stringify({ name: renameName.trim(), color: renameColor }),
     });
     if (res.ok) {
-      setFolders((prev) => prev.map((f) => f.id === id ? { ...f, name: renameName.trim() } : f));
+      setFolders((prev) =>
+        prev.map((f) => f.id === id ? { ...f, name: renameName.trim(), color: renameColor } : f)
+      );
       setRenamingId(null);
     }
   };
@@ -172,17 +202,20 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
             {folders.map((folder) => (
               <div key={folder.id} className="group/folder relative">
                 {renamingId === folder.id ? (
-                  <div className="flex items-center gap-1 px-2 py-1">
-                    <input
-                      autoFocus
-                      value={renameName}
-                      onChange={(e) => setRenameName(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleRenameFolder(folder.id); if (e.key === 'Escape') setRenamingId(null); }}
-                      className="flex-1 text-xs bg-white dark:bg-gray-800 border border-sigma-400 rounded px-1.5 py-0.5 outline-none"
-                    />
-                    <button onClick={() => handleRenameFolder(folder.id)} className="text-green-500 hover:text-green-600">
-                      <Check className="w-3.5 h-3.5" />
-                    </button>
+                  <div className="px-2 py-1 space-y-1.5">
+                    <div className="flex items-center gap-1">
+                      <input
+                        autoFocus
+                        value={renameName}
+                        onChange={(e) => setRenameName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleRenameFolder(folder.id); if (e.key === 'Escape') setRenamingId(null); }}
+                        className="flex-1 text-xs bg-white dark:bg-gray-800 border border-sigma-400 rounded px-1.5 py-0.5 outline-none"
+                      />
+                      <button onClick={() => handleRenameFolder(folder.id)} className="text-green-500 hover:text-green-600">
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <ColorPalette value={renameColor} onChange={setRenameColor} />
                   </div>
                 ) : (
                   <button
@@ -193,7 +226,10 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                     }`}
                   >
-                    <Folder className="w-3.5 h-3.5 flex-shrink-0" />
+                    <Folder
+                      className="w-3.5 h-3.5 flex-shrink-0"
+                      style={{ color: folder.color || '#6172f3' }}
+                    />
                     <span className="flex-1 text-left truncate">{folder.name}</span>
                     <span className="text-xs text-subtle">{files.filter((f) => f.folderId === folder.id).length}</span>
                   </button>
@@ -201,7 +237,7 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
                 {renamingId !== folder.id && (
                   <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/folder:flex items-center gap-0.5">
                     <button
-                      onClick={(e) => { e.stopPropagation(); setRenamingId(folder.id); setRenameName(folder.name); }}
+                      onClick={(e) => { e.stopPropagation(); setRenamingId(folder.id); setRenameName(folder.name); setRenameColor(folder.color || FOLDER_COLORS[0]); }}
                       className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                     >
                       <Pencil className="w-3 h-3" />
@@ -220,21 +256,24 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
 
           {/* New folder input */}
           {showNewFolder ? (
-            <div className="mt-2 flex items-center gap-1 px-2">
-              <input
-                autoFocus
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setShowNewFolder(false); }}
-                placeholder="Nome da pasta"
-                className="flex-1 text-xs bg-white dark:bg-gray-800 border border-sigma-400 rounded px-1.5 py-1 outline-none"
-              />
-              <button onClick={handleCreateFolder} className="text-sigma-600 hover:text-sigma-700">
-                <Check className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={() => setShowNewFolder(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-3.5 h-3.5" />
-              </button>
+            <div className="mt-2 px-2 space-y-1.5">
+              <div className="flex items-center gap-1">
+                <input
+                  autoFocus
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setShowNewFolder(false); }}
+                  placeholder="Nome da pasta"
+                  className="flex-1 text-xs bg-white dark:bg-gray-800 border border-sigma-400 rounded px-1.5 py-1 outline-none"
+                />
+                <button onClick={handleCreateFolder} className="text-sigma-600 hover:text-sigma-700">
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => setShowNewFolder(false)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <ColorPalette value={newFolderColor} onChange={setNewFolderColor} />
             </div>
           ) : (
             <button
@@ -525,7 +564,14 @@ function FileCard({ file, index, folders, isAdmin, onMove, onDelete }: {
           {file.classification}
         </span>
         {file.folder && (
-          <span className="text-xs text-sigma-600 dark:text-sigma-400 bg-sigma-50 dark:bg-sigma-900/20 px-2 py-0.5 rounded-full border border-sigma-200 dark:border-sigma-800 flex items-center gap-1">
+          <span
+            className="text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 font-medium"
+            style={{
+              color: file.folder.color || '#6172f3',
+              borderColor: `${file.folder.color || '#6172f3'}40`,
+              background: `${file.folder.color || '#6172f3'}12`,
+            }}
+          >
             <Folder className="w-2.5 h-2.5" /> {file.folder.name}
           </span>
         )}

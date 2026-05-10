@@ -129,6 +129,7 @@ model RelintTemplate {
 model ReceivedRelintFolder {
   id        String   @id @default(cuid())
   name      String
+  color     String?  @default("#6172f3")
   createdAt DateTime @default(now())
 
   files ReceivedRelint[]
@@ -176,6 +177,7 @@ model ChatMessage {
   groupId    String?
   group      Group?      @relation(fields: [groupId], references: [id])
   readBy     String[]    @default([])
+  reactions  Json?
   isDeleted  Boolean     @default(false)
   createdAt  DateTime    @default(now())
 
