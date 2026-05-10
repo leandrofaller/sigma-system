@@ -29,7 +29,7 @@ export interface CloudEntry {
 export async function getCloudConfig(): Promise<CloudConfig> {
   try {
     const cfg = await prisma.systemConfig.findUnique({ where: { key: 'backup_cloud' } });
-    return (cfg?.value as CloudConfig) || { provider: 'none' };
+    return (cfg?.value as unknown as CloudConfig) || { provider: 'none' };
   } catch {
     return { provider: 'none' };
   }
