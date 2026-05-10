@@ -19,7 +19,7 @@ RUN npm run build
 # Stage 3: Runner
 FROM node:20-alpine AS runner
 # su-exec permite dropar privilégios após acertar permissões do volume montado
-RUN apk add --no-cache openssl su-exec
+RUN apk add --no-cache openssl su-exec postgresql-client
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

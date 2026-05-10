@@ -87,23 +87,27 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
   const [uploading, setUploading] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [emojiPicker, setEmojiPicker] = useState<{ msgId: string; top: number; left: number } | null>(null);
-  const [showEmojiInput, setShowEmojiInput] = useState(false);
+  const [emojiInsert, setEmojiInsert] = useState<{ top: number; left: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
-  const emojiInputRef = useRef<HTMLDivElement>(null);
+  const emojiInsertRef = useRef<HTMLDivElement>(null);
+  const emojiSmileBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Close emoji picker on outside click
+  // Close emoji pickers on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) {
         setEmojiPicker(null);
       }
-      if (emojiInputRef.current && !emojiInputRef.current.contains(e.target as Node)) {
-        setShowEmojiInput(false);
+      if (
+        emojiInsertRef.current && !emojiInsertRef.current.contains(e.target as Node) &&
+        emojiSmileBtnRef.current && !emojiSmileBtnRef.current.contains(e.target as Node)
+      ) {
+        setEmojiInsert(null);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -112,12 +116,12 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
 
   const insertEmoji = (emoji: string) => {
     const el = inputRef.current;
-    if (!el) { setInput((prev) => prev + emoji); setShowEmojiInput(false); return; }
+    if (!el) { setInput((prev) => prev + emoji); setEmojiInsert(null); return; }
     const start = el.selectionStart ?? input.length;
     const end = el.selectionEnd ?? input.length;
     const newVal = input.slice(0, start) + emoji + input.slice(end);
     setInput(newVal);
-    setShowEmojiInput(false);
+    setEmojiInsert(null);
     requestAnimationFrame(() => {
       el.focus();
       el.setSelectionRange(start + emoji.length, start + emoji.length);
@@ -484,31 +488,22 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
                 >
                   {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                 </button>
-                <div ref={emojiInputRef} className="relative flex-shrink-0">
-                  <button
-                    onClick={() => setShowEmojiInput((v) => !v)}
-                    className={`p-2.5 rounded-xl transition-colors ${showEmojiInput ? 'bg-sigma-50 dark:bg-sigma-900/20 text-sigma-500' : 'text-subtle hover:text-body hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                    title="Inserir emoji"
-                  >
-                    <Smile className="w-4 h-4" />
-                  </button>
-                  {showEmojiInput && (
-                    <div className="absolute bottom-full mb-2 left-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-2.5 z-10">
-                      <p className="text-xs text-subtle font-medium px-1 pb-1.5">Inserir emoji</p>
-                      <div className="grid grid-cols-8 gap-0.5">
-                        {EMOJI_INSERT_LIST.map((emoji) => (
-                          <button
-                            key={emoji}
-                            onClick={() => insertEmoji(emoji)}
-                            className="w-8 h-8 flex items-center justify-center text-lg rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors hover:scale-110 active:scale-95"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <button
+                  ref={emojiSmileBtnRef}
+                  onClick={(e) => {
+                    if (emojiInsert) { setEmojiInsert(null); return; }
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const panelWidth = 290;
+                    let left = rect.left;
+                    if (left + panelWidth > window.innerWidth - 8) left = window.innerWidth - panelWidth - 8;
+                    if (left < 8) left = 8;
+                    setEmojiInsert({ top: rect.top, left });
+                  }}
+                  className={`p-2.5 rounded-xl transition-colors flex-shrink-0 ${emojiInsert ? 'bg-sigma-50 dark:bg-sigma-900/20 text-sigma-500' : 'text-subtle hover:text-body hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                  title="Inserir emoji"
+                >
+                  <Smile className="w-4 h-4" />
+                </button>
                 <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                   placeholder="Digite uma mensagem ou arraste um arquivo..."
@@ -537,6 +532,34 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
                 key={emoji}
                 onClick={() => handleToggleReaction(emojiPicker.msgId, emoji)}
                 className="w-9 h-9 flex items-center justify-center text-xl rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors hover:scale-110 active:scale-95"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Emoji insert portal */}
+      {emojiInsert && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={emojiInsertRef}
+          style={{
+            position: 'fixed',
+            bottom: window.innerHeight - emojiInsert.top + 8,
+            left: emojiInsert.left,
+            zIndex: 9999,
+          }}
+          className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-2.5"
+        >
+          <p className="text-xs text-subtle font-medium px-1 pb-1.5">Inserir emoji</p>
+          <div className="grid grid-cols-8 gap-0.5">
+            {EMOJI_INSERT_LIST.map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => insertEmoji(emoji)}
+                className="w-8 h-8 flex items-center justify-center text-lg rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors hover:scale-110 active:scale-95"
               >
                 {emoji}
               </button>
