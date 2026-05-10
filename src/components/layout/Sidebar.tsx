@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
-  Users, Settings, Shield, ClipboardList, ChevronLeft,
+  Users, Settings, ClipboardList, ChevronLeft,
   ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
@@ -61,8 +62,14 @@ export function Sidebar({ user }: SidebarProps) {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-800">
-        <div className="w-9 h-9 bg-sigma-600 rounded-xl flex items-center justify-center flex-shrink-0">
-          <Shield className="w-5 h-5 text-white" />
+        <div className="w-9 h-9 flex items-center justify-center flex-shrink-0">
+          <Image
+            src="/logos/badge-policia-penal.png"
+            alt="Polícia Penal"
+            width={36}
+            height={36}
+            className="w-9 h-9 object-contain"
+          />
         </div>
         <AnimatePresence>
           {!collapsed && (

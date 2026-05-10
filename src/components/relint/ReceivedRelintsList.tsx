@@ -2,8 +2,8 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { motion } from 'framer-motion';
-import { Upload, File, Search, Loader2, X, Download, Eye } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Upload, File, Search, Loader2, X, Download, Eye, Building2, ChevronDown } from 'lucide-react';
 import { formatDate, formatFileSize, getClassificationColor } from '@/lib/utils';
 
 interface Props {
@@ -56,6 +56,14 @@ export function ReceivedRelintsList({ files: initialFiles, groups, userId, role 
   const filtered = files.filter((f) =>
     !search || f.title.toLowerCase().includes(search.toLowerCase()) || f.source.toLowerCase().includes(search.toLowerCase())
   );
+
+  const grouped: Record<string, any[]> = {};
+  for (const file of filtered) {
+    const key = file.source?.trim() || 'Sem Agência';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(file);
+  }
+  const sortedSources = Object.keys(grouped).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
   const inputCls = 'w-full input-base px-3 py-2';
 
@@ -131,54 +139,103 @@ export function ReceivedRelintsList({ files: initialFiles, groups, userId, role 
         </motion.div>
       )}
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.length === 0 && (
-          <div className="col-span-3 card py-12 text-center">
-            <File className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
-            <p className="text-subtle text-sm">Nenhum arquivo importado</p>
-          </div>
-        )}
-        {filtered.map((file, i) => (
-          <motion.div key={file.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-            className="card p-5 hover:shadow-md transition-shadow">
-            <div className="flex items-start gap-3 mb-3">
-              <div className="w-10 h-10 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                <File className="w-5 h-5 text-red-500 dark:text-red-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-title truncate">{file.title}</p>
-                <p className="text-xs text-subtle">{file.source}</p>
-              </div>
+      {filtered.length === 0 ? (
+        <div className="card py-12 text-center">
+          <File className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
+          <p className="text-subtle text-sm">Nenhum arquivo importado</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {sortedSources.map((source) => (
+            <AgencyGroup key={source} source={source} files={grouped[source]} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgencyGroup({ source, files }: { source: string; files: any[] }) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 mb-3 w-full text-left group"
+      >
+        <div className="w-7 h-7 bg-sigma-100 dark:bg-sigma-900/30 rounded-lg flex items-center justify-center">
+          <Building2 className="w-3.5 h-3.5 text-sigma-600 dark:text-sigma-400" />
+        </div>
+        <span className="font-semibold text-sm text-title">{source}</span>
+        <span className="text-xs text-subtle font-normal">
+          {files.length} arquivo{files.length !== 1 ? 's' : ''}
+        </span>
+        <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800 mx-2" />
+        <ChevronDown
+          className={`w-4 h-4 text-subtle transition-transform ${open ? '' : '-rotate-90'}`}
+        />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {files.map((file, i) => (
+                <motion.div
+                  key={file.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  className="card p-5 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-10 h-10 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <File className="w-5 h-5 text-red-500 dark:text-red-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-title truncate">{file.title}</p>
+                      <p className="text-xs text-subtle">{file.source}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${getClassificationColor(file.classification)}`}>
+                      {file.classification}
+                    </span>
+                    {file.group && (
+                      <span className="text-xs text-subtle bg-gray-50 dark:bg-gray-800 px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-700">
+                        {file.group.name}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-subtle mb-3">
+                    <span>{formatDate(file.createdAt)} · {formatFileSize(file.fileSize)}</span>
+                    <span>por {file.uploadedBy?.name}</span>
+                  </div>
+                  {file.localPath && (
+                    <div className="flex gap-2">
+                      <a href={file.localPath} target="_blank" rel="noopener noreferrer"
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 text-body hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <Eye className="w-3.5 h-3.5" /> Visualizar
+                      </a>
+                      <a href={file.localPath} download={file.originalName}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 text-body hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <Download className="w-3.5 h-3.5" /> Baixar
+                      </a>
+                    </div>
+                  )}
+                </motion.div>
+              ))}
             </div>
-            <div className="flex items-center gap-2 mb-3">
-              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${getClassificationColor(file.classification)}`}>
-                {file.classification}
-              </span>
-              {file.group && (
-                <span className="text-xs text-subtle bg-gray-50 dark:bg-gray-800 px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-700">
-                  {file.group.name}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center justify-between text-xs text-subtle mb-3">
-              <span>{formatDate(file.createdAt)} · {formatFileSize(file.fileSize)}</span>
-              <span>por {file.uploadedBy?.name}</span>
-            </div>
-            {file.localPath && (
-              <div className="flex gap-2">
-                <a href={file.localPath} target="_blank" rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 text-body hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                  <Eye className="w-3.5 h-3.5" /> Visualizar
-                </a>
-                <a href={file.localPath} download={file.originalName}
-                  className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium border border-gray-200 dark:border-gray-700 rounded-lg py-1.5 text-body hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                  <Download className="w-3.5 h-3.5" /> Baixar
-                </a>
-              </div>
-            )}
           </motion.div>
-        ))}
-      </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
