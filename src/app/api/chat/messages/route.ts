@@ -95,7 +95,7 @@ export async function DELETE(req: NextRequest) {
 
   let where: any;
   if (groupId) {
-    where = { groupId, senderId: user.id };
+    where = { groupId };
   } else {
     where = {
       OR: [
