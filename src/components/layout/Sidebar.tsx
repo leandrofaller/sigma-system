@@ -44,13 +44,13 @@ interface SidebarProps {
 export function Sidebar({ user }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
-  const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
   const filteredNav = navItems.filter(
-    (item) => !item.roles || item.roles.includes(user.role)
+    (item) => !item.roles || item.roles.includes(user?.role ?? '')
   );
   const filteredAdmin = adminItems.filter(
-    (item) => (!item.roles || item.roles.includes(user.role)) && isAdmin
+    (item) => (!item.roles || item.roles.includes(user?.role ?? '')) && isAdmin
   );
 
   return (
