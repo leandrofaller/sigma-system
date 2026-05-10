@@ -257,14 +257,113 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
         </SectionCard>
 
         <SectionCard icon={HardDrive} title="Backup & Armazenamento">
-          <Toggle checked={configs.backup_enabled?.enabled || false}
-            label="Backup automático no Google Drive"
-            onChange={(v: boolean) => update('backup_enabled', { enabled: v })} />
-          <Field label="ID da Pasta no Google Drive">
-            <Input placeholder="Deixe em branco para pasta raiz"
-              value={configs.backup_folder?.folderId || ''}
-              onChange={(e: any) => update('backup_folder', { folderId: e.target.value })} />
+          <Field label="Provedor de Nuvem para Backups">
+            <Select
+              value={configs.backup_cloud?.provider || 'none'}
+              onChange={(e: any) =>
+                update('backup_cloud', { ...configs.backup_cloud, provider: e.target.value })
+              }
+            >
+              <option value="none">Sem nuvem (somente local)</option>
+              <option value="google_drive">Google Drive</option>
+              <option value="onedrive">OneDrive (Microsoft 365)</option>
+            </Select>
           </Field>
+
+          {(configs.backup_cloud?.provider || 'none') === 'google_drive' && (
+            <>
+              <Field label="ID da Pasta no Google Drive">
+                <Input
+                  placeholder="Deixe em branco para pasta raiz"
+                  value={configs.backup_cloud?.googleDrive?.folderId || ''}
+                  onChange={(e: any) =>
+                    update('backup_cloud', {
+                      ...configs.backup_cloud,
+                      googleDrive: { folderId: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+              <p className="text-xs text-subtle -mt-2">
+                As credenciais do Google Drive são configuradas via variáveis de ambiente{' '}
+                <code className="font-mono">GOOGLE_DRIVE_CLIENT_ID</code>,{' '}
+                <code className="font-mono">GOOGLE_DRIVE_CLIENT_SECRET</code> e{' '}
+                <code className="font-mono">GOOGLE_DRIVE_REFRESH_TOKEN</code>.
+              </p>
+            </>
+          )}
+
+          {(configs.backup_cloud?.provider || 'none') === 'onedrive' && (
+            <>
+              <Field label="Tenant ID (ID do Diretório Azure)">
+                <Input
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  value={configs.backup_cloud?.onedrive?.tenantId || ''}
+                  onChange={(e: any) =>
+                    update('backup_cloud', {
+                      ...configs.backup_cloud,
+                      onedrive: { ...configs.backup_cloud?.onedrive, tenantId: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Client ID (ID do Aplicativo Azure)">
+                <Input
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  value={configs.backup_cloud?.onedrive?.clientId || ''}
+                  onChange={(e: any) =>
+                    update('backup_cloud', {
+                      ...configs.backup_cloud,
+                      onedrive: { ...configs.backup_cloud?.onedrive, clientId: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Client Secret (Segredo do Aplicativo)">
+                <Input
+                  type="password"
+                  placeholder="Cole o segredo do aplicativo Azure"
+                  value={configs.backup_cloud?.onedrive?.clientSecret || ''}
+                  onChange={(e: any) =>
+                    update('backup_cloud', {
+                      ...configs.backup_cloud,
+                      onedrive: { ...configs.backup_cloud?.onedrive, clientSecret: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Drive ID (opcional — deixe vazio para OneDrive pessoal/padrão)">
+                <Input
+                  placeholder="b!xxxxxx... (ID do drive do SharePoint ou do usuário)"
+                  value={configs.backup_cloud?.onedrive?.driveId || ''}
+                  onChange={(e: any) =>
+                    update('backup_cloud', {
+                      ...configs.backup_cloud,
+                      onedrive: { ...configs.backup_cloud?.onedrive, driveId: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Folder ID no OneDrive (opcional — deixe vazio para pasta raiz)">
+                <Input
+                  placeholder="ID da pasta de destino"
+                  value={configs.backup_cloud?.onedrive?.folderId || ''}
+                  onChange={(e: any) =>
+                    update('backup_cloud', {
+                      ...configs.backup_cloud,
+                      onedrive: { ...configs.backup_cloud?.onedrive, folderId: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+              <p className="text-xs text-subtle -mt-2">
+                Crie um aplicativo no{' '}
+                <strong>Portal Azure → Registros de Aplicativo</strong>, conceda a permissão{' '}
+                <code className="font-mono">Files.ReadWrite.All</code> (Aplicativo) e gere um segredo.
+              </p>
+            </>
+          )}
+
           <Field label="Tamanho Máximo de Upload (MB)">
             <Input type="number" min="1" max="500"
               value={configs.max_upload_size?.mb || 50}

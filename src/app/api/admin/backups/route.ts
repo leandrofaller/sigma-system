@@ -4,11 +4,17 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { readdirSync, statSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import {
+  getCloudConfig,
+  uploadBackupToCloud,
+  markCloudUploaded,
+  getCloudIndex,
+} from '@/lib/cloud-backup';
 
 const execAsync = promisify(exec);
 const BACKUP_DIR = join(process.env.UPLOAD_DIR || '/app/uploads', 'backups');
 
-function listBackups() {
+function listLocalBackups() {
   mkdirSync(BACKUP_DIR, { recursive: true });
   return readdirSync(BACKUP_DIR)
     .filter((f) => f.endsWith('.sql'))
@@ -23,7 +29,14 @@ export async function GET() {
   const session = await auth();
   if ((session?.user as any)?.role !== 'SUPER_ADMIN')
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  return NextResponse.json(listBackups());
+
+  const [backups, cloudIndex, cloudConfig] = await Promise.all([
+    listLocalBackups(),
+    getCloudIndex(),
+    getCloudConfig(),
+  ]);
+
+  return NextResponse.json({ backups, cloudIndex, cloudProvider: cloudConfig.provider });
 }
 
 export async function POST() {
@@ -45,7 +58,28 @@ export async function POST() {
   try {
     await execAsync(cmd, { timeout: 120000, env });
     const stat = statSync(filepath);
-    return NextResponse.json({ name: filename, size: stat.size, createdAt: stat.mtime.toISOString() });
+
+    // Auto-upload to cloud if configured
+    let cloudId: string | null = null;
+    let cloudError: string | null = null;
+    const cloudConfig = await getCloudConfig();
+
+    if (cloudConfig.provider !== 'none') {
+      try {
+        cloudId = await uploadBackupToCloud(filepath, filename, cloudConfig);
+        await markCloudUploaded(filename, cloudId, cloudConfig.provider);
+      } catch (err: any) {
+        cloudError = err.message;
+      }
+    }
+
+    return NextResponse.json({
+      name: filename,
+      size: stat.size,
+      createdAt: stat.mtime.toISOString(),
+      cloudId,
+      cloudError,
+    });
   } catch (err: any) {
     return NextResponse.json(
       { error: 'Backup falhou', detail: err.stderr || err.message },

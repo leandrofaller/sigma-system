@@ -3,8 +3,9 @@ import { redirect } from 'next/navigation';
 import { readdirSync, statSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { BackupPanel } from '@/components/admin/BackupPanel';
+import { getCloudConfig, getCloudIndex } from '@/lib/cloud-backup';
 
-function getBackups() {
+function getLocalBackups() {
   const dir = join(process.env.UPLOAD_DIR || '/app/uploads', 'backups');
   try {
     mkdirSync(dir, { recursive: true });
@@ -25,7 +26,11 @@ export default async function BackupsPage() {
   const user = session!.user as any;
   if (user.role !== 'SUPER_ADMIN') redirect('/dashboard');
 
-  const backups = getBackups();
+  const [backups, cloudIndex, cloudConfig] = await Promise.all([
+    getLocalBackups(),
+    getCloudIndex(),
+    getCloudConfig(),
+  ]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -37,7 +42,11 @@ export default async function BackupsPage() {
             : 'Gerencie backups completos do banco de dados'}
         </p>
       </div>
-      <BackupPanel initialBackups={backups} />
+      <BackupPanel
+        initialBackups={backups}
+        initialCloudIndex={cloudIndex}
+        cloudProvider={cloudConfig.provider}
+      />
     </div>
   );
 }
