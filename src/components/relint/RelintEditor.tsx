@@ -201,13 +201,6 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
               {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-subtle mb-1.5">Template</label>
-            <select value={form.templateId} onChange={(e) => update('templateId', e.target.value)}
-              className={inputCls}>
-              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
         </div>
       </div>
 

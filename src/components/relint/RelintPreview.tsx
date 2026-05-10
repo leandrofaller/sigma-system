@@ -219,11 +219,6 @@ export function RelintPreview({ form }: Props) {
           </div>
         )}
 
-        {/* Carimbo rodapé */}
-        <div style={{ textAlign: 'center', marginTop: '30px', marginBottom: '10px' }}>
-          <span style={{ ...stamp, fontSize: '11pt' }}>{classLabel}</span>
-        </div>
-
         {/* Aviso legal — visível na tela, substituído por rodapé fixo no print */}
         <div data-print-footer="true" style={{ borderTop: '1px solid #ccc', paddingTop: '8px' }}>
           <p style={{ fontSize: '7.5pt', color: '#333', textAlign: 'justify', lineHeight: '1.3', margin: 0 }}>
