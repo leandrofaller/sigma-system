@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const buffer = Buffer.from(bytes);
   const ext = file.name.split('.').pop() || 'bin';
   const filename = `${randomUUID()}.${ext}`;
-  const uploadDir = join(process.cwd(), 'uploads', 'chat');
+  const uploadDir = join(process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads'), 'chat');
 
   await mkdir(uploadDir, { recursive: true });
   await writeFile(join(uploadDir, filename), buffer);

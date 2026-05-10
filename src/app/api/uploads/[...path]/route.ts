@@ -26,7 +26,8 @@ export async function GET(
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const filePath = join(process.cwd(), 'uploads', ...params.path);
+  const uploadsBase = process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads');
+  const filePath = join(uploadsBase, ...params.path);
 
   if (!existsSync(filePath)) {
     return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 });

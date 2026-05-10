@@ -40,7 +40,15 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/start.sh ./start.sh
 RUN chmod +x start.sh
 
-RUN mkdir -p uploads && chown -R nextjs:nodejs /app
+# Cria o diretório de uploads e garante permissões antes de trocar para nextjs
+RUN mkdir -p /app/uploads/relints /app/uploads/chat && \
+    chown -R nextjs:nodejs /app
+
+# Caminho fixo para uploads — monte um volume persistente aqui no Coolify
+ENV UPLOAD_DIR=/app/uploads
+
+# Declara o volume para que orquestradores saibam que este caminho é persistente
+VOLUME ["/app/uploads"]
 
 USER nextjs
 EXPOSE 3000

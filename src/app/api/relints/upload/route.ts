@@ -4,6 +4,10 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 
+function uploadsBase() {
+  return process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads');
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -18,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
   const filename = `${randomUUID()}.${ext}`;
-  const dir = join(process.cwd(), 'uploads', 'relints');
+  const dir = join(uploadsBase(), 'relints');
 
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, filename), Buffer.from(await file.arrayBuffer()));
