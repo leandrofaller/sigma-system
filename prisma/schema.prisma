@@ -89,7 +89,7 @@ model Relint {
   status         RelintStatus   @default(DRAFT)
   classification Classification @default(RESERVADO)
   authorId       String
-  author         User           @relation(fields: [authorId], references: [id])
+  author         User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   groupId        String
   group          Group          @relation(fields: [groupId], references: [id])
   templateId     String?
@@ -150,7 +150,7 @@ model ReceivedRelint {
   localPath      String?
   classification Classification @default(RESERVADO)
   uploadedById   String
-  uploadedBy     User           @relation(fields: [uploadedById], references: [id])
+  uploadedBy     User           @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
   groupId        String?
   group          Group?         @relation(fields: [groupId], references: [id])
   folderId       String?
@@ -172,9 +172,9 @@ model ChatMessage {
   fileName   String?
   fileSize   Int?
   senderId   String
-  sender     User        @relation("SentMessages", fields: [senderId], references: [id])
+  sender     User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   receiverId String?
-  receiver   User?       @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  receiver   User?       @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
   groupId    String?
   group      Group?      @relation(fields: [groupId], references: [id])
   readBy     String[]    @default([])
@@ -207,7 +207,7 @@ model Attachment {
 model AuditLog {
   id        String   @id @default(cuid())
   userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   action    String
   entity    String?
   entityId  String?
@@ -236,7 +236,7 @@ model SystemConfig {
 model AIQuery {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   query     String   @db.Text
   response  String   @db.Text
   provider  String
@@ -265,7 +265,7 @@ model AccessRequest {
 model UserLocation {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   lat       Float
   lng       Float
   accuracy  Float?
