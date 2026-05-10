@@ -15,6 +15,36 @@ export interface LocationEntry {
   user: { id: string; name: string; email: string };
 }
 
+export const TILE_LAYERS = {
+  standard: {
+    label: 'Padrão (OpenStreetMap)',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  },
+  satellite: {
+    label: 'Satélite (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '© <a href="https://www.esri.com">Esri</a>, Maxar, GeoEye, Earthstar Geographics',
+  },
+  dark: {
+    label: 'Escuro (CartoDB)',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  light: {
+    label: 'Minimalista (CartoDB)',
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  topo: {
+    label: 'Topográfico',
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://opentopomap.org">OpenTopoMap</a>',
+  },
+} as const;
+
+export type TileStyle = keyof typeof TILE_LAYERS;
+
 function markerColor(ts: string): string {
   const h = (Date.now() - new Date(ts).getTime()) / 3600000;
   if (h < 1) return '#22c55e';
@@ -38,10 +68,10 @@ function MapController({ targets }: { targets: [number, number][] }) {
 interface Props {
   locations: LocationEntry[];
   selectedUserId: string | null;
+  tileStyle?: TileStyle;
 }
 
-export default function GeoMap({ locations, selectedUserId }: Props) {
-  // Most recent location per user (for "all users" view)
+export default function GeoMap({ locations, selectedUserId, tileStyle = 'standard' }: Props) {
   const latestByUser = new Map<string, LocationEntry>();
   for (const loc of [...locations].reverse()) {
     latestByUser.set(loc.userId, loc);
@@ -52,6 +82,7 @@ export default function GeoMap({ locations, selectedUserId }: Props) {
     : Array.from(latestByUser.values());
 
   const targets: [number, number][] = markers.map((m) => [m.lat, m.lng]);
+  const tile = TILE_LAYERS[tileStyle] ?? TILE_LAYERS.standard;
 
   return (
     <MapContainer
@@ -60,10 +91,7 @@ export default function GeoMap({ locations, selectedUserId }: Props) {
       style={{ height: '100%', width: '100%', borderRadius: 'inherit' }}
       zoomControl
     >
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-      />
+      <TileLayer url={tile.url} attribution={tile.attribution} />
       <MapController targets={targets} />
       {markers.map((loc, i) => (
         <CircleMarker

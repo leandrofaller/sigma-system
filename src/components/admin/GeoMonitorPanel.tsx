@@ -2,8 +2,9 @@
 
 import dynamic from 'next/dynamic';
 import { useState, useMemo } from 'react';
-import { MapPin, Users, Clock, RefreshCw, Download } from 'lucide-react';
-import type { LocationEntry } from './GeoMap';
+import { MapPin, Users, Clock, Download, Layers } from 'lucide-react';
+import type { LocationEntry, TileStyle } from './GeoMap';
+import { TILE_LAYERS } from './GeoMap';
 
 const GeoMap = dynamic(() => import('./GeoMap'), { ssr: false, loading: () => (
   <div className="flex items-center justify-center h-full text-subtle text-sm">Carregando mapa...</div>
@@ -42,6 +43,7 @@ interface Props {
 export function GeoMonitorPanel({ locations, allUsers }: Props) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [tileStyle, setTileStyle] = useState<TileStyle>('standard');
 
   const latestByUser = useMemo(() => {
     const map = new Map<string, LocationEntry>();
@@ -142,8 +144,29 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
         </div>
 
         {/* Map */}
-        <div className="card overflow-hidden" style={{ height: 420 }}>
-          <GeoMap locations={locations} selectedUserId={selectedUserId} />
+        <div className="card overflow-hidden flex flex-col" style={{ height: 420 }}>
+          {/* Map style selector */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+            <Layers className="w-3.5 h-3.5 text-subtle flex-shrink-0" />
+            <div className="flex items-center gap-1 flex-wrap">
+              {(Object.entries(TILE_LAYERS) as [TileStyle, typeof TILE_LAYERS[TileStyle]][]).map(([key, layer]) => (
+                <button
+                  key={key}
+                  onClick={() => setTileStyle(key)}
+                  className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-medium ${
+                    tileStyle === key
+                      ? 'bg-sigma-500 text-white'
+                      : 'text-subtle hover:text-body hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  {layer.label.split(' (')[0]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 min-h-0">
+            <GeoMap locations={locations} selectedUserId={selectedUserId} tileStyle={tileStyle} />
+          </div>
         </div>
       </div>
 

@@ -6,12 +6,14 @@ import { motion } from 'framer-motion';
 import {
   Package, Truck, MapPin, Clock, Shield, Star,
   ArrowRight, Phone, Mail, Instagram, Facebook,
-  CheckCircle, BarChart3, Zap, Globe
+  CheckCircle, BarChart3, Zap, Globe, Sun, Moon,
 } from 'lucide-react';
+import { useTheme } from '@/components/providers/ThemeProvider';
 
 export default function CoverPage() {
   const [trackingCode, setTrackingCode] = useState('');
   const [tracked, setTracked] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   const handleTracking = (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,37 +21,46 @@ export default function CoverPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <div className="min-h-screen bg-white dark:bg-gray-950 font-sans transition-colors duration-300">
       {/* Navbar */}
-      <nav className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
+      <nav className="fixed top-0 w-full z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2">
               <div className="w-9 h-9 bg-cover-500 rounded-xl flex items-center justify-center">
                 <Package className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold text-gray-900">
+              <span className="text-xl font-bold text-gray-900 dark:text-white">
                 LogiTrack<span className="text-cover-500">Express</span>
               </span>
             </div>
-            <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
-              <a href="#servicos" className="hover:text-cover-500 transition-colors">Serviços</a>
-              <a href="#rastreamento" className="hover:text-cover-500 transition-colors">Rastreamento</a>
-              <a href="#sobre" className="hover:text-cover-500 transition-colors">Sobre</a>
-              <a href="#contato" className="hover:text-cover-500 transition-colors">Contato</a>
+            <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600 dark:text-gray-400">
+              <a href="#servicos" className="hover:text-cover-500 dark:hover:text-cover-400 transition-colors">Serviços</a>
+              <a href="#rastreamento" className="hover:text-cover-500 dark:hover:text-cover-400 transition-colors">Rastreamento</a>
+              <a href="#sobre" className="hover:text-cover-500 dark:hover:text-cover-400 transition-colors">Sobre</a>
+              <a href="#contato" className="hover:text-cover-500 dark:hover:text-cover-400 transition-colors">Contato</a>
             </div>
-            <Link
-              href="/login"
-              className="bg-cover-500 hover:bg-cover-600 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
-            >
-              Portal do Cliente
-            </Link>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleTheme}
+                className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+              >
+                {theme === 'dark' ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
+              </button>
+              <Link
+                href="/login"
+                className="bg-cover-500 hover:bg-cover-600 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
+              >
+                Portal do Cliente
+              </Link>
+            </div>
           </div>
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="pt-24 pb-20 bg-gradient-to-br from-cover-50 via-white to-orange-50">
+      <section className="pt-24 pb-20 bg-gradient-to-br from-cover-50 via-white to-orange-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <motion.div
@@ -57,15 +68,15 @@ export default function CoverPage() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <span className="inline-flex items-center gap-2 bg-cover-100 text-cover-700 text-sm font-medium px-3 py-1 rounded-full mb-4">
+              <span className="inline-flex items-center gap-2 bg-cover-100 dark:bg-cover-900/30 text-cover-700 dark:text-cover-400 text-sm font-medium px-3 py-1 rounded-full mb-4">
                 <Zap className="w-3.5 h-3.5" /> Entrega Expressa em Todo Brasil
               </span>
-              <h1 className="text-5xl font-extrabold text-gray-900 leading-tight mb-6">
+              <h1 className="text-5xl font-extrabold text-gray-900 dark:text-white leading-tight mb-6">
                 Sua encomenda,
                 <span className="text-cover-500"> no lugar certo,</span>
                 <br /> na hora certa.
               </h1>
-              <p className="text-lg text-gray-600 mb-8 max-w-lg">
+              <p className="text-lg text-gray-600 dark:text-gray-400 mb-8 max-w-lg">
                 Soluções completas em logística para empresas e pessoas físicas.
                 Rastreamento em tempo real, entrega segura e atendimento 24h.
               </p>
@@ -75,15 +86,15 @@ export default function CoverPage() {
                   <Package className="w-4 h-4" /> Rastrear Encomenda
                 </a>
                 <a href="#servicos"
-                  className="border-2 border-gray-200 hover:border-cover-300 text-gray-700 px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all">
+                  className="border-2 border-gray-200 dark:border-gray-700 hover:border-cover-300 dark:hover:border-cover-600 text-gray-700 dark:text-gray-300 px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all">
                   Nossos Serviços <ArrowRight className="w-4 h-4" />
                 </a>
               </div>
-              <div className="flex items-center gap-8 mt-10 pt-8 border-t border-gray-100">
+              <div className="flex items-center gap-8 mt-10 pt-8 border-t border-gray-100 dark:border-gray-800">
                 {[['50k+', 'Entregas/Mês'], ['98%', 'Satisfação'], ['24h', 'Suporte']].map(([num, label]) => (
                   <div key={label}>
-                    <p className="text-2xl font-bold text-gray-900">{num}</p>
-                    <p className="text-sm text-gray-500">{label}</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{num}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
                   </div>
                 ))}
               </div>
@@ -131,7 +142,7 @@ export default function CoverPage() {
       </section>
 
       {/* Rastreamento */}
-      <section id="rastreamento" className="py-16 bg-gray-900">
+      <section id="rastreamento" className="py-16 bg-gray-900 dark:bg-gray-950">
         <div className="max-w-3xl mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold text-white mb-3">Rastrear Encomenda</h2>
           <p className="text-gray-400 mb-8">Insira o código de rastreamento para ver o status da sua encomenda</p>
@@ -159,26 +170,26 @@ export default function CoverPage() {
       </section>
 
       {/* Serviços */}
-      <section id="servicos" className="py-20 bg-white">
+      <section id="servicos" className="py-20 bg-white dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-3">Nossos Serviços</h2>
-            <p className="text-gray-500 max-w-xl mx-auto">Soluções completas para sua necessidade logística</p>
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">Nossos Serviços</h2>
+            <p className="text-gray-500 dark:text-gray-400 max-w-xl mx-auto">Soluções completas para sua necessidade logística</p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { icon: Truck, title: 'Entrega Expressa', desc: 'Entrega em até 24h para capitais e regiões metropolitanas', color: 'bg-orange-50 text-cover-500' },
-              { icon: Package, title: 'Carga Fracionada', desc: 'Transporte de volumes variados com segurança e pontualidade', color: 'bg-blue-50 text-blue-500' },
-              { icon: Globe, title: 'Logística Nacional', desc: 'Cobertura em todos os estados brasileiros', color: 'bg-green-50 text-green-500' },
-              { icon: Shield, title: 'Carga Especial', desc: 'Transporte de itens de alto valor com segurança reforçada', color: 'bg-purple-50 text-purple-500' },
+              { icon: Truck, title: 'Entrega Expressa', desc: 'Entrega em até 24h para capitais e regiões metropolitanas', light: 'bg-orange-50 text-cover-500', dark: 'dark:bg-orange-950/30 dark:text-cover-400' },
+              { icon: Package, title: 'Carga Fracionada', desc: 'Transporte de volumes variados com segurança e pontualidade', light: 'bg-blue-50 text-blue-500', dark: 'dark:bg-blue-950/30 dark:text-blue-400' },
+              { icon: Globe, title: 'Logística Nacional', desc: 'Cobertura em todos os estados brasileiros', light: 'bg-green-50 text-green-500', dark: 'dark:bg-green-950/30 dark:text-green-400' },
+              { icon: Shield, title: 'Carga Especial', desc: 'Transporte de itens de alto valor com segurança reforçada', light: 'bg-purple-50 text-purple-500', dark: 'dark:bg-purple-950/30 dark:text-purple-400' },
             ].map((s, i) => (
               <motion.div key={i} whileHover={{ y: -5 }}
-                className="p-6 border border-gray-100 rounded-2xl hover:shadow-lg transition-all">
-                <div className={`w-12 h-12 ${s.color} rounded-xl flex items-center justify-center mb-4`}>
+                className="p-6 border border-gray-100 dark:border-gray-800 rounded-2xl hover:shadow-lg dark:hover:shadow-gray-900 bg-white dark:bg-gray-800/50 transition-all">
+                <div className={`w-12 h-12 ${s.light} ${s.dark} rounded-xl flex items-center justify-center mb-4`}>
                   <s.icon className="w-6 h-6" />
                 </div>
-                <h3 className="font-bold text-gray-900 mb-2">{s.title}</h3>
-                <p className="text-gray-500 text-sm">{s.desc}</p>
+                <h3 className="font-bold text-gray-900 dark:text-white mb-2">{s.title}</h3>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">{s.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -186,7 +197,7 @@ export default function CoverPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-12">
+      <footer className="bg-gray-900 dark:bg-black text-gray-400 py-12">
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>

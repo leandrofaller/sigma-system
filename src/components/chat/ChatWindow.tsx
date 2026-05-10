@@ -117,26 +117,33 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
     }
   }, [activeChannel]);
 
+  const fullRefresh = useCallback(async () => {
+    if (!activeChannel) return;
+    const params = new URLSearchParams();
+    if (activeChannel.type === 'group') params.set('groupId', activeChannel.id);
+    else params.set('receiverId', activeChannel.id);
+    const res = await fetch(`/api/chat/messages?${params}`);
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      setMessages(data);
+      if (data.length > 0) lastMessageRef.current = data[data.length - 1].createdAt;
+    }
+  }, [activeChannel]);
+
   useEffect(() => {
     if (!activeChannel) return;
     setMessages([]);
     lastMessageRef.current = null;
 
-    const params = new URLSearchParams();
-    if (activeChannel.type === 'group') params.set('groupId', activeChannel.id);
-    else params.set('receiverId', activeChannel.id);
-
-    fetch(`/api/chat/messages?${params}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setMessages(data);
-          if (data.length > 0) lastMessageRef.current = data[data.length - 1].createdAt;
-        }
-      });
+    fullRefresh();
 
     pollRef.current = setInterval(fetchMessages, 3000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    // Full refresh every 20 s to pick up reaction changes from other users
+    const fullPoll = setInterval(fullRefresh, 20000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      clearInterval(fullPoll);
+    };
   }, [activeChannel]);
 
   useEffect(() => {
