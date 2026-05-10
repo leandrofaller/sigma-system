@@ -7,7 +7,10 @@
       "Bash(mkdir -p \"f:\\\\relatorio_claude\\\\src\\\\app\\\\api\\\\received-relints\\\\[id]\")",
       "PowerShell(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Filter \"route.ts\" -Recurse | Where-Object {$_.FullName -match \"\\(chat|received-relints\\)\"} | Select-Object -ExpandProperty FullName)",
       "Bash(grep -E \"\\\\.\\(ts|js|sql\\)$\")",
-      "Bash(xargs grep -l \"ai\\\\|AI\")"
+      "Bash(xargs grep -l \"ai\\\\|AI\")",
+      "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(xargs grep -l \"relints\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
