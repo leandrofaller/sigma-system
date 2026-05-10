@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save, Send, Edit3, Loader2, Sparkles } from 'lucide-react';
+import { Save, Send, Edit3, Loader2 } from 'lucide-react';
 import { RelintPreview } from './RelintPreview';
 import { BlockEditor, Block, initBlocks } from './BlockEditor';
 
@@ -41,7 +41,6 @@ function swapPrefix(number: string, newType: DocType): string {
 export function RelintEditor({ templates, groups, userId, userRole, defaultGroupId, initialData }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
-  const [aiLoading, setAiLoading] = useState('');
   const [activeView, setActiveView] = useState<'split' | 'edit' | 'preview'>('split');
   const [docType, setDocType] = useState<DocType>(() =>
     detectDocType(initialData?.number || '')
@@ -105,25 +104,6 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
     setForm((prev) => ({ ...prev, content: { ...prev.content, body: blocks as any } }));
   }, []);
 
-  const handleAI = async (field: string, prompt: string) => {
-    setAiLoading(field);
-    try {
-      const res = await fetch('/api/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: prompt, context: `Assunto do relatório: ${form.subject}` }),
-      });
-      const data = await res.json();
-      if (field === 'body') {
-        updateBodyBlocks([{ type: 'text', id: crypto.randomUUID(), content: data.response }]);
-      } else {
-        updateContent(field, data.response);
-      }
-    } finally {
-      setAiLoading('');
-    }
-  };
-
   const handleSave = async (status: 'DRAFT' | 'PUBLISHED') => {
     if (!form.subject || !form.diffusion || !form.groupId) {
       alert('Preencha: Assunto, Difusão e Grupo.');
@@ -149,14 +129,6 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
   };
 
   const inputCls = 'w-full input-base px-3 py-2 text-sm';
-
-  const aiBtn = (field: string, prompt: string) => (
-    <button onClick={() => handleAI(field, prompt)} disabled={!!aiLoading}
-      className="flex items-center gap-1.5 text-xs text-sigma-600 dark:text-sigma-400 font-medium bg-sigma-50 dark:bg-sigma-900/20 px-2.5 py-1.5 rounded-lg hover:bg-sigma-100 dark:hover:bg-sigma-900/30 transition-colors disabled:opacity-50">
-      {aiLoading === field ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-      Gerar com IA
-    </button>
-  );
 
   const editor = (
     <div className="space-y-5">
@@ -242,11 +214,7 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
 
       {/* Corpo do Relatório */}
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-3">
-          <label className="text-sm font-semibold text-title">Corpo do Relatório</label>
-          {aiBtn('body', `Escreva o corpo de um relatório de inteligência sobre: ${form.subject}. Inclua análise técnica e pontos críticos.`)}
-        </div>
-        <p className="text-xs text-subtle mb-3">Use os botões entre os blocos para inserir textos ou imagens em qualquer posição. Passe o mouse sobre um bloco para ver as opções de mover e remover.</p>
+        <label className="text-sm font-semibold text-title block mb-3">Corpo do Relatório</label>
         <BlockEditor
           blocks={(form.content as any).body as Block[]}
           onChange={updateBodyBlocks}
@@ -255,10 +223,7 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
 
       {/* Conclusão */}
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-3">
-          <label className="text-sm font-semibold text-title">Conclusão</label>
-          {aiBtn('conclusion', `Escreva uma conclusão para um relatório de inteligência sobre: ${form.subject}`)}
-        </div>
+        <label className="text-sm font-semibold text-title block mb-3">Conclusão</label>
         <textarea value={form.content.conclusion}
           onChange={(e) => updateContent('conclusion', e.target.value)}
           placeholder="Apresente as conclusões baseadas nas informações..."
@@ -268,10 +233,7 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
 
       {/* Recomendações */}
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-3">
-          <label className="text-sm font-semibold text-title">Recomendações (Opcional)</label>
-          {aiBtn('recommendations', `Escreva recomendações técnicas para um relatório de inteligência sobre: ${form.subject}`)}
-        </div>
+        <label className="text-sm font-semibold text-title block mb-3">Recomendações (Opcional)</label>
         <textarea value={form.content.recommendations}
           onChange={(e) => updateContent('recommendations', e.target.value)}
           placeholder="Liste as recomendações e medidas sugeridas..."
