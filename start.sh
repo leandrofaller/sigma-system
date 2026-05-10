@@ -8,6 +8,10 @@ UPLOAD_DIR="${UPLOAD_DIR:-/app/uploads}"
 mkdir -p "$UPLOAD_DIR/relints" "$UPLOAD_DIR/chat" "$UPLOAD_DIR/received"
 chown -R 1001:1001 "$UPLOAD_DIR"
 
+# Garante que o cache do Next.js existe e tem permissão de escrita.
+mkdir -p /app/.next/cache
+chown -R 1001:1001 /app/.next
+
 echo "Executando migrações do banco de dados..."
 # Roda prisma como nextjs
 su-exec nextjs node_modules/.bin/prisma db push --skip-generate || \
