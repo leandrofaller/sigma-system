@@ -17,6 +17,7 @@ enum RelintStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+  DELETION_REQUESTED
 }
 
 enum MessageType {

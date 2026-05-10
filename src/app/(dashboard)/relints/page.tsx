@@ -26,7 +26,7 @@ export default async function RelintsPage() {
           </p>
         </div>
       </div>
-      <RelintsList relints={relints} role={user.role} />
+      <RelintsList relints={relints} role={user.role} userId={user.id} />
     </div>
   );
 }

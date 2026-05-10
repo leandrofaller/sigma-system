@@ -69,11 +69,46 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const user = session.user as any;
-  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+  
+  const relint = await prisma.relint.findUnique({
+    where: { id: params.id },
+    select: { authorId: true }
+  });
+
+  if (!relint) {
+    return NextResponse.json({ error: 'Relatório não encontrado' }, { status: 404 });
   }
 
-  await prisma.relint.delete({ where: { id: params.id } });
+  const isSuperAdmin = user.role === 'SUPER_ADMIN';
+  const isAdmin = user.role === 'ADMIN';
+  const isAuthor = relint.authorId === user.id;
+
+  if (isSuperAdmin) {
+    // Super Admin deleta imediatamente
+    await prisma.relint.delete({ where: { id: params.id } });
+  } else if (isAuthor) {
+    // Autor solicita a exclusão (revisão)
+    await prisma.relint.update({
+      where: { id: params.id },
+      data: { status: 'DELETION_REQUESTED' as any }
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: AUDIT_ACTIONS.DELETE_RELINT, // Podemos considerar como solicitação no log
+      entity: 'Relint',
+      entityId: params.id,
+      details: { info: 'Solicitação de exclusão enviada para revisão' },
+      request: req,
+    });
+
+    return NextResponse.json({ success: true, message: 'Exclusão solicitada para revisão do administrador' });
+  } else if (isAdmin && relint.status === 'DELETION_REQUESTED') {
+    // Admin aprova a exclusão solicitada
+    await prisma.relint.delete({ where: { id: params.id } });
+  } else {
+    return NextResponse.json({ error: 'Acesso negado. Apenas o autor pode solicitar a exclusão, e apenas o Super Administrador pode excluir diretamente.' }, { status: 403 });
+  }
 
   await createAuditLog({
     userId: user.id,
