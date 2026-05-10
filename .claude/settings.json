@@ -13,11 +13,17 @@
       "Bash(xargs grep -l \"relints\")",
       "Bash(git log *)",
       "Bash(grep -i \"\\\\.\\(ts|tsx\\)$\")",
-      "Bash(xargs grep -l \"reaction\\\\|emoji\")"
+      "Bash(xargs grep -l \"reaction\\\\|emoji\")",
+      "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -Directory)",
+      "PowerShell(head -30)",
+      "Bash(mkdir -p \"f:/relatorio_claude/src/app/api/debriefings/next-number\" && mkdir -p \"f:/relatorio_claude/src/app/api/debriefings/[id]\")",
+      "Bash(mkdir -p \"f:/relatorio_claude/src/app/\\(dashboard\\)/debriefings/novo\" && mkdir -p \"f:/relatorio_claude/src/app/\\(dashboard\\)/debriefings/[id]/editar\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
-      "f:\\relatorio_claude\\src\\app\\api\\received-relints"
+      "f:\\relatorio_claude\\src\\app\\api\\received-relints",
+      "f:\\relatorio_claude\\src\\app\\api\\debriefings",
+      "f:\\relatorio_claude\\src\\app\\(dashboard)\\debriefings\\[id]"
     ]
   }
 }

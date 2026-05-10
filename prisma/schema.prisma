@@ -51,6 +51,7 @@ model User {
   updatedAt    DateTime  @updatedAt
 
   relints          Relint[]
+  debriefings      Debriefing[]
   sentMessages     ChatMessage[]   @relation("SentMessages")
   receivedMessages ChatMessage[]   @relation("ReceivedMessages")
   auditLogs        AuditLog[]
@@ -73,6 +74,7 @@ model Group {
 
   users           User[]
   relints         Relint[]
+  debriefings     Debriefing[]
   messages        ChatMessage[]
   receivedRelints ReceivedRelint[]
 
@@ -274,4 +276,32 @@ model UserLocation {
 
   @@index([userId, timestamp])
   @@map("user_locations")
+}
+
+model Debriefing {
+  id            String         @id @default(cuid())
+  number        String         @unique
+  date          DateTime
+  missionDate   DateTime?
+  missionCode   String?
+  operationType String?
+  operatives    String?
+  handler       String?
+  location      String?
+  subject       String
+  diffusion     String
+  content       Json
+  status        RelintStatus   @default(DRAFT)
+  classification Classification @default(RESERVADO)
+  authorId      String
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  groupId       String
+  group         Group          @relation(fields: [groupId], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([groupId])
+  @@index([authorId])
+  @@index([status])
+  @@map("debriefings")
 }

@@ -1,6 +1,6 @@
-import { User, Group, Relint, RelintTemplate, ReceivedRelint, ChatMessage, AuditLog } from '@prisma/client';
+import { User, Group, Relint, RelintTemplate, ReceivedRelint, ChatMessage, AuditLog, Debriefing } from '@prisma/client';
 
-export type { User, Group, Relint, RelintTemplate, ReceivedRelint, ChatMessage, AuditLog };
+export type { User, Group, Relint, RelintTemplate, ReceivedRelint, ChatMessage, AuditLog, Debriefing };
 
 export interface UserWithGroup extends User {
   group?: Group | null;
@@ -11,6 +11,11 @@ export interface RelintWithRelations extends Relint {
   group: Group;
   template?: RelintTemplate | null;
   attachments?: any[];
+}
+
+export interface DebriefingWithRelations extends Debriefing {
+  author: User;
+  group: Group;
 }
 
 export interface ChatMessageWithSender extends ChatMessage {

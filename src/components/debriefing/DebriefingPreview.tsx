@@ -1,0 +1,294 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { formatDate } from '@/lib/utils';
+import { Printer } from 'lucide-react';
+
+interface FormData {
+  number: string;
+  date: string;
+  missionDate?: string;
+  missionCode?: string;
+  operationType?: string;
+  operatives?: string;
+  handler?: string;
+  location?: string;
+  subject: string;
+  diffusion: string;
+  classification: string;
+  content: {
+    body: any;
+    agentAssessment?: string;
+    conclusions?: string;
+    recommendations?: string;
+  };
+}
+
+interface Props { form: FormData; }
+
+const classColors: Record<string, string> = {
+  RESERVADO: '#b91c1c',
+  CONFIDENCIAL: '#c2410c',
+  SECRETO: '#991b1b',
+  ULTRA_SECRETO: '#6d28d9',
+};
+
+const LEGAL_TEXT = `"O teor sigiloso deste documento é protegido e controlado pela Lei nº 12.527, de 18.11.2011, que restringe o acesso, a divulgação e o tratamento deste documento a pessoa devidamente credenciadas que tenham necessidade de conhecê-lo. A divulgação, a revelação, o fornecimento, a utilização ou a reprodução desautorizada das informações e conhecimentos utilizados, contidos ou veiculados por meio deste documento, a qualquer tempo, meio e modo, inclusive mediante acesso ou facilitação de acessos indevidos, caracterizam os crimes de violação de sigilo funcional ou de divulgação de segredo tipificados no Código Penal, bem como configuram condutas de improbidade administrativa."`;
+
+function buildPrintHtml(contentHtml: string, title: string): string {
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>${title}</title>
+<style>
+  @page { size: A4 portrait; margin: 0 0 2.4cm 0; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #000;
+    background: white;
+    padding: 1.8cm 2cm 0;
+    margin: 0;
+    width: 210mm;
+  }
+  img { max-width: 100%; }
+  p { margin: 0 0 3px; }
+  hr { border: none; border-top: 1.5px solid #000; margin: 8px 0 10px; }
+  [data-print-footer] { display: none !important; }
+  .fixed-footer {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    padding: 5px 2cm 6px;
+    border-top: 1px solid #ccc;
+    background: white;
+  }
+  .fixed-footer p { font-size: 7.5pt; color: #333; text-align: justify; line-height: 1.3; margin: 0; }
+  h1 { font-size: 16pt; font-weight: bold; margin: 8px 0 4px; }
+  h2 { font-size: 14pt; font-weight: bold; margin: 7px 0 3px; }
+  h3 { font-size: 12pt; font-weight: bold; margin: 6px 0 3px; }
+  ul { list-style: disc; padding-left: 20px; margin: 4px 0; }
+  ol { list-style: decimal; padding-left: 20px; margin: 4px 0; }
+  li { margin: 2px 0; }
+  strong { font-weight: bold; }
+  em { font-style: italic; }
+  u { text-decoration: underline; }
+  s { text-decoration: line-through; }
+  mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; }
+  th, td { border: 1px solid #666; padding: 4px 8px; font-size: 10pt; vertical-align: top; }
+  th { background: #f0f0f0; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+</style>
+</head>
+<body>
+${contentHtml}
+<div class="fixed-footer"><p>${LEGAL_TEXT}</p></div>
+<script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script>
+</body>
+</html>`;
+}
+
+export function DebriefingPreview({ form }: Props) {
+  const [badgeSizes, setBadgeSizes] = useState({ sejus: 72, aip: 80, policiaPenal: 72 });
+  const printAreaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch('/api/relint-config')
+      .then((r) => r.json())
+      .then((d) => setBadgeSizes((prev) => ({ ...prev, ...d })))
+      .catch(() => {});
+  }, []);
+
+  const handlePrint = () => {
+    const html = printAreaRef.current?.innerHTML;
+    if (!html) return;
+    const win = window.open('', '_blank', 'width=900,height=700');
+    if (!win) { alert('Permita pop-ups para imprimir.'); return; }
+    win.document.write(buildPrintHtml(html, form.number));
+    win.document.close();
+  };
+
+  const color = classColors[form.classification] || '#b91c1c';
+  const classLabel = form.classification.replace('_', ' ');
+
+  const bodyBlocks: Array<{
+    type: string; id?: string; content?: string;
+    url?: string; caption?: string; align?: string; width?: number;
+    imagePosition?: string; imageWidth?: number; text?: string;
+  }> =
+    typeof form.content.body === 'string'
+      ? (form.content.body ? [{ type: 'text', content: form.content.body }] : [])
+      : (Array.isArray(form.content.body) ? form.content.body : []);
+
+  const stamp = {
+    color,
+    border: `2px solid ${color}`,
+    fontWeight: 'bold' as const,
+    fontSize: '12pt',
+    letterSpacing: '0.15em',
+    padding: '2px 18px',
+    display: 'inline-block',
+  };
+  const para = { textAlign: 'justify' as const, fontSize: '11pt', lineHeight: '1.6', marginBottom: '12px', whiteSpace: 'pre-wrap' as const };
+  const fieldRow = { margin: '0 0 3px', fontSize: '11pt' };
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+        <span className="text-xs font-medium text-gray-500">Pré-visualização — A4</span>
+        <button onClick={handlePrint}
+          className="flex items-center gap-1.5 text-xs font-medium text-gray-700 border border-gray-300 bg-white px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          <Printer className="w-3.5 h-3.5" /> Imprimir / PDF
+        </button>
+      </div>
+
+      {/* Documento A4 */}
+      <div ref={printAreaRef} className="bg-white text-black"
+        style={{ fontFamily: 'Arial, sans-serif', fontSize: '11pt', lineHeight: '1.5', padding: '1.8cm 2cm 1.5cm', minHeight: '27cm', width: '100%' }}>
+
+        {/* Carimbo de classificação */}
+        <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+          <span style={stamp}>{classLabel}</span>
+        </div>
+
+        {/* Cabeçalho 3 colunas */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', gap: '8px' }}>
+          <div style={{ width: badgeSizes.sejus + 8, flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <img src="/logos/badge-sejus.png" alt="SEJUS" style={{ width: badgeSizes.sejus, height: 'auto' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          </div>
+          <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>SECRETARIA DE ESTADO DA JUSTIÇA DE RONDÔNIA</p>
+            <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>AGÊNCIA DE INTELIGÊNCIA PENAL</p>
+            <p style={{ fontWeight: 'bold', fontSize: '12pt', margin: '2px 0 8px', textTransform: 'uppercase' }}>AIP/SEJUS/RO</p>
+            <img src="/logos/badge-aip.png" alt="AIP/SEJUS/RO" style={{ width: badgeSizes.aip, height: 'auto' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          </div>
+          <div style={{ width: badgeSizes.policiaPenal + 8, flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <img src="/logos/badge-policia-penal.png" alt="Polícia Penal RO" style={{ width: badgeSizes.policiaPenal, height: 'auto' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          </div>
+        </div>
+
+        <hr style={{ margin: '8px 0 10px', borderTop: '1.5px solid #000', borderBottom: 'none', borderLeft: 'none', borderRight: 'none' }} />
+
+        {/* Título do documento */}
+        <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+          <p style={{ fontWeight: 'bold', fontSize: '13pt', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+            Relatório de Debriefing
+          </p>
+        </div>
+
+        {/* Campos de identificação */}
+        <div style={{ marginBottom: '14px' }}>
+          <p style={fieldRow}><strong><u>{form.number || 'DEBRIEFING Nº___/20__/AIP/SEJUS/RO'}</u></strong></p>
+          <p style={fieldRow}><strong>Data do Debriefing:</strong>&nbsp;{form.date ? formatDate(new Date(form.date + 'T12:00:00')) : '__/__/____'}</p>
+          {form.missionDate && (
+            <p style={fieldRow}><strong>Data da Missão:</strong>&nbsp;{formatDate(new Date(form.missionDate + 'T12:00:00'))}</p>
+          )}
+          {form.missionCode && (
+            <p style={fieldRow}><strong>Código da Missão:</strong>&nbsp;{form.missionCode}</p>
+          )}
+          {form.operationType && (
+            <p style={fieldRow}><strong>Tipo de Operação:</strong>&nbsp;{form.operationType}</p>
+          )}
+          {form.location && (
+            <p style={fieldRow}><strong>Local da Operação:</strong>&nbsp;{form.location}</p>
+          )}
+          <p style={fieldRow}><strong>Assunto:</strong>&nbsp;{form.subject || '_______________'}</p>
+          {form.operatives && (
+            <p style={fieldRow}><strong>Agente(s):</strong>&nbsp;{form.operatives}</p>
+          )}
+          {form.handler && (
+            <p style={fieldRow}><strong>Oficial Controlador:</strong>&nbsp;{form.handler}</p>
+          )}
+          <p style={fieldRow}><strong>Difusão:</strong>&nbsp;{form.diffusion || '_______________'}</p>
+        </div>
+
+        <hr style={{ margin: '0 0 14px', borderTop: '1px solid #666', borderBottom: 'none', borderLeft: 'none', borderRight: 'none' }} />
+
+        {/* Título da seção de relato */}
+        <p style={{ fontWeight: 'bold', fontSize: '11pt', textTransform: 'uppercase', marginBottom: '8px' }}>
+          Relato da Missão
+        </p>
+
+        {/* Corpo — blocos de texto e imagens */}
+        {bodyBlocks.map((block, i) => {
+          if (block.type === 'text') {
+            if (!block.content) return null;
+            const isHtml = block.content.trimStart().startsWith('<');
+            return isHtml
+              ? <div key={i} className="tiptap-print-content" style={{ textAlign: 'justify', fontSize: '11pt', lineHeight: '1.6', marginBottom: '12px' }} dangerouslySetInnerHTML={{ __html: block.content }} />
+              : <div key={i} style={para}>{block.content}</div>;
+          }
+          if (block.type === 'row') {
+            const imgW = block.imageWidth ?? 35;
+            const textW = 100 - imgW;
+            const imgEl = (
+              <div style={{ width: `${imgW}%`, flexShrink: 0 }}>
+                <img src={block.url} alt={block.caption || `Imagem ${i + 1}`}
+                  style={{ width: '100%', height: 'auto', objectFit: 'contain', display: 'block', borderRadius: 4 }} />
+                {block.caption && (
+                  <p style={{ fontSize: '8pt', color: '#555', marginTop: '2px', textAlign: 'center' }}>{block.caption}</p>
+                )}
+              </div>
+            );
+            const txtEl = (
+              <div style={{ width: `${textW}%`, fontSize: '11pt', lineHeight: '1.6', whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
+                {block.text}
+              </div>
+            );
+            return (
+              <div key={i} style={{ display: 'flex', gap: '14px', marginBottom: '14px', alignItems: 'flex-start' }}>
+                {block.imagePosition === 'left' ? <>{imgEl}{txtEl}</> : <>{txtEl}{imgEl}</>}
+              </div>
+            );
+          }
+          const align = block.align || 'center';
+          const width = block.width || 100;
+          const marginH = align === 'left' ? '0 auto 0 0' : align === 'right' ? '0 0 0 auto' : '0 auto';
+          return (
+            <div key={i} style={{ marginBottom: '14px' }}>
+              <div style={{ width: `${width}%`, margin: marginH }}>
+                <img src={block.url} alt={block.caption || `Imagem ${i + 1}`}
+                  style={{ width: '100%', height: 'auto', objectFit: 'contain', display: 'block' }} />
+                {block.caption && (
+                  <p style={{ fontSize: '8pt', color: '#555', marginTop: '3px', textAlign: align as any }}>{block.caption}</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {form.content.agentAssessment && (
+          <div style={{ marginBottom: '12px' }}>
+            <p style={{ fontWeight: 'bold', fontSize: '11pt', textTransform: 'uppercase', marginBottom: '4px' }}>Avaliação do Agente</p>
+            <div style={para}>{form.content.agentAssessment}</div>
+          </div>
+        )}
+        {form.content.conclusions && (
+          <div style={{ marginBottom: '12px' }}>
+            <p style={{ fontWeight: 'bold', fontSize: '11pt', textTransform: 'uppercase', marginBottom: '4px' }}>Conclusões</p>
+            <div style={para}>{form.content.conclusions}</div>
+          </div>
+        )}
+        {form.content.recommendations && (
+          <div style={{ marginBottom: '12px' }}>
+            <p style={{ fontWeight: 'bold', fontSize: '11pt', textTransform: 'uppercase', marginBottom: '4px' }}>Recomendações</p>
+            <div style={para}>{form.content.recommendations}</div>
+          </div>
+        )}
+
+        {/* Aviso legal */}
+        <div data-print-footer="true" style={{ borderTop: '1px solid #ccc', paddingTop: '8px' }}>
+          <p style={{ fontSize: '7.5pt', color: '#333', textAlign: 'justify', lineHeight: '1.3', margin: 0 }}>
+            {LEGAL_TEXT}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
