@@ -36,7 +36,7 @@ function statusColor(ts: string | undefined): string {
 
 interface Props {
   locations: LocationEntry[];
-  allUsers: UserSummary[];
+  allUsers: { id: string; name: string; email: string }[];
 }
 
 export function GeoMonitorPanel({ locations, allUsers }: Props) {

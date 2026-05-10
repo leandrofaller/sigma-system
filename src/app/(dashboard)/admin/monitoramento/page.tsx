@@ -32,7 +32,14 @@ export default async function MonitoramentoPage() {
     locations = locs;
     allUsers = users;
   } catch (err: any) {
-    if (err?.code === 'P2021' || err?.message?.includes('does not exist')) {
+    const msg: string = err?.message ?? '';
+    const isTableMissing =
+      err?.code === 'P2021' ||
+      err?.meta?.code === '42P01' ||  // PostgreSQL: relation does not exist
+      msg.includes('does not exist') ||
+      msg.includes('relation') ||
+      msg.includes('user_locations');
+    if (isTableMissing) {
       tablesMissing = true;
     } else {
       throw err;
