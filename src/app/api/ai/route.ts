@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { queryAI } from '@/lib/ai';
+import { queryAI, getAIProviderInfo } from '@/lib/ai';
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit';
+
+export async function GET() {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  const info = await getAIProviderInfo();
+  return NextResponse.json(info);
+}
 
 export async function POST(req: NextRequest) {
   const session = await auth();

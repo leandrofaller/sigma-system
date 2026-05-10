@@ -105,29 +105,36 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
       <div className="grid lg:grid-cols-2 gap-6">
         <SectionCard icon={Brain} title="Inteligência Artificial">
           <Field label="Provedor Padrão">
-            <Select value={configs.ai_provider?.provider || 'anthropic'}
+            <Select value={configs.ai_provider?.provider || 'groq'}
               onChange={(e: any) => {
                 update('ai_provider', { ...configs.ai_provider, provider: e.target.value });
                 setTestResult(null);
               }}>
+              <option value="groq">Groq (LLaMA / Mixtral) — recomendado</option>
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="gemini">Google Gemini</option>
               <option value="openai">OpenAI (GPT)</option>
             </Select>
           </Field>
           <Field label="Modelo">
-            <Select value={configs.ai_provider?.model || 'claude-haiku-4-5-20251001'}
+            <Select value={configs.ai_provider?.model || 'llama-3.3-70b-versatile'}
               onChange={(e: any) => update('ai_provider', { ...configs.ai_provider, model: e.target.value })}>
+              <optgroup label="Groq — LLaMA / Mixtral">
+                <option value="llama-3.3-70b-versatile">LLaMA 3.3 70B Versatile (recomendado)</option>
+                <option value="llama-3.1-8b-instant">LLaMA 3.1 8B Instant (ultra-rápido)</option>
+                <option value="llama3-70b-8192">LLaMA 3 70B</option>
+                <option value="llama3-8b-8192">LLaMA 3 8B (rápido)</option>
+                <option value="mixtral-8x7b-32768">Mixtral 8x7B (32k ctx)</option>
+                <option value="gemma2-9b-it">Gemma 2 9B</option>
+              </optgroup>
               <optgroup label="Anthropic — Claude">
                 <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (rápido e econômico)</option>
                 <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (equilibrado)</option>
                 <option value="claude-opus-4-7">Claude Opus 4.7 (mais capaz)</option>
               </optgroup>
               <optgroup label="Google — Gemini">
-                <option value="gemini-2.0-flash">Gemini 2.0 Flash (mais rápido)</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash (rápido)</option>
-                <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash Latest</option>
-                <option value="gemini-pro">Gemini Pro 1.0 (compatível)</option>
+                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
               </optgroup>
               <optgroup label="OpenAI — GPT">
                 <option value="gpt-4o">GPT-4o</option>
@@ -151,8 +158,8 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
                   setTestResult(null);
                 }}
                 placeholder={
-                  ({ anthropic: 'sk-ant-...', gemini: 'AIza...', openai: 'sk-...' } as Record<string, string>)[
-                    configs.ai_provider?.provider || 'anthropic'
+                  ({ groq: 'gsk_...', anthropic: 'sk-ant-...', gemini: 'AIza...', openai: 'sk-...' } as Record<string, string>)[
+                    configs.ai_provider?.provider || 'groq'
                   ] || 'Cole sua chave aqui'
                 }
                 className={`${inputCls} pr-10 font-mono text-sm`}

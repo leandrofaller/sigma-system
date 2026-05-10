@@ -4,11 +4,10 @@ import { prisma } from './db';
 
 async function getAIConfig() {
   const config = await prisma.systemConfig.findUnique({ where: { key: 'ai_provider' } });
-  return (config?.value as any) ?? { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' };
+  return (config?.value as any) ?? { provider: 'groq', model: 'llama-3.3-70b-versatile' };
 }
 
 async function getAPIKey(provider: string): Promise<string | undefined> {
-  // DB key (set via admin panel) takes priority over env vars
   const cfg = await prisma.systemConfig.findUnique({ where: { key: `${provider}_api_key` } });
   const dbKey = (cfg?.value as any)?.key?.trim();
   if (dbKey) return dbKey;
@@ -16,8 +15,14 @@ async function getAPIKey(provider: string): Promise<string | undefined> {
     anthropic: process.env.ANTHROPIC_API_KEY,
     gemini: process.env.GEMINI_API_KEY,
     openai: process.env.OPENAI_API_KEY,
+    groq: process.env.GROQ_API_KEY,
   };
   return envMap[provider];
+}
+
+export async function getAIProviderInfo(): Promise<{ provider: string; model: string }> {
+  const config = await getAIConfig();
+  return { provider: config.provider, model: config.model };
 }
 
 const systemPrompt = `Você é um assistente de inteligência especializado em análise de informações,
@@ -71,6 +76,20 @@ export async function queryAI(userId: string, query: string, context?: string): 
     const openai = new OpenAI({ apiKey });
     const completion = await openai.chat.completions.create({
       model: config.model || 'gpt-4o',
+      messages: [
+        { role: 'system', content: fullSystemPrompt },
+        { role: 'user', content: query },
+      ],
+      max_tokens: 2000,
+    });
+    response = completion.choices[0]?.message?.content ?? 'Sem resposta';
+    tokens = completion.usage?.total_tokens ?? 0;
+
+  } else if (config.provider === 'groq' && apiKey) {
+    // Groq is OpenAI-compatible — same SDK, different base URL
+    const groq = new OpenAI({ apiKey, baseURL: 'https://api.groq.com/openai/v1' });
+    const completion = await groq.chat.completions.create({
+      model: config.model || 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: fullSystemPrompt },
         { role: 'user', content: query },
