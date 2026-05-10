@@ -2,7 +2,7 @@
 const nextConfig = {
   output: 'standalone',
   experimental: {
-    serverComponentsExternalPackages: ['@prisma/client', 'bcryptjs', 'sharp', 'archiver'],
+    serverComponentsExternalPackages: ['@prisma/client', 'bcryptjs', 'sharp'],
   },
   images: {
     remotePatterns: [

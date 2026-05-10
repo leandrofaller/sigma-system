@@ -20,7 +20,8 @@
       "Bash(mkdir -p \"f:/relatorio_claude/src/app/\\(dashboard\\)/debriefings/novo\" && mkdir -p \"f:/relatorio_claude/src/app/\\(dashboard\\)/debriefings/[id]/editar\")",
       "Bash(node -e \"require\\('archiver'\\)\")",
       "Bash(node -e \"require\\('adm-zip'\\)\")",
-      "Bash(node -e \"require\\('jszip'\\)\")"
+      "Bash(node -e \"require\\('jszip'\\)\")",
+      "Bash(npm uninstall *)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",

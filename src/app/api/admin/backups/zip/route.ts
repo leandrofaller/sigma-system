@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { mkdirSync, statSync, existsSync, createWriteStream, readdirSync, unlinkSync } from 'fs';
+import { mkdirSync, statSync, existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import { createRequire } from 'module';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
-// Use createRequire to load the CommonJS archiver without ES module interop issues
-const _require = createRequire(import.meta.url);
-const archiver = _require('archiver') as typeof import('archiver');
+const execAsync = promisify(exec);
 
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || '/app/uploads';
 const BACKUP_DIR = join(UPLOAD_ROOT, 'backups');
-// Subdirectories to include (excludes /backups to avoid recursion)
 const INCLUDE_DIRS = ['relints', 'chat', 'received', 'debriefings'];
 
 export async function POST() {
@@ -24,46 +22,34 @@ export async function POST() {
   const filename = `files_${ts}.zip`;
   const filepath = join(BACKUP_DIR, filename);
 
+  // Collect subdirectories that actually exist
+  const foundDirs = INCLUDE_DIRS.filter((d) => existsSync(join(UPLOAD_ROOT, d)));
+
   try {
-    // Scan what actually exists under UPLOAD_ROOT
-    const foundDirs: string[] = [];
-    for (const dir of INCLUDE_DIRS) {
-      const dirPath = join(UPLOAD_ROOT, dir);
-      if (existsSync(dirPath)) foundDirs.push(dir);
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      const output = createWriteStream(filepath);
-      const archive = archiver('zip', { zlib: { level: 6 } });
-
-      output.on('close', resolve);
-      output.on('error', reject);
-      archive.on('error', reject);
-      archive.on('warning', (err: any) => {
-        if (err.code !== 'ENOENT') reject(err);
+    if (foundDirs.length > 0) {
+      // zip -r <output> <dir1> <dir2> ... executed from UPLOAD_ROOT
+      const dirs = foundDirs.join(' ');
+      await execAsync(`zip -r "${filepath}" ${dirs}`, {
+        cwd: UPLOAD_ROOT,
+        timeout: 300_000,
       });
+    } else {
+      // Produce a valid ZIP with an info file when no upload dirs exist yet
+      const infoText = [
+        'BACKUP DE ARQUIVOS — SIAIP',
+        `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+        `Diretório base: ${UPLOAD_ROOT}`,
+        '',
+        'Nenhuma subpasta de uploads encontrada.',
+        `Pastas esperadas: ${INCLUDE_DIRS.join(', ')}`,
+      ].join('\n');
 
-      archive.pipe(output);
-
-      if (foundDirs.length > 0) {
-        for (const dir of foundDirs) {
-          archive.directory(join(UPLOAD_ROOT, dir), dir);
-        }
-      } else {
-        // Always produce a valid (non-empty) ZIP
-        const uploadInfo = [
-          `BACKUP DE ARQUIVOS — SIAIP`,
-          `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
-          `Diretório base: ${UPLOAD_ROOT}`,
-          ``,
-          `Nenhuma subpasta de uploads foi encontrada.`,
-          `Pastas esperadas: ${INCLUDE_DIRS.join(', ')}`,
-        ].join('\n');
-        archive.append(uploadInfo, { name: 'INFO.txt' });
-      }
-
-      archive.finalize();
-    });
+      const tmpInfo = join(BACKUP_DIR, `_info_${ts}.txt`);
+      const { writeFileSync } = await import('fs');
+      writeFileSync(tmpInfo, infoText);
+      await execAsync(`zip "${filepath}" "${tmpInfo}"`, { timeout: 30_000 });
+      unlinkSync(tmpInfo);
+    }
 
     const stat = statSync(filepath);
     return NextResponse.json({
@@ -75,7 +61,7 @@ export async function POST() {
   } catch (err: any) {
     try { if (existsSync(filepath)) unlinkSync(filepath); } catch {}
     return NextResponse.json(
-      { error: 'Falha ao gerar ZIP', detail: err?.message || String(err) },
+      { error: 'Falha ao gerar ZIP', detail: err?.stderr || err?.message || String(err) },
       { status: 500 }
     );
   }
