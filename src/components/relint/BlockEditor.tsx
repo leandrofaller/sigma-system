@@ -5,6 +5,7 @@ import {
   Type, ImagePlus, X, Loader2, ChevronUp, ChevronDown,
   AlignLeft, AlignCenter, AlignRight, GripVertical, Columns2,
 } from 'lucide-react';
+import { RichTextEditor } from './RichTextEditor';
 
 export type TextBlock  = { type: 'text';  id: string; content: string };
 export type ImageBlock = {
@@ -175,14 +176,16 @@ function TextBlockView({ block, idx, total, onPatch, onRemove, onMove }: {
 }) {
   return (
     <div className="relative group/block">
-      <textarea value={block.content} onChange={e => onPatch(block.id, { content: e.target.value })}
-        placeholder="Digite o texto aqui..." rows={5} spellCheck lang="pt-BR"
-        className="w-full input-base px-4 py-3 resize-none leading-relaxed pr-16" />
-      <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover/block:opacity-100 transition-opacity">
+      {/* Block-level controls */}
+      <div className="flex items-center justify-end gap-1 mb-1 h-6 opacity-0 group-hover/block:opacity-100 transition-opacity">
         {idx > 0 && <MoveBtn dir="up" onClick={() => onMove(idx, 'up')} />}
         {idx < total - 1 && <MoveBtn dir="down" onClick={() => onMove(idx, 'down')} />}
         {total > 1 && <DelBtn onClick={() => onRemove(block.id)} />}
       </div>
+      <RichTextEditor
+        content={block.content}
+        onChange={html => onPatch(block.id, { content: html })}
+      />
     </div>
   );
 }

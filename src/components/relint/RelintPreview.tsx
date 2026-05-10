@@ -73,6 +73,22 @@ function buildPrintHtml(
     line-height: 1.3;
     margin: 0;
   }
+  /* Rich text content */
+  h1 { font-size: 16pt; font-weight: bold; margin: 8px 0 4px; }
+  h2 { font-size: 14pt; font-weight: bold; margin: 7px 0 3px; }
+  h3 { font-size: 12pt; font-weight: bold; margin: 6px 0 3px; }
+  ul { list-style: disc; padding-left: 20px; margin: 4px 0; }
+  ol { list-style: decimal; padding-left: 20px; margin: 4px 0; }
+  li { margin: 2px 0; }
+  blockquote { border-left: 3px solid #999; padding-left: 10px; margin: 6px 0; color: #555; }
+  strong { font-weight: bold; }
+  em { font-style: italic; }
+  u { text-decoration: underline; }
+  s { text-decoration: line-through; }
+  mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; }
+  th, td { border: 1px solid #666; padding: 4px 8px; font-size: 10pt; vertical-align: top; }
+  th { background: #f0f0f0; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style>
 </head>
 <body>
@@ -187,7 +203,11 @@ export function RelintPreview({ form }: Props) {
         {/* Corpo do relatório — blocos de texto, imagens e lado-a-lado */}
         {bodyBlocks.map((block, i) => {
           if (block.type === 'text') {
-            return block.content ? <div key={i} style={para}>{block.content}</div> : null;
+            if (!block.content) return null;
+            const isHtml = block.content.trimStart().startsWith('<');
+            return isHtml
+              ? <div key={i} className="tiptap-print-content" style={{ textAlign: 'justify', fontSize: '11pt', lineHeight: '1.6', marginBottom: '12px' }} dangerouslySetInnerHTML={{ __html: block.content }} />
+              : <div key={i} style={para}>{block.content}</div>;
           }
           if (block.type === 'row') {
             const imgW  = block.imageWidth ?? 35;
