@@ -112,6 +112,7 @@ export function RelintPreview({ form }: Props) {
   const bodyBlocks: Array<{
     type: string; id?: string; content?: string;
     url?: string; caption?: string; align?: string; width?: number;
+    imagePosition?: string; imageWidth?: number; text?: string;
   }> =
     typeof form.content.body === 'string'
       ? (form.content.body ? [{ type: 'text', content: form.content.body }] : [])
@@ -183,13 +184,37 @@ export function RelintPreview({ form }: Props) {
 
         <hr style={{ margin: '0 0 14px', borderTop: '1px solid #666', borderBottom: 'none', borderLeft: 'none', borderRight: 'none' }} />
 
-        {/* Corpo do relatório — blocos de texto e imagens intercalados */}
+        {/* Corpo do relatório — blocos de texto, imagens e lado-a-lado */}
         {bodyBlocks.map((block, i) => {
           if (block.type === 'text') {
             return block.content ? <div key={i} style={para}>{block.content}</div> : null;
           }
-          const align = block.align || 'center';
-          const width = block.width || 100;
+          if (block.type === 'row') {
+            const imgW  = block.imageWidth ?? 35;
+            const textW = 100 - imgW;
+            const imgEl = (
+              <div style={{ width: `${imgW}%`, flexShrink: 0 }}>
+                <img src={block.url} alt={block.caption || `Imagem ${i + 1}`}
+                  style={{ width: '100%', height: 'auto', objectFit: 'contain', display: 'block', borderRadius: 4 }} />
+                {block.caption && (
+                  <p style={{ fontSize: '8pt', color: '#555', marginTop: '2px', textAlign: 'center' }}>{block.caption}</p>
+                )}
+              </div>
+            );
+            const txtEl = (
+              <div style={{ width: `${textW}%`, fontSize: '11pt', lineHeight: '1.6', whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
+                {block.text}
+              </div>
+            );
+            return (
+              <div key={i} style={{ display: 'flex', gap: '14px', marginBottom: '14px', alignItems: 'flex-start' }}>
+                {block.imagePosition === 'left' ? <>{imgEl}{txtEl}</> : <>{txtEl}{imgEl}</>}
+              </div>
+            );
+          }
+          // image block
+          const align   = block.align || 'center';
+          const width   = block.width || 100;
           const marginH = align === 'left' ? '0 auto 0 0' : align === 'right' ? '0 0 0 auto' : '0 auto';
           return (
             <div key={i} style={{ marginBottom: '14px' }}>
@@ -197,9 +222,7 @@ export function RelintPreview({ form }: Props) {
                 <img src={block.url} alt={block.caption || `Imagem ${i + 1}`}
                   style={{ width: '100%', height: 'auto', objectFit: 'contain', display: 'block' }} />
                 {block.caption && (
-                  <p style={{ fontSize: '8pt', color: '#555', marginTop: '3px', textAlign: align as any }}>
-                    {block.caption}
-                  </p>
+                  <p style={{ fontSize: '8pt', color: '#555', marginTop: '3px', textAlign: align as any }}>{block.caption}</p>
                 )}
               </div>
             </div>

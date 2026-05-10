@@ -221,25 +221,6 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
         />
       </div>
 
-      {/* Conclusão */}
-      <div className="card p-6">
-        <label className="text-sm font-semibold text-title block mb-3">Conclusão</label>
-        <textarea value={form.content.conclusion}
-          onChange={(e) => updateContent('conclusion', e.target.value)}
-          placeholder="Apresente as conclusões baseadas nas informações..."
-          rows={4} spellCheck lang="pt-BR"
-          className="w-full input-base px-4 py-3 resize-none leading-relaxed" />
-      </div>
-
-      {/* Recomendações */}
-      <div className="card p-6">
-        <label className="text-sm font-semibold text-title block mb-3">Recomendações (Opcional)</label>
-        <textarea value={form.content.recommendations}
-          onChange={(e) => updateContent('recommendations', e.target.value)}
-          placeholder="Liste as recomendações e medidas sugeridas..."
-          rows={4} spellCheck lang="pt-BR"
-          className="w-full input-base px-4 py-3 resize-none leading-relaxed" />
-      </div>
     </div>
   );
 
