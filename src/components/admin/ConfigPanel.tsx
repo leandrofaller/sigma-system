@@ -185,7 +185,7 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
             <Select value={configs.system_theme?.mode || 'cover'}
               onChange={(e: any) => update('system_theme', { ...configs.system_theme, mode: e.target.value })}>
               <option value="cover">Cobertura (Empresa de Entregas)</option>
-              <option value="sigma">Sistema SIGMA (Direto)</option>
+              <option value="sigma">Sistema SIAIP (Direto)</option>
               <option value="hybrid">Híbrido</option>
             </Select>
           </Field>

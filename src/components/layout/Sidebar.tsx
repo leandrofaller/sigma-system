@@ -67,8 +67,8 @@ export function Sidebar({ user }: SidebarProps) {
         <AnimatePresence>
           {!collapsed && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <p className="text-white font-bold text-sm leading-tight">SIGMA</p>
-              <p className="text-gray-400 text-xs">Sistema Integrado</p>
+              <p className="text-white font-bold text-sm leading-tight">SIAIP</p>
+              <p className="text-gray-400 text-xs leading-tight">Sistema Integrado da Agência de Inteligência Penal</p>
             </motion.div>
           )}
         </AnimatePresence>

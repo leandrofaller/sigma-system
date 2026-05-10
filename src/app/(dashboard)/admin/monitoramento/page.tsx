@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { GeoMonitorPanel } from '@/components/admin/GeoMonitorPanel';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Monitoramento — SIGMA' };
+export const metadata = { title: 'Monitoramento — SIAIP' };
 
 export default async function MonitoramentoPage() {
   const session = await auth();
