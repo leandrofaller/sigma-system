@@ -43,7 +43,7 @@ export async function PATCH(
 
     await createAuditLog({
       userId: user.id,
-      action: AUDIT_ACTIONS.UPDATE_RELINT,
+      action: AUDIT_ACTIONS.EDIT_RELINT,
       entity: 'Mission',
       entityId: id,
       details: { status: updated.status },
