@@ -5,6 +5,7 @@ import { DashboardCards } from '@/components/dashboard/DashboardCards';
 import { RecentRelints } from '@/components/dashboard/RecentRelints';
 import { RelintChart } from '@/components/dashboard/RelintChart';
 import { RecentMessages } from '@/components/dashboard/RecentMessages';
+import { OngoingMissions } from '@/components/dashboard/OngoingMissions';
 
 async function getDashboardData(userId: string, role: string, groupId?: string) {
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
@@ -24,6 +25,11 @@ async function getDashboardData(userId: string, role: string, groupId?: string) 
       }),
       prisma.receivedRelint.count({ where: isAdmin ? {} : { groupId: groupId ?? 'none' } }),
       prisma.debriefing.count({ where: groupFilter }),
+      prisma.mission.findMany({
+        where: { ...groupFilter, status: 'IN_PROGRESS' },
+        include: { group: true, user: true },
+        orderBy: { startDate: 'desc' },
+      }),
     ]);
 
   const relintsPerMonth = await prisma.$queryRaw<{ month: string; count: bigint }[]>`
@@ -41,6 +47,7 @@ async function getDashboardData(userId: string, role: string, groupId?: string) 
     totalUsers,
     receivedRelints,
     totalDebriefings,
+    ongoingMissions,
     recentRelints,
     relintsPerMonth: relintsPerMonth.map((r) => ({
       month: r.month,
@@ -83,7 +90,14 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <RecentRelints relints={data.recentRelints} role={user.role} />
+      <div className="grid lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <OngoingMissions missions={data.ongoingMissions as any} />
+        </div>
+        <div className="lg:col-span-2">
+          <RecentRelints relints={data.recentRelints} role={user.role} />
+        </div>
+      </div>
     </div>
   );
 }
