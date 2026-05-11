@@ -34,6 +34,13 @@ enum Classification {
   ULTRA_SECRETO
 }
 
+enum MissionStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 model User {
   id           String    @id @default(cuid())
   name         String
@@ -58,6 +65,7 @@ model User {
   aiQueries        AIQuery[]
   uploadedFiles    ReceivedRelint[]
   locations        UserLocation[]
+  missions         Mission[]
 
   @@map("users")
 }
@@ -77,6 +85,7 @@ model Group {
   debriefings     Debriefing[]
   messages        ChatMessage[]
   receivedRelints ReceivedRelint[]
+  missions        Mission[]
 
   @@map("groups")
 }
@@ -304,4 +313,25 @@ model Debriefing {
   @@index([authorId])
   @@index([status])
   @@map("debriefings")
+}
+
+model Mission {
+  id          String        @id @default(cuid())
+  title       String
+  description String?       @db.Text
+  destination String
+  startDate   DateTime
+  endDate     DateTime?
+  status      MissionStatus @default(PLANNED)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId     String?
+  group       Group?         @relation(fields: [groupId], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([groupId])
+  @@index([status])
+  @@map("missions")
 }

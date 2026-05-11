@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -27,6 +27,7 @@ const navItems: NavItem[] = [
   { label: 'Relatórios (RELINTs)', href: '/relints', icon: FileText },
   { label: 'RELINTs Recebidos', href: '/relints-recebidos', icon: Inbox, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Debriefings', href: '/debriefings', icon: BookOpen },
+  { label: 'Calendário de Missões', href: '/missoes', icon: Calendar },
   { label: 'Chat Interno', href: '/chat', icon: MessageSquare },
   { label: 'Consulta IA', href: '/ia', icon: Sparkles },
 ];
