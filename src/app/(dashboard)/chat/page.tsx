@@ -11,11 +11,8 @@ async function getContacts(userId: string, role: string) {
   });
 }
 
-async function getGroups(role: string, groupId?: string) {
-  if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
-    return prisma.group.findMany({ where: { isActive: true } });
-  }
-  return groupId ? prisma.group.findMany({ where: { id: groupId } }) : [];
+async function getGroups() {
+  return prisma.group.findMany({ where: { isActive: true } });
 }
 
 export default async function ChatPage() {
@@ -24,7 +21,7 @@ export default async function ChatPage() {
 
   const [contacts, groups] = await Promise.all([
     getContacts(user.id, user.role),
-    getGroups(user.role, user.groupId),
+    getGroups(),
   ]);
 
   return (
