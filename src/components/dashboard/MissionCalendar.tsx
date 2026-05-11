@@ -29,6 +29,8 @@ interface Mission {
   groupId?: string;
   group?: { name: string; color?: string };
   participants: string[];
+  startKm?: number;
+  endKm?: number;
 }
 
 const AVAILABLE_PARTICIPANTS = [
@@ -50,6 +52,8 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
   const [showAddForm, setShowAddForm] = useState(false);
   const [viewingMission, setViewingMission] = useState<Mission | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showEndKmInput, setShowEndKmInput] = useState(false);
+  const [endKmValue, setEndKmValue] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -60,6 +64,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
     endDate: '',
     groupId: currentUser.groupId || '',
     participants: [] as string[],
+    startKm: '',
   });
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -91,7 +96,8 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
         setFormData({ 
           title: '', description: '', destination: '', 
           startDate: '', endDate: '', groupId: currentUser.groupId || '',
-          participants: []
+          participants: [],
+          startKm: ''
         });
         toast.success('Missão agendada com sucesso!');
       } else {
@@ -105,22 +111,24 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
     }
   };
 
-  const updateMissionStatus = async (id: string, status: string) => {
+  const updateMissionStatus = async (id: string, status: string, additionalData?: any) => {
     setLoading(true);
     try {
       const res = await fetch(`/api/missions/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, ...additionalData }),
       });
       if (res.ok) {
         const updated = await res.json();
         setMissions(missions.map(m => m.id === id ? updated : m));
         setViewingMission(updated);
-        toast.success('Status da missão atualizado!');
+        setShowEndKmInput(false);
+        setEndKmValue('');
+        toast.success('Missão atualizada!');
       }
     } catch (err) {
-      toast.error('Erro ao atualizar status');
+      toast.error('Erro ao atualizar missão');
     } finally {
       setLoading(false);
     }
@@ -297,6 +305,15 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                       {viewingMission.endDate && ` — ${format(new Date(viewingMission.endDate), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}`}
                     </span>
                   </div>
+                  {viewingMission.startKm && (
+                    <div className="flex items-center gap-3 text-sm text-body">
+                      <div className="w-4 h-4 text-sigma-500 flex items-center justify-center font-bold text-[10px]">KM</div>
+                      <span>KM Inicial: <span className="font-bold">{viewingMission.startKm}</span>
+                        {viewingMission.endKm && <span> — KM Final: <span className="font-bold">{viewingMission.endKm}</span></span>}
+                        {viewingMission.endKm && <span className="ml-2 text-sigma-600">(Total: {viewingMission.endKm - viewingMission.startKm} km)</span>}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 text-sm text-body">
                     <UserIcon className="w-4 h-4 text-sigma-500" />
                     <span>Responsável: <span className="font-medium">{viewingMission.user.name}</span></span>
@@ -323,32 +340,66 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                   </div>
                 )}
 
-                <div className="flex gap-3 pt-2">
-                  {viewingMission.status === 'PLANNED' && (
-                    <button 
-                      onClick={() => updateMissionStatus(viewingMission.id, 'IN_PROGRESS')}
-                      className="flex-1 bg-sigma-600 hover:bg-sigma-700 text-white py-3 rounded-2xl font-bold shadow-lg shadow-sigma-600/20 transition-all active:scale-95"
-                    >
-                      Iniciar Viagem
-                    </button>
-                  )}
-                  {viewingMission.status === 'IN_PROGRESS' && (
-                    <button 
-                      onClick={() => updateMissionStatus(viewingMission.id, 'COMPLETED')}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold shadow-lg shadow-green-600/20 transition-all active:scale-95"
-                    >
-                      Finalizar na Chegada
-                    </button>
-                  )}
-                  {(currentUser.role === 'SUPER_ADMIN' || viewingMission.userId === currentUser.id) && viewingMission.status !== 'COMPLETED' && (
-                    <button 
-                      onClick={() => updateMissionStatus(viewingMission.id, 'CANCELLED')}
-                      className="px-4 border border-red-200 dark:border-red-900/30 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                  )}
-                </div>
+                {showEndKmInput ? (
+                  <div className="bg-sigma-50 dark:bg-sigma-900/20 p-4 rounded-2xl border border-sigma-100 dark:border-sigma-900/30 space-y-3">
+                    <p className="text-xs font-bold text-sigma-700 dark:text-sigma-300">Informe a Kilometragem Final para concluir:</p>
+                    <div className="flex gap-2">
+                      <input 
+                        type="number"
+                        placeholder="KM Final"
+                        value={endKmValue}
+                        onChange={e => setEndKmValue(e.target.value)}
+                        className="flex-1 input-base px-4 py-2"
+                        autoFocus
+                      />
+                      <button 
+                        onClick={() => {
+                          if (!endKmValue) return toast.error('Informe a kilometragem final');
+                          if (viewingMission.startKm && parseInt(endKmValue) < viewingMission.startKm) {
+                            return toast.error('KM final não pode ser menor que o inicial');
+                          }
+                          updateMissionStatus(viewingMission.id, 'COMPLETED', { endKm: endKmValue });
+                        }}
+                        className="bg-sigma-600 text-white px-4 py-2 rounded-xl font-bold text-xs"
+                      >
+                        Confirmar
+                      </button>
+                      <button 
+                        onClick={() => setShowEndKmInput(false)}
+                        className="bg-gray-200 dark:bg-gray-800 text-body px-3 py-2 rounded-xl text-xs"
+                      >
+                        X
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-3 pt-2">
+                    {viewingMission.status === 'PLANNED' && (
+                      <button 
+                        onClick={() => updateMissionStatus(viewingMission.id, 'IN_PROGRESS')}
+                        className="flex-1 bg-sigma-600 hover:bg-sigma-700 text-white py-3 rounded-2xl font-bold shadow-lg shadow-sigma-600/20 transition-all active:scale-95"
+                      >
+                        Iniciar Viagem
+                      </button>
+                    )}
+                    {viewingMission.status === 'IN_PROGRESS' && (
+                      <button 
+                        onClick={() => setShowEndKmInput(true)}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold shadow-lg shadow-green-600/20 transition-all active:scale-95"
+                      >
+                        Finalizar na Chegada
+                      </button>
+                    )}
+                    {(currentUser.role === 'SUPER_ADMIN' || viewingMission.userId === currentUser.id) && viewingMission.status !== 'COMPLETED' && (
+                      <button 
+                        onClick={() => updateMissionStatus(viewingMission.id, 'CANCELLED')}
+                        className="px-4 border border-red-200 dark:border-red-900/30 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>
@@ -432,6 +483,16 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                       type="datetime-local"
                       value={formData.endDate}
                       onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                      className="w-full input-base px-4 py-3"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">KM Inicial</label>
+                    <input 
+                      type="number"
+                      value={formData.startKm}
+                      onChange={e => setFormData({ ...formData, startKm: e.target.value })}
+                      placeholder="0"
                       className="w-full input-base px-4 py-3"
                     />
                   </div>

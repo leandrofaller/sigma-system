@@ -35,6 +35,8 @@ export async function PATCH(
         startDate: body.startDate ? new Date(body.startDate) : undefined,
         endDate: body.endDate ? new Date(body.endDate) : undefined,
         participants: body.participants !== undefined ? body.participants : undefined,
+        startKm: body.startKm !== undefined ? (body.startKm ? parseInt(body.startKm) : null) : undefined,
+        endKm: body.endKm !== undefined ? (body.endKm ? parseInt(body.endKm) : null) : undefined,
       },
       include: {
         user: { select: { name: true } },
