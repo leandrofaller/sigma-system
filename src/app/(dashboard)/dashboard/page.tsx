@@ -11,7 +11,7 @@ async function getDashboardData(userId: string, role: string, groupId?: string) 
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
   const groupFilter = isAdmin ? {} : { groupId: groupId ?? 'none' };
 
-  const [totalRelints, publishedRelints, draftRelints, totalUsers, recentRelints, receivedRelints, totalDebriefings] =
+  const [totalRelints, publishedRelints, draftRelints, totalUsers, recentRelints, receivedRelints, totalDebriefings, ongoingMissions] =
     await Promise.all([
       prisma.relint.count({ where: groupFilter }),
       prisma.relint.count({ where: { ...groupFilter, status: 'PUBLISHED' } }),
