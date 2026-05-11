@@ -28,7 +28,14 @@ interface Mission {
   user: { name: string; avatar?: string };
   groupId?: string;
   group?: { name: string; color?: string };
+  participants: string[];
 }
+
+const AVAILABLE_PARTICIPANTS = [
+  'GEAN', 'JAQUELINE', 'JEFFERSON', 'JORDANIO', 
+  'SIQUEIRA', 'FALLER', 'RAFAEL', 'SIDNEI', 
+  'STAUSTON', 'VALTEIR'
+];
 
 interface Props {
   initialMissions: Mission[];
@@ -52,6 +59,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
     startDate: '',
     endDate: '',
     groupId: currentUser.groupId || '',
+    participants: [] as string[],
   });
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -80,7 +88,11 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
         const newMission = await res.json();
         setMissions([...missions, newMission]);
         setShowAddForm(false);
-        setFormData({ title: '', description: '', destination: '', startDate: '', endDate: '', groupId: currentUser.groupId || '' });
+        setFormData({ 
+          title: '', description: '', destination: '', 
+          startDate: '', endDate: '', groupId: currentUser.groupId || '',
+          participants: []
+        });
         toast.success('Missão agendada com sucesso!');
       } else {
         const error = await res.json();
@@ -291,6 +303,19 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                   </div>
                 </div>
 
+                {viewingMission.participants && viewingMission.participants.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-subtle uppercase tracking-wider">Participantes</p>
+                    <div className="flex flex-wrap gap-2">
+                      {viewingMission.participants.map(p => (
+                        <span key={p} className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-title text-[10px] font-bold rounded-lg border border-gray-200 dark:border-gray-700">
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {viewingMission.description && (
                   <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl">
                     <p className="text-[10px] font-bold text-subtle uppercase tracking-wider mb-2">Descrição</p>
@@ -409,6 +434,32 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                       onChange={e => setFormData({ ...formData, endDate: e.target.value })}
                       className="w-full input-base px-4 py-3"
                     />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">Participantes</label>
+                  <div className="flex flex-wrap gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700">
+                    {AVAILABLE_PARTICIPANTS.map(name => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => {
+                          const current = formData.participants;
+                          if (current.includes(name)) {
+                            setFormData({ ...formData, participants: current.filter(n => n !== name) });
+                          } else {
+                            setFormData({ ...formData, participants: [...current, name] });
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all border
+                          ${formData.participants.includes(name) 
+                            ? 'bg-sigma-600 border-sigma-500 text-white shadow-md shadow-sigma-600/20 scale-105' 
+                            : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-subtle hover:border-sigma-400'}`}
+                      >
+                        {name}
+                      </button>
+                    ))}
                   </div>
                 </div>
 

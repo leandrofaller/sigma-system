@@ -34,6 +34,7 @@ export async function PATCH(
         // Garantir que datas sejam objetos Date se fornecidas
         startDate: body.startDate ? new Date(body.startDate) : undefined,
         endDate: body.endDate ? new Date(body.endDate) : undefined,
+        participants: body.participants !== undefined ? body.participants : undefined,
       },
       include: {
         user: { select: { name: true } },

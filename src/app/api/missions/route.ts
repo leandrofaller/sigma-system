@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { title, description, destination, startDate, endDate, groupId } = body;
+    const { title, description, destination, startDate, endDate, groupId, participants } = body;
 
     if (!title || !destination || !startDate) {
       return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
         startDate: new Date(startDate),
         endDate: endDate ? new Date(endDate) : null,
         status: 'PLANNED',
+        participants: participants || [],
         userId: user.id,
         groupId: groupId || user.groupId,
       },

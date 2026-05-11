@@ -323,6 +323,7 @@ model Mission {
   startDate   DateTime
   endDate     DateTime?
   status      MissionStatus @default(PLANNED)
+  participants String[]      @default([])
   userId      String
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   groupId     String?
