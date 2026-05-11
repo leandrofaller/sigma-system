@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const missions = await prisma.mission.findMany({
-      where: isAdmin ? {} : { groupId: user.groupId || 'none' },
+      where: {}, // Ver todas as missões
       include: {
         user: { select: { name: true, avatar: true } },
         group: { select: { name: true, color: true } },

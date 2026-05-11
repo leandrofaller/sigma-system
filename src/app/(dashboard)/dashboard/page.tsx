@@ -26,7 +26,7 @@ async function getDashboardData(userId: string, role: string, groupId?: string) 
       prisma.receivedRelint.count({ where: isAdmin ? {} : { groupId: groupId ?? 'none' } }),
       prisma.debriefing.count({ where: groupFilter }),
       prisma.mission.findMany({
-        where: { ...groupFilter, status: 'IN_PROGRESS' },
+        where: { status: 'IN_PROGRESS' },
         include: { group: true, user: true },
         orderBy: { startDate: 'desc' },
       }),

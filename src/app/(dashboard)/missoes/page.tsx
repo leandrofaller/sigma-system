@@ -2,10 +2,9 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { MissionCalendar } from '@/components/dashboard/MissionCalendar';
 
-async function getMissions(role: string, groupId?: string) {
-  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
+async function getMissions() {
   return prisma.mission.findMany({
-    where: isAdmin ? {} : { groupId: groupId || 'none' },
+    where: {},
     include: {
       user: { select: { name: true, avatar: true } },
       group: { select: { name: true, color: true } },
@@ -23,7 +22,7 @@ export default async function MissoesPage() {
   const user = session!.user as any;
 
   const [missions, groups] = await Promise.all([
-    getMissions(user.role, user.groupId),
+    getMissions(),
     getGroups(),
   ]);
 
