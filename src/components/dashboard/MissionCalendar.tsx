@@ -11,7 +11,7 @@ import {
   ChevronLeft, ChevronRight, Plus, MapPin, 
   Clock, CheckCircle2, AlertCircle, X, 
   MoreHorizontal, Calendar as CalendarIcon,
-  User as UserIcon, Users
+  User as UserIcon, Users, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
