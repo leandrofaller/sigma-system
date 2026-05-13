@@ -7,12 +7,13 @@ import {
   isSameDay, addDays, isToday 
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { 
-  ChevronLeft, ChevronRight, Plus, MapPin, 
-  Clock, CheckCircle2, AlertCircle, X, 
+import {
+  ChevronLeft, ChevronRight, Plus, MapPin,
+  Clock, CheckCircle2, AlertCircle, X,
   MoreHorizontal, Calendar as CalendarIcon,
-  User as UserIcon, Users, Loader2
+  User as UserIcon, Users, Loader2, FileBarChart
 } from 'lucide-react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -163,13 +164,19 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
         </div>
         
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => setCurrentMonth(new Date())}
             className="px-4 py-2 text-sm font-medium border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
             Hoje
           </button>
-          <button 
+          <Link
+            href="/missoes/relatorio"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-body"
+          >
+            <FileBarChart className="w-4 h-4" /> Relatório
+          </Link>
+          <button
             onClick={() => setShowAddForm(true)}
             className="flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-lg shadow-sigma-600/20 transition-all active:scale-95"
           >

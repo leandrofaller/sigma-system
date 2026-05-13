@@ -13,7 +13,11 @@
       "Bash(mkdir -p \"f:\\\\relatorio_claude\\\\public\\\\logos\" && echo done)",
       "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -File -ErrorAction SilentlyContinue)",
       "Bash(Select-Object -First 50)",
-      "Bash(xargs grep -l \"map\\\\|Map\\\\|leaflet\\\\|mapbox\\\\|geom\")"
+      "Bash(xargs grep -l \"map\\\\|Map\\\\|leaflet\\\\|mapbox\\\\|geom\")",
+      "Bash(rtk gain *)",
+      "Bash(rtk ls *)",
+      "Bash(rtk read *)",
+      "Bash(rtk tsc *)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
