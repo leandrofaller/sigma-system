@@ -21,6 +21,8 @@ function buildRedirect(req: NextRequest, path: string): URL {
   return new URL(path, `${proto}://${host}`);
 }
 
+const MOBILE_UA_REGEX = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i;
+
 export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth;
@@ -44,6 +46,15 @@ export default auth((req) => {
 
   if (isLoggedIn && nextUrl.pathname === '/login') {
     return Response.redirect(buildRedirect(req, '/dashboard'));
+  }
+
+  // Redireciona /missoes para versão mobile quando acessado de celular,
+  // a menos que o usuário tenha forçado desktop com ?desktop=1.
+  if (isLoggedIn && nextUrl.pathname === '/missoes' && nextUrl.searchParams.get('desktop') !== '1') {
+    const ua = req.headers.get('user-agent') || '';
+    if (MOBILE_UA_REGEX.test(ua)) {
+      return Response.redirect(buildRedirect(req, '/missoes/mobile'));
+    }
   }
 });
 
