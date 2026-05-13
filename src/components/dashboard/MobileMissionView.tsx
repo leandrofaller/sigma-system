@@ -368,26 +368,39 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              drag="y"
-              dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={{ top: 0, bottom: 0.4 }}
-              onDragEnd={(_, info) => { if (info.offset.y > 120 && !loading) setShowForm(false); }}
-              className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl overflow-y-auto overscroll-contain"
-              style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom)' }}
+              className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl flex flex-col overflow-hidden"
+              style={{ height: '92dvh', maxHeight: '92dvh' }}
             >
-              <div className="sticky top-0 bg-white dark:bg-gray-900 z-10 border-b border-gray-100 dark:border-gray-800">
+              {/* Header com handle arrastável (só essa área fecha por swipe) */}
+              <motion.div
+                drag="y"
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.4 }}
+                onDragEnd={(_, info) => { if (info.offset.y > 80 && !loading) setShowForm(false); }}
+                className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 rounded-t-3xl cursor-grab active:cursor-grabbing touch-none"
+              >
                 <div className="flex justify-center pt-3 pb-2">
                   <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full" />
                 </div>
                 <div className="px-5 pb-3 flex items-center justify-between">
                   <h3 className="text-lg font-bold text-title">Nova Viagem</h3>
-                  <button onClick={() => !loading && setShowForm(false)} className="p-1 text-subtle">
+                  <button
+                    type="button"
+                    onClick={() => !loading && setShowForm(false)}
+                    className="p-2 -m-2 text-subtle"
+                    aria-label="Fechar"
+                  >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-              </div>
+              </motion.div>
 
-              <form onSubmit={submit} className="p-4 sm:p-5 space-y-4">
+              <form
+                onSubmit={submit}
+                className="flex-1 flex flex-col min-h-0"
+              >
+                {/* Área scrollável dos campos */}
+                <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4">
                 {/* Título */}
                 <FieldLabel>Título da Viagem</FieldLabel>
                 <input
@@ -524,16 +537,22 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                     />
                   </div>
                 )}
+                </div>
 
-                {/* CTA */}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-sigma-600 active:bg-sigma-700 text-white py-4 rounded-2xl font-bold text-base shadow-lg shadow-sigma-600/30 flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition"
+                {/* Footer fixo com CTA — sempre visível */}
+                <div
+                  className="flex-shrink-0 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 sm:px-5 pt-3"
+                  style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
                 >
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                  {form.startNow ? 'Registrar e Iniciar' : 'Registrar Viagem'}
-                </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-sigma-600 active:bg-sigma-700 text-white py-4 rounded-2xl font-bold text-base shadow-lg shadow-sigma-600/30 flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition"
+                  >
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                    {form.startNow ? 'Registrar e Iniciar' : 'Registrar Viagem'}
+                  </button>
+                </div>
               </form>
             </motion.div>
           </div>
