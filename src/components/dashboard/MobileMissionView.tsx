@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Plus, MapPin, Clock, CheckCircle2, X, Loader2,
-  Navigation, Zap, Monitor, ChevronDown, ChevronUp,
+  Navigation, Zap, Monitor,
   Calendar as CalendarIcon, Gauge, FileBarChart, Flag,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -56,7 +56,6 @@ function nowLocalInput() {
 export function MobileMissionView({ initialMissions, groups, currentUser }: Props) {
   const [missions, setMissions] = useState<Mission[]>(initialMissions);
   const [showForm, setShowForm] = useState(false);
-  const [showMore, setShowMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [endingMission, setEndingMission] = useState<Mission | null>(null);
@@ -84,7 +83,6 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
       participants: [], description: '', endDate: '',
       groupId: currentUser.groupId || '', startNow: false,
     });
-    setShowMore(false);
   };
 
   const useMyLocation = () => {
@@ -497,46 +495,35 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                   })}
                 </div>
 
-                {/* Mais opções */}
-                <button
-                  type="button"
-                  onClick={() => setShowMore(!showMore)}
-                  className="w-full flex items-center justify-between text-sm text-subtle font-semibold py-2 border-t border-gray-100 dark:border-gray-800 mt-2"
+                {/* Grupo / Equipe */}
+                <FieldLabel>Grupo / Equipe</FieldLabel>
+                <select
+                  value={form.groupId}
+                  onChange={e => setForm({ ...form, groupId: e.target.value })}
+                  className="w-full input-base px-4 py-3.5 text-base"
                 >
-                  <span>Mais opções</span>
-                  {showMore ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
+                  <option value="">Selecione</option>
+                  {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
 
-                {showMore && (
-                  <div className="space-y-3 pt-1">
-                    <FieldLabel>Grupo / Equipe</FieldLabel>
-                    <select
-                      value={form.groupId}
-                      onChange={e => setForm({ ...form, groupId: e.target.value })}
-                      className="w-full input-base px-4 py-3 text-base"
-                    >
-                      <option value="">Selecione</option>
-                      {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                    </select>
+                {/* Previsão de Fim */}
+                <FieldLabel>Previsão de Fim</FieldLabel>
+                <input
+                  type="datetime-local"
+                  value={form.endDate}
+                  onChange={e => setForm({ ...form, endDate: e.target.value })}
+                  className="w-full input-base px-4 py-3.5 text-base"
+                />
 
-                    <FieldLabel>Previsão de Fim</FieldLabel>
-                    <input
-                      type="datetime-local"
-                      value={form.endDate}
-                      onChange={e => setForm({ ...form, endDate: e.target.value })}
-                      className="w-full input-base px-4 py-3 text-base"
-                    />
-
-                    <FieldLabel>Observações</FieldLabel>
-                    <textarea
-                      rows={3}
-                      value={form.description}
-                      onChange={e => setForm({ ...form, description: e.target.value })}
-                      placeholder="Detalhes adicionais..."
-                      className="w-full input-base px-4 py-3 text-base resize-none"
-                    />
-                  </div>
-                )}
+                {/* Observações */}
+                <FieldLabel>Observações</FieldLabel>
+                <textarea
+                  rows={3}
+                  value={form.description}
+                  onChange={e => setForm({ ...form, description: e.target.value })}
+                  placeholder="Detalhes adicionais..."
+                  className="w-full input-base px-4 py-3.5 text-base resize-none"
+                />
                 </div>
 
                 {/* Footer fixo com CTA — sempre visível */}
