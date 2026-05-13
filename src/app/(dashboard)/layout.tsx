@@ -19,11 +19,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <QueryProvider>
-      <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+      <div className="flex h-screen min-h-[100dvh] bg-gray-50 dark:bg-gray-950 overflow-hidden">
         <Sidebar user={session.user as any} logoSize={logoSize} />
         <div className="flex-1 flex flex-col min-w-0">
           <Header user={session.user as any} />
-          <main className="flex-1 overflow-auto p-6">
+          <main className="flex-1 overflow-auto p-3 md:p-6">
             {children}
           </main>
         </div>

@@ -72,9 +72,9 @@ export function Header({ user }: HeaderProps) {
   }, []);
 
   return (
-    <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between px-6 flex-shrink-0 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className="relative">
+    <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between px-3 md:px-6 flex-shrink-0 shadow-sm gap-2">
+      <div className="flex items-center gap-3 pl-12 md:pl-0 min-w-0 flex-1">
+        <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="search"
@@ -84,7 +84,7 @@ export function Header({ user }: HeaderProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
         <div className="text-right hidden sm:block">
           <p className="text-xs font-medium text-gray-700 dark:text-gray-300">{formatDate(currentTime)}</p>
           <p className="text-xs text-gray-400">
@@ -116,7 +116,7 @@ export function Header({ user }: HeaderProps) {
           </button>
 
           {notifOpen && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl z-50 overflow-hidden">
+            <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl z-50 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
                 <div className="flex items-center gap-2">
                   <Bell className="w-4 h-4 text-sigma-500" />

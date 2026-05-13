@@ -243,17 +243,25 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
   };
 
   return (
-    <div className="-m-6 min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-gray-950 pb-32">
+    <div
+      className="-mx-3 md:-mx-6 -my-3 md:-my-6 bg-gray-50 dark:bg-gray-950"
+      style={{ paddingBottom: 'max(8rem, calc(6rem + env(safe-area-inset-bottom)))' }}
+    >
       {/* Header */}
-      <div className="bg-gradient-to-br from-sigma-600 to-sigma-800 text-white p-6 pb-8 rounded-b-3xl shadow-lg">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-white/70 text-xs font-semibold uppercase tracking-wider">Olá, {currentUser.name?.split(' ')[0]}</p>
-            <h1 className="text-2xl font-bold">Minhas Viagens</h1>
+      <div
+        className="bg-gradient-to-br from-sigma-600 to-sigma-800 text-white px-4 sm:px-6 pb-6 rounded-b-3xl shadow-lg"
+        style={{ paddingTop: 'max(1.25rem, calc(env(safe-area-inset-top) + 1rem))' }}
+      >
+        <div className="flex items-center justify-between mb-4 pl-12 md:pl-0">
+          <div className="min-w-0">
+            <p className="text-white/70 text-[11px] font-semibold uppercase tracking-wider truncate">
+              Olá, {currentUser.name?.split(' ')[0]}
+            </p>
+            <h1 className="text-xl sm:text-2xl font-bold truncate">Minhas Viagens</h1>
           </div>
           <Link
             href="/missoes?desktop=1"
-            className="bg-white/15 backdrop-blur-md p-2.5 rounded-xl text-white/90 hover:bg-white/25 transition"
+            className="flex-shrink-0 bg-white/15 backdrop-blur-md p-2.5 rounded-xl text-white/90 hover:bg-white/25 transition"
             title="Versão desktop"
           >
             <Monitor className="w-5 h-5" />
@@ -267,7 +275,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
         </div>
       </div>
 
-      <div className="px-4 pt-4 space-y-5">
+      <div className="px-3 sm:px-4 pt-4 space-y-5">
         {/* Em curso (destaque) */}
         {inProgress.length > 0 && (
           <section>
@@ -342,7 +350,8 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
       {/* FAB Nova Viagem */}
       <button
         onClick={() => setShowForm(true)}
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-sigma-600 active:bg-sigma-700 text-white px-6 py-4 rounded-full shadow-2xl shadow-sigma-600/40 font-bold flex items-center gap-2 active:scale-95 transition"
+        className="fixed left-1/2 -translate-x-1/2 z-40 bg-sigma-600 active:bg-sigma-700 text-white px-6 py-4 rounded-full shadow-2xl shadow-sigma-600/40 font-bold flex items-center gap-2 active:scale-95 transition"
+        style={{ bottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))' }}
       >
         <Plus className="w-5 h-5" /> Nova Viagem
       </button>
@@ -363,7 +372,8 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
               dragConstraints={{ top: 0, bottom: 0 }}
               dragElastic={{ top: 0, bottom: 0.4 }}
               onDragEnd={(_, info) => { if (info.offset.y > 120 && !loading) setShowForm(false); }}
-              className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl max-h-[92vh] overflow-y-auto"
+              className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl overflow-y-auto overscroll-contain"
+              style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom)' }}
             >
               <div className="sticky top-0 bg-white dark:bg-gray-900 z-10 border-b border-gray-100 dark:border-gray-800">
                 <div className="flex justify-center pt-3 pb-2">
@@ -377,7 +387,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                 </div>
               </div>
 
-              <form onSubmit={submit} className="p-5 space-y-4">
+              <form onSubmit={submit} className="p-4 sm:p-5 space-y-4">
                 {/* Título */}
                 <FieldLabel>Título da Viagem</FieldLabel>
                 <input
@@ -454,7 +464,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
 
                 {/* Participantes */}
                 <FieldLabel>Participantes</FieldLabel>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {AVAILABLE_PARTICIPANTS.map(name => {
                     const selected = form.participants.includes(name);
                     return (
@@ -462,7 +472,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                         key={name}
                         type="button"
                         onClick={() => toggleParticipant(name)}
-                        className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition active:scale-95 ${
+                        className={`px-2 py-2.5 rounded-xl text-[11px] font-bold border transition active:scale-95 truncate ${
                           selected
                             ? 'bg-sigma-600 border-sigma-500 text-white shadow-md shadow-sigma-600/20'
                             : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-body'
@@ -542,7 +552,8 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl p-5 pb-8 space-y-4"
+              className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl p-5 space-y-4"
+              style={{ paddingBottom: 'max(2rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}
             >
               <div className="flex justify-center mb-1">
                 <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full" />

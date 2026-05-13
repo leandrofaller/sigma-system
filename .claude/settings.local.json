@@ -17,7 +17,8 @@
       "Bash(rtk gain *)",
       "Bash(rtk ls *)",
       "Bash(rtk read *)",
-      "Bash(rtk tsc *)"
+      "Bash(rtk tsc *)",
+      "Bash(rtk grep *)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

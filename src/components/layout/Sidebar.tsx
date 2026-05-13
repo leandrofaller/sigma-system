@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -48,8 +48,20 @@ interface SidebarProps {
 
 export function Sidebar({ user, logoSize = 36 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+
+  // Fecha o drawer mobile quando o usuário navega
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  // Trava o scroll do body quando o drawer mobile está aberto
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = ''; };
+    }
+  }, [mobileOpen]);
 
   const filteredNav = navItems.filter(
     (item) => !item.roles || item.roles.includes(user?.role ?? '')
@@ -59,10 +71,37 @@ export function Sidebar({ user, logoSize = 36 }: SidebarProps) {
   );
 
   return (
+    <>
+      {/* Botão hamburger — só no mobile */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden fixed top-3 left-3 z-30 w-10 h-10 bg-gray-900/90 backdrop-blur-md text-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition"
+        style={{ top: 'max(0.75rem, env(safe-area-inset-top))' }}
+        aria-label="Abrir menu"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* Backdrop mobile */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setMobileOpen(false)}
+            className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+          />
+        )}
+      </AnimatePresence>
+
     <motion.aside
       animate={{ width: collapsed ? 72 : 260 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className="relative flex flex-col bg-gray-900 border-r border-gray-800 overflow-hidden flex-shrink-0"
+      className={cn(
+        "flex flex-col bg-gray-900 border-r border-gray-800 overflow-hidden flex-shrink-0 z-50",
+        // Mobile: off-canvas drawer
+        "fixed inset-y-0 left-0 transform transition-transform duration-300 md:relative md:translate-x-0",
+        mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+      )}
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-800">
@@ -142,14 +181,24 @@ export function Sidebar({ user, logoSize = 36 }: SidebarProps) {
         </button>
       </div>
 
-      {/* Collapse button */}
+      {/* Botão fechar — só no mobile */}
+      <button
+        onClick={() => setMobileOpen(false)}
+        className="md:hidden absolute top-3 right-3 w-9 h-9 bg-gray-800 text-gray-400 hover:text-white rounded-lg flex items-center justify-center"
+        aria-label="Fechar menu"
+      >
+        <X className="w-4 h-4" />
+      </button>
+
+      {/* Collapse button — só no desktop */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute top-1/2 -right-3 w-6 h-6 bg-gray-700 border border-gray-600 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-600 transition-colors z-10"
+        className="hidden md:flex absolute top-1/2 -right-3 w-6 h-6 bg-gray-700 border border-gray-600 rounded-full items-center justify-center text-gray-400 hover:text-white hover:bg-gray-600 transition-colors z-10"
       >
         {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
       </button>
     </motion.aside>
+    </>
   );
 }
 
