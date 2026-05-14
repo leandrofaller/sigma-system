@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -118,9 +118,21 @@ export function Sidebar({ user, logoSize = 36 }: SidebarProps) {
         </div>
         <AnimatePresence>
           {!collapsed && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <p className="text-white font-bold text-sm leading-tight">SIAIP</p>
-              <p className="text-gray-400 text-xs leading-tight">Sistema Integrado da Agência de Inteligência Penal</p>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="flex-1 min-w-0"
+            >
+              <div className="flex items-center gap-1.5">
+                <p className="text-white font-bold text-sm leading-tight">SIAIP</p>
+                <Link
+                  href="/missoes/mobile"
+                  title="Abrir versão mobile"
+                  className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+              <p className="text-gray-400 text-xs leading-tight truncate">Sistema Integrado da Agência de Inteligência Penal</p>
             </motion.div>
           )}
         </AnimatePresence>
