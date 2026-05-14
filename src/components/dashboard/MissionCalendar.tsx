@@ -50,9 +50,26 @@ function isScheduledDateReached(scheduledISO: string): boolean {
 }
 
 const AVAILABLE_PARTICIPANTS = [
-  'GEAN', 'JAQUELINE', 'JEFFERSON', 'JORDANIO', 
-  'SIQUEIRA', 'FALLER', 'RAFAEL', 'SIDNEI', 
+  'GEAN', 'JAQUELINE', 'JEFFERSON', 'JORDANIO',
+  'SIQUEIRA', 'FALLER', 'RAFAEL', 'SIDNEI',
   'STAUNSTON', 'VALTEIR'
+];
+
+const MUNICIPIOS_RONDONIA = [
+  "Alta Floresta d'Oeste", "Alto Alegre dos Parecis", "Alto Paraíso",
+  "Alvorada d'Oeste", "Ariquemes", "Buritis", "Cabixi", "Cacaulândia",
+  "Cacoal", "Campo Novo de Rondônia", "Candeias do Jamari", "Castanheiras",
+  "Cerejeiras", "Chupinguaia", "Colorado do Oeste", "Corumbiara",
+  "Costa Marques", "Cujubim", "Espigão d'Oeste", "Governador Jorge Teixeira",
+  "Guajará-Mirim", "Itapuã do Oeste", "Jaru", "Ji-Paraná",
+  "Machadinho d'Oeste", "Ministro Andreazza", "Mirante da Serra", "Monte Negro",
+  "Nova Brasilândia d'Oeste", "Nova Mamoré", "Nova União", "Novo Horizonte do Oeste",
+  "Ouro Preto do Oeste", "Parecis", "Pimenta Bueno", "Pimenteiras do Oeste",
+  "Porto Velho", "Presidente Médici", "Primavera de Rondônia", "Rio Crespo",
+  "Rolim de Moura", "Santa Luzia d'Oeste", "São Felipe d'Oeste",
+  "São Francisco do Guaporé", "São Miguel do Guaporé", "Seringueiras",
+  "Teixeirópolis", "Theobroma", "Urupá", "Vale do Anari", "Vale do Paraíso",
+  "Vilhena",
 ];
 
 interface Props {
@@ -77,11 +94,13 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
   const [endInput, setEndInput] = useState<{ open: boolean; km: string; note: string }>({ open: false, km: '', note: '' });
   const [confirmCancel, setConfirmCancel] = useState(false);
 
+  const [municipioSearch, setMunicipioSearch] = useState('');
+
   // Form state — agendamento NÃO pede KM nem hora; só data
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    destination: '',
+    destinations: [] as string[],
     startDate: '',     // AGORA: input type="date" (sem hora)
     endDate: '',       // previsão de fim (opcional)
     groupId: currentUser.groupId || '',
@@ -101,20 +120,28 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
     return missions.filter(m => isSameDay(new Date(m.startDate), day));
   };
 
-  const resetForm = () => setFormData({
-    title: '', description: '', destination: '',
-    startDate: '', endDate: '', groupId: currentUser.groupId || '',
-    participants: [],
-  });
+  const resetForm = () => {
+    setFormData({
+      title: '', description: '', destinations: [],
+      startDate: '', endDate: '', groupId: currentUser.groupId || '',
+      participants: [],
+    });
+    setMunicipioSearch('');
+  };
 
   const handleAddMission = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.destinations.length === 0) {
+      toast.error('Selecione ao menos um município de destino');
+      return;
+    }
     setLoading(true);
     try {
+      const { destinations, ...rest } = formData;
       const res = await fetch('/api/missions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...rest, destination: destinations.join(', ') }),
       });
       if (res.ok) {
         const newMission = await res.json();
@@ -136,12 +163,17 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
   const handleEditMission = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMission) return;
+    if (formData.destinations.length === 0) {
+      toast.error('Selecione ao menos um município de destino');
+      return;
+    }
     setLoading(true);
     try {
+      const { destinations, ...rest } = formData;
       const res = await fetch(`/api/missions/${editingMission.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...rest, destination: destinations.join(', ') }),
       });
       if (res.ok) {
         const updated = await res.json();
@@ -164,12 +196,13 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
     setFormData({
       title: m.title,
       description: m.description || '',
-      destination: m.destination,
-      startDate: m.startDate.slice(0, 10), // YYYY-MM-DD
+      destinations: m.destination ? m.destination.split(', ').filter(Boolean) : [],
+      startDate: m.startDate.slice(0, 10),
       endDate: m.endDate ? m.endDate.slice(0, 16) : '',
       groupId: m.groupId || '',
       participants: m.participants || [],
     });
+    setMunicipioSearch('');
     setEditingMission(m);
     setViewingMission(null);
   };
@@ -674,28 +707,61 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">Destino</label>
-                    <input 
-                      required
-                      value={formData.destination}
-                      onChange={e => setFormData({ ...formData, destination: e.target.value })}
-                      placeholder="Cidade/Local"
-                      className="w-full input-base px-4 py-3"
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">
+                    Destino
+                    {formData.destinations.length > 0 && (
+                      <span className="ml-2 normal-case font-normal text-sigma-600">
+                        ({formData.destinations.length} selecionado{formData.destinations.length > 1 ? 's' : ''})
+                      </span>
+                    )}
+                  </label>
+                  <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-2">
+                    <input
+                      type="text"
+                      value={municipioSearch}
+                      onChange={e => setMunicipioSearch(e.target.value)}
+                      placeholder="Buscar município..."
+                      className="w-full input-base px-3 py-2 text-sm"
                     />
+                    <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                      {MUNICIPIOS_RONDONIA
+                        .filter(m => m.toLowerCase().includes(municipioSearch.toLowerCase()))
+                        .map(municipio => (
+                          <button
+                            key={municipio}
+                            type="button"
+                            onClick={() => {
+                              const current = formData.destinations;
+                              setFormData({
+                                ...formData,
+                                destinations: current.includes(municipio)
+                                  ? current.filter(d => d !== municipio)
+                                  : [...current, municipio],
+                              });
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all border
+                              ${formData.destinations.includes(municipio)
+                                ? 'bg-sigma-600 border-sigma-500 text-white shadow-md shadow-sigma-600/20 scale-105'
+                                : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-subtle hover:border-sigma-400'}`}
+                          >
+                            {municipio}
+                          </button>
+                        ))}
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">Grupo/Equipe</label>
-                    <select 
-                      value={formData.groupId}
-                      onChange={e => setFormData({ ...formData, groupId: e.target.value })}
-                      className="w-full input-base px-4 py-3"
-                    >
-                      <option value="">Selecione um grupo</option>
-                      {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                    </select>
-                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">Grupo/Equipe</label>
+                  <select
+                    value={formData.groupId}
+                    onChange={e => setFormData({ ...formData, groupId: e.target.value })}
+                    className="w-full input-base px-4 py-3"
+                  >
+                    <option value="">Selecione um grupo</option>
+                    {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
