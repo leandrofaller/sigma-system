@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { 
   format, addMonths, subMonths, startOfMonth, endOfMonth, 
   startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, 
-  isSameDay, addDays, isToday 
+  addDays, isToday 
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -118,7 +118,8 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
   const getMissionsForDay = (day: Date) => {
-    return missions.filter(m => isSameDay(new Date(m.startDate), day));
+    const dayStr = format(day, 'yyyy-MM-dd');
+    return missions.filter(m => m.startDate.slice(0, 10) === dayStr);
   };
 
   const resetForm = () => {
@@ -488,7 +489,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                   <div className="flex items-center gap-3 text-sm text-body">
                     <CalendarIcon className="w-4 h-4 text-sigma-500" />
                     <span>Agendado para: <span className="font-medium">
-                      {format(new Date(viewingMission.startDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                      {format(new Date(viewingMission.startDate.slice(0, 10) + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                     </span></span>
                   </div>
                   {viewingMission.startedAt && (

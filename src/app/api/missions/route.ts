@@ -50,6 +50,19 @@ export async function DELETE(req: NextRequest) {
   }
 }
 
+/**
+ * Parses a date-only string ("YYYY-MM-DD") as UTC noon to prevent the
+ * UTC-midnight → local-previous-day timezone shift. Full ISO strings are
+ * passed through unchanged.
+ */
+function parseDateOnly(str: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  }
+  return new Date(str);
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -79,7 +92,7 @@ export async function POST(req: NextRequest) {
         title,
         description,
         destination,
-        startDate: new Date(startDate),
+        startDate: parseDateOnly(startDate),
         endDate: endDate ? new Date(endDate) : null,
         status: startNow ? 'IN_PROGRESS' : 'PLANNED',
         startedAt: startNow ? now : null,

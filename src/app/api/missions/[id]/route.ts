@@ -3,6 +3,14 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit';
 
+function parseDateOnly(str: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  }
+  return new Date(str);
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -102,7 +110,7 @@ export async function PATCH(
       if (body.title !== undefined) data.title = body.title;
       if (body.description !== undefined) data.description = body.description;
       if (body.destination !== undefined) data.destination = body.destination;
-      if (body.startDate !== undefined) data.startDate = new Date(body.startDate);
+      if (body.startDate !== undefined) data.startDate = parseDateOnly(body.startDate);
       if (body.endDate !== undefined) data.endDate = body.endDate ? new Date(body.endDate) : null;
       if (body.participants !== undefined) data.participants = body.participants;
       if (body.groupId !== undefined) data.groupId = body.groupId || null;
