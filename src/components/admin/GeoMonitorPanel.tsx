@@ -1,8 +1,8 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, useMemo } from 'react';
-import { MapPin, Users, Clock, Download, Layers, Activity } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { MapPin, Users, Clock, Download, Layers, Activity, Loader2 } from 'lucide-react';
 import type { LocationEntry, TileStyle } from './GeoMap';
 import { TILE_LAYERS } from './GeoMap';
 
@@ -44,6 +44,25 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [tileStyle, setTileStyle] = useState<TileStyle>('standard');
+  const [userTrail, setUserTrail] = useState<LocationEntry[] | null>(null);
+  const [trailLoading, setTrailLoading] = useState(false);
+
+  // Fetch the 4-hour trail whenever a user is selected
+  useEffect(() => {
+    if (!selectedUserId) {
+      setUserTrail(null);
+      return;
+    }
+    setTrailLoading(true);
+    const since = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+    fetch(`/api/geolocation?userId=${selectedUserId}&since=${encodeURIComponent(since)}`)
+      .then((r) => r.json())
+      .then((data: LocationEntry[]) => {
+        setUserTrail(data);
+        setTrailLoading(false);
+      })
+      .catch(() => setTrailLoading(false));
+  }, [selectedUserId]);
 
   const latestByUser = useMemo(() => {
     const map = new Map<string, LocationEntry>();
@@ -61,8 +80,9 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
     u.email.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Table shows the raw trail when a user is selected (all points, not bucketed)
   const tableRows = selectedUserId
-    ? locations.filter((l) => l.userId === selectedUserId)
+    ? (userTrail ?? locations.filter((l) => l.userId === selectedUserId))
     : locations;
 
   const trackedToday = useMemo(() => {
@@ -90,15 +110,17 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
     a.click();
   };
 
+  const selectedUserName = allUsers.find((u) => u.id === selectedUserId)?.name;
+
   return (
     <div className="space-y-4">
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { icon: Users, label: 'Usuários rastreados', value: latestByUser.size },
+          { icon: Users,    label: 'Usuários rastreados',   value: latestByUser.size },
           { icon: Activity, label: 'Ativos agora (10 min)', value: activeNow },
-          { icon: Clock, label: 'Ativos nas últimas 24h', value: trackedToday },
-          { icon: MapPin, label: 'Registros totais', value: locations.length },
+          { icon: Clock,    label: 'Ativos nas últimas 24h', value: trackedToday },
+          { icon: MapPin,   label: 'Registros totais',      value: locations.length },
         ].map(({ icon: Icon, label, value }) => (
           <div key={label} className="card p-4 flex items-center gap-3">
             <div className="w-10 h-10 icon-badge-sigma rounded-xl flex items-center justify-center flex-shrink-0">
@@ -150,11 +172,11 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
         </div>
 
         {/* Map */}
-        <div className="card overflow-hidden flex flex-col" style={{ height: 420 }}>
-          {/* Map style selector */}
+        <div className="card overflow-hidden flex flex-col" style={{ height: 460 }}>
+          {/* Toolbar */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
             <Layers className="w-3.5 h-3.5 text-subtle flex-shrink-0" />
-            <div className="flex items-center gap-1 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap flex-1">
               {(Object.entries(TILE_LAYERS) as [TileStyle, typeof TILE_LAYERS[TileStyle]][]).map(([key, layer]) => (
                 <button
                   key={key}
@@ -169,9 +191,22 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
                 </button>
               ))}
             </div>
+            {selectedUserId && (
+              <div className="flex items-center gap-1.5 text-xs text-subtle flex-shrink-0">
+                {trailLoading
+                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Carregando trilha…</>
+                  : <><span className="w-2 h-2 rounded-full bg-sigma-500 inline-block" /> Trilha 4h — intervalos 10 min</>
+                }
+              </div>
+            )}
           </div>
           <div className="flex-1 min-h-0">
-            <GeoMap locations={locations} selectedUserId={selectedUserId} tileStyle={tileStyle} />
+            <GeoMap
+              locations={locations}
+              userTrail={userTrail}
+              selectedUserId={selectedUserId}
+              tileStyle={tileStyle}
+            />
           </div>
         </div>
       </div>
@@ -180,11 +215,15 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
           <span className="text-sm font-semibold text-title">
-            Histórico {selectedUserId ? `— ${allUsers.find((u) => u.id === selectedUserId)?.name}` : '(todos)'}
-            <span className="ml-2 text-xs font-normal text-subtle">{tableRows.length} registros</span>
+            Histórico {selectedUserId ? `— ${selectedUserName}` : '(todos)'}
+            <span className="ml-2 text-xs font-normal text-subtle">
+              {trailLoading ? 'carregando…' : `${tableRows.length} registros`}
+            </span>
           </span>
-          <button onClick={exportCSV}
-            className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
             <Download className="w-3.5 h-3.5" /> Exportar CSV
           </button>
         </div>
@@ -198,7 +237,7 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
               </tr>
             </thead>
             <tbody>
-              {tableRows.slice(0, 100).map((loc) => (
+              {tableRows.slice(0, 200).map((loc) => (
                 <tr key={loc.id} className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
                   <td className="px-4 py-2.5">
                     <span className="font-medium text-body">{loc.user.name}</span>
@@ -212,7 +251,7 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
                   <td className="px-4 py-2.5 text-subtle text-xs max-w-xs truncate">{loc.address || '—'}</td>
                 </tr>
               ))}
-              {tableRows.length === 0 && (
+              {tableRows.length === 0 && !trailLoading && (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-subtle text-sm">Nenhum dado de localização registrado ainda.</td></tr>
               )}
             </tbody>

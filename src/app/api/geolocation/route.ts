@@ -47,12 +47,18 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get('userId');
+  const since = searchParams.get('since');
+
+  const where: Record<string, unknown> = {};
+  if (userId) where.userId = userId;
+  if (since) where.timestamp = { gte: new Date(since) };
 
   const locations = await prisma.userLocation.findMany({
-    where: userId ? { userId } : {},
+    where,
     orderBy: { timestamp: 'desc' },
-    take: 200,
-    include: { user: { select: { name: true, email: true } } },
+    // When fetching a specific user's trail there's no hard cap; cap overview at 300
+    ...(userId ? {} : { take: 300 }),
+    include: { user: { select: { id: true, name: true, email: true } } },
   });
 
   return NextResponse.json(locations);
