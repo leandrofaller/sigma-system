@@ -16,8 +16,11 @@ export default async function MonitoramentoPage() {
   let allUsers: any[] = [];
   let tablesMissing = false;
 
+  let onlineUsers: any[] = [];
+
   try {
-    const [locs, users] = await Promise.all([
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const [locs, users, online] = await Promise.all([
       prisma.userLocation.findMany({
         orderBy: { timestamp: 'desc' },
         take: 500,
@@ -28,9 +31,15 @@ export default async function MonitoramentoPage() {
         select: { id: true, name: true, email: true },
         orderBy: { name: 'asc' },
       }),
+      prisma.user.findMany({
+        where: { isActive: true, lastSeenAt: { gte: fiveMinAgo } },
+        select: { id: true, name: true, email: true, lastSeenAt: true },
+        orderBy: { lastSeenAt: 'desc' },
+      }),
     ]);
     locations = locs;
     allUsers = users;
+    onlineUsers = online;
   } catch (err: any) {
     const msg: string = err?.message ?? '';
     const isTableMissing =
@@ -70,6 +79,10 @@ export default async function MonitoramentoPage() {
         <GeoMonitorPanel
           locations={serialized as any}
           allUsers={allUsers as any}
+          onlineUsers={onlineUsers.map((u) => ({
+            ...u,
+            lastSeenAt: (u.lastSeenAt as Date).toISOString(),
+          })) as any}
         />
       )}
     </div>

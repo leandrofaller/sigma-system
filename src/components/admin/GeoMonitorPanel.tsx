@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useState, useMemo, useEffect } from 'react';
-import { MapPin, Users, Clock, Download, Layers, Activity, Loader2 } from 'lucide-react';
+import { MapPin, Users, Clock, Download, Layers, Activity, Loader2, Wifi } from 'lucide-react';
 import type { LocationEntry, TileStyle } from './GeoMap';
 import { TILE_LAYERS } from './GeoMap';
 
@@ -35,17 +35,27 @@ function statusColor(ts: string | undefined): string {
   return 'bg-red-500';
 }
 
+interface OnlineUser {
+  id: string;
+  name: string;
+  email: string;
+  lastSeenAt: string;
+}
+
 interface Props {
   locations: LocationEntry[];
   allUsers: { id: string; name: string; email: string }[];
+  onlineUsers: OnlineUser[];
 }
 
-export function GeoMonitorPanel({ locations, allUsers }: Props) {
+export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [tileStyle, setTileStyle] = useState<TileStyle>('standard');
   const [userTrail, setUserTrail] = useState<LocationEntry[] | null>(null);
   const [trailLoading, setTrailLoading] = useState(false);
+
+  const onlineIds = useMemo(() => new Set(onlineUsers.map((u) => u.id)), [onlineUsers]);
 
   // Fetch the 4-hour trail whenever a user is selected
   useEffect(() => {
@@ -115,15 +125,15 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
   return (
     <div className="space-y-4">
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { icon: Users,    label: 'Usuários rastreados',   value: latestByUser.size },
-          { icon: Activity, label: 'Ativos agora (10 min)', value: activeNow },
-          { icon: Clock,    label: 'Ativos nas últimas 24h', value: trackedToday },
-          { icon: MapPin,   label: 'Registros totais',      value: locations.length },
-        ].map(({ icon: Icon, label, value }) => (
+          { icon: Wifi,     label: 'Logados agora',         value: onlineUsers.length, highlight: true },
+          { icon: Activity, label: 'Ativos agora (10 min)', value: activeNow,           highlight: false },
+          { icon: Clock,    label: 'Ativos nas últimas 24h', value: trackedToday,       highlight: false },
+          { icon: MapPin,   label: 'Registros totais',      value: locations.length,   highlight: false },
+        ].map(({ icon: Icon, label, value, highlight }) => (
           <div key={label} className="card p-4 flex items-center gap-3">
-            <div className="w-10 h-10 icon-badge-sigma rounded-xl flex items-center justify-center flex-shrink-0">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${highlight ? 'icon-badge-green' : 'icon-badge-sigma'}`}>
               <Icon className="w-5 h-5" />
             </div>
             <div>
@@ -133,6 +143,39 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
           </div>
         ))}
       </div>
+
+      {/* Online users strip */}
+      {onlineUsers.length > 0 && (
+        <div className="card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+            </span>
+            <p className="text-xs font-bold text-subtle uppercase tracking-wider">
+              Usuários logados agora ({onlineUsers.length})
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {onlineUsers.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => setSelectedUserId(u.id === selectedUserId ? null : u.id)}
+                title={`${u.email} — visto ${relTime(u.lastSeenAt)}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                  selectedUserId === u.id
+                    ? 'bg-green-600 border-green-500 text-white shadow-md shadow-green-600/20'
+                    : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
+                {u.name}
+                <span className="text-[10px] opacity-70 font-normal">{relTime(u.lastSeenAt)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <div className="grid lg:grid-cols-[260px_1fr] gap-4">
@@ -158,11 +201,18 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
                 className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${selectedUserId === u.id ? 'bg-sigma-50 dark:bg-sigma-900/20 text-sigma-700 dark:text-sigma-300' : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-body'}`}
               >
                 <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColor(u.lastLoc?.timestamp)}`} />
+                  {onlineIds.has(u.id) ? (
+                    <span className="relative flex h-2 w-2 flex-shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                    </span>
+                  ) : (
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColor(u.lastLoc?.timestamp)}`} />
+                  )}
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{u.name}</p>
                     <p className="text-xs text-subtle truncate">
-                      {u.lastLoc ? relTime(u.lastLoc.timestamp) : 'Sem dados'}
+                      {onlineIds.has(u.id) ? 'online agora' : (u.lastLoc ? relTime(u.lastLoc.timestamp) : 'Sem dados')}
                     </p>
                   </div>
                 </div>
