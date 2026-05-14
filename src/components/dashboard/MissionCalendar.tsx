@@ -88,6 +88,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
   const [loading, setLoading] = useState(false);
 
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [confirmDeleteMission, setConfirmDeleteMission] = useState(false);
 
   // Modais de transição
   const [startInput, setStartInput] = useState<{ open: boolean; km: string }>({ open: false, km: '' });
@@ -261,6 +262,27 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
       endKm: endInput.km,
       endNote: endInput.note || null,
     });
+  };
+
+  const handleDeleteMission = async () => {
+    if (!viewingMission) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/missions/${viewingMission.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setMissions(missions.filter(m => m.id !== viewingMission.id));
+        setViewingMission(null);
+        setConfirmDeleteMission(false);
+        toast.success('Missão excluída permanentemente.');
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'Erro ao excluir missão');
+      }
+    } catch {
+      toast.error('Erro de conexão');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteAll = async () => {
@@ -610,8 +632,32 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                   </div>
                 )}
 
+                {/* CONFIRMAÇÃO DE EXCLUSÃO — apenas SUPER_ADMIN */}
+                {confirmDeleteMission && (
+                  <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-2xl border border-red-200 dark:border-red-900/30 space-y-3">
+                    <p className="text-sm font-bold text-red-700 dark:text-red-300">Excluir esta missão permanentemente?</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      Todos os dados (quadro, cards, checklists e comentários) serão removidos. Esta ação não pode ser desfeita.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleDeleteMission}
+                        disabled={loading}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+                      >
+                        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                        Sim, excluir
+                      </button>
+                      <button onClick={() => setConfirmDeleteMission(false)}
+                        className="bg-gray-200 dark:bg-gray-800 text-body px-4 py-2 rounded-xl text-xs">
+                        Voltar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* BOTÕES DE AÇÃO PRINCIPAIS — escondidos quando algum input está aberto */}
-                {!startInput.open && !endInput.open && !confirmCancel && (
+                {!startInput.open && !endInput.open && !confirmCancel && !confirmDeleteMission && (
                   <div className="flex gap-3 pt-2">
                     {viewingMission.status === 'PLANNED' && (() => {
                       const reachable = isScheduledDateReached(viewingMission.startDate);
@@ -659,6 +705,17 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                         className="px-4 border border-red-200 dark:border-red-900/30 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-colors"
                       >
                         Cancelar
+                      </button>
+                    )}
+
+                    {/* Excluir permanentemente — apenas SUPER_ADMIN, qualquer status */}
+                    {currentUser.role === 'SUPER_ADMIN' && (
+                      <button
+                        onClick={() => setConfirmDeleteMission(true)}
+                        title="Excluir missão permanentemente"
+                        className="px-4 border border-red-300 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-2xl transition-colors flex items-center gap-1.5"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
