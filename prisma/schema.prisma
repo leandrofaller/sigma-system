@@ -66,6 +66,9 @@ model User {
   uploadedFiles    ReceivedRelint[]
   locations        UserLocation[]
   missions         Mission[]
+  boardCardsCreated BoardCard[]         @relation("CreatedCards")
+  boardCardAssignments BoardCardAssignee[]
+  boardComments    BoardComment[]
 
   @@map("users")
 }
@@ -333,8 +336,85 @@ model Mission {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  boardLists  BoardList[]
+
   @@index([userId])
   @@index([groupId])
   @@index([status])
   @@map("missions")
+}
+
+model BoardList {
+  id        String   @id @default(cuid())
+  missionId String
+  mission   Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  name      String
+  position  Float    @default(0)
+  color     String?  @default("#6172f3")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cards BoardCard[]
+
+  @@index([missionId])
+  @@map("board_lists")
+}
+
+model BoardCard {
+  id          String   @id @default(cuid())
+  listId      String
+  list        BoardList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  title       String
+  description String?  @db.Text
+  position    Float    @default(0)
+  dueDate     DateTime?
+  createdById String
+  createdBy   User     @relation("CreatedCards", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignees   BoardCardAssignee[]
+  checklist   BoardChecklistItem[]
+  comments    BoardComment[]
+
+  @@index([listId])
+  @@map("board_cards")
+}
+
+model BoardCardAssignee {
+  cardId    String
+  userId    String
+  card      BoardCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@id([cardId, userId])
+  @@index([userId])
+  @@map("board_card_assignees")
+}
+
+model BoardChecklistItem {
+  id        String   @id @default(cuid())
+  cardId    String
+  card      BoardCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  text      String
+  done      Boolean  @default(false)
+  position  Float    @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([cardId])
+  @@map("board_checklist_items")
+}
+
+model BoardComment {
+  id        String   @id @default(cuid())
+  cardId    String
+  card      BoardCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([cardId, createdAt])
+  @@map("board_comments")
 }
