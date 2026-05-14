@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Plus, MapPin, Clock, CheckCircle2, X, Loader2,
-  Navigation, Zap, Monitor,
+  Navigation, Zap, Monitor, Pencil, AlertTriangle,
   Calendar as CalendarIcon, Gauge, FileBarChart, Flag,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,6 +19,9 @@ interface Mission {
   destination: string;
   startDate: string;
   endDate?: string | null;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  endNote?: string | null;
   status: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   userId: string;
   groupId?: string | null;
@@ -26,6 +29,19 @@ interface Mission {
   participants: string[];
   startKm?: number | null;
   endKm?: number | null;
+}
+
+function todayDateStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function isScheduledDateReached(scheduledISO: string): boolean {
+  const today = new Date();
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const sch = new Date(scheduledISO);
+  const s = new Date(sch.getFullYear(), sch.getMonth(), sch.getDate());
+  return t.getTime() >= s.getTime();
 }
 
 const AVAILABLE_PARTICIPANTS = [
@@ -47,25 +63,29 @@ const STATUS_LABEL: Record<Mission['status'], string> = {
   CANCELLED: 'Cancelada',
 };
 
-function nowLocalInput() {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
-
 export function MobileMissionView({ initialMissions, groups, currentUser }: Props) {
-  const [missions, setMissions] = useState<Mission[]>(initialMissions);
+  // Filtra cancelladas — não devem poluir o dashboard mobile
+  const [missions, setMissions] = useState<Mission[]>(
+    initialMissions.filter(m => m.status !== 'CANCELLED')
+  );
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+
+  // Modais de transição
+  const [startingMission, setStartingMission] = useState<Mission | null>(null);
+  const [startKmValue, setStartKmValue] = useState('');
   const [endingMission, setEndingMission] = useState<Mission | null>(null);
   const [endKmValue, setEndKmValue] = useState('');
+  const [endNoteValue, setEndNoteValue] = useState('');
+  const [confirmCancelMission, setConfirmCancelMission] = useState<Mission | null>(null);
 
   const [form, setForm] = useState({
     title: '',
     destination: '',
-    startDate: nowLocalInput(),
-    startKm: '',
+    startDate: todayDateStr(),  // input type="date"
+    startKm: '',                 // só usado se startNow
     participants: [] as string[],
     description: '',
     endDate: '',
@@ -75,14 +95,31 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
 
   const inProgress = missions.filter(m => m.status === 'IN_PROGRESS');
   const planned = missions.filter(m => m.status === 'PLANNED');
-  const recent = missions.filter(m => m.status === 'COMPLETED' || m.status === 'CANCELLED').slice(0, 8);
+  const recent = missions.filter(m => m.status === 'COMPLETED').slice(0, 8);
 
   const resetForm = () => {
     setForm({
-      title: '', destination: '', startDate: nowLocalInput(), startKm: '',
+      title: '', destination: '', startDate: todayDateStr(), startKm: '',
       participants: [], description: '', endDate: '',
       groupId: currentUser.groupId || '', startNow: false,
     });
+    setEditingId(null);
+  };
+
+  const openEdit = (m: Mission) => {
+    setForm({
+      title: m.title,
+      destination: m.destination,
+      startDate: m.startDate.slice(0, 10),
+      startKm: '',
+      participants: m.participants || [],
+      description: m.description || '',
+      endDate: m.endDate ? m.endDate.slice(0, 16) : '',
+      groupId: m.groupId || currentUser.groupId || '',
+      startNow: false,
+    });
+    setEditingId(m.id);
+    setShowForm(true);
   };
 
   const useMyLocation = () => {
@@ -136,9 +173,41 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
       toast.error('Preencha título e destino');
       return;
     }
+    if (form.startNow && !form.startKm) {
+      toast.error('Informe o KM inicial para iniciar agora');
+      return;
+    }
     setLoading(true);
     try {
-      const payload = {
+      // EDIÇÃO de agendamento existente (PLANNED)
+      if (editingId) {
+        const res = await fetch(`/api/missions/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: form.title,
+            description: form.description || null,
+            destination: form.destination,
+            startDate: form.startDate,
+            endDate: form.endDate || null,
+            groupId: form.groupId || null,
+            participants: form.participants,
+          }),
+        });
+        if (!res.ok) {
+          const e = await res.json();
+          throw new Error(e.error || 'Erro ao atualizar');
+        }
+        const updated = await res.json();
+        setMissions(prev => prev.map(m => m.id === editingId ? { ...m, ...updated } : m));
+        toast.success('Agendamento atualizado!');
+        resetForm();
+        setShowForm(false);
+        return;
+      }
+
+      // CRIAÇÃO de nova missão
+      const payload: any = {
         title: form.title,
         description: form.description || undefined,
         destination: form.destination,
@@ -146,8 +215,11 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
         endDate: form.endDate || undefined,
         groupId: form.groupId || undefined,
         participants: form.participants,
-        startKm: form.startKm || undefined,
       };
+      if (form.startNow) {
+        payload.startNow = true;
+        payload.startKm = form.startKm;
+      }
 
       const res = await fetch('/api/missions', {
         method: 'POST',
@@ -159,26 +231,8 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
         throw new Error(error.error || 'Erro ao registrar viagem');
       }
       const newMission = await res.json();
-
-      // Se "iniciar agora", já marca como IN_PROGRESS
-      if (form.startNow) {
-        const upd = await fetch(`/api/missions/${newMission.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'IN_PROGRESS' }),
-        });
-        if (upd.ok) {
-          const updated = await upd.json();
-          setMissions([{ ...updated, group: newMission.group }, ...missions]);
-          toast.success('Viagem iniciada!');
-        } else {
-          setMissions([newMission, ...missions]);
-          toast.success('Viagem registrada (não foi possível iniciar)');
-        }
-      } else {
-        setMissions([newMission, ...missions]);
-        toast.success('Viagem registrada!');
-      }
+      setMissions([newMission, ...missions]);
+      toast.success(form.startNow ? 'Viagem iniciada!' : 'Viagem registrada!');
 
       resetForm();
       setShowForm(false);
@@ -189,18 +243,57 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
     }
   };
 
-  const startMission = async (id: string) => {
+  const requestStart = (m: Mission) => {
+    if (!isScheduledDateReached(m.startDate)) {
+      toast.error('Esta missão está agendada para data futura — disponível só a partir do dia previsto.');
+      return;
+    }
+    setStartingMission(m);
+    setStartKmValue('');
+  };
+
+  const confirmStart = async () => {
+    if (!startingMission) return;
+    if (!startKmValue) { toast.error('Informe o KM inicial'); return; }
     setLoading(true);
     try {
-      const res = await fetch(`/api/missions/${id}`, {
+      const res = await fetch(`/api/missions/${startingMission.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'IN_PROGRESS' }),
+        body: JSON.stringify({ status: 'IN_PROGRESS', startKm: startKmValue }),
       });
       if (res.ok) {
         const updated = await res.json();
-        setMissions(missions.map(m => m.id === id ? { ...m, ...updated } : m));
+        setMissions(missions.map(m => m.id === startingMission.id ? { ...m, ...updated } : m));
         toast.success('Viagem iniciada');
+        setStartingMission(null);
+        setStartKmValue('');
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Erro ao iniciar');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelMission = async () => {
+    if (!confirmCancelMission) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/missions/${confirmCancelMission.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'CANCELLED' }),
+      });
+      if (res.ok) {
+        // Remove da lista (some do dashboard automaticamente)
+        setMissions(prev => prev.filter(m => m.id !== confirmCancelMission.id));
+        toast.success('Missão cancelada');
+        setConfirmCancelMission(null);
+      } else {
+        const e = await res.json();
+        toast.error(e.error || 'Erro ao cancelar');
       }
     } finally {
       setLoading(false);
@@ -225,6 +318,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
         body: JSON.stringify({
           status: 'COMPLETED',
           endKm: endKmValue,
+          endNote: endNoteValue || null,
           endDate: new Date().toISOString(),
         }),
       });
@@ -234,6 +328,10 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
         toast.success('Viagem finalizada!');
         setEndingMission(null);
         setEndKmValue('');
+        setEndNoteValue('');
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Erro ao finalizar');
       }
     } finally {
       setLoading(false);
@@ -302,18 +400,41 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
           <section>
             <h2 className="text-xs font-bold text-subtle uppercase tracking-wider mb-2 px-1">Planejadas</h2>
             <div className="space-y-2">
-              {planned.slice(0, 5).map(m => (
-                <MissionCard key={m.id} mission={m}
-                  action={
-                    <button
-                      onClick={() => startMission(m.id)}
-                      className="bg-sigma-600 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md"
-                    >
-                      Iniciar
-                    </button>
-                  }
-                />
-              ))}
+              {planned.slice(0, 5).map(m => {
+                const reachable = isScheduledDateReached(m.startDate);
+                return (
+                  <MissionCard key={m.id} mission={m}
+                    action={
+                      <div className="flex flex-col gap-1.5">
+                        <button
+                          onClick={() => requestStart(m)}
+                          disabled={!reachable}
+                          title={!reachable ? 'Disponível a partir do dia agendado' : 'Iniciar viagem'}
+                          className="bg-sigma-600 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-gray-400"
+                        >
+                          {reachable ? 'Iniciar' : 'Aguarde'}
+                        </button>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => openEdit(m)}
+                            title="Editar agendamento"
+                            className="flex-1 bg-gray-100 dark:bg-gray-800 active:scale-95 text-body p-1.5 rounded-lg flex items-center justify-center"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => setConfirmCancelMission(m)}
+                            title="Cancelar agendamento"
+                            className="flex-1 bg-red-50 dark:bg-red-900/20 active:scale-95 text-red-500 p-1.5 rounded-lg flex items-center justify-center"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  />
+                );
+              })}
             </div>
           </section>
         )}
@@ -381,10 +502,10 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                   <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full" />
                 </div>
                 <div className="px-5 pb-3 flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-title">Nova Viagem</h3>
+                  <h3 className="text-lg font-bold text-title">{editingId ? 'Editar Agendamento' : 'Nova Viagem'}</h3>
                   <button
                     type="button"
-                    onClick={() => !loading && setShowForm(false)}
+                    onClick={() => { if (!loading) { setShowForm(false); resetForm(); } }}
                     className="p-2 -m-2 text-subtle"
                     aria-label="Fechar"
                   >
@@ -430,48 +551,60 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                   </button>
                 </div>
 
-                {/* Iniciar agora */}
-                <button
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, startNow: !f.startNow }))}
-                  className={`w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2 transition active:scale-95 ${
-                    form.startNow
-                      ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/30'
-                      : 'border-dashed border-orange-300 dark:border-orange-700 text-orange-600 dark:text-orange-400 bg-orange-50/50 dark:bg-orange-900/10'
-                  }`}
-                >
-                  <Zap className="w-4 h-4" />
-                  {form.startNow ? 'Iniciando agora — toque para desfazer' : 'Iniciar agora (data/hora atual)'}
-                </button>
+                {/* Iniciar agora — só na CRIAÇÃO, não na edição */}
+                {!editingId && (
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, startNow: !f.startNow }))}
+                    className={`w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2 transition active:scale-95 ${
+                      form.startNow
+                        ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/30'
+                        : 'border-dashed border-orange-300 dark:border-orange-700 text-orange-600 dark:text-orange-400 bg-orange-50/50 dark:bg-orange-900/10'
+                    }`}
+                  >
+                    <Zap className="w-4 h-4" />
+                    {form.startNow ? 'Iniciando agora — toque para desfazer' : 'Iniciar agora (registro pós-viagem)'}
+                  </button>
+                )}
 
-                {/* Data/hora — escondida quando "iniciar agora" */}
+                {/* Data agendada — escondida quando "iniciar agora" */}
                 {!form.startNow && (
                   <>
-                    <FieldLabel>Data e Hora de Início</FieldLabel>
+                    <FieldLabel>Data Agendada</FieldLabel>
                     <input
                       required
-                      type="datetime-local"
+                      type="date"
                       value={form.startDate}
                       onChange={e => setForm({ ...form, startDate: e.target.value })}
                       className="w-full input-base px-4 py-3.5 text-base"
                     />
+                    {!editingId && (
+                      <p className="text-[11px] text-subtle italic ml-1 -mt-2">
+                        ℹ️ Hora de partida e KM serão registrados ao iniciar a viagem.
+                      </p>
+                    )}
                   </>
                 )}
 
-                {/* KM Inicial */}
-                <FieldLabel>
-                  <span className="flex items-center gap-1.5">
-                    <Gauge className="w-3.5 h-3.5" /> KM Inicial
-                  </span>
-                </FieldLabel>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={form.startKm}
-                  onChange={e => setForm({ ...form, startKm: e.target.value })}
-                  placeholder="0"
-                  className="w-full input-base px-4 py-3.5 text-base"
-                />
+                {/* KM Inicial — só quando "iniciar agora" */}
+                {form.startNow && (
+                  <>
+                    <FieldLabel>
+                      <span className="flex items-center gap-1.5">
+                        <Gauge className="w-3.5 h-3.5" /> KM Inicial *
+                      </span>
+                    </FieldLabel>
+                    <input
+                      required
+                      type="number"
+                      inputMode="numeric"
+                      value={form.startKm}
+                      onChange={e => setForm({ ...form, startKm: e.target.value })}
+                      placeholder="Quilometragem atual do veículo"
+                      className="w-full input-base px-4 py-3.5 text-base"
+                    />
+                  </>
+                )}
 
                 {/* Participantes */}
                 <FieldLabel>Participantes</FieldLabel>
@@ -536,8 +669,12 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                     disabled={loading}
                     className="w-full bg-sigma-600 active:bg-sigma-700 text-white py-4 rounded-2xl font-bold text-base shadow-lg shadow-sigma-600/30 flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition"
                   >
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                    {form.startNow ? 'Registrar e Iniciar' : 'Registrar Viagem'}
+                    {loading
+                      ? <Loader2 className="w-5 h-5 animate-spin" />
+                      : (editingId ? <Pencil className="w-5 h-5" /> : <Plus className="w-5 h-5" />)}
+                    {editingId
+                      ? 'Salvar Alterações'
+                      : (form.startNow ? 'Registrar e Iniciar' : 'Registrar Viagem')}
                   </button>
                 </div>
               </form>
@@ -581,9 +718,17 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                 placeholder="Ex: 14523"
                 className="w-full input-base px-4 py-4 text-lg font-bold"
               />
+              <FieldLabel>Observação (opcional)</FieldLabel>
+              <textarea
+                rows={2}
+                placeholder="Ex: viagem interrompida por…"
+                value={endNoteValue}
+                onChange={e => setEndNoteValue(e.target.value)}
+                className="w-full input-base px-4 py-3 text-base resize-none"
+              />
               <div className="flex gap-3 pt-1">
                 <button
-                  onClick={() => setEndingMission(null)}
+                  onClick={() => { setEndingMission(null); setEndKmValue(''); setEndNoteValue(''); }}
                   className="flex-1 border border-gray-200 dark:border-gray-700 text-body py-3.5 rounded-2xl font-semibold"
                 >
                   Cancelar
@@ -595,6 +740,111 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                 >
                   {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
                   Concluir
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Bottom Sheet — Iniciar viagem (KM inicial) */}
+      <AnimatePresence>
+        {startingMission && (
+          <div className="fixed inset-0 z-50">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => !loading && setStartingMission(null)}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl p-5 space-y-4"
+              style={{ paddingBottom: 'max(2rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}
+            >
+              <div className="flex justify-center mb-1">
+                <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-title">Iniciar Viagem</h3>
+                <p className="text-sm text-subtle">{startingMission.title} — {startingMission.destination}</p>
+                <p className="text-xs text-subtle mt-1 italic">Hora de partida será registrada automaticamente.</p>
+              </div>
+              <FieldLabel>KM Inicial</FieldLabel>
+              <input
+                autoFocus
+                type="number"
+                inputMode="numeric"
+                value={startKmValue}
+                onChange={e => setStartKmValue(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') confirmStart(); }}
+                placeholder="Ex: 14200"
+                className="w-full input-base px-4 py-4 text-lg font-bold"
+              />
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => { setStartingMission(null); setStartKmValue(''); }}
+                  className="flex-1 border border-gray-200 dark:border-gray-700 text-body py-3.5 rounded-2xl font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmStart}
+                  disabled={loading}
+                  className="flex-1 bg-sigma-600 active:bg-sigma-700 text-white py-3.5 rounded-2xl font-bold shadow-lg shadow-sigma-600/30 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Flag className="w-5 h-5" />}
+                  Iniciar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Bottom Sheet — Confirmar Cancelamento */}
+      <AnimatePresence>
+        {confirmCancelMission && (
+          <div className="fixed inset-0 z-50">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => !loading && setConfirmCancelMission(null)}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl p-5 space-y-4"
+              style={{ paddingBottom: 'max(2rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}
+            >
+              <div className="flex justify-center mb-1">
+                <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full" />
+              </div>
+              <div className="text-center">
+                <div className="w-14 h-14 bg-red-50 dark:bg-red-900/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                  <AlertTriangle className="w-7 h-7 text-red-500" />
+                </div>
+                <h3 className="text-lg font-bold text-title">Cancelar missão?</h3>
+                <p className="text-sm text-subtle mt-1">
+                  <span className="font-semibold text-body">{confirmCancelMission.title}</span>
+                  <br/>
+                  Esta ação não pode ser desfeita. A missão sairá do calendário.
+                </p>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => setConfirmCancelMission(null)}
+                  className="flex-1 border border-gray-200 dark:border-gray-700 text-body py-3.5 rounded-2xl font-semibold"
+                >
+                  Voltar
+                </button>
+                <button
+                  onClick={cancelMission}
+                  disabled={loading}
+                  className="flex-1 bg-red-600 active:bg-red-700 text-white py-3.5 rounded-2xl font-bold shadow-lg shadow-red-600/30 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <X className="w-5 h-5" />}
+                  Sim, cancelar
                 </button>
               </div>
             </motion.div>

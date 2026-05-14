@@ -11,7 +11,7 @@ import {
   ChevronLeft, ChevronRight, Plus, MapPin,
   Clock, CheckCircle2, AlertCircle, X,
   MoreHorizontal, Calendar as CalendarIcon,
-  User as UserIcon, Users, Loader2, FileBarChart
+  User as UserIcon, Users, Loader2, FileBarChart, Pencil
 } from 'lucide-react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,6 +24,9 @@ interface Mission {
   destination: string;
   startDate: string;
   endDate?: string;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  endNote?: string | null;
   status: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   userId: string;
   user: { name: string; avatar?: string };
@@ -32,6 +35,18 @@ interface Mission {
   participants: string[];
   startKm?: number;
   endKm?: number;
+}
+
+function todayLocalDate() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function isScheduledDateReached(scheduledISO: string): boolean {
+  const today = todayLocalDate();
+  const sch = new Date(scheduledISO);
+  const schDay = new Date(sch.getFullYear(), sch.getMonth(), sch.getDate());
+  return today.getTime() >= schDay.getTime();
 }
 
 const AVAILABLE_PARTICIPANTS = [
@@ -51,21 +66,24 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
   const [missions, setMissions] = useState<Mission[]>(initialMissions);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingMission, setEditingMission] = useState<Mission | null>(null);
   const [viewingMission, setViewingMission] = useState<Mission | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showEndKmInput, setShowEndKmInput] = useState(false);
-  const [endKmValue, setEndKmValue] = useState('');
 
-  // Form state
+  // Modais de transição
+  const [startInput, setStartInput] = useState<{ open: boolean; km: string }>({ open: false, km: '' });
+  const [endInput, setEndInput] = useState<{ open: boolean; km: string; note: string }>({ open: false, km: '', note: '' });
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  // Form state — agendamento NÃO pede KM nem hora; só data
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     destination: '',
-    startDate: '',
-    endDate: '',
+    startDate: '',     // AGORA: input type="date" (sem hora)
+    endDate: '',       // previsão de fim (opcional)
     groupId: currentUser.groupId || '',
     participants: [] as string[],
-    startKm: '',
   });
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -81,6 +99,12 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
     return missions.filter(m => isSameDay(new Date(m.startDate), day));
   };
 
+  const resetForm = () => setFormData({
+    title: '', description: '', destination: '',
+    startDate: '', endDate: '', groupId: currentUser.groupId || '',
+    participants: [],
+  });
+
   const handleAddMission = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -94,12 +118,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
         const newMission = await res.json();
         setMissions([...missions, newMission]);
         setShowAddForm(false);
-        setFormData({ 
-          title: '', description: '', destination: '', 
-          startDate: '', endDate: '', groupId: currentUser.groupId || '',
-          participants: [],
-          startKm: ''
-        });
+        resetForm();
         toast.success('Missão agendada com sucesso!');
       } else {
         const error = await res.json();
@@ -112,6 +131,47 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
     }
   };
 
+  const handleEditMission = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMission) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/missions/${editingMission.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setMissions(missions.map(m => m.id === editingMission.id ? { ...m, ...updated } : m));
+        setEditingMission(null);
+        resetForm();
+        toast.success('Agendamento atualizado!');
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'Erro ao atualizar');
+      }
+    } catch {
+      toast.error('Erro de conexão');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEdit = (m: Mission) => {
+    setFormData({
+      title: m.title,
+      description: m.description || '',
+      destination: m.destination,
+      startDate: m.startDate.slice(0, 10), // YYYY-MM-DD
+      endDate: m.endDate ? m.endDate.slice(0, 16) : '',
+      groupId: m.groupId || '',
+      participants: m.participants || [],
+    });
+    setEditingMission(m);
+    setViewingMission(null);
+  };
+
   const updateMissionStatus = async (id: string, status: string, additionalData?: any) => {
     setLoading(true);
     try {
@@ -122,17 +182,50 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
       });
       if (res.ok) {
         const updated = await res.json();
-        setMissions(missions.map(m => m.id === id ? updated : m));
-        setViewingMission(updated);
-        setShowEndKmInput(false);
-        setEndKmValue('');
+        // Cancelado some da listagem (regra: dashboard não polui)
+        if (updated.status === 'CANCELLED') {
+          setMissions(missions.filter(m => m.id !== id));
+          setViewingMission(null);
+        } else {
+          setMissions(missions.map(m => m.id === id ? { ...m, ...updated } : m));
+          setViewingMission({ ...viewingMission, ...updated } as Mission);
+        }
+        setStartInput({ open: false, km: '' });
+        setEndInput({ open: false, km: '', note: '' });
+        setConfirmCancel(false);
         toast.success('Missão atualizada!');
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'Erro ao atualizar');
       }
     } catch (err) {
       toast.error('Erro ao atualizar missão');
     } finally {
       setLoading(false);
     }
+  };
+
+  const submitStart = () => {
+    if (!viewingMission) return;
+    if (!startInput.km) { toast.error('Informe o KM inicial'); return; }
+    if (!isScheduledDateReached(viewingMission.startDate)) {
+      toast.error('Esta missão está agendada para data futura — não é possível iniciar antes.');
+      return;
+    }
+    updateMissionStatus(viewingMission.id, 'IN_PROGRESS', { startKm: startInput.km });
+  };
+
+  const submitEnd = () => {
+    if (!viewingMission) return;
+    if (!endInput.km) { toast.error('Informe o KM final'); return; }
+    if (viewingMission.startKm != null && parseInt(endInput.km) < viewingMission.startKm) {
+      toast.error('KM final não pode ser menor que o inicial');
+      return;
+    }
+    updateMissionStatus(viewingMission.id, 'COMPLETED', {
+      endKm: endInput.km,
+      endNote: endInput.note || null,
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -209,7 +302,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                 onClick={() => {
                   if (dayMissions.length > 0) setSelectedDay(day);
                   else {
-                    setFormData({ ...formData, startDate: format(day, "yyyy-MM-dd'T'HH:mm") });
+                    setFormData({ ...formData, startDate: format(day, "yyyy-MM-dd") });
                     setShowAddForm(true);
                   }
                 }}
@@ -306,18 +399,33 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
 
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 text-sm text-body">
-                    <Clock className="w-4 h-4 text-sigma-500" />
-                    <span>
-                      {format(new Date(viewingMission.startDate), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
-                      {viewingMission.endDate && ` — ${format(new Date(viewingMission.endDate), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}`}
-                    </span>
+                    <CalendarIcon className="w-4 h-4 text-sigma-500" />
+                    <span>Agendado para: <span className="font-medium">
+                      {format(new Date(viewingMission.startDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                    </span></span>
                   </div>
-                  {viewingMission.startKm && (
+                  {viewingMission.startedAt && (
+                    <div className="flex items-center gap-3 text-sm text-body">
+                      <Clock className="w-4 h-4 text-sigma-500" />
+                      <span>Iniciada em: <span className="font-medium">
+                        {format(new Date(viewingMission.startedAt), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                      </span></span>
+                    </div>
+                  )}
+                  {viewingMission.endedAt && (
+                    <div className="flex items-center gap-3 text-sm text-body">
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      <span>Finalizada em: <span className="font-medium">
+                        {format(new Date(viewingMission.endedAt), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                      </span></span>
+                    </div>
+                  )}
+                  {viewingMission.startKm != null && (
                     <div className="flex items-center gap-3 text-sm text-body">
                       <div className="w-4 h-4 text-sigma-500 flex items-center justify-center font-bold text-[10px]">KM</div>
                       <span>KM Inicial: <span className="font-bold">{viewingMission.startKm}</span>
-                        {viewingMission.endKm && <span> — KM Final: <span className="font-bold">{viewingMission.endKm}</span></span>}
-                        {viewingMission.endKm && <span className="ml-2 text-sigma-600">(Total: {viewingMission.endKm - viewingMission.startKm} km)</span>}
+                        {viewingMission.endKm != null && <span> — KM Final: <span className="font-bold">{viewingMission.endKm}</span></span>}
+                        {viewingMission.endKm != null && <span className="ml-2 text-sigma-600">(Total: {viewingMission.endKm - viewingMission.startKm} km)</span>}
                       </span>
                     </div>
                   )}
@@ -326,6 +434,13 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                     <span>Responsável: <span className="font-medium">{viewingMission.user.name}</span></span>
                   </div>
                 </div>
+
+                {viewingMission.endNote && (
+                  <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-900/30 p-3 rounded-2xl">
+                    <p className="text-[10px] font-bold text-orange-700 dark:text-orange-300 uppercase tracking-wider mb-1">Observação na finalização</p>
+                    <p className="text-sm text-body leading-relaxed">{viewingMission.endNote}</p>
+                  </div>
+                )}
 
                 {viewingMission.participants && viewingMission.participants.length > 0 && (
                   <div className="space-y-2">
@@ -347,59 +462,135 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                   </div>
                 )}
 
-                {showEndKmInput ? (
+                {/* INPUT KM INICIAL (modal de iniciar) */}
+                {startInput.open && (
                   <div className="bg-sigma-50 dark:bg-sigma-900/20 p-4 rounded-2xl border border-sigma-100 dark:border-sigma-900/30 space-y-3">
-                    <p className="text-xs font-bold text-sigma-700 dark:text-sigma-300">Informe a Kilometragem Final para concluir:</p>
+                    <p className="text-xs font-bold text-sigma-700 dark:text-sigma-300">
+                      Informe o KM inicial do veículo. Hora de partida será registrada automaticamente.
+                    </p>
                     <div className="flex gap-2">
-                      <input 
-                        type="number"
-                        placeholder="KM Final"
-                        value={endKmValue}
-                        onChange={e => setEndKmValue(e.target.value)}
+                      <input
+                        type="number" inputMode="numeric"
+                        placeholder="KM Inicial" autoFocus
+                        value={startInput.km}
+                        onChange={e => setStartInput({ ...startInput, km: e.target.value })}
+                        onKeyDown={e => { if (e.key === 'Enter') submitStart(); }}
                         className="flex-1 input-base px-4 py-2"
-                        autoFocus
                       />
-                      <button 
-                        onClick={() => {
-                          if (!endKmValue) return toast.error('Informe a kilometragem final');
-                          if (viewingMission.startKm && parseInt(endKmValue) < viewingMission.startKm) {
-                            return toast.error('KM final não pode ser menor que o inicial');
-                          }
-                          updateMissionStatus(viewingMission.id, 'COMPLETED', { endKm: endKmValue });
-                        }}
-                        className="bg-sigma-600 text-white px-4 py-2 rounded-xl font-bold text-xs"
-                      >
-                        Confirmar
+                      <button onClick={submitStart} disabled={loading}
+                        className="bg-sigma-600 text-white px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50">
+                        Iniciar
                       </button>
-                      <button 
-                        onClick={() => setShowEndKmInput(false)}
-                        className="bg-gray-200 dark:bg-gray-800 text-body px-3 py-2 rounded-xl text-xs"
-                      >
-                        X
+                      <button onClick={() => setStartInput({ open: false, km: '' })}
+                        className="bg-gray-200 dark:bg-gray-800 text-body px-3 py-2 rounded-xl text-xs">
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
-                ) : (
-                  <div className="flex gap-3 pt-2">
-                    {viewingMission.status === 'PLANNED' && (
-                      <button 
-                        onClick={() => updateMissionStatus(viewingMission.id, 'IN_PROGRESS')}
-                        className="flex-1 bg-sigma-600 hover:bg-sigma-700 text-white py-3 rounded-2xl font-bold shadow-lg shadow-sigma-600/20 transition-all active:scale-95"
-                      >
-                        Iniciar Viagem
+                )}
+
+                {/* INPUT KM FINAL + OBSERVAÇÃO (modal de finalizar) */}
+                {endInput.open && (
+                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-2xl border border-green-200 dark:border-green-900/30 space-y-3">
+                    <p className="text-xs font-bold text-green-700 dark:text-green-300">
+                      Finalizar viagem — informe o KM final. Hora de chegada será registrada automaticamente.
+                    </p>
+                    <input
+                      type="number" inputMode="numeric"
+                      placeholder="KM Final" autoFocus
+                      value={endInput.km}
+                      onChange={e => setEndInput({ ...endInput, km: e.target.value })}
+                      className="w-full input-base px-4 py-2"
+                    />
+                    <textarea
+                      rows={2}
+                      placeholder="Observação (opcional) — ex: viagem interrompida por…"
+                      value={endInput.note}
+                      onChange={e => setEndInput({ ...endInput, note: e.target.value })}
+                      className="w-full input-base px-4 py-2 resize-none text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={submitEnd} disabled={loading}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50">
+                        Confirmar Finalização
                       </button>
-                    )}
+                      <button onClick={() => setEndInput({ open: false, km: '', note: '' })}
+                        className="bg-gray-200 dark:bg-gray-800 text-body px-3 py-2 rounded-xl text-xs">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* CONFIRMAÇÃO DE CANCELAMENTO */}
+                {confirmCancel && (
+                  <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-2xl border border-red-200 dark:border-red-900/30 space-y-3">
+                    <p className="text-sm font-bold text-red-700 dark:text-red-300">Cancelar esta missão?</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      A missão sairá do calendário (consultável apenas no Relatório). Esta ação não pode ser desfeita.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateMissionStatus(viewingMission.id, 'CANCELLED')}
+                        disabled={loading}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50"
+                      >
+                        Sim, cancelar missão
+                      </button>
+                      <button onClick={() => setConfirmCancel(false)}
+                        className="bg-gray-200 dark:bg-gray-800 text-body px-4 py-2 rounded-xl text-xs">
+                        Voltar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* BOTÕES DE AÇÃO PRINCIPAIS — escondidos quando algum input está aberto */}
+                {!startInput.open && !endInput.open && !confirmCancel && (
+                  <div className="flex gap-3 pt-2">
+                    {viewingMission.status === 'PLANNED' && (() => {
+                      const reachable = isScheduledDateReached(viewingMission.startDate);
+                      return (
+                        <>
+                          <button
+                            onClick={() => {
+                              if (!reachable) {
+                                toast.error('Esta missão está agendada para data futura.');
+                                return;
+                              }
+                              setStartInput({ open: true, km: '' });
+                            }}
+                            disabled={!reachable}
+                            title={!reachable ? 'Disponível a partir do dia agendado' : 'Iniciar viagem'}
+                            className="flex-1 bg-sigma-600 hover:bg-sigma-700 text-white py-3 rounded-2xl font-bold shadow-lg shadow-sigma-600/20 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {reachable ? 'Iniciar Viagem' : 'Aguarde dia agendado'}
+                          </button>
+                          <button
+                            onClick={() => openEdit(viewingMission)}
+                            className="px-4 border border-gray-200 dark:border-gray-700 text-body hover:bg-gray-50 dark:hover:bg-gray-800 rounded-2xl transition-colors flex items-center gap-2"
+                            title="Editar agendamento"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        </>
+                      );
+                    })()}
+
                     {viewingMission.status === 'IN_PROGRESS' && (
-                      <button 
-                        onClick={() => setShowEndKmInput(true)}
+                      <button
+                        onClick={() => setEndInput({ open: true, km: '', note: '' })}
                         className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold shadow-lg shadow-green-600/20 transition-all active:scale-95"
                       >
                         Finalizar na Chegada
                       </button>
                     )}
-                    {(currentUser.role === 'SUPER_ADMIN' || viewingMission.userId === currentUser.id) && viewingMission.status !== 'COMPLETED' && (
-                      <button 
-                        onClick={() => updateMissionStatus(viewingMission.id, 'CANCELLED')}
+
+                    {/* Cancelar — SOMENTE missões PLANNED */}
+                    {viewingMission.status === 'PLANNED' &&
+                     (currentUser.role === 'SUPER_ADMIN' || viewingMission.userId === currentUser.id) && (
+                      <button
+                        onClick={() => setConfirmCancel(true)}
                         className="px-4 border border-red-200 dark:border-red-900/30 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-colors"
                       >
                         Cancelar
@@ -413,16 +604,16 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
         )}
       </AnimatePresence>
 
-      {/* Add Mission Modal */}
+      {/* Add / Edit Mission Modal */}
       <AnimatePresence>
-        {showAddForm && (
+        {(showAddForm || editingMission) && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowAddForm(false)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
+              onClick={() => { setShowAddForm(false); setEditingMission(null); }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -430,14 +621,16 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
             >
               <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-title flex items-center gap-2">
-                  <CalendarIcon className="w-5 h-5 text-sigma-600" /> Agendar Nova Missão
+                  {editingMission
+                    ? <><Pencil className="w-5 h-5 text-sigma-600" /> Editar Agendamento</>
+                    : <><CalendarIcon className="w-5 h-5 text-sigma-600" /> Agendar Nova Missão</>}
                 </h3>
-                <button onClick={() => setShowAddForm(false)} className="text-subtle hover:text-body transition-colors">
+                <button onClick={() => { setShowAddForm(false); setEditingMission(null); }} className="text-subtle hover:text-body transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <form onSubmit={handleAddMission} className="p-6 space-y-4">
+              <form onSubmit={editingMission ? handleEditMission : handleAddMission} className="p-6 space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">Título da Missão</label>
                   <input 
@@ -475,35 +668,28 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">Início</label>
-                    <input 
+                    <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">Data Agendada</label>
+                    <input
                       required
-                      type="datetime-local"
+                      type="date"
                       value={formData.startDate}
                       onChange={e => setFormData({ ...formData, startDate: e.target.value })}
                       className="w-full input-base px-4 py-3"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">Previsão Fim</label>
-                    <input 
+                    <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">Previsão de Fim (opcional)</label>
+                    <input
                       type="datetime-local"
                       value={formData.endDate}
                       onChange={e => setFormData({ ...formData, endDate: e.target.value })}
                       className="w-full input-base px-4 py-3"
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">KM Inicial</label>
-                    <input 
-                      type="number"
-                      value={formData.startKm}
-                      onChange={e => setFormData({ ...formData, startKm: e.target.value })}
-                      placeholder="0"
-                      className="w-full input-base px-4 py-3"
-                    />
-                  </div>
                 </div>
+                <p className="text-[11px] text-subtle italic ml-1">
+                  ℹ️ Hora de partida e KM inicial serão registrados quando a viagem for iniciada.
+                </p>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">Participantes</label>
@@ -543,20 +729,20 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                 </div>
 
                 <div className="flex gap-3 pt-4">
-                  <button 
-                    type="button" 
-                    onClick={() => setShowAddForm(false)}
+                  <button
+                    type="button"
+                    onClick={() => { setShowAddForm(false); setEditingMission(null); }}
                     className="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-body font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                   >
                     Cancelar
                   </button>
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     disabled={loading}
                     className="flex-1 bg-sigma-600 hover:bg-sigma-700 text-white px-4 py-3 rounded-2xl font-bold shadow-lg shadow-sigma-600/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    Agendar Missão
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingMission ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />)}
+                    {editingMission ? 'Salvar Alterações' : 'Agendar Missão'}
                   </button>
                 </div>
               </form>

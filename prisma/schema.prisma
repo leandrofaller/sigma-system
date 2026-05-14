@@ -323,8 +323,11 @@ model Mission {
   title       String
   description String?       @db.Text
   destination String
-  startDate   DateTime
-  endDate     DateTime?
+  startDate   DateTime      // Data AGENDADA (planejada)
+  endDate     DateTime?     // Previsão de fim (opcional, definida no agendamento)
+  startedAt   DateTime?     // Hora REAL de início (preenchida quando o usuário inicia)
+  endedAt     DateTime?     // Hora REAL de finalização
+  endNote     String?       @db.Text  // Observação opcional na finalização (ex: interrompida por X)
   status      MissionStatus @default(PLANNED)
   participants String[]      @default([])
   startKm     Int?

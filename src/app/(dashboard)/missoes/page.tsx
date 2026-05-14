@@ -3,8 +3,9 @@ import { prisma } from '@/lib/db';
 import { MissionCalendar } from '@/components/dashboard/MissionCalendar';
 
 async function getMissions() {
+  // Esconde missões canceladas do calendário (consultar via Relatório se necessário)
   return prisma.mission.findMany({
-    where: {},
+    where: { status: { not: 'CANCELLED' } },
     include: {
       user: { select: { name: true, avatar: true } },
       group: { select: { name: true, color: true } },

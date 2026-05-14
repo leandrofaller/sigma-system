@@ -7,12 +7,11 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const user = session.user as any;
-  const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+  const includeCancelled = req.nextUrl.searchParams.get('includeCancelled') === '1';
 
   try {
     const missions = await prisma.mission.findMany({
-      where: {}, // Ver todas as missões
+      where: includeCancelled ? {} : { status: { not: 'CANCELLED' } },
       include: {
         user: { select: { name: true, avatar: true } },
         group: { select: { name: true, color: true } },
@@ -33,12 +32,22 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { title, description, destination, startDate, endDate, groupId, participants, startKm } = body;
+    const {
+      title, description, destination, startDate, endDate, groupId, participants,
+      // Caso "iniciar agora" — cria já em IN_PROGRESS com KM e hora real
+      startKm, startNow,
+    } = body;
 
     if (!title || !destination || !startDate) {
       return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 });
     }
 
+    // Quando "iniciar agora", startKm é obrigatório
+    if (startNow && (startKm === undefined || startKm === null || startKm === '')) {
+      return NextResponse.json({ error: 'KM inicial é obrigatório para iniciar agora' }, { status: 400 });
+    }
+
+    const now = new Date();
     const mission = await prisma.mission.create({
       data: {
         title,
@@ -46,9 +55,10 @@ export async function POST(req: NextRequest) {
         destination,
         startDate: new Date(startDate),
         endDate: endDate ? new Date(endDate) : null,
-        status: 'PLANNED',
+        status: startNow ? 'IN_PROGRESS' : 'PLANNED',
+        startedAt: startNow ? now : null,
+        startKm: startNow && startKm ? parseInt(startKm) : null,
         participants: participants || [],
-        startKm: startKm ? parseInt(startKm) : null,
         userId: user.id,
         groupId: groupId || user.groupId,
       },
