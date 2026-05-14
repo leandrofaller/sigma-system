@@ -11,7 +11,7 @@ import {
   ChevronLeft, ChevronRight, Plus, MapPin,
   Clock, CheckCircle2, AlertCircle, X,
   MoreHorizontal, Calendar as CalendarIcon,
-  User as UserIcon, Users, Loader2, FileBarChart, Pencil
+  User as UserIcon, Users, Loader2, FileBarChart, Pencil, Trash2
 } from 'lucide-react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -69,6 +69,8 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
   const [editingMission, setEditingMission] = useState<Mission | null>(null);
   const [viewingMission, setViewingMission] = useState<Mission | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   // Modais de transição
   const [startInput, setStartInput] = useState<{ open: boolean; km: string }>({ open: false, km: '' });
@@ -228,6 +230,28 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
     });
   };
 
+  const handleDeleteAll = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/missions', { method: 'DELETE' });
+      if (res.ok) {
+        const { deleted } = await res.json();
+        setMissions([]);
+        setSelectedDay(null);
+        setViewingMission(null);
+        setConfirmDeleteAll(false);
+        toast.success(`${deleted} missão(ões) removida(s) do calendário.`);
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'Erro ao apagar missões');
+      }
+    } catch {
+      toast.error('Erro de conexão');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'PLANNED': return <span className="badge-blue">Planejada</span>;
@@ -269,6 +293,14 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
           >
             <FileBarChart className="w-4 h-4" /> Relatório
           </Link>
+          {currentUser.role === 'SUPER_ADMIN' && (
+            <button
+              onClick={() => setConfirmDeleteAll(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 border border-red-200 dark:border-red-800 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" /> Limpar Calendário
+            </button>
+          )}
           <button
             onClick={() => setShowAddForm(true)}
             className="flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-lg shadow-sigma-600/20 transition-all active:scale-95"
@@ -746,6 +778,51 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: confirmar exclusão total — apenas SUPER_ADMIN */}
+      <AnimatePresence>
+        {confirmDeleteAll && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl p-8 max-w-md w-full border border-red-200 dark:border-red-800"
+            >
+              <div className="flex flex-col items-center text-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <Trash2 className="w-8 h-8 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-title">Limpar Calendário de Missões</h3>
+                  <p className="text-body mt-2 text-sm">
+                    Todas as missões e dados associados (quadros, cards, checklists, comentários) serão
+                    <span className="font-bold text-red-600"> permanentemente deletados</span>.
+                    Esta ação não pode ser desfeita.
+                  </p>
+                </div>
+                <div className="flex gap-3 w-full pt-2">
+                  <button
+                    onClick={() => setConfirmDeleteAll(false)}
+                    disabled={loading}
+                    className="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-body font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleDeleteAll}
+                    disabled={loading}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-2xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    Apagar Tudo
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

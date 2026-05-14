@@ -24,6 +24,32 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+  const user = session.user as any;
+  if (user.role !== 'SUPER_ADMIN') {
+    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+  }
+
+  try {
+    const { count } = await prisma.mission.deleteMany({});
+
+    await createAuditLog({
+      userId: user.id,
+      action: AUDIT_ACTIONS.DELETE_ALL_MISSIONS,
+      entity: 'Mission',
+      details: { deletedCount: count },
+      request: req,
+    });
+
+    return NextResponse.json({ deleted: count });
+  } catch (err) {
+    return NextResponse.json({ error: 'Erro ao apagar missões' }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
