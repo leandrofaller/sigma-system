@@ -682,9 +682,9 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden relative z-10"
+              className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg shadow-2xl relative z-10 flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+              <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center flex-shrink-0">
                 <h3 className="text-lg font-bold text-title flex items-center gap-2">
                   {editingMission
                     ? <><Pencil className="w-5 h-5 text-sigma-600" /> Editar Agendamento</>
@@ -695,7 +695,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                 </button>
               </div>
 
-              <form onSubmit={editingMission ? handleEditMission : handleAddMission} className="p-6 space-y-4">
+              <form onSubmit={editingMission ? handleEditMission : handleAddMission} className="p-6 space-y-4 overflow-y-auto flex-1">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-subtle uppercase tracking-wider ml-1">Título da Missão</label>
                   <input 
