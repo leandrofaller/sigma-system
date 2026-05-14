@@ -132,7 +132,7 @@ export function Sidebar({ user, logoSize = 36 }: SidebarProps) {
                   <Smartphone className="w-3.5 h-3.5" />
                 </Link>
               </div>
-              <p className="text-gray-400 text-xs leading-tight truncate">Sistema Integrado da Agência de Inteligência Penal</p>
+              <p className="text-gray-400 text-xs leading-tight">Sistema Integrado da Agência de Inteligência Penal</p>
             </motion.div>
           )}
         </AnimatePresence>
