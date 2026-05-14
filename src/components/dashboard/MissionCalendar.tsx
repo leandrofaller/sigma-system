@@ -52,7 +52,7 @@ function isScheduledDateReached(scheduledISO: string): boolean {
 const AVAILABLE_PARTICIPANTS = [
   'GEAN', 'JAQUELINE', 'JEFFERSON', 'JORDANIO', 
   'SIQUEIRA', 'FALLER', 'RAFAEL', 'SIDNEI', 
-  'STAUSTON', 'VALTEIR'
+  'STAUNSTON', 'VALTEIR'
 ];
 
 interface Props {
