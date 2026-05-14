@@ -21,7 +21,9 @@
       "Bash(rtk grep *)",
       "Bash(rtk prisma *)",
       "Bash(rtk npx *)",
-      "Bash(rtk find *)"
+      "Bash(rtk find *)",
+      "Bash(rtk git *)",
+      "Bash(set \"DATABASE_URL=postgresql://user:pass@localhost:5432/db\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

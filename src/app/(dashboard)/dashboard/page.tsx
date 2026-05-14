@@ -6,12 +6,14 @@ import { RecentRelints } from '@/components/dashboard/RecentRelints';
 import { RelintChart } from '@/components/dashboard/RelintChart';
 import { RecentMessages } from '@/components/dashboard/RecentMessages';
 import { OngoingMissions } from '@/components/dashboard/OngoingMissions';
+import { OnlineUsersPanel } from '@/components/dashboard/OnlineUsersPanel';
 
 async function getDashboardData(userId: string, role: string, groupId?: string) {
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
   const groupFilter = isAdmin ? {} : { groupId: groupId ?? 'none' };
+  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
 
-  const [totalRelints, publishedRelints, draftRelints, totalUsers, recentRelints, receivedRelints, totalDebriefings, ongoingMissions] =
+  const [totalRelints, publishedRelints, draftRelints, totalUsers, recentRelints, receivedRelints, totalDebriefings, ongoingMissions, onlineUsers] =
     await Promise.all([
       prisma.relint.count({ where: groupFilter }),
       prisma.relint.count({ where: { ...groupFilter, status: 'PUBLISHED' } }),
@@ -30,6 +32,13 @@ async function getDashboardData(userId: string, role: string, groupId?: string) 
         include: { group: true, user: true },
         orderBy: { startDate: 'desc' },
       }),
+      isAdmin
+        ? prisma.user.findMany({
+            where: { isActive: true, lastSeenAt: { gte: fiveMinAgo } },
+            select: { id: true, name: true, email: true, lastSeenAt: true },
+            orderBy: { lastSeenAt: 'desc' },
+          })
+        : [],
     ]);
 
   const relintsPerMonth = await prisma.$queryRaw<{ month: string; count: bigint }[]>`
@@ -49,6 +58,7 @@ async function getDashboardData(userId: string, role: string, groupId?: string) 
     totalDebriefings,
     ongoingMissions,
     recentRelints,
+    onlineUsers,
     relintsPerMonth: relintsPerMonth.map((r) => ({
       month: r.month,
       count: Number(r.count),
@@ -91,8 +101,16 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 flex flex-col gap-6">
           <OngoingMissions missions={data.ongoingMissions as any} />
+          {(user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') && (
+            <OnlineUsersPanel
+              users={data.onlineUsers.map((u) => ({
+                ...u,
+                lastSeenAt: (u.lastSeenAt as Date).toISOString(),
+              }))}
+            />
+          )}
         </div>
         <div className="lg:col-span-2">
           <RecentRelints relints={data.recentRelints} role={user.role} />

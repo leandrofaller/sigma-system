@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { QueryProvider } from '@/components/providers/QueryProvider';
+import { HeartbeatProvider } from '@/components/providers/HeartbeatProvider';
 import { Toaster } from '@/components/ui/Toaster';
 import { prisma } from '@/lib/db';
 
@@ -28,6 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </main>
         </div>
       </div>
+      <HeartbeatProvider />
       <Toaster />
     </QueryProvider>
   );

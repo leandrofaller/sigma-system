@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useState, useMemo } from 'react';
-import { MapPin, Users, Clock, Download, Layers } from 'lucide-react';
+import { MapPin, Users, Clock, Download, Layers, Activity } from 'lucide-react';
 import type { LocationEntry, TileStyle } from './GeoMap';
 import { TILE_LAYERS } from './GeoMap';
 
@@ -70,6 +70,11 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
     return new Set(locations.filter((l) => new Date(l.timestamp).getTime() > since).map((l) => l.userId)).size;
   }, [locations]);
 
+  const activeNow = useMemo(() => {
+    const since = Date.now() - 10 * 60 * 1000;
+    return new Set(locations.filter((l) => new Date(l.timestamp).getTime() > since).map((l) => l.userId)).size;
+  }, [locations]);
+
   const exportCSV = () => {
     const rows = [['Usuário', 'Email', 'Data/Hora', 'Latitude', 'Longitude', 'Acurácia (m)', 'Endereço']];
     tableRows.forEach((l) => rows.push([
@@ -88,9 +93,10 @@ export function GeoMonitorPanel({ locations, allUsers }: Props) {
   return (
     <div className="space-y-4">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         {[
           { icon: Users, label: 'Usuários rastreados', value: latestByUser.size },
+          { icon: Activity, label: 'Ativos agora (10 min)', value: activeNow },
           { icon: Clock, label: 'Ativos nas últimas 24h', value: trackedToday },
           { icon: MapPin, label: 'Registros totais', value: locations.length },
         ].map(({ icon: Icon, label, value }) => (
