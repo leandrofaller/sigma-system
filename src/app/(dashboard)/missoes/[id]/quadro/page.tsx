@@ -6,12 +6,13 @@ import { ArrowLeft } from 'lucide-react';
 import { canAccessMissionBoard } from '@/lib/board-auth';
 import { MissionBoard } from '@/components/dashboard/board/MissionBoard';
 
-export default async function MissionBoardPage({ params }: { params: { id: string } }) {
+export default async function MissionBoardPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) redirect('/login');
   const user = session.user as any;
+  const { id } = await params;
 
-  const access = await canAccessMissionBoard(params.id, user);
+  const access = await canAccessMissionBoard(id, user);
   if (!access.ok) {
     if (access.status === 404) notFound();
     redirect('/acompanhamento');
@@ -39,7 +40,7 @@ export default async function MissionBoardPage({ params }: { params: { id: strin
 
       <div className="flex-1 min-h-0">
         <MissionBoard
-          missionId={params.id}
+          missionId={id}
           missionTitle={access.mission.title}
           currentUser={{ id: user.id, name: user.name }}
           allUsers={allUsers}

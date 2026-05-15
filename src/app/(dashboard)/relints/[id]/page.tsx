@@ -19,12 +19,13 @@ async function getRelint(id: string, userId: string, role: string, groupId?: str
   return relint;
 }
 
-export default async function RelintViewPage({ params }: { params: { id: string } }) {
+export default async function RelintViewPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) redirect('/login');
 
   const user = session.user as any;
-  const relint = await getRelint(params.id, user.id, user.role, user.groupId);
+  const { id } = await params;
+  const relint = await getRelint(id, user.id, user.role, user.groupId);
 
   if (!relint) notFound();
 

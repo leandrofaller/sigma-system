@@ -3,12 +3,12 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit';
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const debriefing = await prisma.debriefing.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     include: { author: true, group: true },
   });
 
@@ -23,14 +23,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   return NextResponse.json(debriefing);
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const body = await req.json();
   const user = session.user as any;
 
-  const existing = await prisma.debriefing.findUnique({ where: { id: params.id } });
+  const existing = await prisma.debriefing.findUnique({ where: { id: (await params).id } });
   if (!existing) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
 
   const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
@@ -39,7 +39,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 
   const debriefing = await prisma.debriefing.update({
-    where: { id: params.id },
+    where: { id: (await params).id },
     data: {
       date: body.date ? new Date(body.date) : undefined,
       missionDate: body.missionDate ? new Date(body.missionDate) : null,
@@ -70,14 +70,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   return NextResponse.json(debriefing);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const user = session.user as any;
 
   const debriefing = await prisma.debriefing.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     select: { authorId: true, status: true },
   });
 
@@ -90,10 +90,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const isAuthor = debriefing.authorId === user.id;
 
   if (isSuperAdmin) {
-    await prisma.debriefing.delete({ where: { id: params.id } });
+    await prisma.debriefing.delete({ where: { id: (await params).id } });
   } else if (isAuthor) {
     await prisma.debriefing.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: { status: 'DELETION_REQUESTED' as any },
     });
 
@@ -101,14 +101,14 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       userId: user.id,
       action: AUDIT_ACTIONS.DELETE_DEBRIEFING,
       entity: 'Debriefing',
-      entityId: params.id,
+      entityId: (await params).id,
       details: { info: 'Solicitação de exclusão enviada para revisão' },
       request: req,
     });
 
     return NextResponse.json({ success: true, message: 'Exclusão solicitada para revisão do administrador' });
   } else if (isAdmin && debriefing.status === 'DELETION_REQUESTED') {
-    await prisma.debriefing.delete({ where: { id: params.id } });
+    await prisma.debriefing.delete({ where: { id: (await params).id } });
   } else {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
@@ -117,7 +117,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     userId: user.id,
     action: AUDIT_ACTIONS.DELETE_DEBRIEFING,
     entity: 'Debriefing',
-    entityId: params.id,
+    entityId: (await params).id,
     request: req,
   });
 

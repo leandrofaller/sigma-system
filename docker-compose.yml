@@ -46,7 +46,7 @@ services:
     networks:
       - sigma_network
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
   redis:
     image: redis:7-alpine

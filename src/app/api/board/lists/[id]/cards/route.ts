@@ -4,12 +4,12 @@ import { prisma } from '@/lib/db';
 import { canAccessMissionBoard, missionIdFromList } from '@/lib/board-auth';
 import { publish } from '@/lib/board-events';
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   const user = session.user as any;
 
-  const missionId = await missionIdFromList(params.id);
+  const missionId = await missionIdFromList((await params).id);
   if (!missionId) return NextResponse.json({ error: 'Lista não encontrada' }, { status: 404 });
   const access = await canAccessMissionBoard(missionId, user);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
@@ -18,14 +18,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!body.title?.trim()) return NextResponse.json({ error: 'Título obrigatório' }, { status: 400 });
 
   const last = await prisma.boardCard.findFirst({
-    where: { listId: params.id },
+    where: { listId: (await params).id },
     orderBy: { position: 'desc' },
     select: { position: true },
   });
 
   const card = await prisma.boardCard.create({
     data: {
-      listId: params.id,
+      listId: (await params).id,
       title: body.title.trim(),
       description: body.description || null,
       position: (last?.position ?? -1) + 1,

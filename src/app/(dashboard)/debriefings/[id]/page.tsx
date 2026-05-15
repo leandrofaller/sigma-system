@@ -18,12 +18,13 @@ async function getDebriefing(id: string, role: string, groupId?: string) {
   return debriefing;
 }
 
-export default async function DebriefingViewPage({ params }: { params: { id: string } }) {
+export default async function DebriefingViewPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) redirect('/login');
 
   const user = session.user as any;
-  const debriefing = await getDebriefing(params.id, user.role, user.groupId);
+  const { id } = await params;
+  const debriefing = await getDebriefing(id, user.role, user.groupId);
 
   if (!debriefing) notFound();
 

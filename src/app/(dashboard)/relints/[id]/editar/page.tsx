@@ -18,12 +18,13 @@ async function getData(id: string, userId: string, role: string, groupId?: strin
   return { relint, templates, groups };
 }
 
-export default async function EditarRelintPage({ params }: { params: { id: string } }) {
+export default async function EditarRelintPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) redirect('/login');
 
   const user = session.user as any;
-  const { relint, templates, groups } = await getData(params.id, user.id, user.role, user.groupId);
+  const { id } = await params;
+  const { relint, templates, groups } = await getData(id, user.id, user.role, user.groupId);
 
   if (!relint) notFound();
 

@@ -15,11 +15,11 @@ function isSuperAdmin(session: any) {
   return (session?.user as any)?.role === 'SUPER_ADMIN';
 }
 
-export async function GET(_: Request, { params }: { params: { filename: string } }) {
+export async function GET(_: Request, { params }: { params: Promise<{ filename: string }> }) {
   const session = await auth();
   if (!isSuperAdmin(session)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const safe = basename(params.filename);
+  const safe = basename((await params).filename);
   const filepath = join(BACKUP_DIR, safe);
   if (!existsSync(filepath)) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
 
@@ -34,11 +34,11 @@ export async function GET(_: Request, { params }: { params: { filename: string }
 }
 
 // Upload existing backup to cloud
-export async function PUT(_: Request, { params }: { params: { filename: string } }) {
+export async function PUT(_: Request, { params }: { params: Promise<{ filename: string }> }) {
   const session = await auth();
   if (!isSuperAdmin(session)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const safe = basename(params.filename);
+  const safe = basename((await params).filename);
   const filepath = join(BACKUP_DIR, safe);
   if (!existsSync(filepath)) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
 
@@ -56,11 +56,11 @@ export async function PUT(_: Request, { params }: { params: { filename: string }
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: { filename: string } }) {
+export async function DELETE(_: Request, { params }: { params: Promise<{ filename: string }> }) {
   const session = await auth();
   if (!isSuperAdmin(session)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const safe = basename(params.filename);
+  const safe = basename((await params).filename);
   const filepath = join(BACKUP_DIR, safe);
   if (!existsSync(filepath)) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
 

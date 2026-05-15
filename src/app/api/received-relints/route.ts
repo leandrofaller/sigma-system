@@ -7,6 +7,21 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
+import { assertUploadAllowed } from '@/lib/security';
+
+const RECEIVED_RELINT_EXTENSIONS = [
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'txt',
+  'zip',
+] as const;
 
 function uploadsBase() {
   return process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads');
@@ -53,6 +68,9 @@ export async function POST(req: NextRequest) {
     if (!file || !title) {
       return NextResponse.json({ error: 'Dados obrigatórios faltando' }, { status: 400 });
     }
+
+    const uploadError = assertUploadAllowed(file, { allowedExtensions: RECEIVED_RELINT_EXTENSIONS });
+    if (uploadError) return NextResponse.json({ error: uploadError }, { status: 400 });
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const ext = path.extname(file.name) || '.bin';

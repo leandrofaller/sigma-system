@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
@@ -20,13 +20,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const folder = await prisma.receivedRelintFolder.update({
-    where: { id: params.id },
+    where: { id: (await params).id },
     data: updateData,
   });
   return NextResponse.json(folder);
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
@@ -37,9 +37,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   // Unassign files before deleting the folder
   await prisma.receivedRelint.updateMany({
-    where: { folderId: params.id },
+    where: { folderId: (await params).id },
     data: { folderId: null },
   });
-  await prisma.receivedRelintFolder.delete({ where: { id: params.id } });
+  await prisma.receivedRelintFolder.delete({ where: { id: (await params).id } });
   return NextResponse.json({ success: true });
 }

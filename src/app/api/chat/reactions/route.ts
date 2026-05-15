@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { canAccessChatMessage } from '@/lib/chat-auth';
 
 export async function PATCH(req: NextRequest) {
   const session = await auth();
@@ -11,6 +12,10 @@ export async function PATCH(req: NextRequest) {
 
   if (!messageId || !emoji) {
     return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 });
+  }
+
+  if (!(await canAccessChatMessage(messageId, user))) {
+    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
   const message = await prisma.chatMessage.findUnique({ where: { id: messageId } });

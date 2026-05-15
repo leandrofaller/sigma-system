@@ -13,13 +13,13 @@ function parseDateOnly(str: string): Date {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const user = session.user as any;
-  const { id } = params;
+  const { id } = await params;
 
   try {
     const body = await req.json();
@@ -142,13 +142,13 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const user = session.user as any;
-  const { id } = params;
+  const { id } = await params;
 
   try {
     const mission = await prisma.mission.findUnique({ where: { id } });

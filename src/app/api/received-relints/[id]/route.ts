@@ -8,7 +8,7 @@ function uploadsBase() {
   return process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads');
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
@@ -19,14 +19,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const body = await req.json();
   const file = await prisma.receivedRelint.update({
-    where: { id: params.id },
+    where: { id: (await params).id },
     data: { folderId: body.folderId ?? null },
     include: { uploadedBy: { select: { name: true } }, group: { select: { name: true } }, folder: true },
   });
   return NextResponse.json(file);
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
@@ -35,7 +35,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
-  const file = await prisma.receivedRelint.findUnique({ where: { id: params.id } });
+  const file = await prisma.receivedRelint.findUnique({ where: { id: (await params).id } });
   if (!file) return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 });
 
   // Try to delete the local file
@@ -47,6 +47,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     }
   }
 
-  await prisma.receivedRelint.delete({ where: { id: params.id } });
+  await prisma.receivedRelint.delete({ where: { id: (await params).id } });
   return NextResponse.json({ success: true });
 }

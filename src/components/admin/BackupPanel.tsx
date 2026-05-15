@@ -209,7 +209,7 @@ export function BackupPanel({ initialBackups, initialCloudIndex, cloudProvider }
           <div className="flex flex-col items-center justify-center py-14 text-subtle">
             <HardDrive className="w-10 h-10 text-gray-200 dark:text-gray-700 mb-3" />
             <p className="text-sm font-medium">Nenhum backup ainda</p>
-            <p className="text-xs mt-1">Clique em "Criar Backup Agora" para gerar o primeiro</p>
+            <p className="text-xs mt-1">Clique em &quot;Criar Backup Agora&quot; para gerar o primeiro</p>
           </div>
         ) : (
           <table className="w-full">

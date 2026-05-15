@@ -11,14 +11,15 @@ async function getGroups(role: string, groupId?: string) {
   return prisma.group.findMany({ where: { id: groupId } });
 }
 
-export default async function EditarDebriefingPage({ params }: { params: { id: string } }) {
+export default async function EditarDebriefingPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) redirect('/login');
 
   const user = session.user as any;
+  const { id } = await params;
 
   const debriefing = await prisma.debriefing.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: { author: true, group: true },
   });
 

@@ -1,9 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client', 'bcryptjs', 'sharp', '@react-pdf/renderer'],
-  },
+  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'sharp', '@react-pdf/renderer'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },

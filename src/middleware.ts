@@ -11,6 +11,10 @@ const apiPublicRoutes = ['/api/auth', '/api/health', '/api/access-requests'];
 // O proxy injeta x-forwarded-host com o domínio/IP que o cliente usou;
 // sem isso, nextUrl.host seria o endereço interno do container.
 function buildRedirect(req: NextRequest, path: string): URL {
+  if (process.env.NEXTAUTH_URL) {
+    return new URL(path, process.env.NEXTAUTH_URL);
+  }
+
   const proto =
     req.headers.get('x-forwarded-proto')?.split(',')[0].trim() ||
     req.nextUrl.protocol.replace(':', '');

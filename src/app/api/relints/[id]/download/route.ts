@@ -3,12 +3,12 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit';
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const relint = await prisma.relint.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     include: { author: true, group: true },
   });
 

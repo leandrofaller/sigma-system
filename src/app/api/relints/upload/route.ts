@@ -3,6 +3,9 @@ import { auth } from '@/lib/auth';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
+import { assertUploadAllowed, getExtension } from '@/lib/security';
+
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'] as const;
 
 function uploadsBase() {
   return process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads');
@@ -16,11 +19,13 @@ export async function POST(req: NextRequest) {
   const file = formData.get('file') as File;
 
   if (!file) return NextResponse.json({ error: 'Arquivo obrigatório' }, { status: 400 });
-  if (!file.type.startsWith('image/')) {
-    return NextResponse.json({ error: 'Apenas imagens são permitidas' }, { status: 400 });
-  }
+  const uploadError = assertUploadAllowed(file, {
+    allowedExtensions: IMAGE_EXTENSIONS,
+    allowedMimePrefixes: ['image/'],
+  });
+  if (uploadError) return NextResponse.json({ error: uploadError }, { status: 400 });
 
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+  const ext = getExtension(file.name);
   const filename = `${randomUUID()}.${ext}`;
   const dir = join(uploadsBase(), 'relints');
 

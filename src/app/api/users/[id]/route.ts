@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit';
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
@@ -28,14 +28,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
   // Admin não pode alterar SUPER_ADMIN nem promover a SUPER_ADMIN
   if (current.role === 'ADMIN') {
-    const target = await prisma.user.findUnique({ where: { id: params.id } });
+    const target = await prisma.user.findUnique({ where: { id: (await params).id } });
     if (target?.role === 'SUPER_ADMIN' || body.role === 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'Permissão insuficiente' }, { status: 403 });
     }
   }
 
   const user = await prisma.user.update({
-    where: { id: params.id },
+    where: { id: (await params).id },
     data: updateData,
     include: { group: true },
   });
@@ -52,7 +52,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   return NextResponse.json(safeUser);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
@@ -61,17 +61,17 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return NextResponse.json({ error: 'Apenas super administrador pode excluir usuários' }, { status: 403 });
   }
 
-  if (params.id === current.id) {
+  if ((await params).id === current.id) {
     return NextResponse.json({ error: 'Não é possível excluir sua própria conta' }, { status: 400 });
   }
 
-  await prisma.user.delete({ where: { id: params.id } });
+  await prisma.user.delete({ where: { id: (await params).id } });
 
   await createAuditLog({
     userId: current.id,
     action: AUDIT_ACTIONS.DELETE_USER,
     entity: 'User',
-    entityId: params.id,
+    entityId: (await params).id,
     request: req,
   });
 

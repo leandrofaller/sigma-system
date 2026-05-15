@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { canAccessChatGroup, canAccessDirectChat } from '@/lib/chat-auth';
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -18,14 +19,22 @@ export async function GET(req: NextRequest) {
   };
 
   if (groupId) {
+    if (!(await canAccessChatGroup(groupId, user))) {
+      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    }
     where.groupId = groupId;
     where.receiverId = null;
   } else if (receiverId) {
+    if (!(await canAccessDirectChat(receiverId, user))) {
+      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    }
     where.OR = [
       { senderId: user.id, receiverId },
       { senderId: receiverId, receiverId: user.id },
     ];
     where.groupId = null;
+  } else {
+    return NextResponse.json({ error: 'Canal não especificado' }, { status: 400 });
   }
 
   const messages = await prisma.chatMessage.findMany({
@@ -64,12 +73,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 });
   }
 
+  if (body.fileUrl) {
+    return NextResponse.json({ error: 'Use o endpoint de upload para enviar arquivos' }, { status: 400 });
+  }
+
+  if (body.groupId && body.receiverId) {
+    return NextResponse.json({ error: 'Canal inválido' }, { status: 400 });
+  }
+  if (!body.groupId && !body.receiverId) {
+    return NextResponse.json({ error: 'Canal não especificado' }, { status: 400 });
+  }
+
+  if (body.groupId && !(await canAccessChatGroup(body.groupId, user))) {
+    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+  }
+
+  if (body.receiverId && !(await canAccessDirectChat(body.receiverId, user))) {
+    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+  }
+
   const message = await prisma.chatMessage.create({
     data: {
       content: body.content?.trim() || '',
-      type: body.type || 'TEXT',
-      fileUrl: body.fileUrl,
-      fileName: body.fileName,
+      type: 'TEXT',
       senderId: user.id,
       receiverId: body.receiverId || null,
       groupId: body.groupId || null,
@@ -95,8 +121,14 @@ export async function DELETE(req: NextRequest) {
 
   let where: any;
   if (groupId) {
+    if (!(await canAccessChatGroup(groupId, user))) {
+      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    }
     where = { groupId };
   } else {
+    if (!receiverId || !(await canAccessDirectChat(receiverId, user))) {
+      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    }
     where = {
       OR: [
         { senderId: user.id, receiverId },

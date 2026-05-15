@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+const ROLES = ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] as const;
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
@@ -19,16 +22,23 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: 'Ação inválida' }, { status: 400 });
   }
 
-  const request = await prisma.accessRequest.findUnique({ where: { id: params.id } });
+  const request = await prisma.accessRequest.findUnique({ where: { id: (await params).id } });
   if (!request) return NextResponse.json({ error: 'Solicitação não encontrada' }, { status: 404 });
 
   await prisma.accessRequest.update({
-    where: { id: params.id },
+    where: { id: (await params).id },
     data: { status: action, reviewedBy: current.id, reviewedAt: new Date() },
   });
 
   if (action === 'APPROVED') {
-    const password = tempPassword || Math.random().toString(36).slice(-8) + 'A1!';
+    const requestedRole = ROLES.includes(role) ? role : 'OPERATOR';
+    if (current.role === 'ADMIN' && requestedRole === 'SUPER_ADMIN') {
+      return NextResponse.json({ error: 'Permissão insuficiente' }, { status: 403 });
+    }
+
+    const password = typeof tempPassword === 'string' && tempPassword.length >= 8
+      ? tempPassword
+      : `${randomBytes(9).toString('base64url')}A1!`;
     const hash = await bcrypt.hash(password, 12);
 
     const user = await prisma.user.create({
@@ -36,7 +46,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         name: request.name,
         email: request.email,
         passwordHash: hash,
-        role: role || 'OPERATOR',
+        role: requestedRole,
         groupId: groupId || null,
       },
     });

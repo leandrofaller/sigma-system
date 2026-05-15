@@ -6,12 +6,13 @@ import { subscribe, publish } from '@/lib/board-events';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs'; // SSE não funciona bem em edge
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return new Response('Unauthorized', { status: 401 });
   const user = session.user as any;
+  const { id } = await params;
 
-  const access = await canAccessMissionBoard(params.id, user);
+  const access = await canAccessMissionBoard(id, user);
   if (!access.ok) return new Response(access.error, { status: access.status });
 
   const encoder = new TextEncoder();
@@ -30,12 +31,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       // anuncia presença
       publish({
         type: 'presence',
-        missionId: params.id,
+        missionId: id,
         actorId: user.id,
         payload: { userId: user.id, userName: user.name, online: true },
       });
 
-      unsubscribe = subscribe(params.id, (event) => {
+      unsubscribe = subscribe(id, (event) => {
         send(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
       });
 
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         if (heartbeat) clearInterval(heartbeat);
         publish({
           type: 'presence',
-          missionId: params.id,
+          missionId: id,
           actorId: user.id,
           payload: { userId: user.id, userName: user.name, online: false },
         });
