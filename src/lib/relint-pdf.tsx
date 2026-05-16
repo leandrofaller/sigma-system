@@ -59,7 +59,7 @@ const s = StyleSheet.create({
   bold: { fontFamily: 'Helvetica-Bold' },
   title: { fontFamily: 'Helvetica-Bold', fontSize: 11, textTransform: 'uppercase', marginBottom: 4 },
   para: { textAlign: 'justify', fontSize: 11, lineHeight: 1.6, marginBottom: 12 },
-  footer: { position: 'absolute', bottom: 14, left: 57, right: 57, borderTopWidth: 1, borderTopColor: '#ccc', paddingTop: 4 },
+  footer: { marginTop: 30, borderTopWidth: 1, borderTopColor: '#ccc', paddingTop: 4 },
   footerText: { fontSize: 7.5, color: '#333', textAlign: 'justify', lineHeight: 1.3 },
 });
 
@@ -164,7 +164,7 @@ function Stamp({ classification }: { classification: string }) {
 
 function Footer() {
   return (
-    <View style={s.footer} fixed>
+    <View style={s.footer} wrap={false}>
       <Text style={s.footerText}>{LEGAL_TEXT}</Text>
     </View>
   );
