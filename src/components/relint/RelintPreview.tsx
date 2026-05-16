@@ -49,13 +49,14 @@ function buildPrintHtml(
     line-height: 1.5;
     color: #000;
     background: white;
-    padding: 0 0 2.8cm;
+    padding: 0 0 4cm;
     margin: 0;
     width: 100%;
   }
   img { max-width: 100%; }
-  p { margin: 0 0 3px; }
+  p { margin: 0 0 3px; orphans: 3; widows: 3; }
   hr { border: none; border-top: 1.5px solid #000; margin: 8px 0 10px; }
+  p, div, li { break-inside: avoid; }
   [data-print-footer] { display: none !important; }
   .doc-footer {
     position: fixed;
