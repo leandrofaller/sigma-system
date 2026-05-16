@@ -147,7 +147,7 @@ export function DebriefingPreview({ form }: Props) {
 
       {/* Documento A4 */}
       <div ref={printAreaRef} className="bg-white text-black"
-        style={{ fontFamily: 'Arial, sans-serif', fontSize: '11pt', lineHeight: '1.5', padding: '1.8cm 2cm 1.5cm', minHeight: '27cm', width: '100%' }}>
+        style={{ fontFamily: 'Arial, sans-serif', fontSize: '11pt', lineHeight: '1.5', padding: '0.8cm 2cm 1.5cm', minHeight: '27cm', width: '100%' }}>
 
         {/* Carimbo de classificação */}
         <div style={{ textAlign: 'center', marginBottom: '10px' }}>
