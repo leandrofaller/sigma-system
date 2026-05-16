@@ -155,9 +155,9 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-subtle mb-1.5">Assunto *</label>
-            <input value={form.subject} onChange={(e) => update('subject', e.target.value)}
+            <input value={form.subject} onChange={(e) => update('subject', e.target.value.toUpperCase())}
               placeholder="Ex: DEBRIEFING DE OPERAÇÃO DE VIGILÂNCIA EM UNIDADE PRISIONAL"
-              className={`${inputCls} uppercase`} />
+              className={inputCls} />
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-subtle mb-1.5">Policiais Envolvidos</label>
@@ -173,9 +173,9 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Difusão *</label>
-            <input value={form.diffusion} onChange={(e) => update('diffusion', e.target.value)}
+            <input value={form.diffusion} onChange={(e) => update('diffusion', e.target.value.toUpperCase())}
               placeholder="Ex: DIP/SEAP/DF"
-              className={`${inputCls} uppercase`} />
+              className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Classificação</label>

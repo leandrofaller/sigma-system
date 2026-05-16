@@ -173,33 +173,33 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-subtle mb-1.5">Assunto *</label>
-            <input value={form.subject} onChange={(e) => update('subject', e.target.value)}
+            <input value={form.subject} onChange={(e) => update('subject', e.target.value.toUpperCase())}
               placeholder="Ex: IMPLEMENTAÇÃO DE VISITAÇÃO EM UNIDADE PRISIONAL"
-              className={`${inputCls} uppercase`} />
+              className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Difusão *</label>
-            <input value={form.diffusion} onChange={(e) => update('diffusion', e.target.value)}
+            <input value={form.diffusion} onChange={(e) => update('diffusion', e.target.value.toUpperCase())}
               placeholder="Ex: DIP/SEAP/DF"
-              className={`${inputCls} uppercase`} />
+              className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Difusão anterior</label>
             <input value={(form.content as any).diffusionPrev} onChange={(e) => updateContent('diffusionPrev', e.target.value)}
               placeholder="*** ou preencha"
-              className={`${inputCls} uppercase`} />
+              className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Referência</label>
             <input value={(form.content as any).reference} onChange={(e) => updateContent('reference', e.target.value)}
               placeholder="*** ou número do documento"
-              className={`${inputCls} uppercase`} />
+              className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Anexo(s)</label>
             <input value={(form.content as any).annexes} onChange={(e) => updateContent('annexes', e.target.value)}
               placeholder="*** ou descreva os anexos"
-              className={`${inputCls} uppercase`} />
+              className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Grupo / Setor *</label>
