@@ -41,7 +41,7 @@ function buildPrintHtml(
 <meta charset="UTF-8">
 <title>${title}</title>
 <style>
-  @page { size: A4 portrait; margin: 1.8cm 2cm 1.5cm 2cm; }
+  @page { size: A4 portrait; margin: 1.8cm 2cm 3.5cm 2cm; }
   * { box-sizing: border-box; }
   body {
     font-family: Arial, sans-serif;
@@ -49,7 +49,7 @@ function buildPrintHtml(
     line-height: 1.5;
     color: #000;
     background: white;
-    padding: 0 0 4cm;
+    padding: 0;
     margin: 0;
     width: 100%;
   }
@@ -63,9 +63,10 @@ function buildPrintHtml(
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 5px 0 6px;
+    padding: 4px 0 0;
     border-top: 1px solid #ccc;
     background: white;
+    z-index: 999;
   }
   .doc-footer p {
     font-size: 7.5pt;
