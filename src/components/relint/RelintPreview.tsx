@@ -49,7 +49,7 @@ function buildPrintHtml(
     line-height: 1.5;
     color: #000;
     background: white;
-    padding: 0;
+    padding: 0 0 2.8cm;
     margin: 0;
     width: 100%;
   }
@@ -58,9 +58,13 @@ function buildPrintHtml(
   hr { border: none; border-top: 1.5px solid #000; margin: 8px 0 10px; }
   [data-print-footer] { display: none !important; }
   .doc-footer {
-    margin-top: 48px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 5px 0 6px;
     border-top: 1px solid #ccc;
-    padding-top: 6px;
+    background: white;
   }
   .doc-footer p {
     font-size: 7.5pt;
