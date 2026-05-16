@@ -41,8 +41,7 @@ function buildPrintHtml(
 <meta charset="UTF-8">
 <title>${title}</title>
 <style>
-  @page { size: A4 portrait; margin: 1.8cm 0 0.5cm 0; }
-  @page :first { margin-top: 0; }
+  @page { size: A4 portrait; margin: 1.8cm 2cm 1.5cm 2cm; }
   * { box-sizing: border-box; }
   body {
     font-family: Arial, sans-serif;
@@ -50,24 +49,20 @@ function buildPrintHtml(
     line-height: 1.5;
     color: #000;
     background: white;
-    padding: 1.8cm 2cm 2.5cm;
+    padding: 0;
     margin: 0;
-    width: 210mm;
+    width: 100%;
   }
   img { max-width: 100%; }
   p { margin: 0 0 3px; }
   hr { border: none; border-top: 1.5px solid #000; margin: 8px 0 10px; }
   [data-print-footer] { display: none !important; }
-  .fixed-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 5px 2cm 6px;
+  .doc-footer {
+    margin-top: 48px;
     border-top: 1px solid #ccc;
-    background: white;
+    padding-top: 6px;
   }
-  .fixed-footer p {
+  .doc-footer p {
     font-size: 7.5pt;
     color: #333;
     text-align: justify;
@@ -94,7 +89,7 @@ function buildPrintHtml(
 </head>
 <body>
 ${contentHtml}
-<div class="fixed-footer"><p>${LEGAL_TEXT}</p></div>
+<div class="doc-footer"><p>${LEGAL_TEXT}</p></div>
 <script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script>
 </body>
 </html>`;
