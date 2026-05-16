@@ -41,7 +41,7 @@ function buildPrintHtml(
 <meta charset="UTF-8">
 <title>${title}</title>
 <style>
-  @page { size: A4 portrait; margin: 1.5cm 0 0.5cm 0; }
+  @page { size: A4 portrait; margin: 1.8cm 0 0.5cm 0; }
   @page :first { margin-top: 0; }
   * { box-sizing: border-box; }
   body {
