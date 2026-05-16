@@ -92,14 +92,17 @@ ${contentHtml}
 
 export function DebriefingPreview({ form }: Props) {
   const [badgeSizes, setBadgeSizes] = useState({ sejus: 72, aip: 80, policiaPenal: 72 });
+  const [badgeTs, setBadgeTs] = useState(() => Date.now());
   const printAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch('/api/relint-config')
       .then((r) => r.json())
-      .then((d) => setBadgeSizes((prev) => ({ ...prev, ...d })))
+      .then((d) => { setBadgeSizes((prev) => ({ ...prev, ...d })); setBadgeTs(Date.now()); })
       .catch(() => {});
   }, []);
+
+  const badgeUrl = (key: string) => `/logos/${key}.png?t=${badgeTs}`;
 
   const handlePrint = () => {
     const html = printAreaRef.current?.innerHTML;
@@ -157,18 +160,18 @@ export function DebriefingPreview({ form }: Props) {
         {/* Cabeçalho 3 colunas */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', gap: '8px' }}>
           <div style={{ width: badgeSizes.sejus + 8, flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <img src="/logos/badge-sejus.png" alt="SEJUS" style={{ width: badgeSizes.sejus, height: 'auto' }}
+            <img src={badgeUrl('badge-sejus')} alt="SEJUS" style={{ width: badgeSizes.sejus, height: 'auto' }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
           <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>SECRETARIA DE ESTADO DA JUSTIÇA DE RONDÔNIA</p>
             <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>AGÊNCIA DE INTELIGÊNCIA PENAL</p>
             <p style={{ fontWeight: 'bold', fontSize: '12pt', margin: '2px 0 8px', textTransform: 'uppercase' }}>AIP/SEJUS/RO</p>
-            <img src="/logos/badge-aip.png" alt="AIP/SEJUS/RO" style={{ width: badgeSizes.aip, height: 'auto' }}
+            <img src={badgeUrl('badge-aip')} alt="AIP/SEJUS/RO" style={{ width: badgeSizes.aip, height: 'auto' }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
           <div style={{ width: badgeSizes.policiaPenal + 8, flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <img src="/logos/badge-policia-penal.png" alt="Polícia Penal RO" style={{ width: badgeSizes.policiaPenal, height: 'auto' }}
+            <img src={badgeUrl('badge-policia-penal')} alt="Polícia Penal RO" style={{ width: badgeSizes.policiaPenal, height: 'auto' }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
         </div>

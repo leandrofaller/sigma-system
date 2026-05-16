@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { writeFile, mkdir } from 'fs/promises';
+import { mkdir } from 'fs/promises';
 import { join } from 'path';
+import sharp from 'sharp';
 import { assertUploadAllowed } from '@/lib/security';
 
 const ALLOWED = ['badge-aip', 'badge-sejus', 'badge-policia-penal'];
 const LOGO_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'] as const;
+const MAX_BADGE_PX = 512;
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -30,13 +32,17 @@ export async function POST(req: NextRequest) {
   if (uploadError) return NextResponse.json({ error: uploadError }, { status: 400 });
 
   const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
+  const pngBuffer = await sharp(Buffer.from(bytes))
+    .resize(MAX_BADGE_PX, MAX_BADGE_PX, { fit: 'inside', withoutEnlargement: true })
+    .png({ compressionLevel: 8 })
+    .toBuffer();
+
   const logosDir = join(process.cwd(), 'public', 'logos');
   await mkdir(logosDir, { recursive: true });
 
-  // Always save as .png for consistent referencing
   const filename = `${slot}.png`;
-  await writeFile(join(logosDir, filename), buffer);
+  const { writeFile } = await import('fs/promises');
+  await writeFile(join(logosDir, filename), pngBuffer);
 
   return NextResponse.json({ url: `/logos/${filename}?t=${Date.now()}` });
 }

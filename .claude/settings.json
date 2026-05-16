@@ -21,7 +21,8 @@
       "Bash(node -e \"require\\('archiver'\\)\")",
       "Bash(node -e \"require\\('adm-zip'\\)\")",
       "Bash(node -e \"require\\('jszip'\\)\")",
-      "Bash(npm uninstall *)"
+      "Bash(npm uninstall *)",
+      "PowerShell(node -e \"const fs=require\\('fs'\\); const buf=fs.readFileSync\\('public/logos/badge-aip.png'\\); console.log\\('size:', buf.length, 'bytes'\\); console.log\\('magic:', buf.slice\\(0,8\\).toString\\('hex'\\)\\);\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
