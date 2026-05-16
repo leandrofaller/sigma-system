@@ -263,7 +263,7 @@ export function RelintPreview({ form }: Props) {
         )}
 
         {/* Aviso legal — visível na tela, substituído por rodapé fixo no print */}
-        <div data-print-footer="true" style={{ borderTop: '1px solid #ccc', paddingTop: '8px' }}>
+        <div data-print-footer="true" style={{ marginTop: '48px', borderTop: '1px solid #ccc', paddingTop: '8px' }}>
           <p style={{ fontSize: '7.5pt', color: '#333', textAlign: 'justify', lineHeight: '1.3', margin: 0 }}>
             {LEGAL_TEXT}
           </p>
