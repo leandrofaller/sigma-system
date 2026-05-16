@@ -111,12 +111,40 @@ export function RelintPreview({ form }: Props) {
 
   const badgeUrl = (key: string) => `/logos/${key}.png?t=${badgeTs}`;
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     const html = printAreaRef.current?.innerHTML;
     if (!html) return;
+
+    // Inline badge images as data URIs so the print popup doesn't need auth/session
+    const toDataUri = async (url: string): Promise<string | null> => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch { return null; }
+    };
+
+    let printHtml = html;
+    const badgeKeys = ['badge-sejus', 'badge-aip', 'badge-policia-penal'];
+    for (const key of badgeKeys) {
+      const dataUri = await toDataUri(badgeUrl(key));
+      if (dataUri) {
+        printHtml = printHtml.replace(
+          new RegExp(`src="/logos/${key}\\.png[^"]*"`, 'g'),
+          `src="${dataUri}"`
+        );
+      }
+    }
+
     const win = window.open('', '_blank', 'width=900,height=700');
     if (!win) { alert('Permita pop-ups para imprimir.'); return; }
-    win.document.write(buildPrintHtml(html, form.number));
+    win.document.write(buildPrintHtml(printHtml, form.number));
     win.document.close();
   };
 
