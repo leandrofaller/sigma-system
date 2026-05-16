@@ -56,7 +56,7 @@ function buildPrintHtml(
   img { max-width: 100%; }
   p { margin: 0 0 3px; orphans: 3; widows: 3; }
   hr { border: none; border-top: 1.5px solid #000; margin: 8px 0 10px; }
-  p, div, li { break-inside: avoid; }
+  p, li { break-inside: avoid; }
   [data-print-footer] { display: none !important; }
   .doc-footer {
     position: fixed;
