@@ -13,43 +13,52 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
-  const body = await req.json();
-  const updateData: any = {
-    name: body.name,
-    phone: body.phone,
-    role: body.role,
-    groupId: body.groupId || null,
-    isActive: body.isActive,
-  };
+  try {
+    const { id } = await params;
+    const body = await req.json();
 
-  if (body.password) {
-    updateData.passwordHash = await bcrypt.hash(body.password, 12);
-  }
+    const updateData: any = {
+      name: body.name?.trim() || undefined,
+      phone: body.phone?.trim() || null,   // '' → null (evita violação de unique)
+      role: body.role || undefined,
+      groupId: body.groupId || null,        // '' → null (evita FK inválida)
+      isActive: body.isActive ?? undefined,
+    };
 
-  // Admin não pode alterar SUPER_ADMIN nem promover a SUPER_ADMIN
-  if (current.role === 'ADMIN') {
-    const target = await prisma.user.findUnique({ where: { id: (await params).id } });
-    if (target?.role === 'SUPER_ADMIN' || body.role === 'SUPER_ADMIN') {
-      return NextResponse.json({ error: 'Permissão insuficiente' }, { status: 403 });
+    if (body.password) {
+      updateData.passwordHash = await bcrypt.hash(body.password, 12);
     }
+
+    // Admin não pode alterar SUPER_ADMIN nem promover a SUPER_ADMIN
+    if (current.role === 'ADMIN') {
+      const target = await prisma.user.findUnique({ where: { id } });
+      if (target?.role === 'SUPER_ADMIN' || body.role === 'SUPER_ADMIN') {
+        return NextResponse.json({ error: 'Permissão insuficiente' }, { status: 403 });
+      }
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: updateData,
+      include: { group: true },
+    });
+
+    await createAuditLog({
+      userId: current.id,
+      action: AUDIT_ACTIONS.EDIT_USER,
+      entity: 'User',
+      entityId: user.id,
+      request: req,
+    });
+
+    const { passwordHash: _, ...safeUser } = user;
+    return NextResponse.json(safeUser);
+  } catch (err: any) {
+    const msg = err?.meta?.target
+      ? `Conflito no campo: ${err.meta.target}`
+      : err?.message || 'Erro interno';
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
-
-  const user = await prisma.user.update({
-    where: { id: (await params).id },
-    data: updateData,
-    include: { group: true },
-  });
-
-  await createAuditLog({
-    userId: current.id,
-    action: AUDIT_ACTIONS.EDIT_USER,
-    entity: 'User',
-    entityId: user.id,
-    request: req,
-  });
-
-  const { passwordHash: _, ...safeUser } = user;
-  return NextResponse.json(safeUser);
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -61,19 +70,25 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: 'Apenas super administrador pode excluir usuários' }, { status: 403 });
   }
 
-  if ((await params).id === current.id) {
-    return NextResponse.json({ error: 'Não é possível excluir sua própria conta' }, { status: 400 });
+  try {
+    const { id } = await params;
+
+    if (id === current.id) {
+      return NextResponse.json({ error: 'Não é possível excluir sua própria conta' }, { status: 400 });
+    }
+
+    await prisma.user.delete({ where: { id } });
+
+    await createAuditLog({
+      userId: current.id,
+      action: AUDIT_ACTIONS.DELETE_USER,
+      entity: 'User',
+      entityId: id,
+      request: req,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || 'Erro interno' }, { status: 500 });
   }
-
-  await prisma.user.delete({ where: { id: (await params).id } });
-
-  await createAuditLog({
-    userId: current.id,
-    action: AUDIT_ACTIONS.DELETE_USER,
-    entity: 'User',
-    entityId: (await params).id,
-    request: req,
-  });
-
-  return NextResponse.json({ success: true });
 }
