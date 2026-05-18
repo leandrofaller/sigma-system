@@ -1,13 +1,10 @@
+import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
-import { ApenadosClient } from '@/components/apenados/ApenadosClient';
 
-export const metadata = { title: 'Identificação de Apenados' };
-
-export default async function ApenadosPage() {
+export async function GET() {
   const session = await auth();
-  if (!session) redirect('/login');
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const [total, comFoto, letterRows] = await Promise.all([
     prisma.apenado.count(),
@@ -26,13 +23,5 @@ export default async function ApenadosPage() {
     letterCounts[row.letter] = Number(row.count);
   }
 
-  const user = session.user as any;
-
-  return (
-    <ApenadosClient
-      stats={{ total, comFoto, semFoto: total - comFoto }}
-      letterCounts={letterCounts}
-      userRole={user.role}
-    />
-  );
+  return NextResponse.json({ total, comFoto, semFoto: total - comFoto, letterCounts });
 }

@@ -8,19 +8,18 @@ export interface Apenado {
   matricula: string | null;
   unidade: string | null;
   photoPath: string | null;
-  notes: string | null;
+  notes?: string | null;
   createdAt: Date | string;
 }
 
 interface Props {
   apenado: Apenado;
   userRole: string;
-  index: number;
   onEdit: (a: Apenado) => void;
   onDelete: (id: string) => void;
 }
 
-export function ApenadoCard({ apenado, userRole, index, onEdit, onDelete }: Props) {
+export function ApenadoCard({ apenado, userRole, onEdit, onDelete }: Props) {
   const canDelete = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
   const photoUrl = apenado.photoPath ? `/api/apenados/${apenado.id}/foto` : null;
   const initial = apenado.name.charAt(0).toUpperCase();
@@ -33,16 +32,14 @@ export function ApenadoCard({ apenado, userRole, index, onEdit, onDelete }: Prop
   };
 
   return (
-    <div
-      className="group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-sigma-500/10 hover:-translate-y-0.5"
-      style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
-    >
+    <div className="group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-sigma-500/10 hover:-translate-y-0.5">
       {/* Photo area */}
       <div className="relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800">
         {photoUrl ? (
           <img
             src={photoUrl}
             alt={apenado.name}
+            loading="lazy"
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = 'none';
@@ -58,7 +55,7 @@ export function ApenadoCard({ apenado, userRole, index, onEdit, onDelete }: Prop
           </span>
         </div>
 
-        {/* Hover overlay with actions */}
+        {/* Hover overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 gap-1.5">
           {photoUrl && (
             <button
@@ -86,7 +83,6 @@ export function ApenadoCard({ apenado, userRole, index, onEdit, onDelete }: Prop
           </div>
         </div>
 
-        {/* No photo indicator */}
         {!apenado.photoPath && (
           <div className="absolute top-2 right-2">
             <div className="w-5 h-5 bg-gray-400/80 rounded-full flex items-center justify-center">

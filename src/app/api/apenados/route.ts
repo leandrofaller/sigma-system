@@ -1,36 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import type { Prisma } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const search = req.nextUrl.searchParams.get('search')?.trim() || '';
+  const params = req.nextUrl.searchParams;
+  const search = params.get('search')?.trim() || '';
+  const letter = params.get('letter')?.trim().toUpperCase() || '';
+  const skip = Math.max(0, parseInt(params.get('skip') || '0', 10));
+  const take = Math.min(Math.max(1, parseInt(params.get('take') || '50', 10)), 1000);
 
-  const apenados = await prisma.apenado.findMany({
-    where: search
-      ? {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { matricula: { contains: search, mode: 'insensitive' } },
-            { unidade: { contains: search, mode: 'insensitive' } },
-          ],
-        }
-      : undefined,
-    orderBy: { name: 'asc' },
-    select: {
-      id: true,
-      name: true,
-      matricula: true,
-      unidade: true,
-      photoPath: true,
-      notes: true,
-      createdAt: true,
-    },
-  });
+  let where: Prisma.ApenadoWhereInput | undefined;
+  if (search) {
+    where = {
+      OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        { matricula: { contains: search, mode: 'insensitive' } },
+        { unidade: { contains: search, mode: 'insensitive' } },
+      ],
+    };
+  } else if (letter) {
+    where = { name: { startsWith: letter, mode: 'insensitive' } };
+  }
 
-  return NextResponse.json(apenados);
+  const [apenados, total] = await Promise.all([
+    prisma.apenado.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      skip,
+      take,
+      select: {
+        id: true,
+        name: true,
+        matricula: true,
+        unidade: true,
+        photoPath: true,
+        notes: true,
+        createdAt: true,
+      },
+    }),
+    prisma.apenado.count({ where }),
+  ]);
+
+  return NextResponse.json({ apenados, total, skip, take });
 }
 
 export async function POST(req: NextRequest) {

@@ -424,6 +424,8 @@ model Apenado {
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([name])
+  @@index([matricula])
+  @@index([unidade])
   @@map("apenados")
 }
 
