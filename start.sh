@@ -5,7 +5,7 @@ UPLOAD_DIR="${UPLOAD_DIR:-/app/uploads}"
 
 # Garante que os subdirectorios existam e pertencem ao nextjs (uid 1001).
 # Isto resolve o problema de volume montado com dono root.
-mkdir -p "$UPLOAD_DIR/relints" "$UPLOAD_DIR/chat" "$UPLOAD_DIR/received"
+mkdir -p "$UPLOAD_DIR/relints" "$UPLOAD_DIR/chat" "$UPLOAD_DIR/received" "$UPLOAD_DIR/apenados"
 chown -R 1001:1001 "$UPLOAD_DIR"
 
 # Garante que o cache do Next.js existe e tem permissão de escrita.

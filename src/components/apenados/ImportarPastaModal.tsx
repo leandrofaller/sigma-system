@@ -89,7 +89,10 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: entry.name }),
       });
-      if (!res.ok) throw new Error('Falha ao criar registro');
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? `Erro ${res.status} ao criar registro`);
+      }
       const apenado: Apenado = await res.json();
 
       setEntries((prev) => {
@@ -101,7 +104,11 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
       const fd = new FormData();
       fd.append('foto', entry.file);
       const photoRes = await fetch(`/api/apenados/${apenado.id}/foto`, { method: 'POST', body: fd });
-      if (photoRes.ok) apenado.photoPath = `uploads/apenados/${apenado.id}.jpg`;
+      if (!photoRes.ok) {
+        const body = await photoRes.json().catch(() => null);
+        throw new Error(body?.error ?? `Erro ${photoRes.status} no upload da foto`);
+      }
+      apenado.photoPath = `uploads/apenados/${apenado.id}.jpg`;
 
       setEntries((prev) => {
         const next = [...prev];
