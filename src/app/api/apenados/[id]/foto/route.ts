@@ -27,10 +27,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (uploadError) return NextResponse.json({ error: uploadError }, { status: 400 });
 
   const bytes = await file.arrayBuffer();
-  const jpegBuffer = await sharp(Buffer.from(bytes))
-    .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 85 })
-    .toBuffer();
+  const inputBuffer = Buffer.from(bytes);
+
+  const [jpegBuffer, hashRaw] = await Promise.all([
+    sharp(inputBuffer)
+      .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer(),
+    sharp(inputBuffer)
+      .resize(9, 8, { fit: 'fill', kernel: 'nearest' })
+      .grayscale()
+      .raw()
+      .toBuffer(),
+  ]);
+
+  // dHash: compare adjacent pixels in each row → 64-bit hash
+  let hash = 0n;
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      hash = (hash << 1n) | (hashRaw[row * 9 + col] > hashRaw[row * 9 + col + 1] ? 1n : 0n);
+    }
+  }
+  const photoHash = hash.toString(16).padStart(16, '0');
 
   const dir = join(process.cwd(), 'uploads', 'apenados');
   await mkdir(dir, { recursive: true });
@@ -38,7 +56,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   await writeFile(join(dir, filename), jpegBuffer);
 
   const photoPath = `uploads/apenados/${filename}`;
-  await prisma.apenado.update({ where: { id }, data: { photoPath } });
+  await prisma.apenado.update({ where: { id }, data: { photoPath, photoHash } });
 
   return NextResponse.json({ photoPath });
 }

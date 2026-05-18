@@ -417,6 +417,7 @@ model Apenado {
   matricula   String?
   unidade     String?
   photoPath   String?
+  photoHash   String?
   faccao      String?
   notes       String?  @db.Text
   createdAt   DateTime @default(now())
@@ -427,6 +428,7 @@ model Apenado {
   @@index([name])
   @@index([matricula])
   @@index([unidade])
+  @@index([photoHash])
   @@map("apenados")
 }
 

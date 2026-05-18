@@ -3,12 +3,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   UserCheck, Search, Download, Plus, LayoutGrid, List,
-  Users, Camera, UserX, ChevronUp, FolderInput, Loader2,
+  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch,
 } from 'lucide-react';
 import { ApenadoCard, type Apenado } from './ApenadoCard';
 import { ApenadoModal } from './ApenadoModal';
 import { ImportarPastaModal } from './ImportarPastaModal';
 import { PhotoLightbox } from './PhotoLightbox';
+import { DuplicateChecker } from './DuplicateChecker';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const SEARCH_PAGE_SIZE = 50;
@@ -49,6 +50,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Apenado | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [dupCheckerOpen, setDupCheckerOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [lightbox, setLightbox] = useState<Apenado | null>(null);
@@ -278,6 +280,14 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                 <Download className="w-4 h-4" />
                 {exporting ? 'Exportando...' : 'Exportar ZIP'}
               </button>
+              {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
+                <button
+                  onClick={() => setDupCheckerOpen(true)}
+                  className="flex items-center gap-2 text-sm font-medium text-white border border-white/30 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
+                >
+                  <ScanSearch className="w-4 h-4" /> Duplicatas
+                </button>
+              )}
               <button
                 onClick={() => setImportOpen(true)}
                 className="flex items-center gap-2 text-sm font-medium text-white border border-white/30 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
@@ -546,6 +556,26 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
         <ImportarPastaModal
           onClose={() => setImportOpen(false)}
           onImported={() => { handleImported(); setImportOpen(false); }}
+        />
+      )}
+
+      {dupCheckerOpen && (
+        <DuplicateChecker
+          onClose={() => setDupCheckerOpen(false)}
+          onPhotoDeleted={(id) => {
+            // Remove photo from letter cache and displayed items
+            setLetterData((prev) => prev.map((a) => a.id === id ? { ...a, photoPath: null } : a));
+            setSearchResults((prev) => prev.map((a) => a.id === id ? { ...a, photoPath: null } : a));
+            if (letterCache.current) {
+              for (const [letter, items] of letterCache.current.entries()) {
+                if (items.some((a) => a.id === id)) {
+                  letterCache.current.set(letter, items.map((a) => a.id === id ? { ...a, photoPath: null } : a));
+                  break;
+                }
+              }
+            }
+            setStatsLocal((prev) => ({ ...prev, comFoto: Math.max(0, prev.comFoto - 1), semFoto: prev.semFoto + 1 }));
+          }}
         />
       )}
 
