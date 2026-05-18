@@ -8,11 +8,12 @@ import { assertUploadAllowed } from '@/lib/security';
 
 const PHOTO_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'] as const;
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const apenado = await prisma.apenado.findUnique({ where: { id: params.id } });
+  const { id } = await params;
+  const apenado = await prisma.apenado.findUnique({ where: { id } });
   if (!apenado) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
 
   const formData = await req.formData();
@@ -33,25 +34,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const dir = join(process.cwd(), 'uploads', 'apenados');
   await mkdir(dir, { recursive: true });
-  const filename = `${params.id}.jpg`;
-  const filePath = join(dir, filename);
-  await writeFile(filePath, jpegBuffer);
+  const filename = `${id}.jpg`;
+  await writeFile(join(dir, filename), jpegBuffer);
 
   const photoPath = `uploads/apenados/${filename}`;
-  await prisma.apenado.update({
-    where: { id: params.id },
-    data: { photoPath },
-  });
+  await prisma.apenado.update({ where: { id }, data: { photoPath } });
 
   return NextResponse.json({ photoPath });
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
+  const { id } = await params;
   const apenado = await prisma.apenado.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { photoPath: true, name: true, matricula: true },
   });
   if (!apenado?.photoPath) return NextResponse.json({ error: 'Sem foto' }, { status: 404 });

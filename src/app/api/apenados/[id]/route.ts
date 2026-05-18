@@ -4,10 +4,11 @@ import { prisma } from '@/lib/db';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
+  const { id } = await params;
   const body = await req.json();
   const { name, matricula, unidade, notes } = body;
 
@@ -16,7 +17,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 
   const apenado = await prisma.apenado.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       name: name.trim().toUpperCase(),
       matricula: matricula?.trim() || null,
@@ -28,7 +29,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   return NextResponse.json(apenado);
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
@@ -37,7 +38,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
-  const apenado = await prisma.apenado.findUnique({ where: { id: params.id } });
+  const { id } = await params;
+  const apenado = await prisma.apenado.findUnique({ where: { id } });
   if (!apenado) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
 
   if (apenado.photoPath) {
@@ -46,6 +48,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     } catch {}
   }
 
-  await prisma.apenado.delete({ where: { id: params.id } });
+  await prisma.apenado.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
