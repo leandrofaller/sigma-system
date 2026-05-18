@@ -161,7 +161,7 @@ export async function GET(req: NextRequest) {
 
   // Step 3: fetch all hashed records and detect duplicates
   const allHashed = await prisma.apenado.findMany({
-    where: { photoHash: { not: null } },
+    where: { photoPath: { not: null }, photoHash: { not: null } },
     select: {
       id: true,
       name: true,

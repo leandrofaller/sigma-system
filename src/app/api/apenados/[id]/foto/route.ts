@@ -79,7 +79,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     await unlink(join(process.cwd(), apenado.photoPath));
   } catch {}
 
-  await prisma.apenado.update({ where: { id }, data: { photoPath: null } });
+  await prisma.apenado.update({ where: { id }, data: { photoPath: null, photoHash: null } });
 
   return NextResponse.json({ ok: true });
 }
