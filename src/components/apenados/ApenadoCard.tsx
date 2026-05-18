@@ -17,9 +17,10 @@ interface Props {
   userRole: string;
   onEdit: (a: Apenado) => void;
   onDelete: (id: string) => void;
+  onPhotoClick?: (a: Apenado) => void;
 }
 
-export function ApenadoCard({ apenado, userRole, onEdit, onDelete }: Props) {
+export function ApenadoCard({ apenado, userRole, onEdit, onDelete, onPhotoClick }: Props) {
   const canDelete = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
   const photoUrl = apenado.photoPath ? `/api/apenados/${apenado.id}/foto` : null;
   const initial = apenado.name.charAt(0).toUpperCase();
@@ -34,7 +35,10 @@ export function ApenadoCard({ apenado, userRole, onEdit, onDelete }: Props) {
   return (
     <div className="group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-sigma-500/10 hover:-translate-y-0.5">
       {/* Photo area */}
-      <div className="relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800">
+      <div
+        className="relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800 cursor-pointer"
+        onClick={() => onPhotoClick?.(apenado)}
+      >
         {photoUrl ? (
           <img
             src={photoUrl}
@@ -59,7 +63,7 @@ export function ApenadoCard({ apenado, userRole, onEdit, onDelete }: Props) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 gap-1.5">
           {photoUrl && (
             <button
-              onClick={handleDownload}
+              onClick={(e) => { e.stopPropagation(); handleDownload(); }}
               className="flex items-center gap-1.5 text-xs font-semibold text-white bg-white/20 backdrop-blur-sm hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors w-full justify-center"
             >
               <Download className="w-3.5 h-3.5" /> Baixar Foto
@@ -67,14 +71,14 @@ export function ApenadoCard({ apenado, userRole, onEdit, onDelete }: Props) {
           )}
           <div className="flex gap-1.5">
             <button
-              onClick={() => onEdit(apenado)}
+              onClick={(e) => { e.stopPropagation(); onEdit(apenado); }}
               className="flex-1 flex items-center gap-1 justify-center text-xs font-semibold text-white bg-sigma-600/80 hover:bg-sigma-600 backdrop-blur-sm px-2 py-1.5 rounded-lg transition-colors"
             >
               <Pencil className="w-3.5 h-3.5" /> Editar
             </button>
             {canDelete && (
               <button
-                onClick={() => onDelete(apenado.id)}
+                onClick={(e) => { e.stopPropagation(); onDelete(apenado.id); }}
                 className="flex items-center gap-1 justify-center text-xs font-semibold text-white bg-red-600/80 hover:bg-red-600 backdrop-blur-sm px-2 py-1.5 rounded-lg transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />

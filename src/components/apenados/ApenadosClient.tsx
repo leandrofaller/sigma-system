@@ -8,6 +8,7 @@ import {
 import { ApenadoCard, type Apenado } from './ApenadoCard';
 import { ApenadoModal } from './ApenadoModal';
 import { ImportarPastaModal } from './ImportarPastaModal';
+import { PhotoLightbox } from './PhotoLightbox';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const SEARCH_PAGE_SIZE = 50;
@@ -50,6 +51,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
   const [importOpen, setImportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [lightbox, setLightbox] = useState<Apenado | null>(null);
 
   // Debounce
   useEffect(() => {
@@ -446,6 +448,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                   userRole={userRole}
                   onEdit={openEdit}
                   onDelete={handleDelete}
+                  onPhotoClick={setLightbox}
                 />
               ))}
             </div>
@@ -454,7 +457,10 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
               {displayedItems.map((a) => (
                 <div key={a.id}
                   className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/40 transition-colors">
-                  <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-sigma-400 to-sigma-700">
+                  <div
+                    className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-sigma-400 to-sigma-700 cursor-pointer hover:ring-2 hover:ring-sigma-500 transition-all"
+                    onClick={() => setLightbox(a)}
+                  >
                     {a.photoPath ? (
                       <img src={`/api/apenados/${a.id}/foto`} alt={a.name}
                         loading="lazy"
@@ -539,6 +545,15 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
         <ImportarPastaModal
           onClose={() => setImportOpen(false)}
           onImported={() => { handleImported(); setImportOpen(false); }}
+        />
+      )}
+
+      {lightbox && (
+        <PhotoLightbox
+          apenado={lightbox}
+          all={displayedItems}
+          onClose={() => setLightbox(null)}
+          onNavigate={setLightbox}
         />
       )}
     </div>
