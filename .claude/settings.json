@@ -29,7 +29,12 @@
       "Bash(curl -s -w \"\\\\nsize: %{size_download} bytes\\\\nstatus: %{http_code}\\\\ntype: %{content_type}\\\\n\" http://localhost:3000/logos/badge-aip.png -o /tmp/test-badge.png)",
       "Read(//tmp/**)",
       "Bash(Select-Object Name, Mode)",
-      "Bash(xargs grep -l \"Image\\\\|photo\\\\|avatar\\\\|img\")"
+      "Bash(xargs grep -l \"Image\\\\|photo\\\\|avatar\\\\|img\")",
+      "Bash(cd /mnt/f/relatorio_claude && npx tsc --noEmit 2>&1 | head -80)",
+      "Read(//mnt/f/**)",
+      "Bash(grep -E \"jszip|sharp\" f:\\\\\\\\relatorio_claude\\\\\\\\package.json)",
+      "PowerShell(cd f:\\\\relatorio_claude; $env:DATABASE_URL = \"postgresql://fake:fake@localhost:5432/fake\"; $env:NEXTAUTH_SECRET = \"fake-secret-123\"; $env:NEXTAUTH_URL = \"http://localhost:3000\"; npx next build 2>&1 | Select-Object -Last 50)",
+      "PowerShell(cd f:\\\\relatorio_claude; $env:DATABASE_URL = \"postgresql://fake:fake@localhost:5432/fake\"; $env:NEXTAUTH_SECRET = \"fake-secret-123\"; $env:NEXTAUTH_URL = \"http://localhost:3000\"; npx next build 2>&1 | Select-String \"apenado\" -CaseSensitive:$false)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
