@@ -47,7 +47,9 @@
       "WebSearch",
       "PowerShell(rtk tsc --noEmit 2>&1)",
       "PowerShell(npx tsc --noEmit 2>&1)",
-      "PowerShell(npx next build 2>&1)"
+      "PowerShell(npx next build 2>&1)",
+      "PowerShell(git add Dockerfile start.sh scripts/download_model.py)",
+      "PowerShell(git push)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
