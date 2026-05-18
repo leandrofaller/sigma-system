@@ -3,10 +3,11 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   UserCheck, Search, Download, Plus, LayoutGrid, List,
-  Users, Camera, UserX, ChevronUp,
+  Users, Camera, UserX, ChevronUp, FolderInput,
 } from 'lucide-react';
 import { ApenadoCard, type Apenado } from './ApenadoCard';
 import { ApenadoModal } from './ApenadoModal';
+import { ImportarPastaModal } from './ImportarPastaModal';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -21,6 +22,7 @@ export function ApenadosClient({ initialApenados, userRole }: Props) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Apenado | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [activeLetter, setActiveLetter] = useState('');
   const [exporting, setExporting] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -123,6 +125,12 @@ export function ApenadosClient({ initialApenados, userRole }: Props) {
   }, []);
 
   const openNew = () => { setEditing(null); setModalOpen(true); };
+
+  const handleImported = useCallback((imported: Apenado[]) => {
+    setApenados((prev) =>
+      [...prev, ...imported].sort((a, b) => a.name.localeCompare(b.name))
+    );
+  }, []);
   const openEdit = (a: Apenado) => { setEditing(a); setModalOpen(true); };
 
   let cardIndex = 0;
@@ -152,6 +160,12 @@ export function ApenadosClient({ initialApenados, userRole }: Props) {
               >
                 <Download className="w-4 h-4" />
                 {exporting ? 'Exportando...' : 'Exportar ZIP'}
+              </button>
+              <button
+                onClick={() => setImportOpen(true)}
+                className="flex items-center gap-2 text-sm font-medium text-white border border-white/30 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
+              >
+                <FolderInput className="w-4 h-4" /> Importar Pasta
               </button>
               <button
                 onClick={openNew}
@@ -352,12 +366,20 @@ export function ApenadosClient({ initialApenados, userRole }: Props) {
         </button>
       )}
 
-      {/* ── Modal ── */}
+      {/* ── Modal individual ── */}
       {modalOpen && (
         <ApenadoModal
           apenado={editing}
           onClose={() => { setModalOpen(false); setEditing(null); }}
           onSaved={handleSaved}
+        />
+      )}
+
+      {/* ── Modal importar pasta ── */}
+      {importOpen && (
+        <ImportarPastaModal
+          onClose={() => setImportOpen(false)}
+          onImported={(imported) => { handleImported(imported); setImportOpen(false); }}
         />
       )}
     </div>
