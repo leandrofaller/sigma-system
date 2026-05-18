@@ -36,17 +36,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Instala InsightFace em venv isolado (passos separados para cache eficiente)
-RUN python3 -m venv /opt/arcface-venv
-RUN /opt/arcface-venv/bin/pip install --no-cache-dir --prefer-binary onnxruntime
-RUN /opt/arcface-venv/bin/pip install --no-cache-dir --prefer-binary opencv-python-headless
-RUN /opt/arcface-venv/bin/pip install --no-cache-dir --prefer-binary insightface
+# Instala InsightFace 0.7.3 em venv isolado
+# Sem --prefer-binary: pip instala 0.7.3 do source (g++ já disponível via build-essential)
+RUN python3 -m venv /opt/arcface-venv && \
+    /opt/arcface-venv/bin/pip install --no-cache-dir \
+        onnxruntime \
+        opencv-python-headless \
+        "insightface==0.7.3"
 
 # Pré-baixa o modelo buffalo_l (~326 MB) em camada separada para cache eficiente
 ENV INSIGHTFACE_HOME=/opt/insightface
 RUN mkdir -p /opt/insightface && \
     /opt/arcface-venv/bin/python3 -c \
-        "from insightface.app import FaceAnalysis; app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider']); app.prepare(ctx_id=0, det_size=(640,640))" && \
+        "from insightface.app import FaceAnalysis; app = FaceAnalysis(name='buffalo_l'); app.prepare(ctx_id=0, det_size=(640,640))" && \
     chmod -R 755 /opt/insightface
 
 WORKDIR /app
