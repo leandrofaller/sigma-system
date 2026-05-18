@@ -6,7 +6,8 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const limit = Math.min(500, parseInt(req.nextUrl.searchParams.get('limit') || '200', 10));
+  // Sem cap forçado — o frontend controla o loop em lotes
+  const limit = Math.max(1, parseInt(req.nextUrl.searchParams.get('limit') || '200', 10));
 
   const records = await prisma.apenado.findMany({
     where: { photoPath: { not: null }, faceDescriptor: null },
