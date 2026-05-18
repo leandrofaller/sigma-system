@@ -1,21 +1,25 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Upload, Camera, Loader2, CheckCircle, User } from 'lucide-react';
+import { X, Upload, Camera, Loader2, CheckCircle, User, Trash2 } from 'lucide-react';
 import type { Apenado } from './ApenadoCard';
 
 interface Props {
   apenado: Apenado | null;
   onClose: () => void;
   onSaved: (a: Apenado) => void;
+  userRole: string;
 }
 
-export function ApenadoModal({ apenado, onClose, onSaved }: Props) {
+export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
   const isEdit = !!apenado?.id;
+  const canDeletePhoto = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
+
   const [form, setForm] = useState({
     name: apenado?.name || '',
     matricula: apenado?.matricula || '',
     unidade: apenado?.unidade || '',
+    faccao: apenado?.faccao || '',
     notes: apenado?.notes || '',
   });
   const [saving, setSaving] = useState(false);
@@ -76,6 +80,20 @@ export function ApenadoModal({ apenado, onClose, onSaved }: Props) {
     }
   };
 
+  const handleDeletePhoto = async () => {
+    if (!isEdit || !apenado?.id) return;
+    if (!confirm('Remover permanentemente a foto deste registro?')) return;
+    setUploading(true);
+    try {
+      const res = await fetch(`/api/apenados/${apenado.id}/foto`, { method: 'DELETE' });
+      if (!res.ok) { alert('Erro ao remover foto.'); return; }
+      // Notify parent with updated record (photoPath null) and close modal
+      onSaved({ ...apenado, ...form, name: form.name.trim().toUpperCase(), photoPath: null });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
@@ -83,7 +101,6 @@ export function ApenadoModal({ apenado, onClose, onSaved }: Props) {
     if (file) processFile(file);
   };
 
-  // Cleanup preview URLs on unmount
   useEffect(() => {
     return () => {
       if (photoPreview?.startsWith('blob:')) URL.revokeObjectURL(photoPreview);
@@ -114,7 +131,18 @@ export function ApenadoModal({ apenado, onClose, onSaved }: Props) {
         <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
           {/* Photo upload */}
           <div>
-            <label className="block text-xs font-semibold text-subtle uppercase tracking-wider mb-2">Foto</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-semibold text-subtle uppercase tracking-wider">Foto</label>
+              {isEdit && apenado?.photoPath && canDeletePhoto && (
+                <button
+                  onClick={handleDeletePhoto}
+                  disabled={uploading}
+                  className="flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="w-3 h-3" /> Remover foto
+                </button>
+              )}
+            </div>
             <div
               className={`relative rounded-xl border-2 border-dashed transition-all cursor-pointer overflow-hidden
                 ${dragging
@@ -198,6 +226,15 @@ export function ApenadoModal({ apenado, onClose, onSaved }: Props) {
                   className={inputCls}
                 />
               </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-subtle mb-1.5">Facção</label>
+              <input
+                value={form.faccao}
+                onChange={(e) => setForm((p) => ({ ...p, faccao: e.target.value.toUpperCase() }))}
+                placeholder="Ex: CV, PCC..."
+                className={inputCls}
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-subtle mb-1.5">Observações</label>

@@ -18,7 +18,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     name: body.name,
     phone: body.phone,
     role: body.role,
-    groupId: body.groupId,
+    groupId: body.groupId || null,
     isActive: body.isActive,
   };
 

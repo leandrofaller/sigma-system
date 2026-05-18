@@ -538,6 +538,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
           apenado={editing}
           onClose={() => { setModalOpen(false); setEditing(null); }}
           onSaved={handleSaved}
+          userRole={userRole}
         />
       )}
 

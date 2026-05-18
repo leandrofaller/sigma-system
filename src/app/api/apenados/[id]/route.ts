@@ -10,7 +10,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id } = await params;
   const body = await req.json();
-  const { name, matricula, unidade, notes } = body;
+  const { name, matricula, unidade, faccao, notes } = body;
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
@@ -22,6 +22,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       name: name.trim().toUpperCase(),
       matricula: matricula?.trim() || null,
       unidade: unidade?.trim() || null,
+      faccao: faccao?.trim() || null,
       notes: notes?.trim() || null,
     },
   });

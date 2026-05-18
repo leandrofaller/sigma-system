@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { writeFile, mkdir, readFile } from 'fs/promises';
+import { writeFile, mkdir, readFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import sharp from 'sharp';
 import { assertUploadAllowed } from '@/lib/security';
@@ -41,6 +41,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   await prisma.apenado.update({ where: { id }, data: { photoPath } });
 
   return NextResponse.json({ photoPath });
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+  const user = session.user as any;
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Apenas administradores podem remover fotos' }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const apenado = await prisma.apenado.findUnique({ where: { id }, select: { photoPath: true } });
+  if (!apenado) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
+  if (!apenado.photoPath) return NextResponse.json({ error: 'Sem foto' }, { status: 404 });
+
+  try {
+    await unlink(join(process.cwd(), apenado.photoPath));
+  } catch {}
+
+  await prisma.apenado.update({ where: { id }, data: { photoPath: null } });
+
+  return NextResponse.json({ ok: true });
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -7,6 +7,7 @@ export interface Apenado {
   name: string;
   matricula: string | null;
   unidade: string | null;
+  faccao?: string | null;
   photoPath: string | null;
   notes?: string | null;
   createdAt: Date | string;

@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
         name: true,
         matricula: true,
         unidade: true,
+        faccao: true,
         photoPath: true,
         notes: true,
         createdAt: true,
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   const user = session.user as any;
   const body = await req.json();
-  const { name, matricula, unidade, notes } = body;
+  const { name, matricula, unidade, faccao, notes } = body;
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest) {
       name: name.trim().toUpperCase(),
       matricula: matricula?.trim() || null,
       unidade: unidade?.trim() || null,
+      faccao: faccao?.trim() || null,
       notes: notes?.trim() || null,
       createdById: user.id,
     },
