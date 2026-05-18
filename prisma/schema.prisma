@@ -416,10 +416,11 @@ model Apenado {
   name        String
   matricula   String?
   unidade     String?
-  photoPath   String?
-  photoHash   String?
-  faccao      String?
-  notes       String?  @db.Text
+  photoPath      String?
+  photoHash      String?
+  faccao         String?
+  notes          String?  @db.Text
+  faceDescriptor String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdById String?

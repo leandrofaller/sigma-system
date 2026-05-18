@@ -41,7 +41,8 @@
       "PowerShell(rtk tsc 2>&1)",
       "PowerShell(python f:\\\\relatorio_claude\\\\scripts\\\\find_exact_duplicates.py f:\\\\relatorio_claude\\\\uploads\\\\apenados 2>&1)",
       "PowerShell(python f:\\\\relatorio_claude\\\\scripts\\\\find_exact_duplicates.py $env:TEMP 2>&1)",
-      "PowerShell(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('OK - totalFiles:', d.get\\('totalFiles'\\), 'groups:', d.get\\('totalGroups'\\)\\)\")"
+      "PowerShell(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('OK - totalFiles:', d.get\\('totalFiles'\\), 'groups:', d.get\\('totalGroups'\\)\\)\")",
+      "PowerShell(Get-ChildItem \"f:\\\\relatorio_claude\\\\node_modules\\\\@vladmandic\\\\face-api\\\\model\" | Select-Object Name, @{N='KB';E={[math]::Round\\($_.Length/1KB,0\\)}} | Format-Table -AutoSize)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
