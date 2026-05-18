@@ -14,9 +14,9 @@ chown -R 1001:1001 /app/.next
 
 echo "Executando migrações do banco de dados..."
 # Roda prisma como nextjs
-gosu nextjs node_modules/.bin/prisma db push --skip-generate || \
-gosu nextjs npx prisma db push --skip-generate || true
+su-exec nextjs node_modules/.bin/prisma db push --skip-generate || \
+su-exec nextjs npx prisma db push --skip-generate || true
 echo "Migrações concluídas!"
 
 echo "Iniciando servidor..."
-exec gosu nextjs node server.js
+exec su-exec nextjs node server.js
