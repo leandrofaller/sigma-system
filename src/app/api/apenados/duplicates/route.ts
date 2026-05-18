@@ -57,7 +57,7 @@ async function runWithConcurrency<T>(
 
 function buildDuplicateGroups(
   records: { id: string; name: string; matricula: string | null; unidade: string | null; faccao: string | null; photoPath: string | null; photoHash: string }[],
-): typeof records[][] {
+): (typeof records[number])[][] {
   // LSH banding: 4 bands × 16 bits each
   // Two hashes with Hamming distance ≤ 10 are very likely to share at least one band
   const bandMaps: Map<string, string[]>[] = [new Map(), new Map(), new Map(), new Map()];

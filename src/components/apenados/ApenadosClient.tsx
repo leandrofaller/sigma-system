@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   UserCheck, Search, Download, Plus, LayoutGrid, List,
-  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch,
+  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch, Trash2, AlertTriangle,
 } from 'lucide-react';
 import { ApenadoCard, type Apenado } from './ApenadoCard';
 import { ApenadoModal } from './ApenadoModal';
@@ -54,6 +54,8 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
   const [exporting, setExporting] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [lightbox, setLightbox] = useState<Apenado | null>(null);
+  const [bulkModal, setBulkModal] = useState<{ type: 'sem-foto' | 'clear-fotos'; count: number } | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // Debounce
   useEffect(() => {
@@ -247,6 +249,40 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
     if (activeLetter) loadLetter(activeLetter);
   }, [activeLetter, loadLetter]);
 
+  const handleBulkClick = async (type: 'sem-foto' | 'clear-fotos') => {
+    const res = await fetch('/api/apenados/bulk');
+    const data = await res.json();
+    const count = type === 'sem-foto' ? (data.semFoto ?? 0) : (data.comFoto ?? 0);
+    setBulkModal({ type, count });
+  };
+
+  const handleBulkConfirm = async () => {
+    if (!bulkModal) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch(`/api/apenados/bulk?action=${bulkModal.type}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Erro ao executar operação.');
+        return;
+      }
+      const statsRes = await fetch('/api/apenados/stats');
+      const statsData = await statsRes.json();
+      if (statsData.total !== undefined) {
+        setStatsLocal({ total: statsData.total, comFoto: statsData.comFoto, semFoto: statsData.semFoto });
+        setLetterCountsLocal(statsData.letterCounts ?? {});
+      }
+      letterCache.current.clear();
+      setLetterData([]);
+      setActiveLetter(null);
+      setBulkModal(null);
+    } catch (err: any) {
+      alert(err.message || 'Erro ao executar operação.');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   const showSearchMode = debouncedSearch.length > 0;
   const showLetterMode = !showSearchMode && activeLetter !== null;
   const showInitial = !showSearchMode && activeLetter === null;
@@ -286,6 +322,24 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                   className="flex items-center gap-2 text-sm font-medium text-white border border-white/30 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
                 >
                   <ScanSearch className="w-4 h-4" /> Duplicatas
+                </button>
+              )}
+              {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
+                <button
+                  onClick={() => handleBulkClick('sem-foto')}
+                  disabled={statsLocal.semFoto === 0}
+                  className="flex items-center gap-2 text-sm font-medium text-yellow-200 border border-yellow-300/40 hover:bg-yellow-300/10 px-4 py-2 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <UserX className="w-4 h-4" /> Limpar Sem Foto
+                </button>
+              )}
+              {userRole === 'SUPER_ADMIN' && (
+                <button
+                  onClick={() => handleBulkClick('clear-fotos')}
+                  disabled={statsLocal.comFoto === 0}
+                  className="flex items-center gap-2 text-sm font-medium text-red-300 border border-red-400/40 hover:bg-red-400/10 px-4 py-2 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="w-4 h-4" /> Deletar Todas as Fotos
                 </button>
               )}
               <button
@@ -577,6 +631,58 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
             setStatsLocal((prev) => ({ ...prev, comFoto: Math.max(0, prev.comFoto - 1), semFoto: prev.semFoto + 1 }));
           }}
         />
+      )}
+
+      {bulkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-start gap-4 mb-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                bulkModal.type === 'clear-fotos'
+                  ? 'bg-red-100 dark:bg-red-900/30'
+                  : 'bg-yellow-100 dark:bg-yellow-900/30'
+              }`}>
+                <AlertTriangle className={`w-6 h-6 ${
+                  bulkModal.type === 'clear-fotos' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'
+                }`} />
+              </div>
+              <div>
+                <h3 className="font-bold text-title text-lg">
+                  {bulkModal.type === 'sem-foto' ? 'Limpar registros sem foto' : 'Deletar todas as fotos'}
+                </h3>
+                <p className="text-subtle text-sm mt-1">
+                  {bulkModal.type === 'sem-foto'
+                    ? `Serão excluídos permanentemente ${bulkModal.count.toLocaleString('pt-BR')} registro${bulkModal.count !== 1 ? 's' : ''} sem foto. Os registros com foto não serão afetados.`
+                    : `As fotos de ${bulkModal.count.toLocaleString('pt-BR')} registro${bulkModal.count !== 1 ? 's' : ''} serão removidas permanentemente do disco. Os dados cadastrais (nome, matrícula, etc.) serão mantidos.`}
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-red-500 dark:text-red-400 font-medium mb-5">
+              Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setBulkModal(null)}
+                disabled={bulkLoading}
+                className="px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl text-body hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleBulkConfirm}
+                disabled={bulkLoading}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl text-white transition-colors disabled:opacity-50 ${
+                  bulkModal.type === 'clear-fotos'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-yellow-600 hover:bg-yellow-700'
+                }`}
+              >
+                {bulkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+                {bulkModal.type === 'sem-foto' ? 'Limpar registros' : 'Deletar fotos'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {lightbox && (

@@ -37,7 +37,8 @@
       "PowerShell(cd f:\\\\relatorio_claude; $env:DATABASE_URL = \"postgresql://fake:fake@localhost:5432/fake\"; $env:NEXTAUTH_SECRET = \"fake-secret-123\"; $env:NEXTAUTH_URL = \"http://localhost:3000\"; npx next build 2>&1 | Select-String \"apenado\" -CaseSensitive:$false)",
       "PowerShell(cd f:\\\\relatorio_claude; $env:DATABASE_URL = \"postgresql://fake:fake@localhost:5432/fake\"; $env:NEXTAUTH_SECRET = \"fake-secret-123\"; $env:NEXTAUTH_URL = \"http://localhost:3000\"; npx next build 2>&1 | Select-Object -Last 15)",
       "Bash(rtk next *)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "PowerShell(rtk tsc 2>&1)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
