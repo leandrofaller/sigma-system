@@ -38,7 +38,10 @@
       "PowerShell(cd f:\\\\relatorio_claude; $env:DATABASE_URL = \"postgresql://fake:fake@localhost:5432/fake\"; $env:NEXTAUTH_SECRET = \"fake-secret-123\"; $env:NEXTAUTH_URL = \"http://localhost:3000\"; npx next build 2>&1 | Select-Object -Last 15)",
       "Bash(rtk next *)",
       "Bash(npx next *)",
-      "PowerShell(rtk tsc 2>&1)"
+      "PowerShell(rtk tsc 2>&1)",
+      "PowerShell(python f:\\\\relatorio_claude\\\\scripts\\\\find_exact_duplicates.py f:\\\\relatorio_claude\\\\uploads\\\\apenados 2>&1)",
+      "PowerShell(python f:\\\\relatorio_claude\\\\scripts\\\\find_exact_duplicates.py $env:TEMP 2>&1)",
+      "PowerShell(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('OK - totalFiles:', d.get\\('totalFiles'\\), 'groups:', d.get\\('totalGroups'\\)\\)\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
