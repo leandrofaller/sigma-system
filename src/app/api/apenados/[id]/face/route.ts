@@ -9,8 +9,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const { descriptor } = await req.json();
 
-  if (!Array.isArray(descriptor) || descriptor.length !== 128) {
-    return NextResponse.json({ error: 'Descriptor inválido (esperado: array[128])' }, { status: 400 });
+  if (!Array.isArray(descriptor) || descriptor.length !== 512) {
+    return NextResponse.json({ error: 'Descriptor inválido (esperado: array[512])' }, { status: 400 });
   }
 
   await prisma.apenado.update({

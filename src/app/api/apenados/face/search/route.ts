@@ -1,39 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { spawn } from 'child_process';
+import { join } from 'path';
+import { writeFile, unlink } from 'fs/promises';
+import { tmpdir } from 'os';
+import { randomUUID } from 'crypto';
 
-// Regiões faciais aproximadas no espaço do descriptor de 128 dims
-// (mapeamento heurístico — cada segmento captura aspectos diferentes do rosto)
-const TRAIT_REGIONS = [
-  { name: 'Olhos',        start: 0,   end: 26 },
-  { name: 'Sobrancelhas', start: 26,  end: 51 },
-  { name: 'Nariz',        start: 51,  end: 77 },
-  { name: 'Boca',         start: 77,  end: 103 },
-  { name: 'Contorno',     start: 103, end: 128 },
-];
+export const maxDuration = 60;
 
-function euclidean(a: number[], b: number[]): number {
-  return Math.sqrt(a.reduce((s, ai, i) => s + (ai - b[i]) ** 2, 0));
+interface ArcFace {
+  index: number;
+  det_score: number;
+  bbox: number[];
+  kps: number[][];
+  embedding: number[];
 }
 
-function cosine(a: number[], b: number[]): number {
-  const dot = a.reduce((s, ai, i) => s + ai * b[i], 0);
-  const ma = Math.sqrt(a.reduce((s, ai) => s + ai * ai, 0));
-  const mb = Math.sqrt(b.reduce((s, bi) => s + bi * bi, 0));
-  if (ma === 0 || mb === 0) return 0;
-  return dot / (ma * mb);
+interface AnalyzeResult {
+  faces: ArcFace[];
+  imageWidth: number;
+  imageHeight: number;
+  error?: string;
 }
 
-function overallSimilarity(dist: number): number {
-  // Euclidean distance no espaço face-api: mesma pessoa < 0.6, diferente > 1.0
-  return Math.max(0, Math.min(100, Math.round((1 - dist / 1.4) * 100)));
-}
+function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
+  return new Promise((resolve, reject) => {
+    const scriptPath = join(process.cwd(), 'scripts', 'arcface_analyze.py');
+    const envPython = process.env.ARCFACE_PYTHON;
+    const candidates = envPython ? [envPython] : ['python3', 'python', 'py'];
+    let idx = 0;
 
-function traitSimilarities(a: number[], b: number[]): { name: string; similarity: number }[] {
-  return TRAIT_REGIONS.map(({ name, start, end }) => {
-    const sim = (cosine(a.slice(start, end), b.slice(start, end)) + 1) / 2;
-    return { name, similarity: Math.round(sim * 100) };
+    function tryNext() {
+      if (idx >= candidates.length) {
+        reject(new Error('Python não encontrado. Defina ARCFACE_PYTHON=/opt/arcface-venv/bin/python3 no .env'));
+        return;
+      }
+      const cmd = candidates[idx++];
+      const proc = spawn(cmd, [scriptPath, imagePath], { shell: true, env: process.env });
+      let stdout = '';
+
+      proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+      proc.on('close', (code) => {
+        if (code === 0 && stdout.trim()) {
+          try {
+            const parsed: AnalyzeResult = JSON.parse(stdout);
+            if (parsed.error) reject(new Error(parsed.error));
+            else resolve(parsed);
+          } catch {
+            reject(new Error('Resposta inválida do script Python.'));
+          }
+        } else {
+          tryNext();
+        }
+      });
+      proc.on('error', () => tryNext());
+    }
+
+    tryNext();
   });
+}
+
+// Dot product = cosine similarity (vectors are L2-normalized)
+function cosineSim(a: number[], b: number[]): number {
+  return a.reduce((s, ai, i) => s + ai * b[i], 0);
+}
+
+function toPercent(sim: number): number {
+  return Math.max(0, Math.min(100, Math.round(sim * 100)));
 }
 
 export async function POST(req: NextRequest) {
@@ -45,36 +79,80 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
-  const { descriptor, topN = 20, minSimilarity = 0 } = await req.json();
-  if (!Array.isArray(descriptor) || descriptor.length !== 128) {
-    return NextResponse.json({ error: 'Descriptor facial inválido (esperado: array[128])' }, { status: 400 });
+  const formData = await req.formData();
+  const file = formData.get('image') as File | null;
+  const topN = parseInt((formData.get('topN') as string) || '20', 10);
+  const minSimilarity = parseInt((formData.get('minSimilarity') as string) || '30', 10);
+
+  if (!file) {
+    return NextResponse.json({ error: 'Nenhuma imagem enviada' }, { status: 400 });
   }
 
-  const all = await prisma.apenado.findMany({
-    where: { faceDescriptor: { not: null } },
-    select: {
-      id: true,
-      name: true,
-      matricula: true,
-      unidade: true,
-      faccao: true,
-      photoPath: true,
-      faceDescriptor: true,
-    },
-  });
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const tmpPath = join(tmpdir(), `arcface_${randomUUID()}.${ext}`);
 
-  const results = all
-    .map((a) => {
-      const stored: number[] = JSON.parse(a.faceDescriptor!);
-      const distance = euclidean(descriptor, stored);
-      const similarity = overallSimilarity(distance);
-      const traits = traitSimilarities(descriptor, stored);
-      const { faceDescriptor: _, ...rest } = a;
-      return { ...rest, distance, similarity, traits };
-    })
-    .filter((r) => r.similarity >= minSimilarity)
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, topN);
+  try {
+    const bytes = await file.arrayBuffer();
+    await writeFile(tmpPath, Buffer.from(bytes));
 
-  return NextResponse.json({ matches: results, indexed: all.length });
+    const analysis = await runAnalyze(tmpPath);
+
+    if (!analysis.faces || analysis.faces.length === 0) {
+      return NextResponse.json({
+        faces: [],
+        imageWidth: analysis.imageWidth,
+        imageHeight: analysis.imageHeight,
+        indexed: 0,
+      });
+    }
+
+    const all = await prisma.apenado.findMany({
+      where: { faceDescriptor: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        matricula: true,
+        unidade: true,
+        faccao: true,
+        photoPath: true,
+        faceDescriptor: true,
+      },
+    });
+
+    const indexed = all.length;
+    const minSim01 = minSimilarity / 100;
+
+    const facesWithMatches = analysis.faces.map((face) => {
+      const matches = all
+        .map((a) => {
+          let stored: number[];
+          try { stored = JSON.parse(a.faceDescriptor!); } catch { return null; }
+          if (stored.length !== 512) return null;
+          const sim = cosineSim(face.embedding, stored);
+          if (sim < minSim01) return null;
+          const { faceDescriptor: _, ...rest } = a;
+          return { ...rest, similarity: toPercent(sim) };
+        })
+        .filter(Boolean)
+        .sort((a: any, b: any) => b.similarity - a.similarity)
+        .slice(0, topN);
+
+      return {
+        index: face.index,
+        det_score: face.det_score,
+        bbox: face.bbox,
+        kps: face.kps,
+        matches,
+      };
+    });
+
+    return NextResponse.json({
+      faces: facesWithMatches,
+      imageWidth: analysis.imageWidth,
+      imageHeight: analysis.imageHeight,
+      indexed,
+    });
+  } finally {
+    await unlink(tmpPath).catch(() => {});
+  }
 }
