@@ -20,7 +20,7 @@ RUN npm run build
 # Stage 3: Runner — Debian slim (glibc necessário para wheels Python do InsightFace)
 FROM node:20-slim AS runner
 
-# Sistema: openssl, gosu (su-exec equivalente), cliente postgres, zip, Python
+# Sistema: openssl, gosu (su-exec equivalente), cliente postgres, zip, Python + build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     gosu \
@@ -29,14 +29,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-venv \
+    python3-dev \
+    build-essential \
+    cmake \
     libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Instala InsightFace em venv isolado
-RUN python3 -m venv /opt/arcface-venv && \
-    /opt/arcface-venv/bin/pip install --no-cache-dir \
-        insightface onnxruntime opencv-python-headless
+# Instala InsightFace em venv isolado (passos separados para cache eficiente)
+RUN python3 -m venv /opt/arcface-venv
+RUN /opt/arcface-venv/bin/pip install --no-cache-dir --prefer-binary onnxruntime
+RUN /opt/arcface-venv/bin/pip install --no-cache-dir --prefer-binary opencv-python-headless
+RUN /opt/arcface-venv/bin/pip install --no-cache-dir --prefer-binary insightface
 
 # Pré-baixa o modelo buffalo_l (~326 MB) em camada separada para cache eficiente
 ENV INSIGHTFACE_HOME=/opt/insightface
