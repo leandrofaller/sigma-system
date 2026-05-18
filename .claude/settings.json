@@ -27,7 +27,9 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type}\" http://localhost:3000/logos/badge-aip.png)",
       "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type}\" http://localhost:3000/logos/badge-sejus.png)",
       "Bash(curl -s -w \"\\\\nsize: %{size_download} bytes\\\\nstatus: %{http_code}\\\\ntype: %{content_type}\\\\n\" http://localhost:3000/logos/badge-aip.png -o /tmp/test-badge.png)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(Select-Object Name, Mode)",
+      "Bash(xargs grep -l \"Image\\\\|photo\\\\|avatar\\\\|img\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",

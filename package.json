@@ -62,6 +62,7 @@
     "googleapis": "^140.0.1",
     "html2canvas": "^1.4.1",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.414.0",
     "multer": "^1.4.5-lts.1",
