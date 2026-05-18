@@ -17,29 +17,54 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
-# Stage 3: Runner
-FROM node:20-alpine AS runner
-# su-exec permite dropar privilégios após acertar permissões do volume montado
-RUN apk add --no-cache openssl su-exec postgresql-client zip
+# Stage 3: Runner — Debian slim (glibc necessário para wheels Python do InsightFace)
+FROM node:20-slim AS runner
+
+# Sistema: openssl, gosu (su-exec equivalente), cliente postgres, zip, Python
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    gosu \
+    postgresql-client \
+    zip \
+    python3 \
+    python3-pip \
+    python3-venv \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instala InsightFace em venv isolado
+RUN python3 -m venv /opt/arcface-venv && \
+    /opt/arcface-venv/bin/pip install --no-cache-dir \
+        insightface onnxruntime opencv-python-headless
+
+# Pré-baixa o modelo buffalo_l (~326 MB) em camada separada para cache eficiente
+ENV INSIGHTFACE_HOME=/opt/insightface
+RUN mkdir -p /opt/insightface && \
+    /opt/arcface-venv/bin/python3 -c \
+        "from insightface.app import FaceAnalysis; app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider']); app.prepare(ctx_id=0, det_size=(640,640))" && \
+    chmod -R 755 /opt/insightface
+
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV ARCFACE_PYTHON=/opt/arcface-venv/bin/python3
 
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 --gid 1001 nextjs
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
 
 # Copia o Prisma client e CLI completos para o runner
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
-# Cria symlink correto para o CLI — copiar o arquivo diretamente quebra __dirname
-# e o CLI passa a procurar o .wasm na pasta .bin/ em vez de prisma/build/
+# Cria symlink correto para o CLI
 RUN mkdir -p ./node_modules/.bin && \
     ln -sf ../prisma/build/index.js ./node_modules/.bin/prisma
 
@@ -52,8 +77,6 @@ ENV UPLOAD_DIR=/app/uploads
 # Declara o volume — Coolify deve montar aqui para persistência
 VOLUME ["/app/uploads"]
 
-# Roda como root para que o entrypoint possa corrigir permissões do volume montado
-# start.sh usa su-exec para dropar para nextjs antes de iniciar o servidor
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
