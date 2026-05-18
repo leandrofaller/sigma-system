@@ -25,12 +25,13 @@ interface SimilarResult {
   indexedThisRun: number;
 }
 
-// Resultado do modo "Exatas" (SHA-256 via Python)
+// Resultado do modo "Exatas" (SHA-256 via Python ou Node.js)
 interface ExactResult {
   groups: DisplayRecord[][];
   totalFiles: number;
   totalGroups: number;
   errors: string[];
+  method: 'python' | 'nodejs';
 }
 
 type Mode = 'similar' | 'exact';
@@ -239,17 +240,27 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
               )}
 
               {mode === 'exact' && exactResult && (
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'Arquivos verificados', value: exactResult.totalFiles.toLocaleString('pt-BR'), color: 'text-sigma-600' },
-                    { label: 'Grupos idênticos', value: activeGroups.length.toLocaleString('pt-BR'), color: activeGroups.length > 0 ? 'text-red-600' : 'text-green-600' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="card p-4 text-center">
-                      <p className={`text-2xl font-bold ${color}`}>{value}</p>
-                      <p className="text-xs text-subtle mt-1">{label}</p>
-                    </div>
-                  ))}
-                </div>
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: 'Arquivos verificados', value: exactResult.totalFiles.toLocaleString('pt-BR'), color: 'text-sigma-600' },
+                      { label: 'Grupos idênticos', value: activeGroups.length.toLocaleString('pt-BR'), color: activeGroups.length > 0 ? 'text-red-600' : 'text-green-600' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="card p-4 text-center">
+                        <p className={`text-2xl font-bold ${color}`}>{value}</p>
+                        <p className="text-xs text-subtle mt-1">{label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium w-fit ${
+                    exactResult.method === 'python'
+                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                  }`}>
+                    <Fingerprint className="w-3.5 h-3.5" />
+                    SHA-256 via {exactResult.method === 'python' ? 'Python' : 'Node.js (Python não encontrado)'}
+                  </div>
+                </>
               )}
 
               {/* Erros do script Python */}
@@ -388,7 +399,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
           <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between flex-shrink-0">
             <p className="text-xs text-subtle">
               {mode === 'exact'
-                ? `SHA-256 · ${(exactResult?.totalFiles ?? 0).toLocaleString('pt-BR')} arquivos verificados`
+                ? `SHA-256 (${exactResult?.method === 'python' ? 'Python' : 'Node.js'}) · ${(exactResult?.totalFiles ?? 0).toLocaleString('pt-BR')} arquivos verificados`
                 : `dHash + LSH · threshold ≤10 bits · ${similarResult?.indexedThisRun ? `${similarResult.indexedThisRun} indexadas agora` : 'índice completo'}`}
             </p>
             <button
