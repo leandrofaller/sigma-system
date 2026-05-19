@@ -41,13 +41,17 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
     setPendingFile(file);
   }, []);
 
-  const uploadPhoto = useCallback(async (id: string, file: File) => {
+  const uploadPhoto = useCallback(async (id: string, file: File): Promise<void> => {
     setUploading(true);
     try {
       const fd = new FormData();
       fd.append('foto', file);
       const res = await fetch(`/api/apenados/${id}/foto`, { method: 'POST', body: fd });
-      if (res.ok) setUploadedForId(id);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Erro ${res.status} ao salvar foto`);
+      }
+      setUploadedForId(id);
     } finally {
       setUploading(false);
     }
@@ -68,8 +72,12 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
       const saved: Apenado = await res.json();
 
       if (pendingFile) {
-        await uploadPhoto(saved.id, pendingFile);
-        saved.photoPath = `uploads/apenados/${saved.id}.jpg`;
+        try {
+          await uploadPhoto(saved.id, pendingFile);
+          saved.photoPath = `uploads/apenados/${saved.id}.jpg`;
+        } catch (uploadErr: any) {
+          alert(`Apenado salvo, mas houve um erro ao salvar a foto: ${uploadErr.message}`);
+        }
       }
 
       onSaved(saved);
@@ -157,7 +165,15 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
             >
               {photoPreview ? (
                 <>
-                  <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                  <img
+                    src={photoPreview}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      setPhotoPreview(null);
+                    }}
+                  />
                   <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
                     <div className="flex items-center gap-2 text-white text-sm font-semibold">
                       <Camera className="w-5 h-5" /> Trocar foto

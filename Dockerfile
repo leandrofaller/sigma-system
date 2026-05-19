@@ -1,14 +1,15 @@
 # Stage 1: Dependencies
-FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat openssl
+# Usa Debian slim (glibc) para garantir compatibilidade de binários nativos com o runner
+FROM node:20-slim AS deps
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 RUN npm ci --legacy-peer-deps
 
 # Stage 2: Builder
-FROM node:20-alpine AS builder
-RUN apk add --no-cache openssl
+FROM node:20-slim AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
