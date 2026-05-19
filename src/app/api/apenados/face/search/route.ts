@@ -39,7 +39,12 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
         return;
       }
       const cmd = candidates[idx++];
-      const proc = spawn(cmd, [scriptPath, imagePath], { shell: true, env: process.env });
+      const env = {
+        ...process.env,
+        MPLCONFIGDIR: '/tmp/.matplotlib',
+        MPLBACKEND: 'Agg',
+      };
+      const proc = spawn(cmd, [scriptPath, imagePath], { shell: true, env });
       let stdout = '';
       let stderr = '';
 
@@ -62,7 +67,7 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
           } catch {}
         }
         if (code !== 0) {
-          const hint = (stderr.trim() || `exit ${code}`).slice(0, 300);
+          const hint = (stderr.trim() || `exit ${code}`).slice(0, 1000);
           errors.push(`[${cmd}] ${hint}`);
           tryNext();
         } else {

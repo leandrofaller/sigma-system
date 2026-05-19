@@ -25,12 +25,11 @@ def main():
         import cv2
         import numpy as np
         from insightface.app import FaceAnalysis
-    except ImportError as e:
-        pkg = str(e).split("'")[1] if "'" in str(e) else str(e)
+    except Exception as e:
         print(json.dumps({
-            "error": f"Dependencia ausente: {pkg}",
-            "install": "pip install insightface onnxruntime opencv-python"
-        }))
+            "error": f"Erro ao importar: {type(e).__name__}: {e}",
+            "install": "pip install insightface onnxruntime opencv-python-headless"
+        }), flush=True)
         sys.exit(1)
 
     try:
@@ -75,7 +74,8 @@ def main():
         }))
 
     except Exception as e:
-        print(json.dumps({"error": str(e)}))
+        import traceback
+        print(json.dumps({"error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-500:]}), flush=True)
         sys.exit(1)
 
 
