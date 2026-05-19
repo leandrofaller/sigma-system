@@ -52,7 +52,9 @@
       "PowerShell(git push)",
       "PowerShell(git add prisma/schema.prisma)",
       "PowerShell(git add src/app/api/apenados/face/search/route.ts)",
-      "PowerShell(git commit -m \"fix: add catch block and improve error propagation in face search route`n`nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\")"
+      "PowerShell(git commit -m \"fix: add catch block and improve error propagation in face search route`n`nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\")",
+      "PowerShell(git add src/app/api/apenados/face/search/route.ts Dockerfile)",
+      "PowerShell(git commit -m \"fix: expose stderr in Python error and force pip cache-bust to verify insightface 0.7.3\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
