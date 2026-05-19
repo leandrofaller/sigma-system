@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useIndexing } from '@/contexts/IndexingContext';
 import {
   X, ScanFace, Upload, Loader2, AlertTriangle, RefreshCw,
   Database, Search, CheckCircle, Trash2, Users, ZoomIn, ZoomOut,
@@ -228,10 +229,8 @@ export function FaceSearch({ onClose, userRole }: Props) {
 
   // Index
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
-  const [isIndexing, setIsIndexing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [indexProgress, setIndexProgress] = useState({ current: 0, total: 0, errors: 0, faces: 0, skipped: 0, startTime: 0 });
-  const stopIndexRef = useRef(false);
+  const { isIndexing, progress: indexProgress, indexError, startIndexing, stopIndexing } = useIndexing();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -243,6 +242,9 @@ export function FaceSearch({ onClose, userRole }: Props) {
   };
 
   useEffect(() => { fetchStatus(); }, []);
+
+  // Atualiza contadores quando a indexação terminar
+  useEffect(() => { if (!isIndexing) fetchStatus(); }, [isIndexing]);
 
   // ── Analisar foto no servidor ─────────────────────────────────────────────
   const analyzeImage = useCallback(async (file: File, minSim: number) => {
@@ -296,58 +298,6 @@ export function FaceSearch({ onClose, userRole }: Props) {
     setErrorMsg('');
   };
 
-  // ── Indexação em lote (servidor) ──────────────────────────────────────────
-  const startIndexing = useCallback(async () => {
-    if (isIndexing) return;
-    setIsIndexing(true);
-    stopIndexRef.current = false;
-
-    const statusData: IndexStatus = await (await fetch('/api/apenados/face/status')).json();
-    const grandTotal = statusData.remaining;
-    const startTime = Date.now();
-    setIndexProgress({ current: 0, total: grandTotal, errors: 0, faces: 0, skipped: 0, startTime });
-
-    let processed = 0;
-    let totalFaces = 0;
-    let totalErrors = 0;
-    let totalSkipped = 0;
-
-    while (!stopIndexRef.current) {
-      const idsRes = await fetch(`/api/apenados/face/unindexed?limit=${BATCH_SIZE}`);
-      const { ids }: { ids: string[] } = await idsRes.json();
-      if (ids.length === 0) break;
-
-      const res = await fetch('/api/apenados/face/index-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      });
-      const stats = await res.json();
-
-      if (!res.ok) {
-        setErrorMsg(stats.error || 'Erro na indexação');
-        break;
-      }
-
-      processed += stats.processed ?? ids.length;
-      totalFaces += stats.faces ?? 0;
-      totalErrors += stats.errors ?? 0;
-      totalSkipped += stats.skipped ?? 0;
-
-      setIndexProgress({
-        current: processed,
-        total: grandTotal,
-        errors: totalErrors,
-        faces: totalFaces,
-        skipped: totalSkipped,
-        startTime,
-      });
-    }
-
-    setIsIndexing(false);
-    fetchStatus();
-  }, [isIndexing]);
-
   const clearIndex = async () => {
     setShowClearConfirm(false);
     try {
@@ -361,7 +311,8 @@ export function FaceSearch({ onClose, userRole }: Props) {
   const etaSeconds = (() => {
     const { current, total, startTime } = indexProgress;
     if (!startTime || !current) return Infinity;
-    const rate = current / ((Date.now() - startTime) / 1000);
+    const elapsed = (Date.now() - startTime) / 1000;
+    const rate = current / elapsed;
     return (total - current) / rate;
   })();
 
@@ -596,9 +547,9 @@ export function FaceSearch({ onClose, userRole }: Props) {
                 </div>
               )}
 
-              {errorMsg && (
+              {indexError && (
                 <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-400">
-                  {errorMsg}
+                  {indexError}
                 </div>
               )}
 
@@ -680,7 +631,7 @@ export function FaceSearch({ onClose, userRole }: Props) {
                   </>
                 ) : (
                   <button
-                    onClick={() => { stopIndexRef.current = true; }}
+                    onClick={stopIndexing}
                     className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
                   >
                     <X className="w-4 h-4" /> Parar indexação
