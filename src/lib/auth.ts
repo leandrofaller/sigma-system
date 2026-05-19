@@ -37,8 +37,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           data: { lastLogin: new Date() },
         });
 
-        // ── Verificação de dispositivo ────────────────────────────────────────
+        // ── Verificação de dispositivo (SUPER_ADMIN sempre passa) ─────────────
         let deviceAuthorized = true;
+        if (user.role === 'SUPER_ADMIN') {
+          return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            groupId: user.groupId,
+            groupName: user.group?.name,
+            phone: user.phone,
+            deviceAuthorized: true,
+          };
+        }
         try {
           const cookieStore = await cookies();
           const deviceToken = cookieStore.get('sigma-device')?.value;

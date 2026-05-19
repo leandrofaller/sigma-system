@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -34,9 +34,10 @@ const navItems: NavItem[] = [
   { label: 'Identificação de Apenados', href: '/apenados', icon: UserCheck },
 ];
 
-const adminItems: NavItem[] = [
+const baseAdminItems: NavItem[] = [
   { label: 'Usuários', href: '/admin/usuarios', icon: Users },
   { label: 'Grupos / Setores', href: '/admin/grupos', icon: FolderOpen, roles: ['SUPER_ADMIN'] },
+  { label: 'Dispositivos', href: '/admin/dispositivos', icon: Monitor },
   { label: 'Monitoramento', href: '/admin/monitoramento', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Auditoria', href: '/auditoria', icon: ClipboardList },
   { label: 'Backups', href: '/admin/backups', icon: Database, roles: ['SUPER_ADMIN'] },
@@ -46,9 +47,10 @@ const adminItems: NavItem[] = [
 interface SidebarProps {
   user: SessionUser;
   logoSize?: number;
+  pendingDeviceCount?: number;
 }
 
-export function Sidebar({ user, logoSize = 36 }: SidebarProps) {
+export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
@@ -64,6 +66,12 @@ export function Sidebar({ user, logoSize = 36 }: SidebarProps) {
       return () => { document.body.style.overflow = ''; };
     }
   }, [mobileOpen]);
+
+  const adminItems = baseAdminItems.map((item) =>
+    item.href === '/admin/dispositivos' && pendingDeviceCount > 0
+      ? { ...item, badge: pendingDeviceCount }
+      : item
+  );
 
   const filteredNav = navItems.filter(
     (item) => !item.roles || item.roles.includes(user?.role ?? '')
