@@ -1,15 +1,14 @@
-# Stage 1: Dependencies
-# Usa Debian slim (glibc) para garantir compatibilidade de binários nativos com o runner
-FROM node:20-slim AS deps
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+# Stage 1: Dependencies (Alpine — builds são mais leves e rápidas)
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 RUN npm ci --legacy-peer-deps
 
-# Stage 2: Builder
-FROM node:20-slim AS builder
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+# Stage 2: Builder (Alpine)
+FROM node:20-alpine AS builder
+RUN apk add --no-cache openssl
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -17,6 +16,15 @@ RUN npx prisma generate
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
+
+# Stage 2b: Binários glibc do sharp para o runner Debian
+# O deps instala sharp com binários musl (Alpine). O runner usa Debian (glibc),
+# então precisamos dos binários corretos para evitar erro de runtime.
+FROM node:20-slim AS sharp_glibc
+WORKDIR /tmp/sharp_build
+COPY --from=deps /app/node_modules/sharp/package.json ./sharp_pkg.json
+RUN SHARP_VER=$(node -p "require('./sharp_pkg.json').version") && \
+    npm install --ignore-scripts=false --omit=dev "sharp@${SHARP_VER}"
 
 # Stage 3: Runner — Debian slim com Python/InsightFace (glibc, compativel com wheels Python)
 FROM node:20-slim AS runner
@@ -77,6 +85,9 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+
+# Sobrescreve binários musl do sharp com binários glibc (compatíveis com Debian)
+COPY --from=sharp_glibc /tmp/sharp_build/node_modules/@img /app/node_modules/@img
 
 # Cria symlink correto para o CLI
 RUN mkdir -p ./node_modules/.bin && \
