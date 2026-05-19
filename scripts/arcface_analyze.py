@@ -9,6 +9,8 @@ Saida: JSON em stdout
 import sys
 import json
 import os
+import warnings
+warnings.filterwarnings('ignore')
 
 def main():
     if len(sys.argv) < 2:

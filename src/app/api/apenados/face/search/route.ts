@@ -45,6 +45,8 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
         MPLBACKEND: 'Agg',
         HOME: '/tmp',
         ORT_LOGGING_LEVEL: '3',
+        PYTHONWARNINGS: 'ignore',
+        TQDM_DISABLE: '1',
       };
       const proc = spawn(cmd, ['-u', scriptPath, imagePath], { shell: true, env });
       let stdout = '';
@@ -69,7 +71,8 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
           } catch {}
         }
         if (code !== 0) {
-          const hint = (stderr.trim() || `exit ${code}`).slice(0, 1000);
+          const raw = stderr.trim() || `exit ${code}`;
+          const hint = raw.length > 2000 ? '...' + raw.slice(-2000) : raw;
           errors.push(`[${cmd}] ${hint}`);
           tryNext();
         } else {
