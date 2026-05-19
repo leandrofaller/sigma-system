@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
+import { getApenadoPhotoPath } from '@/lib/storage';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -45,7 +46,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   if (apenado.photoPath) {
     try {
-      await unlink(join(process.cwd(), apenado.photoPath));
+      await unlink(getApenadoPhotoPath(apenado.photoPath));
     } catch {}
   }
 

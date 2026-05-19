@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import sharp from 'sharp';
+import { getApenadoPhotoPath } from '@/lib/storage';
 
 // Maximum Hamming distance to consider two photos as duplicates
 const HAMMING_THRESHOLD = 10;
@@ -144,7 +145,7 @@ export async function GET(req: NextRequest) {
 
   if (toIndex.length > 0) {
     const tasks = toIndex.map((a) => async () => {
-      const filePath = join(process.cwd(), a.photoPath!);
+      const filePath = getApenadoPhotoPath(a.photoPath!);
       const hash = await computeDHash(filePath);
       if (hash) {
         await prisma.apenado.update({ where: { id: a.id }, data: { photoHash: hash } });

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { join } from 'path';
 import { runIndexBatch, type IndexResult } from '@/lib/arcface-batch';
+import { getApenadosDir } from '@/lib/storage';
 
 export const maxDuration = 300;
 
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'ids inválidos' }, { status: 400 });
   }
 
-  const uploadsDir = join(process.cwd(), 'uploads', 'apenados');
+  const uploadsDir = getApenadosDir();
 
   let results: IndexResult[];
   try {

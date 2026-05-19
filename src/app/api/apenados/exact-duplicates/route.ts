@@ -6,6 +6,7 @@ import { createReadStream } from 'fs';
 import { readdir } from 'fs/promises';
 import { join, extname, basename } from 'path';
 import crypto from 'crypto';
+import { getApenadosDir } from '@/lib/storage';
 
 interface ScriptOutput {
   groups: string[][];
@@ -102,7 +103,7 @@ export async function GET() {
   }
 
   const scriptPath = join(process.cwd(), 'scripts', 'find_exact_duplicates.py');
-  const uploadsDir = join(process.cwd(), 'uploads', 'apenados');
+  const uploadsDir = getApenadosDir();
 
   let raw: ScriptOutput;
   try {

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import JSZip from 'jszip';
+import { getApenadoPhotoPath } from '@/lib/storage';
 
 export async function GET(_req: NextRequest) {
   const session = await auth();
@@ -45,7 +46,7 @@ export async function GET(_req: NextRequest) {
   for (const a of apenados) {
     if (!a.photoPath) continue;
     try {
-      const buffer = await readFile(join(process.cwd(), a.photoPath));
+      const buffer = await readFile(getApenadoPhotoPath(a.photoPath));
       const letter = a.name.charAt(0).toUpperCase();
       const letterFolder = fotosFolder.folder(letter)!;
       const safeName = `${a.name}${a.matricula ? '_' + a.matricula : ''}`.replace(/[^a-zA-Z0-9\-_]/g, '_');

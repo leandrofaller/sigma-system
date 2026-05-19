@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { unlink, readdir } from 'fs/promises';
 import { join } from 'path';
+import { getApenadosDir } from '@/lib/storage';
 
 // GET: return counts for confirmation dialogs
 export async function GET() {
@@ -60,7 +61,7 @@ export async function DELETE(req: NextRequest) {
       });
 
       // 2. Delete files from disk (best-effort)
-      const dir = join(process.cwd(), 'uploads', 'apenados');
+      const dir = getApenadosDir();
       try {
         const files = await readdir(dir);
         await Promise.allSettled(

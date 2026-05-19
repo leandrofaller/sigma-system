@@ -80,3 +80,17 @@ export function isDriveEnabled(): boolean {
     process.env.GOOGLE_DRIVE_REFRESH_TOKEN
   );
 }
+
+export function getApenadosDir(): string {
+  const baseDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+  return path.join(baseDir, 'apenados');
+}
+
+export function getApenadoPhotoPath(photoPath: string): string {
+  const baseDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+  const relativePath = photoPath.startsWith('uploads/') 
+    ? photoPath.substring(8) 
+    : photoPath;
+  return path.join(baseDir, relativePath);
+}
+

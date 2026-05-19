@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { prisma } from './db';
 import { runIndexBatch } from './arcface-batch';
+import { getApenadosDir } from './storage';
 
 const BATCH_SIZE = 30;
 
@@ -48,7 +49,7 @@ export function startJob(): void {
 }
 
 async function runLoop(): Promise<void> {
-  const uploadsDir = join(process.cwd(), 'uploads', 'apenados');
+  const uploadsDir = getApenadosDir();
 
   const total = await prisma.apenado.count({
     where: { photoPath: { not: null }, faceDescriptor: null },

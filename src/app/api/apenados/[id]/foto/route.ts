@@ -5,6 +5,8 @@ import { writeFile, mkdir, readFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import sharp from 'sharp';
 import { assertUploadAllowed } from '@/lib/security';
+import { getApenadosDir, getApenadoPhotoPath } from '@/lib/storage';
+
 
 const PHOTO_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'] as const;
 
@@ -50,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   const photoHash = hash.toString(16).padStart(16, '0');
 
-  const dir = join(process.cwd(), 'uploads', 'apenados');
+  const dir = getApenadosDir();
   await mkdir(dir, { recursive: true });
   const filename = `${id}.jpg`;
   await writeFile(join(dir, filename), jpegBuffer);
@@ -76,7 +78,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!apenado.photoPath) return NextResponse.json({ error: 'Sem foto' }, { status: 404 });
 
   try {
-    await unlink(join(process.cwd(), apenado.photoPath));
+    await unlink(getApenadoPhotoPath(apenado.photoPath));
   } catch {}
 
   await prisma.apenado.update({ where: { id }, data: { photoPath: null, photoHash: null } });
@@ -95,7 +97,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   });
   if (!apenado?.photoPath) return NextResponse.json({ error: 'Sem foto' }, { status: 404 });
 
-  const filePath = join(process.cwd(), apenado.photoPath);
+  const filePath = getApenadoPhotoPath(apenado.photoPath);
   let buffer: Buffer;
   try {
     buffer = await readFile(filePath);
