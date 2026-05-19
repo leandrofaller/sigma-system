@@ -31,7 +31,16 @@ function runIndexBatch(ids: string[], uploadsDir: string): Promise<IndexResult[]
         return;
       }
       const cmd = candidates[idx++];
-      const proc = spawn(cmd, [scriptPath], { shell: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      const env = {
+        ...process.env,
+        HOME: '/tmp',
+        MPLCONFIGDIR: '/tmp/.matplotlib',
+        MPLBACKEND: 'Agg',
+        ORT_LOGGING_LEVEL: '3',
+        PYTHONWARNINGS: 'ignore',
+        TQDM_DISABLE: '1',
+      };
+      const proc = spawn(cmd, ['-u', scriptPath], { shell: true, stdio: ['pipe', 'pipe', 'pipe'], env });
 
       let buffer = '';
       let stderr = '';

@@ -15,6 +15,8 @@ import sys
 import json
 import os
 import glob
+import warnings
+warnings.filterwarnings('ignore')
 
 EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
 
@@ -60,11 +62,17 @@ def main():
         }), flush=True)
         raise SystemExit(1)
 
-    app = FaceAnalysis(
-        name="buffalo_l",
-        providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
-    )
-    app.prepare(ctx_id=0, det_size=(640, 640))
+    import io as _io
+    _real_stdout = sys.stdout
+    sys.stdout = _io.StringIO()
+    try:
+        app = FaceAnalysis(
+            name="buffalo_l",
+            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+        )
+        app.prepare(ctx_id=0, det_size=(640, 640))
+    finally:
+        sys.stdout = _real_stdout
 
     for id_ in ids:
         photo_path = find_photo(uploads_dir, id_)
