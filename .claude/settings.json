@@ -56,7 +56,9 @@
       "PowerShell(git add src/app/api/apenados/face/search/route.ts Dockerfile)",
       "PowerShell(git commit -m \"fix: expose stderr in Python error and force pip cache-bust to verify insightface 0.7.3\")",
       "PowerShell(git add src/app/api/apenados/face/search/route.ts scripts/arcface_analyze.py scripts/arcface_index.py)",
-      "PowerShell(git commit -m \"fix: set MPLCONFIGDIR in spawn env, catch all import exceptions, add traceback to errors\")"
+      "PowerShell(git commit -m \"fix: set MPLCONFIGDIR in spawn env, catch all import exceptions, add traceback to errors\")",
+      "PowerShell(git add scripts/arcface_analyze.py scripts/arcface_index.py src/app/api/apenados/face/search/route.ts)",
+      "PowerShell(git commit -m \"fix: catch BaseException for SystemExit at import, add -u unbuffered flag to Python spawn\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
