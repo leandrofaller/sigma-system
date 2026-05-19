@@ -451,10 +451,14 @@ model UserDevice {
   userAgent    String
   ipAddress    String
   status       DeviceStatus @default(PENDING)
-  authorizedBy String?
-  authorizedAt DateTime?
-  lastUsedAt   DateTime     @default(now())
-  createdAt    DateTime     @default(now())
+  authorizedBy    String?
+  authorizedAt    DateTime?
+  lastUsedAt      DateTime     @default(now())
+  createdAt       DateTime     @default(now())
+  latitude        Float?
+  longitude       Float?
+  locationAddress String?
+  locationAt      DateTime?
 
   @@index([userId, status])
   @@map("user_devices")

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Monitor, Check, X, Trash2, Shield, ShieldOff, Loader2, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Monitor, Check, Trash2, Shield, ShieldOff, Loader2, RefreshCw, ToggleLeft, ToggleRight, MapPin, MapPinOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DeviceUser {
@@ -20,6 +20,10 @@ interface Device {
   authorizedAt: string | null;
   lastUsedAt: string;
   createdAt: string;
+  latitude: number | null;
+  longitude: number | null;
+  locationAddress: string | null;
+  locationAt: string | null;
   user: DeviceUser;
 }
 
@@ -212,6 +216,7 @@ export function DevicesPanel({ initialDevices, enforcementEnabled: initialEnforc
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">IP</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Último acesso</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Registrado em</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden xl:table-cell">Localização</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -234,6 +239,47 @@ export function DevicesPanel({ initialDevices, enforcementEnabled: initialEnforc
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
                       <span className="text-gray-400 text-xs">{fmt(device.createdAt)}</span>
+                    </td>
+                    <td className="px-4 py-3 hidden xl:table-cell">
+                      {device.locationAddress ? (
+                        <a
+                          href={`https://www.google.com/maps?q=${device.latitude},${device.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-start gap-1.5 group max-w-[220px]"
+                          title={device.locationAddress}
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span className="text-gray-300 text-xs leading-relaxed line-clamp-2 group-hover:text-white transition-colors">
+                            {device.locationAddress}
+                          </span>
+                        </a>
+                      ) : device.latitude !== null && device.longitude !== null ? (
+                        <a
+                          href={`https://www.google.com/maps?q=${device.latitude},${device.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 group"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                          <span className="font-mono text-gray-400 text-xs group-hover:text-white transition-colors">
+                            {device.latitude.toFixed(4)}, {device.longitude.toFixed(4)}
+                          </span>
+                        </a>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <MapPinOff className={cn(
+                            'w-3.5 h-3.5 flex-shrink-0',
+                            device.status === 'PENDING' ? 'text-yellow-500' : 'text-gray-600'
+                          )} />
+                          <span className={cn(
+                            'text-xs',
+                            device.status === 'PENDING' ? 'text-yellow-600' : 'text-gray-600'
+                          )}>
+                            Não informado
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 justify-end">
