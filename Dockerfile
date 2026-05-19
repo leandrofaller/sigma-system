@@ -51,12 +51,7 @@ RUN echo "cache-bust: ${PIP_CACHE_BUST}" && \
         insightface==0.7.3 \
         "onnxruntime==1.16.3" \
         opencv-python-headless && \
-    HOME=/tmp /opt/arcface-venv/bin/python3 -c "
-import numpy, onnxruntime, insightface
-print('numpy', numpy.__version__)
-print('onnxruntime', onnxruntime.__version__)
-print('insightface', insightface.__version__)
-"
+    HOME=/tmp /opt/arcface-venv/bin/python3 -c "import numpy,onnxruntime,insightface; print('numpy',numpy.__version__,'onnxruntime',onnxruntime.__version__,'insightface',insightface.__version__)"
 
 # Diretorio de modelos ja com dono nextjs (pode gravar no primeiro uso se download falhar aqui)
 RUN mkdir -p /opt/arcface-models && chown 1001:1001 /opt/arcface-models
