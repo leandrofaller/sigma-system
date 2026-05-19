@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   X, ScanFace, Upload, Loader2, AlertTriangle, RefreshCw,
-  Database, Search, CheckCircle, Trash2, Users,
+  Database, Search, CheckCircle, Trash2, Users, ZoomIn, ZoomOut,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -122,6 +122,7 @@ function FaceCanvas({
   imageWidth,
   imageHeight,
   onSelectFace,
+  displayHeight,
 }: {
   imageUrl: string;
   faces: DetectedFace[];
@@ -129,6 +130,7 @@ function FaceCanvas({
   imageWidth: number;
   imageHeight: number;
   onSelectFace: (idx: number) => void;
+  displayHeight: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -164,7 +166,7 @@ function FaceCanvas({
       ctx.font = 'bold 11px sans-serif';
       ctx.fillText(`#${i + 1}`, dx + 4, dy - 6);
     });
-  }, [faces, selectedIdx, imageWidth, imageHeight]);
+  }, [faces, selectedIdx, imageWidth, imageHeight, displayHeight]);
 
   useEffect(() => {
     const img = imgRef.current;
@@ -175,13 +177,13 @@ function FaceCanvas({
   }, [draw]);
 
   return (
-    <div className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800" style={{ maxHeight: '380px' }}>
+    <div className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800" style={{ maxHeight: `${displayHeight}px` }}>
       <img
         ref={imgRef}
         src={imageUrl}
         alt="Foto analisada"
         className="w-full object-contain"
-        style={{ maxHeight: '380px', display: 'block' }}
+        style={{ maxHeight: `${displayHeight}px`, display: 'block' }}
         onLoad={draw}
       />
       <canvas
@@ -222,6 +224,7 @@ export function FaceSearch({ onClose, userRole }: Props) {
   const [selectedFaceIdx, setSelectedFaceIdx] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [minSimilarity, setMinSimilarity] = useState(30);
+  const [faceDisplayHeight, setFaceDisplayHeight] = useState(380);
 
   // Index
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
@@ -488,7 +491,20 @@ export function FaceSearch({ onClose, userRole }: Props) {
                     imageWidth={result.imageWidth}
                     imageHeight={result.imageHeight}
                     onSelectFace={setSelectedFaceIdx}
+                    displayHeight={faceDisplayHeight}
                   />
+
+                  {/* Controle de tamanho da prévia */}
+                  <div className="flex items-center gap-2">
+                    <ZoomOut className="w-3.5 h-3.5 text-subtle flex-shrink-0" />
+                    <input
+                      type="range" min={180} max={640} step={20} value={faceDisplayHeight}
+                      onChange={(e) => setFaceDisplayHeight(Number(e.target.value))}
+                      className="flex-1 accent-sigma-600"
+                    />
+                    <ZoomIn className="w-3.5 h-3.5 text-subtle flex-shrink-0" />
+                    <span className="text-xs text-subtle w-10 text-right">{faceDisplayHeight}px</span>
+                  </div>
 
                   {/* Seletor de rosto (múltiplos rostos) */}
                   {result.faces.length > 1 && (
