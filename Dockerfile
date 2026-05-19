@@ -40,9 +40,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN groupadd --system --gid 1001 nodejs && \
     useradd --system --uid 1001 --gid nodejs nextjs
 
-# Python venv com InsightFace ArcFace — cache-bust: 2026-05-19c
+# ARG force-invalida cache do registry (muda o valor para rebustar)
+ARG PIP_CACHE_BUST=2026-05-20a
 # numpy<2: onnxruntime 1.16.3 foi compilado com numpy 1.x, incompativel com numpy 2.x
-RUN python3 -m venv /opt/arcface-venv && \
+RUN echo "cache-bust: ${PIP_CACHE_BUST}" && \
+    python3 -m venv /opt/arcface-venv && \
     /opt/arcface-venv/bin/pip install --upgrade pip && \
     /opt/arcface-venv/bin/pip install \
         "numpy<2" \
