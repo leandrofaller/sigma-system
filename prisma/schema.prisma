@@ -297,7 +297,8 @@ model Debriefing {
   id            String         @id @default(cuid())
   number        String         @unique
   date          DateTime
-  missionDate   DateTime?
+  missionDate    DateTime?
+  missionEndDate DateTime?
   missionCode   String?
   operationType String?
   operatives    String?

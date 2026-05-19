@@ -8,6 +8,7 @@ interface FormData {
   number: string;
   date: string;
   missionDate?: string;
+  missionEndDate?: string;
   missionCode?: string;
   operationType?: string;
   operatives?: string;
@@ -217,7 +218,10 @@ export function DebriefingPreview({ form }: Props) {
           <p style={fieldRow}><strong><u>{form.number || 'DEBRIEFING Nº___/20__/AIP/SEJUS/RO'}</u></strong></p>
           <p style={fieldRow}><strong>Data do Debriefing:</strong>&nbsp;{form.date ? formatDate(new Date(form.date + 'T12:00:00')) : '__/__/____'}</p>
           {form.missionDate && (
-            <p style={fieldRow}><strong>Data da Missão:</strong>&nbsp;{formatDate(new Date(form.missionDate + 'T12:00:00'))}</p>
+            <p style={fieldRow}><strong>Data inicial da Missão:</strong>&nbsp;{formatDate(new Date(form.missionDate + 'T12:00:00'))}</p>
+          )}
+          {form.missionEndDate && (
+            <p style={fieldRow}><strong>Data final da Missão:</strong>&nbsp;{formatDate(new Date(form.missionEndDate + 'T12:00:00'))}</p>
           )}
           {form.missionCode && (
             <p style={fieldRow}><strong>Código da Missão:</strong>&nbsp;{form.missionCode}</p>

@@ -44,7 +44,8 @@ export default async function AcompanhamentoPage() {
 
   const inProgress = enriched.filter(m => m.status === 'IN_PROGRESS');
   const planned = enriched.filter(m => m.status === 'PLANNED');
-  const others = enriched.filter(m => m.status === 'COMPLETED' || m.status === 'CANCELLED');
+  const completed = enriched.filter(m => m.status === 'COMPLETED');
+  const cancelled = enriched.filter(m => m.status === 'CANCELLED');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -57,7 +58,8 @@ export default async function AcompanhamentoPage() {
 
       <Section title="Em Curso" missions={inProgress} highlight />
       <Section title="Planejadas" missions={planned} />
-      {others.length > 0 && <Section title="Concluídas / Canceladas" missions={others} muted />}
+      <Section title="Concluídas" missions={completed} muted />
+      <Section title="Canceladas" missions={cancelled} muted cancelled />
 
       {missions.length === 0 && (
         <div className="card p-12 text-center">
@@ -73,14 +75,16 @@ export default async function AcompanhamentoPage() {
 }
 
 function Section({
-  title, missions, highlight, muted,
-}: { title: string; missions: any[]; highlight?: boolean; muted?: boolean }) {
+  title, missions, highlight, muted, cancelled,
+}: { title: string; missions: any[]; highlight?: boolean; muted?: boolean; cancelled?: boolean }) {
   if (missions.length === 0) return null;
 
   return (
     <section>
       <h2 className={`text-xs font-bold uppercase tracking-wider mb-3 px-1 flex items-center gap-2 ${
-        highlight ? 'text-orange-600 dark:text-orange-400' : 'text-subtle'
+        highlight ? 'text-orange-600 dark:text-orange-400'
+        : cancelled ? 'text-red-500 dark:text-red-400'
+        : 'text-subtle'
       }`}>
         {highlight && <Activity className="w-3.5 h-3.5 animate-pulse" />}
         {title} <span className="font-normal opacity-60">({missions.length})</span>
@@ -90,8 +94,11 @@ function Section({
           <Link
             key={m.id}
             href={`/missoes/${m.id}/quadro`}
-            className={`card p-4 hover:shadow-lg hover:border-sigma-300 dark:hover:border-sigma-700 transition-all group ${
-              muted ? 'opacity-70 hover:opacity-100' : ''
+            className={`card p-4 hover:shadow-lg transition-all group ${
+              cancelled
+                ? 'opacity-60 hover:opacity-90 hover:border-red-300 dark:hover:border-red-700'
+                : muted ? 'opacity-70 hover:opacity-100 hover:border-sigma-300 dark:hover:border-sigma-700'
+                : 'hover:border-sigma-300 dark:hover:border-sigma-700'
             }`}
           >
             <div className="flex items-start justify-between gap-2">

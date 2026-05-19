@@ -77,6 +77,8 @@ function FileMessage({ msg, isOwn }: { msg: any; isOwn: boolean }) {
   );
 }
 
+function ckKey(ch: Channel): string { return `${ch.type}:${ch.id}`; }
+
 export function ChatWindow({ currentUser, contacts, groups }: Props) {
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -88,9 +90,13 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
   const [clearing, setClearing] = useState(false);
   const [emojiPicker, setEmojiPicker] = useState<{ msgId: string; top: number; left: number } | null>(null);
   const [emojiInsert, setEmojiInsert] = useState<{ top: number; left: number } | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const bgPollRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<string | null>(null);
+  const lastSeenRef = useRef<Record<string, string>>({});
+  const activeChannelRef = useRef<Channel | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
@@ -113,6 +119,48 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Keep activeChannelRef in sync for use in bg poll closure
+  useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
+
+  // Initialize lastSeen to now for all channels on mount so pre-existing messages don't show as unread
+  useEffect(() => {
+    const now = new Date().toISOString();
+    groups.forEach(g => { lastSeenRef.current[`group:${g.id}`] = now; });
+    contacts.forEach(c => { lastSeenRef.current[`direct:${c.id}`] = now; });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Background poller: check all non-active channels for new messages every 10s
+  useEffect(() => {
+    const bgPoll = async () => {
+      const current = activeChannelRef.current;
+      const allChs: Channel[] = [
+        ...groups.map(g => ({ type: 'group' as const, id: g.id, name: g.name })),
+        ...contacts.map(c => ({ type: 'direct' as const, id: c.id, name: c.name })),
+      ];
+      for (const ch of allChs) {
+        if (current && ckKey(ch) === ckKey(current)) continue;
+        const since = lastSeenRef.current[ckKey(ch)];
+        if (!since) continue;
+        const params = new URLSearchParams();
+        if (ch.type === 'group') params.set('groupId', ch.id);
+        else params.set('receiverId', ch.id);
+        params.set('since', since);
+        try {
+          const res = await fetch(`/api/chat/messages?${params}`);
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            lastSeenRef.current[ckKey(ch)] = data[data.length - 1].createdAt;
+            setUnreadCounts(prev => ({ ...prev, [ckKey(ch)]: (prev[ckKey(ch)] || 0) + data.length }));
+          }
+        } catch {}
+      }
+    };
+    bgPollRef.current = setInterval(bgPoll, 10000);
+    return () => { if (bgPollRef.current) clearInterval(bgPollRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, contacts]);
 
   const insertEmoji = (emoji: string) => {
     const el = inputRef.current;
@@ -157,7 +205,10 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
     const data = await res.json();
     if (Array.isArray(data)) {
       setMessages(data);
-      if (data.length > 0) lastMessageRef.current = data[data.length - 1].createdAt;
+      if (data.length > 0) {
+        lastMessageRef.current = data[data.length - 1].createdAt;
+        if (activeChannel) lastSeenRef.current[ckKey(activeChannel)] = data[data.length - 1].createdAt;
+      }
     }
   }, [activeChannel]);
 
@@ -335,38 +386,64 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
           {groups.length > 0 && (
             <>
               <p className="text-xs font-semibold text-subtle uppercase tracking-wider px-3 py-2 mt-2">Grupos</p>
-              {groups.map((g) => (
-                <button key={g.id} onClick={() => setActiveChannel({ type: 'group', id: g.id, name: g.name })}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 transition-colors text-left
-                    ${activeChannel?.id === g.id
-                      ? 'bg-sigma-50 dark:bg-sigma-900/20 text-sigma-700 dark:text-sigma-400'
-                      : 'text-body hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: g.color + '20' }}>
-                    <Hash className="w-3.5 h-3.5" style={{ color: g.color }} />
-                  </div>
-                  <span className="text-sm truncate">{g.name}</span>
-                </button>
-              ))}
+              {groups.map((g) => {
+                const ch: Channel = { type: 'group', id: g.id, name: g.name };
+                const unread = unreadCounts[ckKey(ch)] || 0;
+                return (
+                  <button key={g.id} onClick={() => {
+                    setUnreadCounts(prev => { const n = { ...prev }; delete n[ckKey(ch)]; return n; });
+                    lastSeenRef.current[ckKey(ch)] = new Date().toISOString();
+                    setActiveChannel(ch);
+                  }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 transition-colors text-left
+                      ${activeChannel?.id === g.id
+                        ? 'bg-sigma-50 dark:bg-sigma-900/20 text-sigma-700 dark:text-sigma-400'
+                        : 'text-body hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: g.color + '20' }}>
+                      <Hash className="w-3.5 h-3.5" style={{ color: g.color }} />
+                    </div>
+                    <span className="text-sm truncate flex-1">{g.name}</span>
+                    {unread > 0 && (
+                      <span className="flex-shrink-0 flex items-center justify-center min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full px-1">
+                        {unread > 99 ? '99+' : unread}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </>
           )}
           {filteredContacts.length > 0 && (
             <>
               <p className="text-xs font-semibold text-subtle uppercase tracking-wider px-3 py-2 mt-2">Direto</p>
-              {filteredContacts.map((c) => (
-                <button key={c.id} onClick={() => setActiveChannel({ type: 'direct', id: c.id, name: c.name })}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 transition-colors text-left
-                    ${activeChannel?.id === c.id
-                      ? 'bg-sigma-50 dark:bg-sigma-900/20 text-sigma-700 dark:text-sigma-400'
-                      : 'text-body hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-                  <div className="w-7 h-7 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-body">
-                    {c.name.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{c.name}</p>
-                    <p className="text-xs text-subtle truncate">{c.group?.name}</p>
-                  </div>
-                </button>
-              ))}
+              {filteredContacts.map((c) => {
+                const ch: Channel = { type: 'direct', id: c.id, name: c.name };
+                const unread = unreadCounts[ckKey(ch)] || 0;
+                return (
+                  <button key={c.id} onClick={() => {
+                    setUnreadCounts(prev => { const n = { ...prev }; delete n[ckKey(ch)]; return n; });
+                    lastSeenRef.current[ckKey(ch)] = new Date().toISOString();
+                    setActiveChannel(ch);
+                  }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 transition-colors text-left
+                      ${activeChannel?.id === c.id
+                        ? 'bg-sigma-50 dark:bg-sigma-900/20 text-sigma-700 dark:text-sigma-400'
+                        : 'text-body hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                    <div className="w-7 h-7 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-body">
+                      {c.name.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{c.name}</p>
+                      <p className="text-xs text-subtle truncate">{c.group?.name}</p>
+                    </div>
+                    {unread > 0 && (
+                      <span className="flex-shrink-0 flex items-center justify-center min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full px-1 ml-1">
+                        {unread > 99 ? '99+' : unread}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </>
           )}
         </div>

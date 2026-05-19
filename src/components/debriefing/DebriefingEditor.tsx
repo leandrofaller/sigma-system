@@ -44,6 +44,9 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
     missionDate: initialData?.missionDate
       ? new Date(initialData.missionDate).toISOString().split('T')[0]
       : '',
+    missionEndDate: initialData?.missionEndDate
+      ? new Date(initialData.missionEndDate).toISOString().split('T')[0]
+      : '',
     missionCode: initialData?.missionCode || '',
     operationType: initialData?.operationType || '',
     operatives: initialData?.operatives || '',
@@ -135,8 +138,13 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
               className={inputCls} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-subtle mb-1.5">Data da Missão</label>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Data inicial da Missão</label>
             <input type="date" value={form.missionDate} onChange={(e) => update('missionDate', e.target.value)}
+              className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Data final da Missão</label>
+            <input type="date" value={form.missionEndDate} onChange={(e) => update('missionEndDate', e.target.value)}
               className={inputCls} />
           </div>
           <div>
