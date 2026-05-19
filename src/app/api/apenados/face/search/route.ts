@@ -44,7 +44,7 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
         MPLCONFIGDIR: '/tmp/.matplotlib',
         MPLBACKEND: 'Agg',
       };
-      const proc = spawn(cmd, [scriptPath, imagePath], { shell: true, env });
+      const proc = spawn(cmd, ['-u', scriptPath, imagePath], { shell: true, env });
       let stdout = '';
       let stderr = '';
 

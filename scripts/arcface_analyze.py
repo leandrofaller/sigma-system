@@ -25,12 +25,12 @@ def main():
         import cv2
         import numpy as np
         from insightface.app import FaceAnalysis
-    except Exception as e:
+    except BaseException as e:
         print(json.dumps({
             "error": f"Erro ao importar: {type(e).__name__}: {e}",
             "install": "pip install insightface onnxruntime opencv-python-headless"
         }), flush=True)
-        sys.exit(1)
+        raise SystemExit(1)
 
     try:
         app = FaceAnalysis(
