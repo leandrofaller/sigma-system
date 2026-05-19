@@ -50,7 +50,9 @@
       "PowerShell(npx next build 2>&1)",
       "PowerShell(git add Dockerfile start.sh scripts/download_model.py)",
       "PowerShell(git push)",
-      "PowerShell(git add prisma/schema.prisma)"
+      "PowerShell(git add prisma/schema.prisma)",
+      "PowerShell(git add src/app/api/apenados/face/search/route.ts)",
+      "PowerShell(git commit -m \"fix: add catch block and improve error propagation in face search route`n`nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\received-relints\\folders",
