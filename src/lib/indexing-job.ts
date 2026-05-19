@@ -1,9 +1,12 @@
-import { join } from 'path';
 import { prisma } from './db';
 import { runIndexBatch } from './arcface-batch';
 import { getApenadosDir } from './storage';
 
 const BATCH_SIZE = 30;
+
+// Sentinel gravado no banco para fotos sem rosto detectável ou sem arquivo.
+// Impede que esses registros sejam reprocessados a cada execução.
+export const FACE_NONE = 'NONE';
 
 export interface JobProgress {
   current: number;
@@ -51,14 +54,23 @@ export function startJob(): void {
 async function runLoop(): Promise<void> {
   const uploadsDir = getApenadosDir();
 
-  const total = await prisma.apenado.count({
-    where: { photoPath: { not: null }, faceDescriptor: null },
-  });
+  // Conta total de fotos e já processadas para mostrar progresso real (ex: 600/1000 ao retomar)
+  const [totalWithPhoto, alreadyProcessed] = await Promise.all([
+    prisma.apenado.count({ where: { photoPath: { not: null } } }),
+    prisma.apenado.count({ where: { photoPath: { not: null }, faceDescriptor: { not: null } } }),
+  ]);
 
   const startTime = Date.now();
-  state.progress = { current: 0, total, faces: 0, skipped: 0, errors: 0, startTime };
+  state.progress = {
+    current: alreadyProcessed,
+    total: totalWithPhoto,
+    faces: 0,
+    skipped: 0,
+    errors: 0,
+    startTime,
+  };
 
-  let processed = 0;
+  let processed = alreadyProcessed;
   let faces = 0;
   let skipped = 0;
   let errors = 0;
@@ -89,15 +101,24 @@ async function runLoop(): Promise<void> {
         );
         faces++;
       } else if (r.no_face || r.no_photo) {
+        // Marca com sentinel para não reprocessar em execuções futuras.
+        // O campo fica não-nulo, excluindo o registro da fila de pendentes.
+        updates.push(
+          prisma.apenado.update({
+            where: { id: r.id },
+            data: { faceDescriptor: FACE_NONE },
+          }),
+        );
         skipped++;
       } else {
+        // Erros de leitura/processamento ficam com faceDescriptor null para retry automático.
         errors++;
       }
     }
     await Promise.all(updates);
 
     processed += ids.length;
-    state.progress = { current: processed, total, faces, skipped, errors, startTime };
+    state.progress = { current: processed, total: totalWithPhoto, faces, skipped, errors, startTime };
   }
 
   state.isRunning = false;

@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
     }
 
     const all = await prisma.apenado.findMany({
-      where: { faceDescriptor: { not: null } },
+      where: { faceDescriptor: { not: null }, NOT: { faceDescriptor: 'NONE' } },
       select: {
         id: true,
         name: true,

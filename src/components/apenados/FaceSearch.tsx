@@ -38,6 +38,7 @@ interface IndexStatus {
   total: number;
   indexed: number;
   withPhoto: number;
+  noFace: number;
   remaining: number;
 }
 
@@ -533,10 +534,11 @@ export function FaceSearch({ onClose, userRole }: Props) {
             <div className="space-y-5">
               {/* Contadores */}
               {indexStatus && (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   {[
                     { label: 'Com foto', value: indexStatus.withPhoto, color: 'text-sigma-600' },
                     { label: 'Indexadas', value: indexStatus.indexed, color: 'text-green-600 dark:text-green-400' },
+                    { label: 'Sem rosto', value: indexStatus.noFace ?? 0, color: 'text-gray-500 dark:text-gray-400' },
                     { label: 'Pendentes', value: indexStatus.remaining, color: indexStatus.remaining > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400' },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="card p-4 text-center">
