@@ -39,21 +39,36 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
       const cmd = candidates[idx++];
       const proc = spawn(cmd, [scriptPath, imagePath], { shell: true, env: process.env });
       let stdout = '';
+      let stderr = '';
 
       proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+
       proc.on('close', (code) => {
-        if (code === 0 && stdout.trim()) {
+        const trimmed = stdout.trim();
+        if (trimmed) {
           try {
-            const parsed: AnalyzeResult = JSON.parse(stdout);
-            if (parsed.error) reject(new Error(parsed.error));
-            else resolve(parsed);
-          } catch {
-            reject(new Error('Resposta inválida do script Python.'));
-          }
-        } else {
+            const parsed = JSON.parse(trimmed) as AnalyzeResult;
+            // Script imprimiu JSON de erro — usa a mensagem real independente do exit code
+            if (parsed.error) {
+              reject(new Error(parsed.error));
+              return;
+            }
+            if (code === 0) {
+              resolve(parsed);
+              return;
+            }
+          } catch {}
+        }
+        // Script não produziu JSON valido — tenta proximo candidato
+        if (code !== 0) {
           tryNext();
+        } else {
+          // code 0 mas sem JSON valido
+          reject(new Error(stderr.trim() || 'Resposta inválida do script Python.'));
         }
       });
+
       proc.on('error', () => tryNext());
     }
 
@@ -152,6 +167,8 @@ export async function POST(req: NextRequest) {
       imageHeight: analysis.imageHeight,
       indexed,
     });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   } finally {
     await unlink(tmpPath).catch(() => {});
   }
