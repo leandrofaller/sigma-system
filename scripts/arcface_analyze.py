@@ -35,11 +35,17 @@ def main():
         raise SystemExit(1)
 
     try:
-        app = FaceAnalysis(
-            name="buffalo_l",
-            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
-        )
-        app.prepare(ctx_id=0, det_size=(640, 640))
+        import io as _io
+        _real_stdout = sys.stdout
+        sys.stdout = _io.StringIO()
+        try:
+            app = FaceAnalysis(
+                name="buffalo_l",
+                providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+            )
+            app.prepare(ctx_id=0, det_size=(640, 640))
+        finally:
+            sys.stdout = _real_stdout
 
         img = cv2.imread(image_path)
         if img is None:

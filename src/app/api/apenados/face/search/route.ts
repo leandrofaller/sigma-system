@@ -58,17 +58,21 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
       proc.on('close', (code) => {
         const trimmed = stdout.trim();
         if (trimmed) {
-          try {
-            const parsed = JSON.parse(trimmed) as AnalyzeResult;
-            if (parsed.error) {
-              reject(new Error(parsed.error));
-              return;
-            }
-            if (code === 0) {
-              resolve(parsed);
-              return;
-            }
-          } catch {}
+          const lines = trimmed.split('\n').filter(Boolean).reverse();
+          for (const line of lines) {
+            try {
+              const parsed = JSON.parse(line) as AnalyzeResult;
+              if (parsed.error) {
+                reject(new Error(parsed.error));
+                return;
+              }
+              if (code === 0) {
+                resolve(parsed);
+                return;
+              }
+              break;
+            } catch {}
+          }
         }
         if (code !== 0) {
           const raw = stderr.trim() || `exit ${code}`;
