@@ -40,22 +40,23 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN groupadd --system --gid 1001 nodejs && \
     useradd --system --uid 1001 --gid nodejs nextjs
 
-# Python venv com InsightFace ArcFace — cache-bust: 2026-05-19
-# insightface==0.7.3 sem --prefer-binary: instala da fonte, evita wheel antigo 0.2.1
+# Python venv com InsightFace ArcFace — cache-bust: 2026-05-19b
+# onnxruntime==1.16.3: versao estavel com suporte amplo de CPU (sem AVX-512 obrigatorio)
 RUN python3 -m venv /opt/arcface-venv && \
     /opt/arcface-venv/bin/pip install --upgrade pip && \
     /opt/arcface-venv/bin/pip install \
         insightface==0.7.3 \
-        onnxruntime \
+        "onnxruntime==1.16.3" \
         opencv-python-headless && \
-    /opt/arcface-venv/bin/python3 -c "import insightface; print('insightface', insightface.__version__)"
+    HOME=/tmp /opt/arcface-venv/bin/python3 -c "import insightface; print('insightface', insightface.__version__)"
 
 # Diretorio de modelos ja com dono nextjs (pode gravar no primeiro uso se download falhar aqui)
 RUN mkdir -p /opt/arcface-models && chown 1001:1001 /opt/arcface-models
 
 # Pre-baixa modelo buffalo_l (~326 MB) no build para evitar download na primeira requisicao
 COPY scripts/download_model.py /tmp/download_model.py
-RUN gosu nextjs /opt/arcface-venv/bin/python3 /tmp/download_model.py || \
+RUN HOME=/tmp MPLCONFIGDIR=/tmp/.matplotlib MPLBACKEND=Agg \
+    gosu nextjs /opt/arcface-venv/bin/python3 -u /tmp/download_model.py || \
     echo "AVISO: modelo sera baixado na primeira requisicao"
 RUN rm -f /tmp/download_model.py
 
