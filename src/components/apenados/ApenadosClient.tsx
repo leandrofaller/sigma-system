@@ -14,7 +14,13 @@ import { FaceSearch } from './FaceSearch';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const SEARCH_PAGE_SIZE = 50;
-const LETTER_TAKE = 500;
+const LETTER_TAKE_DESKTOP = 500;
+const LETTER_TAKE_MOBILE = 30;
+
+const MOBILE_UA = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i;
+function isMobileDevice(): boolean {
+  return typeof navigator !== 'undefined' && MOBILE_UA.test(navigator.userAgent);
+}
 
 interface Stats { total: number; comFoto: number; semFoto: number }
 
@@ -139,7 +145,8 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
     setIsLoadingLetter(true);
     setLetterData([]);
     try {
-      const res = await fetch(`/api/apenados?letter=${encodeURIComponent(letter)}&skip=0&take=${LETTER_TAKE}`);
+      const take = isMobileDevice() ? LETTER_TAKE_MOBILE : LETTER_TAKE_DESKTOP;
+      const res = await fetch(`/api/apenados?letter=${encodeURIComponent(letter)}&skip=0&take=${take}`);
       const data = await res.json();
       const records: Apenado[] = data.apenados ?? [];
       letterCache.current.set(letter, records);

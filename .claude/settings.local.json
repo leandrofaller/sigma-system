@@ -23,7 +23,8 @@
       "Bash(rtk npx *)",
       "Bash(rtk find *)",
       "Bash(rtk git *)",
-      "Bash(set \"DATABASE_URL=postgresql://user:pass@localhost:5432/db\")"
+      "Bash(set \"DATABASE_URL=postgresql://user:pass@localhost:5432/db\")",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\('framer-motion:', p.dependencies['framer-motion'] || 'NOT FOUND'\\)\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

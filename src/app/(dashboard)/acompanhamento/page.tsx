@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Activity, Calendar, MapPin, Users, ChevronRight, ClipboardCheck } from 'lucide-react';
+import { DeleteMissionButton } from '@/components/acompanhamento/DeleteMissionButton';
 
 export default async function AcompanhamentoPage() {
   const session = await auth();
@@ -56,10 +57,10 @@ export default async function AcompanhamentoPage() {
         </p>
       </div>
 
-      <Section title="Em Curso" missions={inProgress} highlight />
-      <Section title="Planejadas" missions={planned} />
-      <Section title="Concluídas" missions={completed} muted />
-      <Section title="Canceladas" missions={cancelled} muted cancelled />
+      <Section title="Em Curso" missions={inProgress} highlight isAdmin={isAdmin} />
+      <Section title="Planejadas" missions={planned} isAdmin={isAdmin} />
+      <Section title="Concluídas" missions={completed} muted isAdmin={isAdmin} />
+      <Section title="Canceladas" missions={cancelled} muted cancelled isAdmin={isAdmin} />
 
       {missions.length === 0 && (
         <div className="card p-12 text-center">
@@ -75,8 +76,8 @@ export default async function AcompanhamentoPage() {
 }
 
 function Section({
-  title, missions, highlight, muted, cancelled,
-}: { title: string; missions: any[]; highlight?: boolean; muted?: boolean; cancelled?: boolean }) {
+  title, missions, highlight, muted, cancelled, isAdmin,
+}: { title: string; missions: any[]; highlight?: boolean; muted?: boolean; cancelled?: boolean; isAdmin?: boolean }) {
   if (missions.length === 0) return null;
 
   return (
@@ -91,10 +92,15 @@ function Section({
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {missions.map(m => (
+          <div key={m.id} className="relative group/card">
+            {isAdmin && (
+              <div className="absolute top-2 right-2 z-10 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                <DeleteMissionButton missionId={m.id} />
+              </div>
+            )}
           <Link
-            key={m.id}
             href={`/missoes/${m.id}/quadro`}
-            className={`card p-4 hover:shadow-lg transition-all group ${
+            className={`block card p-4 hover:shadow-lg transition-all group ${
               cancelled
                 ? 'opacity-60 hover:opacity-90 hover:border-red-300 dark:hover:border-red-700'
                 : muted ? 'opacity-70 hover:opacity-100 hover:border-sigma-300 dark:hover:border-sigma-700'
@@ -143,6 +149,7 @@ function Section({
               </div>
             )}
           </Link>
+          </div>
         ))}
       </div>
     </section>
