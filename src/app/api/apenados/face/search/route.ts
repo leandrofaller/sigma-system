@@ -30,10 +30,12 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
     const envPython = process.env.ARCFACE_PYTHON;
     const candidates = envPython ? [envPython] : ['python3', 'python', 'py'];
     let idx = 0;
+    const errors: string[] = [];
 
     function tryNext() {
       if (idx >= candidates.length) {
-        reject(new Error('Python não encontrado. Defina ARCFACE_PYTHON=/opt/arcface-venv/bin/python3 no .env'));
+        const detail = errors.length ? ` | ${errors.join(' | ')}` : '';
+        reject(new Error(`Python não encontrado. ARCFACE_PYTHON=${envPython ?? '(não definido)'}${detail}`));
         return;
       }
       const cmd = candidates[idx++];
@@ -49,7 +51,6 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
         if (trimmed) {
           try {
             const parsed = JSON.parse(trimmed) as AnalyzeResult;
-            // Script imprimiu JSON de erro — usa a mensagem real independente do exit code
             if (parsed.error) {
               reject(new Error(parsed.error));
               return;
@@ -60,16 +61,19 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
             }
           } catch {}
         }
-        // Script não produziu JSON valido — tenta proximo candidato
         if (code !== 0) {
+          const hint = (stderr.trim() || `exit ${code}`).slice(0, 300);
+          errors.push(`[${cmd}] ${hint}`);
           tryNext();
         } else {
-          // code 0 mas sem JSON valido
           reject(new Error(stderr.trim() || 'Resposta inválida do script Python.'));
         }
       });
 
-      proc.on('error', () => tryNext());
+      proc.on('error', (e) => {
+        errors.push(`[${cmd}] spawn: ${e.message}`);
+        tryNext();
+      });
     }
 
     tryNext();
