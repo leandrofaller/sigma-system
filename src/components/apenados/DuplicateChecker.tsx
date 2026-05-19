@@ -3,10 +3,9 @@
 import { useState, useCallback } from 'react';
 import {
   X, ScanSearch, Loader2, Trash2, AlertTriangle, CheckCircle,
-  RefreshCw, Users, Fingerprint, Waves,
+  RefreshCw, Users, Fingerprint, Waves, Clock, Zap,
 } from 'lucide-react';
 
-// Registro comum aos dois modos (exato não tem photoHash)
 interface DisplayRecord {
   id: string;
   name: string;
@@ -16,7 +15,6 @@ interface DisplayRecord {
   photoPath: string | null;
 }
 
-// Resultado do modo "Semelhantes" (dHash)
 interface SimilarResult {
   groups: DisplayRecord[][];
   totalAnalyzed: number;
@@ -25,7 +23,6 @@ interface SimilarResult {
   indexedThisRun: number;
 }
 
-// Resultado do modo "Exatas" (SHA-256 via Python ou Node.js)
 interface ExactResult {
   groups: DisplayRecord[][];
   totalFiles: number;
@@ -66,10 +63,21 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Status da análise
+  const [analysisDuration, setAnalysisDuration] = useState<number | null>(null);
+  const [analyzedAt, setAnalyzedAt] = useState<Date | null>(null);
+
+  // Exclusão em massa
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeletedCount, setBulkDeletedCount] = useState<number | null>(null);
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
   const runCheck = useCallback(async (forceMode?: Mode) => {
     const m = forceMode ?? mode;
     setStatus('loading');
     setErrorMsg('');
+    setBulkDeletedCount(null);
+    const start = Date.now();
     try {
       const endpoint = m === 'exact'
         ? '/api/apenados/exact-duplicates'
@@ -82,6 +90,8 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
       const data = await res.json();
       if (m === 'exact') setExactResult(data);
       else setSimilarResult(data);
+      setAnalysisDuration(Date.now() - start);
+      setAnalyzedAt(new Date());
       setStatus('done');
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro desconhecido.');
@@ -93,6 +103,9 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
     setMode(m);
     setStatus('idle');
     setErrorMsg('');
+    setAnalysisDuration(null);
+    setAnalyzedAt(null);
+    setBulkDeletedCount(null);
   };
 
   const handleDeletePhoto = async (record: DisplayRecord) => {
@@ -108,9 +121,36 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
     }
   };
 
+  const handleBulkDelete = async () => {
+    setShowBulkConfirm(false);
+    setBulkDeleting(true);
+    setErrorMsg('');
+    try {
+      // Para cada grupo mantém o primeiro registro (índice 0) e exclui os demais
+      const idsToDelete = activeGroups.flatMap((g) => g.slice(1).map((r) => r.id));
+      const res = await fetch('/api/apenados/exact-duplicates', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idsToDelete }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao excluir registros');
+      const newDeleted = new Set(deletedIds);
+      idsToDelete.forEach((id) => newDeleted.add(id));
+      setDeletedIds(newDeleted);
+      setBulkDeletedCount(data.deleted);
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const activeGroups = (mode === 'exact' ? exactResult?.groups : similarResult?.groups)
     ?.map((g) => g.filter((r) => !deletedIds.has(r.id)))
     .filter((g) => g.length >= 2) ?? [];
+
+  const pendingDeleteCount = activeGroups.reduce((sum, g) => sum + g.length - 1, 0);
 
   const currentMode = MODES.find((m) => m.key === mode)!;
 
@@ -223,6 +263,39 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
           {/* Results */}
           {status === 'done' && (
             <div className="space-y-5">
+
+              {/* Status da análise */}
+              <div className="flex flex-wrap items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400 font-medium">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Análise concluída
+                </div>
+                {analysisDuration !== null && (
+                  <div className="flex items-center gap-1.5 text-xs text-subtle">
+                    <Zap className="w-3.5 h-3.5" />
+                    {analysisDuration < 1000
+                      ? `${analysisDuration}ms`
+                      : `${(analysisDuration / 1000).toFixed(1)}s`}
+                  </div>
+                )}
+                {analyzedAt && (
+                  <div className="flex items-center gap-1.5 text-xs text-subtle">
+                    <Clock className="w-3.5 h-3.5" />
+                    {analyzedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </div>
+                )}
+                {mode === 'exact' && exactResult && (
+                  <div className={`flex items-center gap-1.5 text-xs font-medium ml-auto ${
+                    exactResult.method === 'python'
+                      ? 'text-blue-700 dark:text-blue-400'
+                      : 'text-gray-500 dark:text-gray-400'
+                  }`}>
+                    <Fingerprint className="w-3.5 h-3.5" />
+                    SHA-256 · {exactResult.method === 'python' ? 'Python' : 'Node.js'}
+                  </div>
+                )}
+              </div>
+
               {/* Summary cards */}
               {mode === 'similar' && similarResult && (
                 <div className="grid grid-cols-3 gap-3">
@@ -240,27 +313,35 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
               )}
 
               {mode === 'exact' && exactResult && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { label: 'Arquivos verificados', value: exactResult.totalFiles.toLocaleString('pt-BR'), color: 'text-sigma-600' },
-                      { label: 'Grupos idênticos', value: activeGroups.length.toLocaleString('pt-BR'), color: activeGroups.length > 0 ? 'text-red-600' : 'text-green-600' },
-                    ].map(({ label, value, color }) => (
-                      <div key={label} className="card p-4 text-center">
-                        <p className={`text-2xl font-bold ${color}`}>{value}</p>
-                        <p className="text-xs text-subtle mt-1">{label}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium w-fit ${
-                    exactResult.method === 'python'
-                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                  }`}>
-                    <Fingerprint className="w-3.5 h-3.5" />
-                    SHA-256 via {exactResult.method === 'python' ? 'Python' : 'Node.js (Python não encontrado)'}
-                  </div>
-                </>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Arquivos verificados', value: exactResult.totalFiles.toLocaleString('pt-BR'), color: 'text-sigma-600' },
+                    { label: 'Grupos idênticos', value: activeGroups.length.toLocaleString('pt-BR'), color: activeGroups.length > 0 ? 'text-red-600' : 'text-green-600' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="card p-4 text-center">
+                      <p className={`text-2xl font-bold ${color}`}>{value}</p>
+                      <p className="text-xs text-subtle mt-1">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Resultado da exclusão em massa */}
+              {bulkDeletedCount !== null && (
+                <div className="flex items-center gap-3 px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                  <p className="text-sm font-semibold text-green-800 dark:text-green-300">
+                    {bulkDeletedCount} registro{bulkDeletedCount !== 1 ? 's' : ''} duplicado{bulkDeletedCount !== 1 ? 's' : ''} excluído{bulkDeletedCount !== 1 ? 's' : ''} com sucesso.
+                  </p>
+                </div>
+              )}
+
+              {/* Erro inline (ex: falha na exclusão em massa) */}
+              {errorMsg && (
+                <div className="flex items-start gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3">
+                  <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700 dark:text-red-400">{errorMsg}</p>
+                </div>
               )}
 
               {/* Erros do script Python */}
@@ -333,13 +414,23 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                     )}
                   </div>
                   <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {group.map((record) => {
+                    {group.map((record, ri) => {
                       const isDeleting = deletingId === record.id;
+                      const isKeeper = ri === 0 && mode === 'exact';
                       return (
                         <div
                           key={record.id}
-                          className="relative rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden bg-gray-50 dark:bg-gray-800/50 flex flex-col"
+                          className={`relative rounded-xl border overflow-hidden bg-gray-50 dark:bg-gray-800/50 flex flex-col ${
+                            isKeeper
+                              ? 'border-green-300 dark:border-green-700'
+                              : 'border-gray-100 dark:border-gray-800'
+                          }`}
                         >
+                          {isKeeper && (
+                            <div className="absolute top-1.5 left-1.5 z-10 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                              MANTER
+                            </div>
+                          )}
                           <div className="aspect-square bg-gray-200 dark:bg-gray-700 relative overflow-hidden">
                             {record.photoPath ? (
                               <img
@@ -396,21 +487,74 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
 
         {/* Footer */}
         {status === 'done' && (
-          <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between flex-shrink-0">
+          <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3 flex-shrink-0 flex-wrap">
             <p className="text-xs text-subtle">
               {mode === 'exact'
                 ? `SHA-256 (${exactResult?.method === 'python' ? 'Python' : 'Node.js'}) · ${(exactResult?.totalFiles ?? 0).toLocaleString('pt-BR')} arquivos verificados`
                 : `dHash + LSH · threshold ≤10 bits · ${similarResult?.indexedThisRun ? `${similarResult.indexedThisRun} indexadas agora` : 'índice completo'}`}
             </p>
-            <button
-              onClick={() => runCheck()}
-              className="flex items-center gap-2 text-sm font-medium text-sigma-600 hover:text-sigma-700 border border-sigma-200 dark:border-sigma-800 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 px-4 py-2 rounded-xl transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" /> Verificar novamente
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Botão excluir duplicatas automaticamente (apenas modo exato) */}
+              {mode === 'exact' && activeGroups.length > 0 && (
+                <button
+                  onClick={() => setShowBulkConfirm(true)}
+                  disabled={bulkDeleting}
+                  className="flex items-center gap-2 text-sm font-semibold bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {bulkDeleting
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Trash2 className="w-4 h-4" />}
+                  {bulkDeleting
+                    ? 'Excluindo...'
+                    : `Excluir duplicatas (${pendingDeleteCount})`}
+                </button>
+              )}
+              <button
+                onClick={() => runCheck()}
+                className="flex items-center gap-2 text-sm font-medium text-sigma-600 hover:text-sigma-700 border border-sigma-200 dark:border-sigma-800 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 px-4 py-2 rounded-xl transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" /> Verificar novamente
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Modal de confirmação de exclusão em massa */}
+      {showBulkConfirm && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-red-200 dark:border-red-800 p-6 max-w-sm w-full space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-title">Excluir duplicatas automaticamente?</p>
+                <p className="text-sm text-subtle mt-1">
+                  Para cada grupo idêntico, o <strong>primeiro registro</strong> (marcado com{' '}
+                  <span className="text-green-600 font-semibold">MANTER</span>) será preservado.
+                  Os demais <strong>{pendingDeleteCount} registro{pendingDeleteCount !== 1 ? 's' : ''}</strong> serão excluídos permanentemente, incluindo suas fotos.
+                </p>
+                <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                  Esta ação não pode ser desfeita.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowBulkConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-subtle hover:text-body border border-gray-200 dark:border-gray-700 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors"
+              >
+                Excluir {pendingDeleteCount} registro{pendingDeleteCount !== 1 ? 's' : ''}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

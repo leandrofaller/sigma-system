@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { spawn } from 'child_process';
-import { createReadStream } from 'fs';
+import { createReadStream, unlink } from 'fs';
 import { readdir } from 'fs/promises';
 import { join, extname, basename } from 'path';
 import crypto from 'crypto';
-import { getApenadosDir } from '@/lib/storage';
+import { getApenadosDir, getApenadoPhotoPath } from '@/lib/storage';
 
 interface ScriptOutput {
   groups: string[][];
@@ -92,7 +92,7 @@ async function runNodeJS(uploadsDir: string): Promise<ScriptOutput> {
   return { groups, totalFiles: total, totalGroups: groups.length, errors, method: 'nodejs' };
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+// ── Handlers ─────────────────────────────────────────────────────────────────
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -145,4 +145,43 @@ export async function GET() {
     errors: raw.errors,
     method: raw.method,
   });
+}
+
+// DELETE — exclui registros duplicados enviados pelo frontend.
+// Para cada grupo, o frontend mantém o primeiro e envia os demais para exclusão.
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+  const user = session.user as any;
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const idsToDelete: string[] = Array.isArray(body.idsToDelete) ? body.idsToDelete : [];
+  if (idsToDelete.length === 0) {
+    return NextResponse.json({ error: 'Nenhum ID informado' }, { status: 400 });
+  }
+
+  const apenados = await prisma.apenado.findMany({
+    where: { id: { in: idsToDelete } },
+    select: { id: true, photoPath: true },
+  });
+
+  // Remove arquivos de foto do disco (best-effort)
+  await Promise.allSettled(
+    apenados
+      .filter((a) => a.photoPath)
+      .map(
+        (a) =>
+          new Promise<void>((res) => {
+            unlink(getApenadoPhotoPath(a.photoPath!), () => res());
+          }),
+      ),
+  );
+
+  const result = await prisma.apenado.deleteMany({ where: { id: { in: idsToDelete } } });
+
+  return NextResponse.json({ deleted: result.count });
 }
