@@ -17,6 +17,7 @@ export const authConfig: NextAuthConfig = {
         token.groupId = (user as any).groupId;
         token.groupName = (user as any).groupName;
         token.phone = (user as any).phone;
+        token.deviceAuthorized = (user as any).deviceAuthorized ?? true;
       }
       return token;
     },
@@ -27,6 +28,7 @@ export const authConfig: NextAuthConfig = {
         session.user.groupId = token.groupId as string;
         session.user.groupName = token.groupName as string;
         session.user.phone = token.phone as string;
+        session.user.deviceAuthorized = token.deviceAuthorized as boolean;
       }
       return session;
     },

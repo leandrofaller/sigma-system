@@ -1,8 +1,10 @@
 import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
+import { cookies, headers } from 'next/headers';
 import { prisma } from './db';
 import { authConfig } from '../auth.config';
+import { getOrCreateDevice } from './device';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -35,6 +37,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           data: { lastLogin: new Date() },
         });
 
+        // ── Verificação de dispositivo ────────────────────────────────────────
+        let deviceAuthorized = true;
+        try {
+          const cookieStore = await cookies();
+          const deviceToken = cookieStore.get('sigma-device')?.value;
+
+          if (deviceToken) {
+            const headerStore = await headers();
+            const ua = headerStore.get('user-agent') ?? '';
+            const ip =
+              headerStore.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+              headerStore.get('x-real-ip') ??
+              '';
+
+            const config = await prisma.systemConfig.findUnique({
+              where: { key: 'device_auth_enabled' },
+            });
+            const enforcementEnabled = config?.value === true;
+
+            const status = await getOrCreateDevice(
+              deviceToken,
+              user.id,
+              ua,
+              ip,
+              enforcementEnabled,
+            );
+
+            if (status === 'REVOKED') return null;
+            deviceAuthorized = status === 'AUTHORIZED';
+          }
+        } catch {
+          // Falha silenciosa na verificação de dispositivo não bloqueia o login
+        }
+
         return {
           id: user.id,
           name: user.name,
@@ -43,6 +79,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           groupId: user.groupId,
           groupName: user.group?.name,
           phone: user.phone,
+          deviceAuthorized,
         };
       },
     }),
