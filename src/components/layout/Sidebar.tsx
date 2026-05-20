@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -20,6 +20,7 @@ interface NavItem {
   icon: React.ComponentType<any>;
   roles?: string[];
   badge?: number;
+  badgePulse?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -53,6 +54,8 @@ interface SidebarProps {
 export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const prevCountRef = useRef(0);
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
@@ -67,15 +70,56 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
     }
   }, [mobileOpen]);
 
+  // Polling de mensagens não lidas + notificação nativa
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    async function poll() {
+      try {
+        const res = await fetch('/api/chat/unread');
+        if (!res.ok) return;
+        const { count } = await res.json();
+        if (count > prevCountRef.current && pathname !== '/chat') {
+          if (Notification.permission === 'granted' && document.hidden) {
+            new Notification('Nova mensagem — Chat Interno', {
+              body: `Você tem ${count} mensagem${count !== 1 ? 's' : ''} não lida${count !== 1 ? 's' : ''}.`,
+              icon: '/logos/badge-aip.png',
+            });
+          }
+        }
+        prevCountRef.current = count;
+        setChatUnreadCount(count);
+      } catch {}
+    }
+
+    poll();
+    const id = setInterval(poll, 10_000);
+    return () => clearInterval(id);
+  }, [pathname]);
+
+  // Zera imediatamente ao entrar no chat
+  useEffect(() => {
+    if (pathname === '/chat') {
+      setChatUnreadCount(0);
+      prevCountRef.current = 0;
+    }
+  }, [pathname]);
+
   const adminItems = baseAdminItems.map((item) =>
     item.href === '/admin/dispositivos' && pendingDeviceCount > 0
       ? { ...item, badge: pendingDeviceCount }
       : item
   );
 
-  const filteredNav = navItems.filter(
-    (item) => !item.roles || item.roles.includes(user?.role ?? '')
-  );
+  const filteredNav = navItems
+    .filter((item) => !item.roles || item.roles.includes(user?.role ?? ''))
+    .map((item) =>
+      item.href === '/chat' && chatUnreadCount > 0
+        ? { ...item, badge: chatUnreadCount, badgePulse: true }
+        : item
+    );
   const filteredAdmin = adminItems.filter(
     (item) => (!item.roles || item.roles.includes(user?.role ?? '')) && isAdmin
   );
@@ -233,15 +277,20 @@ function SidebarItem({ item, pathname, collapsed }: { item: NavItem; pathname: s
       className={cn(
         'sidebar-item',
         isActive ? 'sidebar-item-active' : 'sidebar-item-inactive',
-        collapsed && 'justify-center px-2'
+        collapsed && 'justify-center px-2',
+        item.badgePulse && !isActive && 'ring-1 ring-red-500/40'
       )}
       title={collapsed ? item.label : undefined}
     >
       <item.icon className="w-4 h-4 flex-shrink-0" />
       {!collapsed && <span className="flex-1">{item.label}</span>}
-      {!collapsed && item.badge && (
-        <span className="bg-sigma-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-          {item.badge}
+      {item.badge != null && item.badge > 0 && (
+        <span className={cn(
+          'text-white text-xs px-1.5 py-0.5 rounded-full',
+          collapsed ? 'absolute top-1 right-1 px-1 min-w-[16px] text-center' : '',
+          item.badgePulse ? 'bg-red-500 animate-pulse' : 'bg-sigma-500'
+        )}>
+          {item.badge > 99 ? '99+' : item.badge}
         </span>
       )}
     </Link>
