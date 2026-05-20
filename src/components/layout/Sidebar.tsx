@@ -51,10 +51,18 @@ interface SidebarProps {
   pendingDeviceCount?: number;
 }
 
+interface ChatChannel {
+  type: 'direct' | 'group';
+  id: string;
+  name: string;
+  unread: number;
+}
+
 export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [chatChannels, setChatChannels] = useState<ChatChannel[]>([]);
   const prevCountRef = useRef(0);
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
@@ -80,17 +88,29 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
       try {
         const res = await fetch('/api/chat/unread');
         if (!res.ok) return;
-        const { count } = await res.json();
+        const { count, channels } = await res.json() as { count: number; channels: ChatChannel[] };
+
         if (count > prevCountRef.current && pathname !== '/chat') {
           if (Notification.permission === 'granted' && document.hidden) {
-            new Notification('Nova mensagem — Chat Interno', {
-              body: `Você tem ${count} mensagem${count !== 1 ? 's' : ''} não lida${count !== 1 ? 's' : ''}.`,
-              icon: '/logos/badge-aip.png',
-            });
+            const names = channels
+              .filter((c) => c.unread > 0)
+              .map((c) => c.name)
+              .join(', ');
+            new Notification(
+              names
+                ? `Nova mensagem de ${names}`
+                : 'Nova mensagem — Chat Interno',
+              {
+                body: `${count} mensagem${count !== 1 ? 's' : ''} não lida${count !== 1 ? 's' : ''}.`,
+                icon: '/logos/badge-aip.png',
+              }
+            );
           }
         }
+
         prevCountRef.current = count;
         setChatUnreadCount(count);
+        setChatChannels(channels ?? []);
       } catch {}
     }
 
@@ -103,6 +123,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
   useEffect(() => {
     if (pathname === '/chat') {
       setChatUnreadCount(0);
+      setChatChannels([]);
       prevCountRef.current = 0;
     }
   }, [pathname]);
@@ -194,7 +215,24 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {filteredNav.map((item) => (
-          <SidebarItem key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
+          <div key={item.href}>
+            <SidebarItem item={item} pathname={pathname} collapsed={collapsed} />
+            {item.href === '/chat' && !collapsed && chatChannels.length > 0 && pathname !== '/chat' && (
+              <div className="ml-4 mt-0.5 mb-0.5 space-y-0.5 border-l border-gray-700/60 pl-2">
+                {chatChannels.map((ch) => (
+                  <Link
+                    key={ch.id}
+                    href="/chat"
+                    className="flex items-center gap-2 px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                    <span className="flex-1 truncate">{ch.name}</span>
+                    <span className="text-red-400 font-medium tabular-nums">{ch.unread > 99 ? '99+' : ch.unread}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
 
         {filteredAdmin.length > 0 && (
