@@ -28,7 +28,8 @@
       "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -Filter \"middleware.*\")",
       "Bash(Select-Object FullName)",
       "Bash(xargs grep -l \"device\\\\|token\\\\|allowlist\\\\|whitelist\\\\|authorized\")",
-      "Bash(grep -v \":0$\")"
+      "Bash(grep -v \":0$\")",
+      "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -Name)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

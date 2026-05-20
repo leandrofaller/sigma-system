@@ -31,10 +31,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const bytes = await file.arrayBuffer();
   const inputBuffer = Buffer.from(bytes);
 
-  const [jpegBuffer, hashRaw] = await Promise.all([
+  const [webpBuffer, hashRaw] = await Promise.all([
     sharp(inputBuffer)
       .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 85 })
+      .webp({ quality: 85 })
       .toBuffer(),
     sharp(inputBuffer)
       .resize(9, 8, { fit: 'fill', kernel: 'nearest' })
@@ -54,8 +54,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const dir = getApenadosDir();
   await mkdir(dir, { recursive: true });
-  const filename = `${id}.jpg`;
-  await writeFile(join(dir, filename), jpegBuffer);
+  const filename = `${id}.webp`;
+  await writeFile(join(dir, filename), webpBuffer);
 
   const photoPath = `uploads/apenados/${filename}`;
   await prisma.apenado.update({ where: { id }, data: { photoPath, photoHash } });
@@ -105,15 +105,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 });
   }
 
+  const fileExt = filePath.split('.').pop()?.toLowerCase() ?? 'jpg';
+  const contentType = fileExt === 'webp' ? 'image/webp' : 'image/jpeg';
+
   const download = req.nextUrl.searchParams.get('download') === '1';
   const safeName = `${apenado.name}${apenado.matricula ? '_' + apenado.matricula : ''}`.replace(/[^a-zA-Z0-9\-_]/g, '_');
   const disposition = download
-    ? `attachment; filename="${safeName}.jpg"`
-    : `inline; filename="${safeName}.jpg"`;
+    ? `attachment; filename="${safeName}.${fileExt}"`
+    : `inline; filename="${safeName}.${fileExt}"`;
 
   return new Response(new Uint8Array(buffer), {
     headers: {
-      'Content-Type': 'image/jpeg',
+      'Content-Type': contentType,
       'Content-Disposition': disposition,
       'Cache-Control': 'private, max-age=3600',
     },
