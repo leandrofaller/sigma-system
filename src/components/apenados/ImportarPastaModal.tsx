@@ -58,6 +58,7 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
   const [isBulk, setIsBulk] = useState(false);
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [dragging, setDragging] = useState(false);
   const folderRef = useRef<HTMLInputElement>(null);
 
@@ -81,6 +82,7 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
     setBulkErrorList([]);
     setShowErrors(false);
     setDone(false);
+    setScanning(false);
   }, []);
 
   // ── File loading ──────────────────────────────────────────────────
@@ -92,7 +94,9 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
       const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
       if (IMAGE_EXTS.has(ext)) imgs.push(f);
     }
-    imgs.sort((a, b) => fileToName(a).localeCompare(fileToName(b)));
+    if (imgs.length < BULK_THRESHOLD) {
+      imgs.sort((a, b) => fileToName(a).localeCompare(fileToName(b)));
+    }
 
     setDone(false);
 
@@ -132,6 +136,56 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
     }
   }, []);
 
+  // ── File System Access API (lazy, non-blocking) ───────────────────
+  const scanDirectory = useCallback(async (dirHandle: any) => {
+    previewUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
+    previewUrlsRef.current = [];
+    setEntries([]);
+    setPreviewDone(0); setPreviewErrors(0);
+    bulkFilesRef.current = [];
+    setIsBulk(true);
+    setBulkTotal(0); setBulkProcessed(0); setBulkDone(0);
+    setBulkErrCount(0); setBulkCurrentNames([]); setBulkErrorList([]);
+    setShowErrors(false); setDone(false); setScanning(true);
+
+    let count = 0;
+
+    async function recurse(handle: any) {
+      for await (const [, entry] of handle.entries()) {
+        if (entry.kind === 'file') {
+          const ext = (entry.name as string).split('.').pop()?.toLowerCase() ?? '';
+          if (IMAGE_EXTS.has(ext)) {
+            bulkFilesRef.current.push(await entry.getFile());
+            count++;
+            if (count % 500 === 0) setBulkTotal(count);
+          }
+        } else if (entry.kind === 'directory') {
+          await recurse(entry);
+        }
+      }
+    }
+
+    try {
+      await recurse(dirHandle);
+    } finally {
+      setBulkTotal(count);
+      setScanning(false);
+    }
+  }, []);
+
+  const handlePickFolder = useCallback(async () => {
+    if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
+      try {
+        const dirHandle = await (window as any).showDirectoryPicker({ mode: 'read' });
+        await scanDirectory(dirHandle);
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') console.error(e);
+      }
+    } else {
+      folderRef.current?.click();
+    }
+  }, [scanDirectory]);
+
   // ── API helpers ───────────────────────────────────────────────────
   async function apiCreate(name: string): Promise<Apenado> {
     const res = await fetch('/api/apenados', {
@@ -167,7 +221,7 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
       const apenado = await apiCreate(entry.name);
       setEntries(prev => { const n = [...prev]; n[idx] = { ...n[idx], step: 'uploading' }; return n; });
       await apiUploadFoto(apenado.id, entry.file);
-      apenado.photoPath = `uploads/apenados/${apenado.id}.jpg`;
+      apenado.photoPath = `uploads/apenados/${apenado.id}.webp`;
       setEntries(prev => { const n = [...prev]; n[idx] = { ...n[idx], status: 'done', step: undefined }; return n; });
       setPreviewDone(c => c + 1);
       return apenado;
@@ -184,7 +238,7 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
     try {
       const apenado = await apiCreate(name);
       await apiUploadFoto(apenado.id, file);
-      apenado.photoPath = `uploads/apenados/${apenado.id}.jpg`;
+      apenado.photoPath = `uploads/apenados/${apenado.id}.webp`;
       return { apenado, err: null };
     } catch (e: any) {
       return { apenado: null, err: e.message };
@@ -277,18 +331,20 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
         <div className="gradient-sigma px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
-              {running ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <FolderInput className="w-5 h-5 text-white" />}
+              {running || scanning ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <FolderInput className="w-5 h-5 text-white" />}
             </div>
             <div>
               <p className="text-white font-bold text-sm">
-                {running ? `Importando... ${progress}%` :
-                 done    ? 'Importação concluída' :
-                           'Importar Pasta de Fotos'}
+                {running  ? `Importando... ${progress}%` :
+                 done     ? 'Importação concluída' :
+                 scanning ? 'Escaneando pasta...' :
+                            'Importar Pasta de Fotos'}
               </p>
               <p className="text-white/70 text-xs">
-                {running ? `${processed.toLocaleString()} de ${total.toLocaleString()} arquivos` :
-                 done    ? `${doneCount.toLocaleString()} importados · ${errCount.toLocaleString()} erros` :
-                           'Nome do arquivo = nome do apenado'}
+                {running  ? `${processed.toLocaleString()} de ${total.toLocaleString()} arquivos` :
+                 done     ? `${doneCount.toLocaleString()} importados · ${errCount.toLocaleString()} erros` :
+                 scanning ? `${total.toLocaleString()} imagens encontradas...` :
+                            'Nome do arquivo = nome do apenado'}
               </p>
             </div>
           </div>
@@ -314,7 +370,7 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
               className={`rounded-xl border-2 border-dashed transition-all cursor-pointer p-10 flex flex-col items-center gap-4 text-center
                 ${dragging ? 'border-sigma-400 bg-sigma-50 dark:bg-sigma-900/20'
                            : 'border-gray-200 dark:border-gray-700 hover:border-sigma-300 dark:hover:border-sigma-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
-              onClick={() => folderRef.current?.click()}
+              onClick={handlePickFolder}
               onDragOver={e => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onDrop={handleDrop}
@@ -354,10 +410,17 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-subtle">
-                  Modo bulk ativo — sem pré-visualização para economizar memória.
-                  Processamento em lotes de {CONCURRENCY_BULK} arquivos simultâneos.
-                </p>
+                {scanning ? (
+                  <div className="flex items-center gap-2 text-xs text-sigma-600 dark:text-sigma-400">
+                    <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
+                    <span>Escaneando pasta... {total.toLocaleString()} imagens encontradas até agora</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-subtle">
+                    Modo bulk ativo — sem pré-visualização para economizar memória.
+                    Processamento em lotes de {CONCURRENCY_BULK} arquivos simultâneos.
+                  </p>
+                )}
               </div>
 
               {/* Progress panel — shown when running or done */}
@@ -578,14 +641,14 @@ export function ImportarPastaModal({ onClose, onImported }: Props) {
           </button>
 
           {!done ? (
-            <button onClick={handleImport} disabled={total === 0 || running}
+            <button onClick={handleImport} disabled={total === 0 || running || scanning}
               className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-sigma-600 hover:bg-sigma-700 rounded-xl transition-colors disabled:opacity-50 shadow-lg shadow-sigma-600/20">
               {running
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> {processed.toLocaleString()}/{total.toLocaleString()}</>
                 : <><FolderInput className="w-4 h-4" /> Importar {total > 0 ? `${total.toLocaleString()} fotos` : 'Fotos'}</>}
             </button>
           ) : (
-            <button onClick={resetAll}
+            <button onClick={handlePickFolder}
               className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-sigma-600 border border-sigma-200 dark:border-sigma-800 hover:bg-sigma-50 dark:hover:bg-sigma-900/30 rounded-xl transition-colors">
               <FolderOpen className="w-4 h-4" /> Importar outra pasta
             </button>
