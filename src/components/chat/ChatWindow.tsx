@@ -389,6 +389,7 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
               {groups.map((g) => {
                 const ch: Channel = { type: 'group', id: g.id, name: g.name };
                 const unread = unreadCounts[ckKey(ch)] || 0;
+                const isActive = activeChannel?.id === g.id;
                 return (
                   <button key={g.id} onClick={() => {
                     setUnreadCounts(prev => { const n = { ...prev }; delete n[ckKey(ch)]; return n; });
@@ -396,15 +397,20 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
                     setActiveChannel(ch);
                   }}
                     className={`w-full flex items-center gap-2.5 px-3 py-2.5 transition-colors text-left
-                      ${activeChannel?.id === g.id
+                      ${isActive
                         ? 'bg-sigma-50 dark:bg-sigma-900/20 text-sigma-700 dark:text-sigma-400'
-                        : 'text-body hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: g.color + '20' }}>
+                        : unread > 0
+                          ? 'bg-red-50/60 dark:bg-red-500/5 text-title hover:bg-red-50 dark:hover:bg-red-500/10'
+                          : 'text-body hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                    <div
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-shadow ${unread > 0 && !isActive ? 'ring-2 ring-red-500/40' : ''}`}
+                      style={{ background: g.color + '20' }}
+                    >
                       <Hash className="w-3.5 h-3.5" style={{ color: g.color }} />
                     </div>
-                    <span className="text-sm truncate flex-1">{g.name}</span>
+                    <span className={`text-sm truncate flex-1 ${unread > 0 && !isActive ? 'font-semibold' : ''}`}>{g.name}</span>
                     {unread > 0 && (
-                      <span className="flex-shrink-0 flex items-center justify-center min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full px-1">
+                      <span className="flex-shrink-0 flex items-center justify-center min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full px-1 animate-pulse">
                         {unread > 99 ? '99+' : unread}
                       </span>
                     )}
@@ -419,6 +425,7 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
               {filteredContacts.map((c) => {
                 const ch: Channel = { type: 'direct', id: c.id, name: c.name };
                 const unread = unreadCounts[ckKey(ch)] || 0;
+                const isActive = activeChannel?.id === c.id;
                 return (
                   <button key={c.id} onClick={() => {
                     setUnreadCounts(prev => { const n = { ...prev }; delete n[ckKey(ch)]; return n; });
@@ -426,18 +433,25 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
                     setActiveChannel(ch);
                   }}
                     className={`w-full flex items-center gap-2.5 px-3 py-2.5 transition-colors text-left
-                      ${activeChannel?.id === c.id
+                      ${isActive
                         ? 'bg-sigma-50 dark:bg-sigma-900/20 text-sigma-700 dark:text-sigma-400'
-                        : 'text-body hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-                    <div className="w-7 h-7 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-body">
-                      {c.name.charAt(0)}
+                        : unread > 0
+                          ? 'bg-red-50/60 dark:bg-red-500/5 text-title hover:bg-red-50 dark:hover:bg-red-500/10'
+                          : 'text-body hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                    <div className="relative flex-shrink-0">
+                      <div className={`w-7 h-7 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center text-xs font-bold text-body transition-shadow ${unread > 0 && !isActive ? 'ring-2 ring-red-500/50' : ''}`}>
+                        {c.name.charAt(0)}
+                      </div>
+                      {unread > 0 && !isActive && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-gray-900 animate-pulse" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">{c.name}</p>
+                      <p className={`text-sm truncate ${unread > 0 && !isActive ? 'font-semibold text-title' : ''}`}>{c.name}</p>
                       <p className="text-xs text-subtle truncate">{c.group?.name}</p>
                     </div>
                     {unread > 0 && (
-                      <span className="flex-shrink-0 flex items-center justify-center min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full px-1 ml-1">
+                      <span className="flex-shrink-0 flex items-center justify-center min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full px-1 ml-1 animate-pulse">
                         {unread > 99 ? '99+' : unread}
                       </span>
                     )}
