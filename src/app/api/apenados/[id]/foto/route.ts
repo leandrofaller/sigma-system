@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const [webpBuffer, hashRaw] = await Promise.all([
     sharp(inputBuffer)
       .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 85 })
+      .webp({ quality: 90 })
       .toBuffer(),
     sharp(inputBuffer)
       .resize(9, 8, { fit: 'fill', kernel: 'nearest' })

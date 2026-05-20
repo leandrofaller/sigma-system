@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   const inputBuffer = Buffer.from(await file.arrayBuffer());
   const webpBuffer = await sharp(inputBuffer)
     .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
-    .webp({ quality: 85 })
+    .webp({ quality: 90 })
     .toBuffer();
 
   const filename = `${randomUUID()}.webp`;

@@ -29,7 +29,9 @@
       "Bash(Select-Object FullName)",
       "Bash(xargs grep -l \"device\\\\|token\\\\|allowlist\\\\|whitelist\\\\|authorized\")",
       "Bash(grep -v \":0$\")",
-      "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -Name)"
+      "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -Name)",
+      "Bash(git config *)",
+      "PowerShell(git config --global core.editor \"'C:\\\\Users\\\\leand\\\\AppData\\\\Local\\\\Programs\\\\Antigravity IDE\\\\Antigravity IDE.exe' --wait\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     if (isImage) {
       saveBuffer = await sharp(Buffer.from(bytes))
         .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
-        .webp({ quality: 85 })
+        .webp({ quality: 90 })
         .toBuffer();
       filename = `${randomUUID()}.webp`;
       savedSize = saveBuffer.length;

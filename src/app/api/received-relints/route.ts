@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     if (isImage) {
       saveBuffer = await sharp(rawBuffer)
         .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
-        .webp({ quality: 85 })
+        .webp({ quality: 90 })
         .toBuffer();
       uniqueName = `${uuidv4()}.webp`;
       savedType = 'image/webp';
