@@ -37,9 +37,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           data: { lastLogin: new Date() },
         });
 
-        // ── Verificação de dispositivo (SUPER_ADMIN sempre passa) ─────────────
+        // ── Verificação de dispositivo (SUPER_ADMIN e ADMIN sempre passam) ────
         let deviceAuthorized = true;
-        if (user.role === 'SUPER_ADMIN') {
+        if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') {
           return {
             id: user.id,
             name: user.name,
