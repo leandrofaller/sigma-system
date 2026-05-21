@@ -62,13 +62,21 @@ export function AuditPanel({ onClose, onRenamed }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkRenaming, setBulkRenaming] = useState(false);
   const [bulkRenamed, setBulkRenamed] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchState = useCallback(async () => {
     try {
       const res = await fetch('/api/apenados/audit');
-      if (res.ok) setAuditState(await res.json());
-    } catch {}
+      if (res.ok) {
+        setAuditState(await res.json());
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setErrorMsg(d.error ?? `Erro ${res.status} ao carregar estado da auditoria`);
+      }
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? 'Erro de rede');
+    }
   }, []);
 
   const fetchRows = useCallback(async (f: Filter, p: number) => {
@@ -93,14 +101,14 @@ export function AuditPanel({ onClose, onRenamed }: Props) {
 
   // Polling while running
   useEffect(() => {
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    if (auditState?.isRunning) {
-      pollingRef.current = setInterval(async () => {
-        await fetchState();
-      }, 2000);
-    }
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+    if (!auditState?.isRunning) return;
+    pollingRef.current = setInterval(() => { fetchState(); }, 2000);
+    return () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; } };
   }, [auditState?.isRunning, fetchState]);
+
+  // Cleanup on unmount
+  useEffect(() => () => { if (pollingRef.current) clearInterval(pollingRef.current); }, []);
 
   // Refresh rows when job finishes
   const wasRunning = useRef(false);
@@ -125,13 +133,20 @@ export function AuditPanel({ onClose, onRenamed }: Props) {
 
   const startAudit = async () => {
     setErrorMsg('');
-    const res = await fetch('/api/apenados/audit', { method: 'POST' });
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      setErrorMsg(d.error ?? 'Erro ao iniciar auditoria');
-      return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/apenados/audit', { method: 'POST' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setErrorMsg(d.error ?? 'Erro ao iniciar auditoria');
+        return;
+      }
+      await fetchState();
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? 'Erro de rede ao iniciar auditoria');
+    } finally {
+      setSubmitting(false);
     }
-    await fetchState();
   };
 
   const stopAudit = async () => {
@@ -262,10 +277,15 @@ export function AuditPanel({ onClose, onRenamed }: Props) {
                 ) : (
                   <button
                     onClick={startAudit}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-sm rounded-lg transition-colors"
+                    disabled={submitting}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
                   >
-                    <Play className="w-3.5 h-3.5" />
-                    Iniciar
+                    {submitting ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Play className="w-3.5 h-3.5" />
+                    )}
+                    {submitting ? 'Iniciando...' : 'Iniciar'}
                   </button>
                 )}
                 <button
