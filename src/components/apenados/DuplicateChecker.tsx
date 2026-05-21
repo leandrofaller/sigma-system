@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   X, ScanSearch, Loader2, Trash2, AlertTriangle, CheckCircle,
   RefreshCw, Users, Fingerprint, Waves, Clock, Zap,
@@ -29,6 +29,14 @@ interface ExactResult {
   totalGroups: number;
   errors: string[];
   method: 'python' | 'nodejs';
+}
+
+interface ExactJobResponse {
+  isRunning: boolean;
+  current: number;
+  total: number;
+  error: string;
+  result: ExactResult | null;
 }
 
 type Mode = 'similar' | 'exact';
@@ -72,40 +80,98 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
   const [bulkDeletedCount, setBulkDeletedCount] = useState<number | null>(null);
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
+  // Progresso do job exact duplicates
+  const [exactProgress, setExactProgress] = useState<{ current: number; total: number } | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startRef = useRef<number>(0);
+
+  // Para polling ao desmontar
+  useEffect(() => () => { if (pollingRef.current) clearInterval(pollingRef.current); }, []);
+
+  const pollExactJob = useCallback((onDone: (data: ExactJobResponse) => void) => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch('/api/apenados/exact-duplicates');
+        if (!res.ok) return;
+        const data: ExactJobResponse = await res.json();
+        setExactProgress({ current: data.current, total: data.total });
+        if (!data.isRunning) {
+          clearInterval(pollingRef.current!);
+          pollingRef.current = null;
+          onDone(data);
+        }
+      } catch {}
+    }, 1500);
+  }, []);
+
   const runCheck = useCallback(async (forceMode?: Mode) => {
     const m = forceMode ?? mode;
     setStatus('loading');
     setErrorMsg('');
     setBulkDeletedCount(null);
-    const start = Date.now();
+    startRef.current = Date.now();
+
+    if (m === 'exact') {
+      // Start background job
+      try {
+        const startRes = await fetch('/api/apenados/exact-duplicates', { method: 'POST' });
+        if (!startRes.ok) {
+          const d = await startRes.json().catch(() => ({}));
+          // 409 = already running, still poll
+          if (startRes.status !== 409) throw new Error(d.error || `Erro ${startRes.status}`);
+        }
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Erro desconhecido.');
+        setStatus('error');
+        return;
+      }
+
+      setExactProgress({ current: 0, total: 0 });
+      pollExactJob((data) => {
+        if (data.error) {
+          setErrorMsg(data.error);
+          setStatus('error');
+          return;
+        }
+        if (data.result) {
+          setExactResult(data.result);
+          setAnalysisDuration(Date.now() - startRef.current);
+          setAnalyzedAt(new Date());
+          setStatus('done');
+        }
+        setExactProgress(null);
+      });
+      return;
+    }
+
+    // Similar duplicates — synchronous as before
     try {
-      const endpoint = m === 'exact'
-        ? '/api/apenados/exact-duplicates'
-        : '/api/apenados/duplicates';
-      const res = await fetch(endpoint);
+      const res = await fetch('/api/apenados/duplicates');
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || `Erro ${res.status}`);
       }
       const data = await res.json();
-      if (m === 'exact') setExactResult(data);
-      else setSimilarResult(data);
-      setAnalysisDuration(Date.now() - start);
+      setSimilarResult(data);
+      setAnalysisDuration(Date.now() - startRef.current);
       setAnalyzedAt(new Date());
       setStatus('done');
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro desconhecido.');
       setStatus('error');
     }
-  }, [mode]);
+  }, [mode, pollExactJob]);
 
   const switchMode = (m: Mode) => {
+    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
     setMode(m);
     setStatus('idle');
     setErrorMsg('');
     setAnalysisDuration(null);
     setAnalyzedAt(null);
     setBulkDeletedCount(null);
+    setExactProgress(null);
   };
 
   const handleDeletePhoto = async (record: DisplayRecord) => {
@@ -234,10 +300,24 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                 <p className="text-title font-semibold">Analisando fotos...</p>
                 <p className="text-subtle text-sm mt-1">
                   {mode === 'exact'
-                    ? 'Calculando SHA-256 de cada arquivo via Python'
+                    ? 'Calculando SHA-256 em background (8 workers paralelos)'
                     : 'Indexando e comparando hashes perceptuais'}
                 </p>
               </div>
+              {mode === 'exact' && exactProgress && exactProgress.total > 0 && (
+                <div className="w-full max-w-xs space-y-1.5">
+                  <div className="flex justify-between text-xs text-subtle">
+                    <span>{exactProgress.current.toLocaleString('pt-BR')} / {exactProgress.total.toLocaleString('pt-BR')}</span>
+                    <span>{Math.round((exactProgress.current / exactProgress.total) * 100)}%</span>
+                  </div>
+                  <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-sigma-600 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.round((exactProgress.current / exactProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

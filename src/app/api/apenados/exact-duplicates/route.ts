@@ -1,98 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { spawn } from 'child_process';
-import { createReadStream, unlink } from 'fs';
-import { readdir } from 'fs/promises';
-import { join, extname, basename } from 'path';
-import crypto from 'crypto';
+import { unlink } from 'fs';
 import { getApenadosDir, getApenadoPhotoPath } from '@/lib/storage';
+import { getExactDupState, startExactDupJob } from '@/lib/exact-duplicates-job';
 
-interface ScriptOutput {
-  groups: string[][];
-  totalFiles: number;
-  totalGroups: number;
-  errors: string[];
-  method: 'python' | 'nodejs';
-}
-
-// ── Tenta rodar o script Python ──────────────────────────────────────────────
-function runPython(scriptPath: string, uploadsDir: string): Promise<ScriptOutput> {
-  return new Promise((resolve, reject) => {
-    const candidates = ['python', 'python3', 'py'];
-    let idx = 0;
-
-    function tryNext() {
-      if (idx >= candidates.length) {
-        reject(new Error('PYTHON_NOT_FOUND'));
-        return;
-      }
-      const cmd = candidates[idx++];
-      // shell:true → cmd.exe no Windows, resolve PATH do sistema
-      const proc = spawn(cmd, [scriptPath, uploadsDir], { shell: true });
-      let stdout = '';
-
-      proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
-      proc.on('close', (code: number) => {
-        if (code === 0 && stdout.trim()) {
-          try { resolve({ ...JSON.parse(stdout), method: 'python' }); }
-          catch { reject(new Error('Resposta inválida do script Python.')); }
-        } else {
-          tryNext();
-        }
-      });
-      proc.on('error', () => tryNext());
-    }
-
-    tryNext();
-  });
-}
-
-// ── Fallback: SHA-256 em Node.js puro ────────────────────────────────────────
-function sha256Stream(filepath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const h = crypto.createHash('sha256');
-    const s = createReadStream(filepath);
-    s.on('data', (d) => h.update(d));
-    s.on('end', () => resolve(h.digest('hex')));
-    s.on('error', reject);
-  });
-}
-
-async function runNodeJS(uploadsDir: string): Promise<ScriptOutput> {
-  const EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
-  const hashMap = new Map<string, string[]>();
-  const errors: string[] = [];
-  let total = 0;
-
-  let files: string[];
-  try {
-    files = await readdir(uploadsDir);
-  } catch {
-    return { groups: [], totalFiles: 0, totalGroups: 0, errors: [], method: 'nodejs' };
-  }
-
-  for (const filename of files.sort()) {
-    const ext = extname(filename).toLowerCase();
-    if (!EXTENSIONS.has(ext)) continue;
-    const apenadoId = basename(filename, ext);
-    const filepath = join(uploadsDir, filename);
-    try {
-      const h = await sha256Stream(filepath);
-      const arr = hashMap.get(h) ?? [];
-      arr.push(apenadoId);
-      hashMap.set(h, arr);
-      total++;
-    } catch (e: any) {
-      errors.push(`${filename}: ${e.message}`);
-    }
-  }
-
-  const groups = Array.from(hashMap.values()).filter((ids) => ids.length >= 2);
-  return { groups, totalFiles: total, totalGroups: groups.length, errors, method: 'nodejs' };
-}
-
-// ── Handlers ─────────────────────────────────────────────────────────────────
+// GET — retorna estado do job + grupos enriquecidos com dados do DB quando concluído
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -102,29 +15,34 @@ export async function GET() {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
-  const scriptPath = join(process.cwd(), 'scripts', 'find_exact_duplicates.py');
-  const uploadsDir = getApenadosDir();
+  const jobState = getExactDupState();
 
-  let raw: ScriptOutput;
-  try {
-    raw = await runPython(scriptPath, uploadsDir);
-  } catch (err: any) {
-    if (err.message === 'PYTHON_NOT_FOUND') {
-      // Python indisponível — usa implementação Node.js (mesma precisão SHA-256)
-      raw = await runNodeJS(uploadsDir);
-    } else {
-      return NextResponse.json({ error: err.message }, { status: 500 });
-    }
+  if (jobState.isRunning || !jobState.result) {
+    return NextResponse.json({
+      isRunning: jobState.isRunning,
+      current: jobState.current,
+      total: jobState.total,
+      error: jobState.error,
+      result: null,
+    });
   }
 
+  const raw = jobState.result;
   const allIds = raw.groups.flat();
+
   if (allIds.length === 0) {
     return NextResponse.json({
-      groups: [],
-      totalFiles: raw.totalFiles,
-      totalGroups: 0,
-      errors: raw.errors,
-      method: raw.method,
+      isRunning: false,
+      current: jobState.current,
+      total: jobState.total,
+      error: jobState.error,
+      result: {
+        groups: [],
+        totalFiles: raw.totalFiles,
+        totalGroups: 0,
+        errors: raw.errors,
+        method: 'nodejs',
+      },
     });
   }
 
@@ -139,16 +57,40 @@ export async function GET() {
     .filter((g) => g.length >= 2);
 
   return NextResponse.json({
-    groups: enrichedGroups,
-    totalFiles: raw.totalFiles,
-    totalGroups: enrichedGroups.length,
-    errors: raw.errors,
-    method: raw.method,
+    isRunning: false,
+    current: jobState.current,
+    total: jobState.total,
+    error: jobState.error,
+    result: {
+      groups: enrichedGroups,
+      totalFiles: raw.totalFiles,
+      totalGroups: enrichedGroups.length,
+      errors: raw.errors,
+      method: 'nodejs',
+    },
   });
 }
 
-// DELETE — exclui registros duplicados enviados pelo frontend.
-// Para cada grupo, o frontend mantém o primeiro e envia os demais para exclusão.
+// POST — inicia o job em background
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+  const user = session.user as any;
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+  }
+
+  const jobState = getExactDupState();
+  if (jobState.isRunning) {
+    return NextResponse.json({ error: 'Verificação já em andamento.' }, { status: 409 });
+  }
+
+  startExactDupJob(getApenadosDir());
+  return NextResponse.json({ started: true });
+}
+
+// DELETE — exclui registros duplicados enviados pelo frontend
 export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -169,7 +111,6 @@ export async function DELETE(req: NextRequest) {
     select: { id: true, photoPath: true },
   });
 
-  // Remove arquivos de foto do disco (best-effort)
   await Promise.allSettled(
     apenados
       .filter((a) => a.photoPath)
