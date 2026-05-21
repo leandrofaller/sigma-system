@@ -16,5 +16,15 @@ gosu nextjs node_modules/.bin/prisma db push --skip-generate || \
 gosu nextjs npx prisma db push --skip-generate || true
 echo "Migracoes concluidas!"
 
+echo "Garantindo colunas de auditoria (idempotente)..."
+gosu nextjs node -e "
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+Promise.all([
+  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"ocrText\" TEXT'),
+  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"ocrName\" TEXT'),
+]).then(() => { console.log('Colunas OK'); }).catch(e => { console.error('AVISO colunas:', e.message); }).finally(() => p.\$disconnect());
+" || echo "AVISO: script de colunas falhou (nao critico)"
+
 echo "Iniciando servidor..."
 exec gosu nextjs node server.js
