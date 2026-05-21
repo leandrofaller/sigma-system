@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
+import { getApenadosDiskUsage } from '@/lib/storage';
 import { ApenadosClient } from '@/components/apenados/ApenadosClient';
 
 export const metadata = { title: 'Identificação de Apenados' };
@@ -9,7 +10,7 @@ export default async function ApenadosPage() {
   const session = await auth();
   if (!session) redirect('/login');
 
-  const [total, comFoto, letterRows] = await Promise.all([
+  const [total, comFoto, letterRows, diskUsage] = await Promise.all([
     prisma.apenado.count(),
     prisma.apenado.count({ where: { photoPath: { not: null } } }),
     prisma.$queryRaw<{ letter: string; count: number }[]>`
@@ -19,6 +20,7 @@ export default async function ApenadosPage() {
       GROUP BY UPPER(LEFT(name, 1))
       ORDER BY letter
     `,
+    getApenadosDiskUsage(),
   ]);
 
   const letterCounts: Record<string, number> = {};
@@ -30,7 +32,7 @@ export default async function ApenadosPage() {
 
   return (
     <ApenadosClient
-      stats={{ total, comFoto, semFoto: total - comFoto }}
+      stats={{ total, comFoto, semFoto: total - comFoto, diskUsage }}
       letterCounts={letterCounts}
       userRole={user.role}
     />

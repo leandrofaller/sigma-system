@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   UserCheck, Search, Download, Plus, LayoutGrid, List,
-  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch, Trash2, AlertTriangle, ScanFace, FileSearch,
+  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch, Trash2, AlertTriangle, ScanFace, FileSearch, HardDrive,
 } from 'lucide-react';
 import { ApenadoCard, type Apenado } from './ApenadoCard';
 import { ApenadoModal } from './ApenadoModal';
@@ -23,12 +23,20 @@ function isMobileDevice(): boolean {
   return typeof navigator !== 'undefined' && MOBILE_UA.test(navigator.userAgent);
 }
 
-interface Stats { total: number; comFoto: number; semFoto: number }
+interface Stats { total: number; comFoto: number; semFoto: number; diskUsage?: number }
 
 interface Props {
   stats: Stats;
   letterCounts: Record<string, number>;
   userRole: string;
+}
+
+function formatBytes(b: number): string {
+  if (!b) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(b) / Math.log(k));
+  return `${(b / k ** i).toFixed(1)} ${sizes[i]}`;
 }
 
 export function ApenadosClient({ stats: initialStats, letterCounts: initialLetterCounts, userRole }: Props) {
@@ -251,7 +259,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
       const res = await fetch('/api/apenados/stats');
       const data = await res.json();
       if (data.total !== undefined) {
-        setStatsLocal({ total: data.total, comFoto: data.comFoto, semFoto: data.semFoto });
+        setStatsLocal({ total: data.total, comFoto: data.comFoto, semFoto: data.semFoto, diskUsage: data.diskUsage });
         setLetterCountsLocal(data.letterCounts ?? {});
       }
     } catch {}
@@ -280,7 +288,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
       const statsRes = await fetch('/api/apenados/stats');
       const statsData = await statsRes.json();
       if (statsData.total !== undefined) {
-        setStatsLocal({ total: statsData.total, comFoto: statsData.comFoto, semFoto: statsData.semFoto });
+        setStatsLocal({ total: statsData.total, comFoto: statsData.comFoto, semFoto: statsData.semFoto, diskUsage: statsData.diskUsage });
         setLetterCountsLocal(statsData.letterCounts ?? {});
       }
       letterCache.current.clear();
@@ -387,15 +395,16 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
           {/* Stats */}
           <div className="flex gap-6 mt-5 flex-wrap">
             {[
-              { icon: Users, label: 'Total', value: statsLocal.total, color: 'text-white' },
-              { icon: Camera, label: 'Com foto', value: statsLocal.comFoto, color: 'text-green-300' },
-              { icon: UserX, label: 'Sem foto', value: statsLocal.semFoto, color: 'text-yellow-300' },
-            ].map(({ icon: Icon, label, value, color }) => (
+              { icon: Users, label: 'Total', display: statsLocal.total.toLocaleString('pt-BR'), color: 'text-white' },
+              { icon: Camera, label: 'Com foto', display: statsLocal.comFoto.toLocaleString('pt-BR'), color: 'text-green-300' },
+              { icon: UserX, label: 'Sem foto', display: statsLocal.semFoto.toLocaleString('pt-BR'), color: 'text-yellow-300' },
+              { icon: HardDrive, label: 'Em disco', display: formatBytes(statsLocal.diskUsage ?? 0), color: 'text-blue-300' },
+            ].map(({ icon: Icon, label, display, color }) => (
               <div key={label} className="flex items-center gap-2">
                 <Icon className={`w-4 h-4 ${color}`} />
                 <div>
                   <span className="text-white font-bold text-lg leading-none">
-                    {value.toLocaleString('pt-BR')}
+                    {display}
                   </span>
                   <span className="text-white/60 text-xs ml-1.5">{label}</span>
                 </div>

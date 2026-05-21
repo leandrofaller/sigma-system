@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getApenadosDiskUsage } from '@/lib/storage';
 
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const [total, comFoto, letterRows] = await Promise.all([
+  const [total, comFoto, letterRows, diskUsage] = await Promise.all([
     prisma.apenado.count(),
     prisma.apenado.count({ where: { photoPath: { not: null } } }),
     prisma.$queryRaw<{ letter: string; count: number }[]>`
@@ -16,6 +17,7 @@ export async function GET() {
       GROUP BY UPPER(LEFT(name, 1))
       ORDER BY letter
     `,
+    getApenadosDiskUsage(),
   ]);
 
   const letterCounts: Record<string, number> = {};
@@ -23,5 +25,5 @@ export async function GET() {
     letterCounts[row.letter] = Number(row.count);
   }
 
-  return NextResponse.json({ total, comFoto, semFoto: total - comFoto, letterCounts });
+  return NextResponse.json({ total, comFoto, semFoto: total - comFoto, letterCounts, diskUsage });
 }
