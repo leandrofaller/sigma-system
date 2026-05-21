@@ -40,6 +40,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     libglib2.0-0 \
+    tesseract-ocr \
+    tesseract-ocr-por \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -59,7 +61,9 @@ RUN echo "cache-bust: ${PIP_CACHE_BUST}" && \
         "numpy<2" \
         insightface==0.7.3 \
         "onnxruntime==1.16.3" \
-        opencv-python-headless && \
+        opencv-python-headless \
+        pytesseract \
+        Pillow && \
     HOME=/tmp /opt/arcface-venv/bin/python3 -c "import numpy,onnxruntime,insightface; print('numpy',numpy.__version__,'onnxruntime',onnxruntime.__version__,'insightface',insightface.__version__)"
 
 # Diretorio de modelos ja com dono nextjs (pode gravar no primeiro uso se download falhar aqui)

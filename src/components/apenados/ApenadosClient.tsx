@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   UserCheck, Search, Download, Plus, LayoutGrid, List,
-  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch, Trash2, AlertTriangle, ScanFace,
+  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch, Trash2, AlertTriangle, ScanFace, FileSearch,
 } from 'lucide-react';
 import { ApenadoCard, type Apenado } from './ApenadoCard';
 import { ApenadoModal } from './ApenadoModal';
@@ -11,6 +11,7 @@ import { ImportarPastaModal } from './ImportarPastaModal';
 import { PhotoLightbox } from './PhotoLightbox';
 import { DuplicateChecker } from './DuplicateChecker';
 import { FaceSearch } from './FaceSearch';
+import { AuditPanel } from './AuditPanel';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const SEARCH_PAGE_SIZE = 50;
@@ -59,6 +60,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
   const [importOpen, setImportOpen] = useState(false);
   const [dupCheckerOpen, setDupCheckerOpen] = useState(false);
   const [faceSearchOpen, setFaceSearchOpen] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [lightbox, setLightbox] = useState<Apenado | null>(null);
@@ -339,6 +341,14 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                   className="flex items-center gap-2 text-sm font-medium text-white border border-white/30 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
                 >
                   <ScanSearch className="w-4 h-4" /> Duplicatas
+                </button>
+              )}
+              {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
+                <button
+                  onClick={() => setAuditOpen(true)}
+                  className="flex items-center gap-2 text-sm font-medium text-white border border-white/30 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
+                >
+                  <FileSearch className="w-4 h-4" /> Auditar Fotos
                 </button>
               )}
               {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
@@ -650,6 +660,17 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
               }
             }
             setStatsLocal((prev) => ({ ...prev, comFoto: Math.max(0, prev.comFoto - 1), semFoto: prev.semFoto + 1 }));
+          }}
+        />
+      )}
+
+      {auditOpen && (
+        <AuditPanel
+          onClose={() => setAuditOpen(false)}
+          onRenamed={() => {
+            // Invalidate caches so renamed apenados appear with new names
+            letterCache.current.clear();
+            if (activeLetter) setActiveLetter(null);
           }}
         />
       )}

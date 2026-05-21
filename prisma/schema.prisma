@@ -430,6 +430,8 @@ model Apenado {
   faccao         String?
   notes          String?  @db.Text
   faceDescriptor String?  @db.Text
+  ocrText        String?  @db.Text
+  ocrName        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdById String?
