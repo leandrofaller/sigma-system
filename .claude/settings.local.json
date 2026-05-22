@@ -23,7 +23,13 @@
       "Bash(rtk npx *)",
       "Bash(rtk find *)",
       "Bash(rtk git *)",
-      "Bash(set \"DATABASE_URL=postgresql://user:pass@localhost:5432/db\")"
+      "Bash(set \"DATABASE_URL=postgresql://user:pass@localhost:5432/db\")",
+      "Bash(find C:/Users/leand -name \"*.ts\" -path \"*apenado*\" 2>/dev/null | head -5; find C:/Users/leand -name \"*.ts\" -path \"*arcface*\" 2>/dev/null | head -5; find C:/Users/leand -type d -name \"*arcface*\" 2>/dev/null | head -5)",
+      "Read(//c/Users/leand/**)",
+      "Bash(xargs grep -l \"apenado\")",
+      "Bash(xargs grep -l \"apenado\\\\|arcface\")",
+      "Bash(rtk docker *)",
+      "Bash(python3 -c \"import sys,json; e=json.load\\(sys.stdin\\)[0]['Config']['Env']; [print\\(x\\) for x in e if 'DATABASE' in x.upper\\(\\) or 'POSTGRES' in x.upper\\(\\) or 'DB_' in x.upper\\(\\)]\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

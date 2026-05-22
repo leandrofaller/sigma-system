@@ -33,6 +33,7 @@ interface Mission {
   groupId?: string;
   group?: { name: string; color?: string };
   participants: string[];
+  placa?: string | null;
   startKm?: number;
   endKm?: number;
 }
@@ -91,7 +92,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
   const [confirmDeleteMission, setConfirmDeleteMission] = useState(false);
 
   // Modais de transição
-  const [startInput, setStartInput] = useState<{ open: boolean; km: string }>({ open: false, km: '' });
+  const [startInput, setStartInput] = useState<{ open: boolean; km: string; placa: string }>({ open: false, km: '', placa: '' });
   const [endInput, setEndInput] = useState<{ open: boolean; km: string; note: string }>({ open: false, km: '', note: '' });
   const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -227,7 +228,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
           setMissions(missions.map(m => m.id === id ? { ...m, ...updated } : m));
           setViewingMission({ ...viewingMission, ...updated } as Mission);
         }
-        setStartInput({ open: false, km: '' });
+        setStartInput({ open: false, km: '', placa: '' });
         setEndInput({ open: false, km: '', note: '' });
         setConfirmCancel(false);
         toast.success('Missão atualizada!');
@@ -244,12 +245,13 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
 
   const submitStart = () => {
     if (!viewingMission) return;
+    if (!startInput.placa.trim()) { toast.error('Informe a placa do veículo'); return; }
     if (!startInput.km) { toast.error('Informe o KM inicial'); return; }
     if (!isScheduledDateReached(viewingMission.startDate)) {
       toast.error('Esta missão está agendada para data futura — não é possível iniciar antes.');
       return;
     }
-    updateMissionStatus(viewingMission.id, 'IN_PROGRESS', { startKm: startInput.km });
+    updateMissionStatus(viewingMission.id, 'IN_PROGRESS', { placa: startInput.placa.trim().toUpperCase(), startKm: startInput.km });
   };
 
   const submitEnd = () => {
@@ -508,6 +510,12 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                       </span></span>
                     </div>
                   )}
+                  {viewingMission.placa && (
+                    <div className="flex items-center gap-3 text-sm text-body">
+                      <div className="w-4 h-4 text-sigma-500 flex items-center justify-center font-bold text-[10px]">🚗</div>
+                      <span>Placa: <span className="font-bold font-mono tracking-widest">{viewingMission.placa}</span></span>
+                    </div>
+                  )}
                   {viewingMission.startKm != null && (
                     <div className="flex items-center gap-3 text-sm text-body">
                       <div className="w-4 h-4 text-sigma-500 flex items-center justify-center font-bold text-[10px]">KM</div>
@@ -550,16 +558,25 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                   </div>
                 )}
 
-                {/* INPUT KM INICIAL (modal de iniciar) */}
+                {/* INPUT PLACA + KM INICIAL (modal de iniciar) */}
                 {startInput.open && (
                   <div className="bg-sigma-50 dark:bg-sigma-900/20 p-4 rounded-2xl border border-sigma-100 dark:border-sigma-900/30 space-y-3">
                     <p className="text-xs font-bold text-sigma-700 dark:text-sigma-300">
-                      Informe o KM inicial do veículo. Hora de partida será registrada automaticamente.
+                      Informe a placa do veículo e o KM inicial. Hora de partida será registrada automaticamente.
                     </p>
+                    <input
+                      type="text"
+                      placeholder="Placa do veículo (ex: ABC-1234)" autoFocus
+                      value={startInput.placa}
+                      onChange={e => setStartInput({ ...startInput, placa: e.target.value.toUpperCase() })}
+                      onKeyDown={e => { if (e.key === 'Enter') submitStart(); }}
+                      className="w-full input-base px-4 py-2 font-mono tracking-widest"
+                      maxLength={8}
+                    />
                     <div className="flex gap-2">
                       <input
                         type="number" inputMode="numeric"
-                        placeholder="KM Inicial" autoFocus
+                        placeholder="KM Inicial"
                         value={startInput.km}
                         onChange={e => setStartInput({ ...startInput, km: e.target.value })}
                         onKeyDown={e => { if (e.key === 'Enter') submitStart(); }}
@@ -569,7 +586,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                         className="bg-sigma-600 text-white px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50">
                         Iniciar
                       </button>
-                      <button onClick={() => setStartInput({ open: false, km: '' })}
+                      <button onClick={() => setStartInput({ open: false, km: '', placa: '' })}
                         className="bg-gray-200 dark:bg-gray-800 text-body px-3 py-2 rounded-xl text-xs">
                         <X className="w-4 h-4" />
                       </button>
@@ -670,7 +687,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                                 toast.error('Esta missão está agendada para data futura.');
                                 return;
                               }
-                              setStartInput({ open: true, km: '' });
+                              setStartInput({ open: true, km: '', placa: '' });
                             }}
                             disabled={!reachable}
                             title={!reachable ? 'Disponível a partir do dia agendado' : 'Iniciar viagem'}

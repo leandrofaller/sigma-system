@@ -331,6 +331,7 @@ model Mission {
   endNote     String?       @db.Text  // Observação opcional na finalização (ex: interrompida por X)
   status      MissionStatus @default(PLANNED)
   participants String[]      @default([])
+  placa       String?
   startKm     Int?
   endKm       Int?
   userId      String

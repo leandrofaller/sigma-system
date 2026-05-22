@@ -61,6 +61,7 @@ export async function PATCH(
         data.status = 'IN_PROGRESS';
         data.startedAt = now;
         data.startKm = parseInt(body.startKm);
+        if (body.placa !== undefined) data.placa = body.placa || null;
       }
 
       // ---- FINALIZAR (IN_PROGRESS -> COMPLETED) ----

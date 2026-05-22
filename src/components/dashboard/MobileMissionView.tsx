@@ -29,6 +29,7 @@ interface Mission {
   participants: string[];
   startKm?: number | null;
   endKm?: number | null;
+  placa?: string | null;
 }
 
 function todayDateStr() {
@@ -76,6 +77,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
   // Modais de transição
   const [startingMission, setStartingMission] = useState<Mission | null>(null);
   const [startKmValue, setStartKmValue] = useState('');
+  const [placaValue, setPlacaValue] = useState('');
   const [endingMission, setEndingMission] = useState<Mission | null>(null);
   const [endKmValue, setEndKmValue] = useState('');
   const [endNoteValue, setEndNoteValue] = useState('');
@@ -250,17 +252,19 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
     }
     setStartingMission(m);
     setStartKmValue('');
+    setPlacaValue('');
   };
 
   const confirmStart = async () => {
     if (!startingMission) return;
+    if (!placaValue.trim()) { toast.error('Informe a placa do veículo'); return; }
     if (!startKmValue) { toast.error('Informe o KM inicial'); return; }
     setLoading(true);
     try {
       const res = await fetch(`/api/missions/${startingMission.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'IN_PROGRESS', startKm: startKmValue }),
+        body: JSON.stringify({ status: 'IN_PROGRESS', startKm: startKmValue, placa: placaValue.trim().toUpperCase() }),
       });
       if (res.ok) {
         const updated = await res.json();
@@ -268,6 +272,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
         toast.success('Viagem iniciada');
         setStartingMission(null);
         setStartKmValue('');
+        setPlacaValue('');
       } else {
         const err = await res.json();
         toast.error(err.error || 'Erro ao iniciar');
@@ -770,9 +775,18 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                 <p className="text-sm text-subtle">{startingMission.title} — {startingMission.destination}</p>
                 <p className="text-xs text-subtle mt-1 italic">Hora de partida será registrada automaticamente.</p>
               </div>
-              <FieldLabel>KM Inicial</FieldLabel>
+              <FieldLabel>Placa do Veículo</FieldLabel>
               <input
                 autoFocus
+                type="text"
+                value={placaValue}
+                onChange={e => setPlacaValue(e.target.value.toUpperCase())}
+                placeholder="Ex: ABC1D23"
+                maxLength={8}
+                className="w-full input-base px-4 py-4 text-lg font-bold font-mono tracking-widest uppercase"
+              />
+              <FieldLabel>KM Inicial</FieldLabel>
+              <input
                 type="number"
                 inputMode="numeric"
                 value={startKmValue}
@@ -783,7 +797,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
               />
               <div className="flex gap-3 pt-1">
                 <button
-                  onClick={() => { setStartingMission(null); setStartKmValue(''); }}
+                  onClick={() => { setStartingMission(null); setStartKmValue(''); setPlacaValue(''); }}
                   className="flex-1 border border-gray-200 dark:border-gray-700 text-body py-3.5 rounded-2xl font-semibold"
                 >
                   Cancelar
@@ -894,6 +908,11 @@ function MissionCard({ mission, action }: { mission: Mission; action?: React.Rea
             {km != null && (
               <span className="flex items-center gap-1 text-sigma-600 dark:text-sigma-400 font-bold">
                 <Gauge className="w-3 h-3" /> {km} km
+              </span>
+            )}
+            {mission.placa && (
+              <span className="font-mono font-bold tracking-widest text-body">
+                🚗 {mission.placa}
               </span>
             )}
             {mission.group && (
