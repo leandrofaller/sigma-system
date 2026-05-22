@@ -4,19 +4,27 @@ set -e
 UPLOAD_DIR="${UPLOAD_DIR:-/app/uploads}"
 
 # Garante que os subdirectorios existam e pertencem ao nextjs (uid 1001).
-# Isto resolve o problema de volume montado com dono root.
-mkdir -p "$UPLOAD_DIR/relints" "$UPLOAD_DIR/chat" "$UPLOAD_DIR/received"
+mkdir -p "$UPLOAD_DIR/relints" "$UPLOAD_DIR/chat" "$UPLOAD_DIR/received" "$UPLOAD_DIR/apenados"
 chown -R 1001:1001 "$UPLOAD_DIR"
 
-# Garante que o cache do Next.js existe e tem permissão de escrita.
+# Garante que o cache do Next.js existe e tem permissao de escrita.
 mkdir -p /app/.next/cache
 chown -R 1001:1001 /app/.next
 
-echo "Executando migrações do banco de dados..."
-# Roda prisma como nextjs
-su-exec nextjs node_modules/.bin/prisma db push --skip-generate || \
-su-exec nextjs npx prisma db push --skip-generate || true
-echo "Migrações concluídas!"
+echo "Executando migracoes do banco de dados..."
+gosu nextjs node_modules/.bin/prisma db push --skip-generate || \
+gosu nextjs npx prisma db push --skip-generate || true
+echo "Migracoes concluidas!"
+
+echo "Garantindo colunas de auditoria (idempotente)..."
+gosu nextjs node -e "
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+Promise.all([
+  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"ocrText\" TEXT'),
+  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"ocrName\" TEXT'),
+]).then(() => { console.log('Colunas OK'); }).catch(e => { console.error('AVISO colunas:', e.message); }).finally(() => p.\$disconnect());
+" || echo "AVISO: script de colunas falhou (nao critico)"
 
 echo "Iniciando servidor..."
-exec su-exec nextjs node server.js
+exec gosu nextjs node server.js

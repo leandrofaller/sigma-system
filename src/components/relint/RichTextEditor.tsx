@@ -99,7 +99,7 @@ export function RichTextEditor({ content, onChange }: Props) {
     <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-visible bg-white dark:bg-gray-900 focus-within:border-sigma-400 transition-colors">
 
       {/* ── Main toolbar ── */}
-      <div className="flex items-center flex-wrap gap-px px-1.5 py-1.5 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 rounded-t-xl">
+      <div className="flex items-center flex-wrap gap-px px-1.5 py-1.5 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 rounded-t-xl sticky top-0 z-10">
 
         {/* History */}
         <Btn title="Desfazer (Ctrl+Z)" onClick={() => editor.chain().focus().undo().run()}><Undo2 className="w-4 h-4" /></Btn>

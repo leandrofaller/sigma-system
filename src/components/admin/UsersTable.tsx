@@ -35,7 +35,12 @@ export function UsersTable({ users: initialUsers, groups, currentUserRole, curre
       if (editingUser && !form.password) delete (body as any).password;
 
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ error: `Erro ${res.status}` }));
+
+      if (!res.ok) {
+        alert(data.error || `Erro ao salvar usuário (${res.status})`);
+        return;
+      }
 
       if (editingUser) {
         setUsers((prev) => prev.map((u) => u.id === editingUser.id ? { ...u, ...data } : u));
@@ -45,8 +50,8 @@ export function UsersTable({ users: initialUsers, groups, currentUserRole, curre
       setShowForm(false);
       setEditingUser(null);
       setForm({ name: '', email: '', phone: '', password: '', role: 'OPERATOR', groupId: '' });
-    } catch {
-      alert('Erro ao salvar usuário.');
+    } catch (err: any) {
+      alert(err.message || 'Erro ao salvar usuário.');
     } finally {
       setLoading(false);
     }
@@ -66,10 +71,19 @@ export function UsersTable({ users: initialUsers, groups, currentUserRole, curre
     const res = await fetch(`/api/users/${user.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...user, isActive: !user.isActive }),
+      body: JSON.stringify({
+        name: user.name,
+        phone: user.phone,
+        role: user.role,
+        groupId: user.groupId || null,
+        isActive: !user.isActive,
+      }),
     });
     if (res.ok) {
       setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, isActive: !u.isActive } : u));
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || 'Erro ao alterar status.');
     }
   };
 

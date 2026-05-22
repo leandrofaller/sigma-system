@@ -36,6 +36,9 @@ export default async function DebriefingViewPage({ params }: { params: Promise<{
     missionDate: debriefing.missionDate
       ? new Date(debriefing.missionDate).toISOString().split('T')[0]
       : '',
+    missionEndDate: debriefing.missionEndDate
+      ? new Date(debriefing.missionEndDate).toISOString().split('T')[0]
+      : '',
     missionCode: debriefing.missionCode ?? '',
     operationType: debriefing.operationType ?? '',
     operatives: debriefing.operatives ?? '',

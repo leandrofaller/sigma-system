@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -20,6 +20,7 @@ interface NavItem {
   icon: React.ComponentType<any>;
   roles?: string[];
   badge?: number;
+  badgePulse?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -31,11 +32,13 @@ const navItems: NavItem[] = [
   { label: 'Acompanhamento', href: '/acompanhamento', icon: Trello },
   { label: 'Chat Interno', href: '/chat', icon: MessageSquare },
   { label: 'Consulta IA', href: '/ia', icon: Sparkles },
+  { label: 'Identificação de Apenados', href: '/apenados', icon: UserCheck },
 ];
 
-const adminItems: NavItem[] = [
+const baseAdminItems: NavItem[] = [
   { label: 'Usuários', href: '/admin/usuarios', icon: Users },
   { label: 'Grupos / Setores', href: '/admin/grupos', icon: FolderOpen, roles: ['SUPER_ADMIN'] },
+  { label: 'Dispositivos', href: '/admin/dispositivos', icon: Monitor },
   { label: 'Monitoramento', href: '/admin/monitoramento', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Auditoria', href: '/auditoria', icon: ClipboardList },
   { label: 'Backups', href: '/admin/backups', icon: Database, roles: ['SUPER_ADMIN'] },
@@ -45,11 +48,22 @@ const adminItems: NavItem[] = [
 interface SidebarProps {
   user: SessionUser;
   logoSize?: number;
+  pendingDeviceCount?: number;
 }
 
-export function Sidebar({ user, logoSize = 36 }: SidebarProps) {
+interface ChatChannel {
+  type: 'direct' | 'group';
+  id: string;
+  name: string;
+  unread: number;
+}
+
+export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [chatChannels, setChatChannels] = useState<ChatChannel[]>([]);
+  const prevCountRef = useRef(0);
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
@@ -64,9 +78,69 @@ export function Sidebar({ user, logoSize = 36 }: SidebarProps) {
     }
   }, [mobileOpen]);
 
-  const filteredNav = navItems.filter(
-    (item) => !item.roles || item.roles.includes(user?.role ?? '')
+  // Polling de mensagens não lidas + notificação nativa
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    async function poll() {
+      try {
+        const res = await fetch('/api/chat/unread');
+        if (!res.ok) return;
+        const { count, channels } = await res.json() as { count: number; channels: ChatChannel[] };
+
+        if (count > prevCountRef.current && pathname !== '/chat') {
+          if (Notification.permission === 'granted' && document.hidden) {
+            const names = channels
+              .filter((c) => c.unread > 0)
+              .map((c) => c.name)
+              .join(', ');
+            new Notification(
+              names
+                ? `Nova mensagem de ${names}`
+                : 'Nova mensagem — Chat Interno',
+              {
+                body: `${count} mensagem${count !== 1 ? 's' : ''} não lida${count !== 1 ? 's' : ''}.`,
+                icon: '/logos/badge-aip.png',
+              }
+            );
+          }
+        }
+
+        prevCountRef.current = count;
+        setChatUnreadCount(count);
+        setChatChannels(channels ?? []);
+      } catch {}
+    }
+
+    poll();
+    const id = setInterval(poll, 10_000);
+    return () => clearInterval(id);
+  }, [pathname]);
+
+  // Zera imediatamente ao entrar no chat
+  useEffect(() => {
+    if (pathname === '/chat') {
+      setChatUnreadCount(0);
+      setChatChannels([]);
+      prevCountRef.current = 0;
+    }
+  }, [pathname]);
+
+  const adminItems = baseAdminItems.map((item) =>
+    item.href === '/admin/dispositivos' && pendingDeviceCount > 0
+      ? { ...item, badge: pendingDeviceCount }
+      : item
   );
+
+  const filteredNav = navItems
+    .filter((item) => !item.roles || item.roles.includes(user?.role ?? ''))
+    .map((item) =>
+      item.href === '/chat' && chatUnreadCount > 0
+        ? { ...item, badge: chatUnreadCount, badgePulse: true }
+        : item
+    );
   const filteredAdmin = adminItems.filter(
     (item) => (!item.roles || item.roles.includes(user?.role ?? '')) && isAdmin
   );
@@ -141,7 +215,24 @@ export function Sidebar({ user, logoSize = 36 }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {filteredNav.map((item) => (
-          <SidebarItem key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
+          <div key={item.href}>
+            <SidebarItem item={item} pathname={pathname} collapsed={collapsed} />
+            {item.href === '/chat' && !collapsed && chatChannels.length > 0 && pathname !== '/chat' && (
+              <div className="ml-4 mt-0.5 mb-0.5 space-y-0.5 border-l border-gray-700/60 pl-2">
+                {chatChannels.map((ch) => (
+                  <Link
+                    key={ch.id}
+                    href="/chat"
+                    className="flex items-center gap-2 px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                    <span className="flex-1 truncate">{ch.name}</span>
+                    <span className="text-red-400 font-medium tabular-nums">{ch.unread > 99 ? '99+' : ch.unread}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
 
         {filteredAdmin.length > 0 && (
@@ -224,15 +315,20 @@ function SidebarItem({ item, pathname, collapsed }: { item: NavItem; pathname: s
       className={cn(
         'sidebar-item',
         isActive ? 'sidebar-item-active' : 'sidebar-item-inactive',
-        collapsed && 'justify-center px-2'
+        collapsed && 'justify-center px-2',
+        item.badgePulse && !isActive && 'ring-1 ring-red-500/40'
       )}
       title={collapsed ? item.label : undefined}
     >
       <item.icon className="w-4 h-4 flex-shrink-0" />
       {!collapsed && <span className="flex-1">{item.label}</span>}
-      {!collapsed && item.badge && (
-        <span className="bg-sigma-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-          {item.badge}
+      {item.badge != null && item.badge > 0 && (
+        <span className={cn(
+          'text-white text-xs px-1.5 py-0.5 rounded-full',
+          collapsed ? 'absolute top-1 right-1 px-1 min-w-[16px] text-center' : '',
+          item.badgePulse ? 'bg-red-500 animate-pulse' : 'bg-sigma-500'
+        )}>
+          {item.badge > 99 ? '99+' : item.badge}
         </span>
       )}
     </Link>

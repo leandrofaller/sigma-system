@@ -44,6 +44,9 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
     missionDate: initialData?.missionDate
       ? new Date(initialData.missionDate).toISOString().split('T')[0]
       : '',
+    missionEndDate: initialData?.missionEndDate
+      ? new Date(initialData.missionEndDate).toISOString().split('T')[0]
+      : '',
     missionCode: initialData?.missionCode || '',
     operationType: initialData?.operationType || '',
     operatives: initialData?.operatives || '',
@@ -135,8 +138,13 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
               className={inputCls} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-subtle mb-1.5">Data da Missão</label>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Data inicial da Missão</label>
             <input type="date" value={form.missionDate} onChange={(e) => update('missionDate', e.target.value)}
+              className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-subtle mb-1.5">Data final da Missão</label>
+            <input type="date" value={form.missionEndDate} onChange={(e) => update('missionEndDate', e.target.value)}
               className={inputCls} />
           </div>
           <div>
@@ -155,9 +163,9 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-subtle mb-1.5">Assunto *</label>
-            <input value={form.subject} onChange={(e) => update('subject', e.target.value)}
+            <input value={form.subject} onChange={(e) => update('subject', e.target.value.toUpperCase())}
               placeholder="Ex: DEBRIEFING DE OPERAÇÃO DE VIGILÂNCIA EM UNIDADE PRISIONAL"
-              className={`${inputCls} uppercase`} />
+              className={inputCls} />
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-subtle mb-1.5">Policiais Envolvidos</label>
@@ -173,9 +181,9 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Difusão *</label>
-            <input value={form.diffusion} onChange={(e) => update('diffusion', e.target.value)}
+            <input value={form.diffusion} onChange={(e) => update('diffusion', e.target.value.toUpperCase())}
               placeholder="Ex: DIP/SEAP/DF"
-              className={`${inputCls} uppercase`} />
+              className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Classificação</label>

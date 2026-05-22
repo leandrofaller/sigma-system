@@ -8,6 +8,7 @@ import path from 'path';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { assertUploadAllowed } from '@/lib/security';
+import sharp from 'sharp';
 
 const RECEIVED_RELINT_EXTENSIONS = [
   'jpg',
@@ -72,13 +73,33 @@ export async function POST(req: NextRequest) {
     const uploadError = assertUploadAllowed(file, { allowedExtensions: RECEIVED_RELINT_EXTENSIONS });
     if (uploadError) return NextResponse.json({ error: uploadError }, { status: 400 });
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const ext = path.extname(file.name) || '.bin';
-    const uniqueName = `${uuidv4()}${ext}`;
+    const rawBuffer = Buffer.from(await file.arrayBuffer());
+    const isImage = file.type.startsWith('image/');
+
+    let saveBuffer: Buffer;
+    let uniqueName: string;
+    let savedType: string;
+    let savedSize: number;
+
+    if (isImage) {
+      saveBuffer = await sharp(rawBuffer)
+        .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 90 })
+        .toBuffer();
+      uniqueName = `${uuidv4()}.webp`;
+      savedType = 'image/webp';
+      savedSize = saveBuffer.length;
+    } else {
+      saveBuffer = rawBuffer;
+      uniqueName = `${uuidv4()}${path.extname(file.name) || '.bin'}`;
+      savedType = file.type;
+      savedSize = file.size;
+    }
+
     const dir = join(uploadsBase(), 'received');
 
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, uniqueName), buffer);
+    await writeFile(join(dir, uniqueName), saveBuffer);
 
     const fileUrl = `/api/uploads/received/${uniqueName}`;
 
@@ -86,7 +107,7 @@ export async function POST(req: NextRequest) {
     const backupConfig = await prisma.systemConfig.findUnique({ where: { key: 'backup_enabled' } });
     if ((backupConfig?.value as any)?.enabled && isDriveEnabled()) {
       try {
-        driveFileId = await uploadToDrive(buffer, file.name, file.type);
+        driveFileId = await uploadToDrive(saveBuffer, file.name, savedType);
       } catch (err) {
         console.error('Drive upload failed:', err);
       }
@@ -100,8 +121,8 @@ export async function POST(req: NextRequest) {
         source: source || '',
         filename: uniqueName,
         originalName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
+        fileType: savedType,
+        fileSize: savedSize,
         localPath: fileUrl,
         driveFileId,
         classification: classification as any,

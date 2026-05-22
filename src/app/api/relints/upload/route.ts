@@ -3,7 +3,8 @@ import { auth } from '@/lib/auth';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import { assertUploadAllowed, getExtension } from '@/lib/security';
+import { assertUploadAllowed } from '@/lib/security';
+import sharp from 'sharp';
 
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'] as const;
 
@@ -25,12 +26,17 @@ export async function POST(req: NextRequest) {
   });
   if (uploadError) return NextResponse.json({ error: uploadError }, { status: 400 });
 
-  const ext = getExtension(file.name);
-  const filename = `${randomUUID()}.${ext}`;
+  const inputBuffer = Buffer.from(await file.arrayBuffer());
+  const webpBuffer = await sharp(inputBuffer)
+    .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 90 })
+    .toBuffer();
+
+  const filename = `${randomUUID()}.webp`;
   const dir = join(uploadsBase(), 'relints');
 
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, filename), Buffer.from(await file.arrayBuffer()));
+  await writeFile(join(dir, filename), webpBuffer);
 
   return NextResponse.json({ url: `/api/uploads/relints/${filename}` }, { status: 201 });
 }

@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -41,6 +42,12 @@ enum MissionStatus {
   CANCELLED
 }
 
+enum DeviceStatus {
+  PENDING
+  AUTHORIZED
+  REVOKED
+}
+
 model User {
   id           String    @id @default(cuid())
   name         String
@@ -60,6 +67,7 @@ model User {
 
   relints          Relint[]
   debriefings      Debriefing[]
+  apenados         Apenado[]
   sentMessages     ChatMessage[]   @relation("SentMessages")
   receivedMessages ChatMessage[]   @relation("ReceivedMessages")
   auditLogs        AuditLog[]
@@ -70,6 +78,7 @@ model User {
   boardCardsCreated BoardCard[]         @relation("CreatedCards")
   boardCardAssignments BoardCardAssignee[]
   boardComments    BoardComment[]
+  devices          UserDevice[]
 
   @@map("users")
 }
@@ -295,7 +304,8 @@ model Debriefing {
   id            String         @id @default(cuid())
   number        String         @unique
   date          DateTime
-  missionDate   DateTime?
+  missionDate    DateTime?
+  missionEndDate DateTime?
   missionCode   String?
   operationType String?
   operatives    String?
@@ -409,6 +419,52 @@ model BoardChecklistItem {
 
   @@index([cardId])
   @@map("board_checklist_items")
+}
+
+model Apenado {
+  id          String   @id @default(cuid())
+  name        String
+  matricula   String?
+  unidade     String?
+  photoPath      String?
+  photoHash      String?
+  faccao         String?
+  notes          String?  @db.Text
+  faceDescriptor String?  @db.Text
+  ocrText        String?  @db.Text
+  ocrName        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([name])
+  @@index([matricula])
+  @@index([unidade])
+  @@index([photoHash])
+  @@map("apenados")
+}
+
+model UserDevice {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String       @unique
+  name         String
+  userAgent    String
+  ipAddress    String
+  status       DeviceStatus @default(PENDING)
+  authorizedBy    String?
+  authorizedAt    DateTime?
+  lastUsedAt      DateTime     @default(now())
+  createdAt       DateTime     @default(now())
+  latitude        Float?
+  longitude       Float?
+  locationAddress String?
+  locationAt      DateTime?
+
+  @@index([userId, status])
+  @@map("user_devices")
 }
 
 model BoardComment {

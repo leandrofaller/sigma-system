@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { FileText, Plus, Search, Eye, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { FileText, Plus, Search, Eye, Pencil, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { formatDate, getClassificationColor } from '@/lib/utils';
 import type { RelintWithRelations } from '@/types';
 
@@ -112,7 +112,11 @@ export function RelintsList({ relints, role, userId }: Props) {
               )}
               {filtered.map((relint, i) => (
                 <motion.tr key={relint.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                  className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40 transition-colors">
+                  className={`transition-colors ${
+                    relint.status === 'DELETION_REQUESTED'
+                      ? 'bg-red-50/60 dark:bg-red-900/15 border-l-4 border-l-red-500 hover:bg-red-50 dark:hover:bg-red-900/25'
+                      : 'hover:bg-gray-50/50 dark:hover:bg-gray-800/40'
+                  }`}>
                   <td className="px-6 py-4">
                     <span className="text-xs font-mono text-body">{relint.number.split('/')[0]}</span>
                   </td>
@@ -126,9 +130,14 @@ export function RelintsList({ relints, role, userId }: Props) {
                     </span>
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`text-xs px-2 py-1 rounded-full border font-medium ${statusColors[relint.status]}`}>
-                      {statusLabels[relint.status]}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {relint.status === 'DELETION_REQUESTED' && (
+                        <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 animate-pulse" />
+                      )}
+                      <span className={`text-xs px-2 py-1 rounded-full border font-medium ${statusColors[relint.status]}`}>
+                        {statusLabels[relint.status]}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-4 py-4 text-sm text-body">{relint.author?.name}</td>
                   <td className="px-4 py-4 text-xs text-subtle">{formatDate(relint.createdAt)}</td>

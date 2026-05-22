@@ -8,6 +8,7 @@ interface FormData {
   number: string;
   date: string;
   missionDate?: string;
+  missionEndDate?: string;
   missionCode?: string;
   operationType?: string;
   operatives?: string;
@@ -42,7 +43,7 @@ function buildPrintHtml(contentHtml: string, title: string): string {
 <meta charset="UTF-8">
 <title>${title}</title>
 <style>
-  @page { size: A4 portrait; margin: 0 0 2.4cm 0; }
+  @page { size: A4 portrait; margin: 1.8cm 2cm 1.8cm 2cm; }
   * { box-sizing: border-box; }
   body {
     font-family: Arial, sans-serif;
@@ -50,22 +51,22 @@ function buildPrintHtml(contentHtml: string, title: string): string {
     line-height: 1.5;
     color: #000;
     background: white;
-    padding: 1.8cm 2cm 0;
+    padding: 0;
     margin: 0;
-    width: 210mm;
+    width: 100%;
   }
   img { max-width: 100%; }
-  p { margin: 0 0 3px; }
+  p { margin: 0 0 3px; orphans: 3; widows: 3; }
   hr { border: none; border-top: 1.5px solid #000; margin: 8px 0 10px; }
+  p, li { break-inside: avoid; }
   [data-print-footer] { display: none !important; }
-  .fixed-footer {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    padding: 5px 2cm 6px;
+  .doc-footer {
+    margin-top: 40px;
+    padding: 5px 0 0;
     border-top: 1px solid #ccc;
-    background: white;
+    break-inside: avoid;
   }
-  .fixed-footer p { font-size: 7.5pt; color: #333; text-align: justify; line-height: 1.3; margin: 0; }
+  .doc-footer p { font-size: 7.5pt; color: #333; text-align: justify; line-height: 1.3; margin: 0; }
   h1 { font-size: 16pt; font-weight: bold; margin: 8px 0 4px; }
   h2 { font-size: 14pt; font-weight: bold; margin: 7px 0 3px; }
   h3 { font-size: 12pt; font-weight: bold; margin: 6px 0 3px; }
@@ -84,7 +85,7 @@ function buildPrintHtml(contentHtml: string, title: string): string {
 </head>
 <body>
 ${contentHtml}
-<div class="fixed-footer"><p>${LEGAL_TEXT}</p></div>
+<div class="doc-footer"><p>${LEGAL_TEXT}</p></div>
 <script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);}<\/script>
 </body>
 </html>`;
@@ -92,21 +93,51 @@ ${contentHtml}
 
 export function DebriefingPreview({ form }: Props) {
   const [badgeSizes, setBadgeSizes] = useState({ sejus: 72, aip: 80, policiaPenal: 72 });
+  const [badgeTs, setBadgeTs] = useState(() => Date.now());
   const printAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch('/api/relint-config')
       .then((r) => r.json())
-      .then((d) => setBadgeSizes((prev) => ({ ...prev, ...d })))
+      .then((d) => { setBadgeSizes((prev) => ({ ...prev, ...d })); setBadgeTs(Date.now()); })
       .catch(() => {});
   }, []);
 
-  const handlePrint = () => {
+  const badgeUrl = (key: string) => `/logos/${key}.png?t=${badgeTs}`;
+
+  const handlePrint = async () => {
     const html = printAreaRef.current?.innerHTML;
     if (!html) return;
+
+    const toDataUri = async (url: string): Promise<string | null> => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch { return null; }
+    };
+
+    let printHtml = html;
+    const badgeKeys = ['badge-sejus', 'badge-aip', 'badge-policia-penal'];
+    for (const key of badgeKeys) {
+      const dataUri = await toDataUri(badgeUrl(key));
+      if (dataUri) {
+        printHtml = printHtml.replace(
+          new RegExp(`src="/logos/${key}\\.png[^"]*"`, 'g'),
+          `src="${dataUri}"`
+        );
+      }
+    }
+
     const win = window.open('', '_blank', 'width=900,height=700');
     if (!win) { alert('Permita pop-ups para imprimir.'); return; }
-    win.document.write(buildPrintHtml(html, form.number));
+    win.document.write(buildPrintHtml(printHtml, form.number));
     win.document.close();
   };
 
@@ -147,7 +178,7 @@ export function DebriefingPreview({ form }: Props) {
 
       {/* Documento A4 */}
       <div ref={printAreaRef} className="bg-white text-black"
-        style={{ fontFamily: 'Arial, sans-serif', fontSize: '11pt', lineHeight: '1.5', padding: '1.8cm 2cm 1.5cm', minHeight: '27cm', width: '100%' }}>
+        style={{ fontFamily: 'Arial, sans-serif', fontSize: '11pt', lineHeight: '1.5', padding: '0.8cm 2cm 1.5cm', minHeight: '27cm', width: '100%' }}>
 
         {/* Carimbo de classificação */}
         <div style={{ textAlign: 'center', marginBottom: '10px' }}>
@@ -157,18 +188,18 @@ export function DebriefingPreview({ form }: Props) {
         {/* Cabeçalho 3 colunas */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', gap: '8px' }}>
           <div style={{ width: badgeSizes.sejus + 8, flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <img src="/logos/badge-sejus.png" alt="SEJUS" style={{ width: badgeSizes.sejus, height: 'auto' }}
+            <img src={badgeUrl('badge-sejus')} alt="SEJUS" style={{ width: badgeSizes.sejus, height: 'auto' }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
           <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>SECRETARIA DE ESTADO DA JUSTIÇA DE RONDÔNIA</p>
             <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>AGÊNCIA DE INTELIGÊNCIA PENAL</p>
             <p style={{ fontWeight: 'bold', fontSize: '12pt', margin: '2px 0 8px', textTransform: 'uppercase' }}>AIP/SEJUS/RO</p>
-            <img src="/logos/badge-aip.png" alt="AIP/SEJUS/RO" style={{ width: badgeSizes.aip, height: 'auto' }}
+            <img src={badgeUrl('badge-aip')} alt="AIP/SEJUS/RO" style={{ width: badgeSizes.aip, height: 'auto' }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
           <div style={{ width: badgeSizes.policiaPenal + 8, flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <img src="/logos/badge-policia-penal.png" alt="Polícia Penal RO" style={{ width: badgeSizes.policiaPenal, height: 'auto' }}
+            <img src={badgeUrl('badge-policia-penal')} alt="Polícia Penal RO" style={{ width: badgeSizes.policiaPenal, height: 'auto' }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
         </div>
@@ -187,7 +218,10 @@ export function DebriefingPreview({ form }: Props) {
           <p style={fieldRow}><strong><u>{form.number || 'DEBRIEFING Nº___/20__/AIP/SEJUS/RO'}</u></strong></p>
           <p style={fieldRow}><strong>Data do Debriefing:</strong>&nbsp;{form.date ? formatDate(new Date(form.date + 'T12:00:00')) : '__/__/____'}</p>
           {form.missionDate && (
-            <p style={fieldRow}><strong>Data da Missão:</strong>&nbsp;{formatDate(new Date(form.missionDate + 'T12:00:00'))}</p>
+            <p style={fieldRow}><strong>Data inicial da Missão:</strong>&nbsp;{formatDate(new Date(form.missionDate + 'T12:00:00'))}</p>
+          )}
+          {form.missionEndDate && (
+            <p style={fieldRow}><strong>Data final da Missão:</strong>&nbsp;{formatDate(new Date(form.missionEndDate + 'T12:00:00'))}</p>
           )}
           {form.missionCode && (
             <p style={fieldRow}><strong>Código da Missão:</strong>&nbsp;{form.missionCode}</p>
@@ -280,7 +314,7 @@ export function DebriefingPreview({ form }: Props) {
         )}
 
         {/* Aviso legal */}
-        <div data-print-footer="true" style={{ borderTop: '1px solid #ccc', paddingTop: '8px' }}>
+        <div data-print-footer="true" style={{ marginTop: '48px', borderTop: '1px solid #ccc', paddingTop: '8px' }}>
           <p style={{ fontSize: '7.5pt', color: '#333', textAlign: 'justify', lineHeight: '1.3', margin: 0 }}>
             {LEGAL_TEXT}
           </p>

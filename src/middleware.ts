@@ -1,20 +1,20 @@
 import NextAuth from 'next-auth';
 import { authConfig } from './auth.config';
+import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const { auth } = NextAuth(authConfig);
 
-const publicRoutes = ['/', '/login', '/rastreamento', '/sobre', '/contato'];
+const publicRoutes = ['/', '/login', '/rastreamento', '/sobre', '/contato', '/device-pending'];
 const apiPublicRoutes = ['/api/auth', '/api/health', '/api/access-requests'];
 
-// Resolve o host público real quando a app roda atrás de um reverse proxy (Coolify/nginx).
-// O proxy injeta x-forwarded-host com o domínio/IP que o cliente usou;
-// sem isso, nextUrl.host seria o endereço interno do container.
+const DEVICE_COOKIE = 'sigma-device';
+const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
+
 function buildRedirect(req: NextRequest, path: string): URL {
   if (process.env.NEXTAUTH_URL) {
     return new URL(path, process.env.NEXTAUTH_URL);
   }
-
   const proto =
     req.headers.get('x-forwarded-proto')?.split(',')[0].trim() ||
     req.nextUrl.protocol.replace(':', '');
@@ -25,6 +25,17 @@ function buildRedirect(req: NextRequest, path: string): URL {
   return new URL(path, `${proto}://${host}`);
 }
 
+function attachDeviceCookie(response: NextResponse, token: string): NextResponse {
+  response.cookies.set(DEVICE_COOKIE, token, {
+    httpOnly: true,
+    maxAge: COOKIE_MAX_AGE,
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  });
+  return response;
+}
+
 const MOBILE_UA_REGEX = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i;
 
 export default auth((req) => {
@@ -32,8 +43,12 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const isPublicRoute = publicRoutes.includes(nextUrl.pathname);
   const isApiPublicRoute = apiPublicRoutes.some((route) =>
-    nextUrl.pathname.startsWith(route)
+    nextUrl.pathname.startsWith(route),
   );
+
+  const existingToken = req.cookies.get(DEVICE_COOKIE)?.value;
+  const newToken = existingToken ?? crypto.randomUUID();
+  const needsCookie = !existingToken;
 
   if (isApiPublicRoute) return;
 
@@ -44,24 +59,44 @@ export default auth((req) => {
     return;
   }
 
+  // Dispositivo não autorizado — redireciona para página de espera
+  if (isLoggedIn && (req.auth as any)?.user?.deviceAuthorized === false) {
+    if (!nextUrl.pathname.startsWith('/device-pending')) {
+      const res = NextResponse.redirect(buildRedirect(req, '/device-pending'));
+      return needsCookie ? attachDeviceCookie(res, newToken) : res;
+    }
+    // Permite acesso à página de espera — seta cookie se necessário
+    if (needsCookie) {
+      const res = NextResponse.next();
+      return attachDeviceCookie(res, newToken);
+    }
+    return;
+  }
+
   if (!isLoggedIn && !isPublicRoute) {
-    return Response.redirect(buildRedirect(req, '/login'));
+    const res = NextResponse.redirect(buildRedirect(req, '/login'));
+    return needsCookie ? attachDeviceCookie(res, newToken) : res;
   }
 
   if (isLoggedIn && nextUrl.pathname === '/login') {
-    return Response.redirect(buildRedirect(req, '/dashboard'));
+    return NextResponse.redirect(buildRedirect(req, '/dashboard'));
   }
 
-  // Redireciona /missoes para versão mobile quando acessado de celular,
-  // a menos que o usuário tenha forçado desktop com ?desktop=1.
+  // Redireciona /missoes para versão mobile quando acessado de celular
   if (isLoggedIn && nextUrl.pathname === '/missoes' && nextUrl.searchParams.get('desktop') !== '1') {
     const ua = req.headers.get('user-agent') || '';
     if (MOBILE_UA_REGEX.test(ua)) {
-      return Response.redirect(buildRedirect(req, '/missoes/mobile'));
+      return NextResponse.redirect(buildRedirect(req, '/missoes/mobile'));
     }
+  }
+
+  // Seta cookie de dispositivo em visitantes novos (pass-through com cookie)
+  if (needsCookie) {
+    const res = NextResponse.next();
+    return attachDeviceCookie(res, newToken);
   }
 });
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|public/).*)',],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|logos/).*)',],
 };

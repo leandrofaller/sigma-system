@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
       number: body.number,
       date: new Date(body.date),
       missionDate: body.missionDate ? new Date(body.missionDate) : null,
+      missionEndDate: body.missionEndDate ? new Date(body.missionEndDate) : null,
       missionCode: body.missionCode || null,
       operationType: body.operationType || null,
       operatives: body.operatives || null,

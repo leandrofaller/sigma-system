@@ -6,6 +6,7 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { canAccessChatGroup, canAccessDirectChat } from '@/lib/chat-auth';
 import { assertUploadAllowed, getExtension } from '@/lib/security';
+import sharp from 'sharp';
 
 const CHAT_UPLOAD_EXTENSIONS = [
   'jpg',
@@ -51,15 +52,30 @@ export async function POST(req: NextRequest) {
 
   try {
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const ext = getExtension(file.name);
-    const filename = `${randomUUID()}.${ext}`;
+    const isImage = file.type.startsWith('image/');
+
+    let saveBuffer: Buffer;
+    let filename: string;
+    let savedSize: number;
+
+    if (isImage) {
+      saveBuffer = await sharp(Buffer.from(bytes))
+        .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 90 })
+        .toBuffer();
+      filename = `${randomUUID()}.webp`;
+      savedSize = saveBuffer.length;
+    } else {
+      saveBuffer = Buffer.from(bytes);
+      filename = `${randomUUID()}.${getExtension(file.name)}`;
+      savedSize = file.size;
+    }
+
     const uploadDir = join(process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads'), 'chat');
 
     await mkdir(uploadDir, { recursive: true });
-    await writeFile(join(uploadDir, filename), buffer);
+    await writeFile(join(uploadDir, filename), saveBuffer);
 
-    const isImage = file.type.startsWith('image/');
     const fileUrl = `/api/uploads/chat/${filename}`;
 
     const message = await prisma.chatMessage.create({
@@ -68,7 +84,7 @@ export async function POST(req: NextRequest) {
         type: isImage ? 'IMAGE' : 'FILE',
         fileUrl,
         fileName: file.name,
-        fileSize: file.size,
+        fileSize: savedSize,
         senderId: user.id,
         groupId: groupId || null,
         receiverId: receiverId || null,

@@ -43,6 +43,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     data: {
       date: body.date ? new Date(body.date) : undefined,
       missionDate: body.missionDate ? new Date(body.missionDate) : null,
+      missionEndDate: body.missionEndDate ? new Date(body.missionEndDate) : null,
       missionCode: body.missionCode ?? null,
       operationType: body.operationType ?? null,
       operatives: body.operatives ?? null,
