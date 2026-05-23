@@ -3,6 +3,7 @@ import { runIndexBatch } from './arcface-batch';
 import { getApenadosDir } from './storage';
 
 const BATCH_SIZE = 30;
+const MAX_DURATION_MS = 170 * 60 * 1000; // 170 minutos
 
 // Sentinel gravado no banco para fotos sem rosto detectável ou sem arquivo.
 // Impede que esses registros sejam reprocessados a cada execução.
@@ -19,6 +20,7 @@ export interface JobProgress {
 
 interface JobState {
   isRunning: boolean;
+  timedOut: boolean;
   progress: JobProgress;
   error: string;
 }
@@ -26,6 +28,7 @@ interface JobState {
 // Module-level singleton — persiste enquanto o processo Node.js estiver rodando
 let state: JobState = {
   isRunning: false,
+  timedOut: false,
   progress: { current: 0, total: 0, faces: 0, skipped: 0, errors: 0, startTime: 0 },
   error: '',
 };
@@ -42,6 +45,7 @@ export function stopJob(): void {
 export function startJob(): void {
   if (state.isRunning) return;
   state.isRunning = true;
+  state.timedOut = false;
   state.error = '';
   stopFlag = false;
 
@@ -76,6 +80,11 @@ async function runLoop(): Promise<void> {
   let errors = 0;
 
   while (!stopFlag) {
+    if (Date.now() - startTime >= MAX_DURATION_MS) {
+      state.timedOut = true;
+      break;
+    }
+
     const records = await prisma.apenado.findMany({
       where: { photoPath: { not: null }, faceDescriptor: null },
       select: { id: true },

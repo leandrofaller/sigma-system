@@ -5,6 +5,7 @@ import type { JobProgress } from '@/lib/indexing-job';
 
 interface IndexingContextValue {
   isIndexing: boolean;
+  timedOut: boolean;
   progress: JobProgress;
   indexError: string;
   startIndexing: () => Promise<void>;
@@ -25,6 +26,7 @@ export function useIndexing() {
 
 export function IndexingProvider({ children }: { children: ReactNode }) {
   const [isIndexing, setIsIndexing] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
   const [progress, setProgress] = useState<JobProgress>(defaultProgress);
   const [indexError, setIndexError] = useState('');
 
@@ -34,6 +36,7 @@ export function IndexingProvider({ children }: { children: ReactNode }) {
       if (!res.ok) return;
       const data = await res.json();
       setIsIndexing(data.isRunning ?? false);
+      setTimedOut(data.timedOut ?? false);
       setProgress(data.progress ?? defaultProgress);
       setIndexError(data.error ?? '');
     } catch {}
@@ -60,6 +63,7 @@ export function IndexingProvider({ children }: { children: ReactNode }) {
       }
       const data = await res.json();
       setIsIndexing(data.isRunning ?? true);
+      setTimedOut(false);
       setProgress(data.progress ?? defaultProgress);
       setIndexError('');
     } catch (err: any) {
@@ -74,7 +78,7 @@ export function IndexingProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <IndexingContext.Provider value={{ isIndexing, progress, indexError, startIndexing, stopIndexing }}>
+    <IndexingContext.Provider value={{ isIndexing, timedOut, progress, indexError, startIndexing, stopIndexing }}>
       {children}
     </IndexingContext.Provider>
   );

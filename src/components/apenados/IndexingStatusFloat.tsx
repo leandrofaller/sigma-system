@@ -1,6 +1,6 @@
 'use client';
 
-import { Database, Square, CheckCircle } from 'lucide-react';
+import { Database, Square, CheckCircle, Clock } from 'lucide-react';
 import { useIndexing } from '@/contexts/IndexingContext';
 
 function fmtTime(seconds: number): string {
@@ -11,10 +11,10 @@ function fmtTime(seconds: number): string {
 }
 
 export function IndexingStatusFloat() {
-  const { isIndexing, progress, indexError, stopIndexing } = useIndexing();
+  const { isIndexing, timedOut, progress, indexError, stopIndexing } = useIndexing();
 
   const done = !isIndexing && progress.total > 0 && progress.current >= progress.total;
-  if (!isIndexing && !done) return null;
+  if (!isIndexing && !done && !timedOut) return null;
 
   const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
   const elapsed = progress.startTime ? (Date.now() - progress.startTime) / 1000 : 0;
@@ -26,13 +26,15 @@ export function IndexingStatusFloat() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
         <div className="flex items-center gap-2">
-          {done ? (
+          {timedOut ? (
+            <Clock className="w-4 h-4 text-orange-500 flex-shrink-0" />
+          ) : done ? (
             <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
           ) : (
             <Database className="w-4 h-4 text-sigma-600 animate-pulse flex-shrink-0" />
           )}
-          <span className="text-sm font-semibold text-title">
-            {done ? 'Indexação concluída!' : 'Indexando banco facial'}
+          <span className={`text-sm font-semibold ${timedOut ? 'text-orange-600 dark:text-orange-400' : 'text-title'}`}>
+            {timedOut ? 'Tempo limite atingido (170min)' : done ? 'Indexação concluída!' : 'Indexando banco facial'}
           </span>
         </div>
         {isIndexing && (
