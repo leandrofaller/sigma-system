@@ -139,18 +139,22 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const all = await prisma.apenado.findMany({
-      where: { faceDescriptor: { not: null }, NOT: { faceDescriptor: 'NONE' } },
-      select: {
-        id: true,
-        name: true,
-        matricula: true,
-        unidade: true,
-        faccao: true,
-        photoPath: true,
-        faceDescriptor: true,
-      },
-    });
+    // Raw query to skip records with null bytes — prisma's Rust bridge crashes on \x00
+    const all = await prisma.$queryRaw<{
+      id: string;
+      name: string;
+      matricula: string | null;
+      unidade: string | null;
+      faccao: string | null;
+      photoPath: string | null;
+      faceDescriptor: string;
+    }[]>`
+      SELECT id, name, matricula, unidade, faccao, "photoPath", "faceDescriptor"
+      FROM apenados
+      WHERE "faceDescriptor" IS NOT NULL
+        AND "faceDescriptor" != 'NONE'
+        AND position(chr(0) IN "faceDescriptor") = 0
+    `;
 
     const indexed = all.length;
     const minSim01 = minSimilarity / 100;

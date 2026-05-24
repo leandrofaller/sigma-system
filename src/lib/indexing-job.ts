@@ -58,6 +58,14 @@ export function startJob(): void {
 async function runLoop(): Promise<void> {
   const uploadsDir = getApenadosDir();
 
+  // Remove null bytes de registros corrompidos de indexações anteriores
+  await prisma.$executeRaw`
+    UPDATE apenados
+    SET "faceDescriptor" = REPLACE("faceDescriptor", chr(0), '')
+    WHERE "faceDescriptor" IS NOT NULL
+    AND position(chr(0) IN "faceDescriptor") > 0
+  `;
+
   // Conta total de fotos e já processadas para mostrar progresso real (ex: 600/1000 ao retomar)
   const [totalWithPhoto, alreadyProcessed] = await Promise.all([
     prisma.apenado.count({ where: { photoPath: { not: null } } }),
@@ -105,7 +113,7 @@ async function runLoop(): Promise<void> {
         updates.push(
           prisma.apenado.update({
             where: { id: r.id },
-            data: { faceDescriptor: JSON.stringify(r.embedding) },
+            data: { faceDescriptor: JSON.stringify(r.embedding).replace(/\x00/g, '') },
           }),
         );
         faces++;

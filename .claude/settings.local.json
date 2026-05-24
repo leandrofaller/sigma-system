@@ -37,7 +37,11 @@
       "Bash(grep -v \":0$\")",
       "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -Name)",
       "Bash(git config *)",
-      "PowerShell(git config --global core.editor \"'C:\\\\Users\\\\leand\\\\AppData\\\\Local\\\\Programs\\\\Antigravity IDE\\\\Antigravity IDE.exe' --wait\")"
+      "PowerShell(git config --global core.editor \"'C:\\\\Users\\\\leand\\\\AppData\\\\Local\\\\Programs\\\\Antigravity IDE\\\\Antigravity IDE.exe' --wait\")",
+      "Bash(Get-ChildItem -Path \"d:\\\\AIP\\\\sigma-system\" -Recurse -Force)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Format-Table FullName)",
+      "Bash(xargs grep -l \"IndexingStatusFloat\\\\|IndexingProvider\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

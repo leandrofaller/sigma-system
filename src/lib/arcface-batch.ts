@@ -45,7 +45,7 @@ export function runIndexBatch(ids: string[], uploadsDir: string): Promise<IndexR
       proc.stdin.end();
 
       proc.stdout.on('data', (chunk: Buffer) => {
-        buffer += chunk.toString();
+        buffer += chunk.toString().replace(/\x00/g, '');
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
         for (const line of lines) {
