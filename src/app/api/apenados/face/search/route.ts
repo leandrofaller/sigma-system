@@ -139,7 +139,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Raw query to skip records with null bytes — prisma's Rust bridge crashes on \x00
+    // Raw query usando bytea para detectar null bytes — text funcs (position, LIKE) lançam
+    // "null character not permitted" ao tocar em campos corrompidos.
+    // encode(field::bytea, 'hex') retorna hex puro (ASCII), strpos busca '00' sem crash.
     const all = await prisma.$queryRaw<{
       id: string;
       name: string;
@@ -153,7 +155,7 @@ export async function POST(req: NextRequest) {
       FROM apenados
       WHERE "faceDescriptor" IS NOT NULL
         AND "faceDescriptor" != 'NONE'
-        AND position(chr(0) IN "faceDescriptor") = 0
+        AND strpos(encode("faceDescriptor"::bytea, 'hex'), '00') = 0
     `;
 
     const indexed = all.length;

@@ -58,12 +58,14 @@ export function startJob(): void {
 async function runLoop(): Promise<void> {
   const uploadsDir = getApenadosDir();
 
-  // Remove null bytes de registros corrompidos de indexações anteriores
+  // Reseta registros corrompidos com null bytes (detectado via bytea hex — text funcs falham com \x00)
+  // encode(field::bytea, 'hex') converte cada byte em 2 hex chars; null bytes viram '00' em ASCII puro
   await prisma.$executeRaw`
     UPDATE apenados
-    SET "faceDescriptor" = REPLACE("faceDescriptor", chr(0), '')
+    SET "faceDescriptor" = NULL
     WHERE "faceDescriptor" IS NOT NULL
-    AND position(chr(0) IN "faceDescriptor") > 0
+      AND "faceDescriptor" != 'NONE'
+      AND strpos(encode("faceDescriptor"::bytea, 'hex'), '00') > 0
   `;
 
   // Conta total de fotos e já processadas para mostrar progresso real (ex: 600/1000 ao retomar)
