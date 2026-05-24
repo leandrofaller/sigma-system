@@ -58,13 +58,12 @@ export function startJob(): void {
 async function runLoop(): Promise<void> {
   const uploadsDir = getApenadosDir();
 
-  // Reseta registros corrompidos com null bytes (detectado via bytea hex — text funcs falham com \x00)
-  // encode(field::bytea, 'hex') converte cada byte em 2 hex chars; null bytes viram '00' em ASCII puro
+  // Reseta registros com null bytes no faceDescriptor (forçam re-indexação limpa).
+  // Compara via encode(bytea,'hex') — text funcs como position/REPLACE crasham em \x00.
   await prisma.$executeRaw`
     UPDATE apenados
     SET "faceDescriptor" = NULL
     WHERE "faceDescriptor" IS NOT NULL
-      AND "faceDescriptor" != 'NONE'
       AND strpos(encode("faceDescriptor"::bytea, 'hex'), '00') > 0
   `;
 

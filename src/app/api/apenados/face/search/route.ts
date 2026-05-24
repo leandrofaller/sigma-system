@@ -139,24 +139,46 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Raw query usando bytea para detectar null bytes — text funcs (position, LIKE) lançam
-    // "null character not permitted" ao tocar em campos corrompidos.
-    // encode(field::bytea, 'hex') retorna hex puro (ASCII), strpos busca '00' sem crash.
-    const all = await prisma.$queryRaw<{
-      id: string;
-      name: string;
-      matricula: string | null;
-      unidade: string | null;
-      faccao: string | null;
-      photoPath: string | null;
+    // Todas as colunas de texto são retornadas como HEX para evitar que null bytes
+    // cheguem ao driver Rust do Prisma (que crasha ao tentar converter \x00 para string JS).
+    // encode(col::bytea, 'hex') produz apenas chars 0-9a-f — impossível ter null bytes.
+    // Decodificamos no JS com Buffer.from(hex, 'hex').toString('utf8').
+    const rawRows = await prisma.$queryRaw<{
+      id: string; name: string;
+      matricula: string | null; unidade: string | null;
+      faccao: string | null; photoPath: string | null;
       faceDescriptor: string;
     }[]>`
-      SELECT id, name, matricula, unidade, faccao, "photoPath", "faceDescriptor"
+      SELECT
+        encode(id::bytea,              'hex') AS id,
+        encode(name::bytea,            'hex') AS name,
+        encode(matricula::bytea,       'hex') AS matricula,
+        encode(unidade::bytea,         'hex') AS unidade,
+        encode(faccao::bytea,          'hex') AS faccao,
+        encode("photoPath"::bytea,     'hex') AS "photoPath",
+        encode("faceDescriptor"::bytea,'hex') AS "faceDescriptor"
       FROM apenados
       WHERE "faceDescriptor" IS NOT NULL
-        AND "faceDescriptor" != 'NONE'
-        AND strpos(encode("faceDescriptor"::bytea, 'hex'), '00') = 0
     `;
+
+    function hexDecode(hex: string | null): string | null {
+      if (!hex) return null;
+      const s = Buffer.from(hex, 'hex').toString('utf8').replace(/\x00/g, '');
+      return s || null;
+    }
+
+    // Decodifica hex → string original; filtra NONE e descritores inválidos
+    const all = rawRows
+      .map(row => ({
+        id:             Buffer.from(row.id,   'hex').toString('utf8'),
+        name:           Buffer.from(row.name, 'hex').toString('utf8').replace(/\x00/g, ''),
+        matricula:      hexDecode(row.matricula),
+        unidade:        hexDecode(row.unidade),
+        faccao:         hexDecode(row.faccao),
+        photoPath:      hexDecode(row.photoPath),
+        faceDescriptor: Buffer.from(row.faceDescriptor, 'hex').toString('utf8').replace(/\x00/g, ''),
+      }))
+      .filter(row => row.faceDescriptor.startsWith('['));
 
     const indexed = all.length;
     const minSim01 = minSimilarity / 100;
@@ -165,7 +187,7 @@ export async function POST(req: NextRequest) {
       const matches = all
         .map((a) => {
           let stored: number[];
-          try { stored = JSON.parse(a.faceDescriptor!); } catch { return null; }
+          try { stored = JSON.parse(a.faceDescriptor); } catch { return null; }
           if (stored.length !== 512) return null;
           const sim = cosineSim(face.embedding, stored);
           if (sim < minSim01) return null;
