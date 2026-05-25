@@ -38,10 +38,11 @@ async function loadFromDB(): Promise<FaceCache> {
     const batch = await prisma.$queryRaw<{ id: string; fd: string }[]>`
       SELECT
         encode(id::bytea, 'hex') AS id,
-        translate("faceDescriptor", chr(0)::text, '') AS fd
+        "faceDescriptor"          AS fd
       FROM apenados
       WHERE "faceDescriptor" IS NOT NULL
         AND "faceDescriptor" LIKE '[%'
+        AND strpos(encode("faceDescriptor"::bytea, 'hex'), '00') = 0
         AND id > ${lastId}
       ORDER BY id
       LIMIT ${BATCH_SIZE}
