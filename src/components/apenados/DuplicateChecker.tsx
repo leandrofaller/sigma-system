@@ -58,7 +58,7 @@ const MODES: { key: Mode; label: string; icon: typeof ScanSearch; description: s
     key: 'exact',
     label: 'Exatamente iguais',
     icon: Fingerprint,
-    description: 'Hash SHA-256 via Python — detecta arquivos byte a byte idênticos, com 100% de precisão.',
+    description: 'Hash SHA-256 — detecta arquivos byte a byte idênticos, com 100% de precisão. Hashes armazenados em banco para re-execuções instantâneas.',
   },
 ];
 
@@ -278,8 +278,8 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                   {currentMode.description}
                 </p>
                 {mode === 'exact' && (
-                  <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2 max-w-sm">
-                    Requer Python 3 instalado no servidor.
+                  <p className="text-xs text-sigma-500 dark:text-sigma-400 mt-2 max-w-sm">
+                    Na primeira execução, indexa todas as fotos (pode demorar alguns minutos). Execuções seguintes são instantâneas.
                   </p>
                 )}
               </div>
@@ -300,7 +300,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                 <p className="text-title font-semibold">Analisando fotos...</p>
                 <p className="text-subtle text-sm mt-1">
                   {mode === 'exact'
-                    ? 'Calculando SHA-256 em background (8 workers paralelos)'
+                    ? 'Calculando SHA-256 e salvando no banco (4 workers paralelos)'
                     : 'Indexando e comparando hashes perceptuais'}
                 </p>
               </div>
