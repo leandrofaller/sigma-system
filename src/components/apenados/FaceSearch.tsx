@@ -292,7 +292,14 @@ export function FaceSearch({ onClose, userRole }: Props) {
       setSelectedFaceIdx(data!.faces[0].index);
       setSearchState('results');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Erro no reconhecimento facial.');
+      const msg: string = err.message || 'Erro no reconhecimento facial.';
+      // Cache ainda carregando: retry automático em 4s (cache costuma terminar neste intervalo)
+      if (msg.includes('ainda carregando')) {
+        setAnalyzeMsg('Índice quase pronto, tentando novamente...');
+        retryRef.current = setTimeout(() => analyzeImage(file, minSim), 4000);
+        return;
+      }
+      setErrorMsg(msg);
       setSearchState('error');
     } finally {
       clearTimeout(slowTimer);
