@@ -220,6 +220,7 @@ export function FaceSearch({ onClose, userRole }: Props) {
   // Search
   const [searchState, setSearchState] = useState<SearchState>('ready');
   const [errorMsg, setErrorMsg] = useState('');
+  const [analyzeMsg, setAnalyzeMsg] = useState('Analisando rosto no servidor...');
   const [queryURL, setQueryURL] = useState<string | null>(null);
   const [queryFile, setQueryFile] = useState<File | null>(null);
   const [result, setResult] = useState<SearchResult | null>(null);
@@ -234,6 +235,10 @@ export function FaceSearch({ onClose, userRole }: Props) {
   const { isIndexing, progress: indexProgress, indexError, startIndexing, stopIndexing } = useIndexing();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cancela retry pendente ao desmontar
+  useEffect(() => () => { if (retryRef.current) clearTimeout(retryRef.current); }, []);
 
   const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
   const isSuperAdmin = userRole === 'SUPER_ADMIN';
@@ -250,7 +255,9 @@ export function FaceSearch({ onClose, userRole }: Props) {
   // ── Analisar foto no servidor ─────────────────────────────────────────────
   const analyzeImage = useCallback(async (file: File, minSim: number) => {
     setSearchState('analyzing');
+    setAnalyzeMsg('Analisando rosto no servidor...');
     setErrorMsg('');
+    if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
     try {
       const form = new FormData();
       form.append('image', file);
@@ -258,7 +265,14 @@ export function FaceSearch({ onClose, userRole }: Props) {
       form.append('minSimilarity', String(minSim));
 
       const res = await fetch('/api/apenados/face/search', { method: 'POST', body: form });
-      const data: SearchResult & { error?: string } = await res.json();
+      const data: SearchResult & { error?: string; cacheLoading?: boolean } = await res.json();
+
+      // 503 = cache de embeddings ainda carregando — retry automático em 5s
+      if (res.status === 503 && data.cacheLoading) {
+        setAnalyzeMsg('Carregando índice de embeddings... aguarde.');
+        retryRef.current = setTimeout(() => analyzeImage(file, minSim), 5000);
+        return;
+      }
 
       if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
 
@@ -292,11 +306,13 @@ export function FaceSearch({ onClose, userRole }: Props) {
   }, [queryFile, analyzeImage, minSimilarity]);
 
   const reset = () => {
+    if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
     setSearchState('ready');
     setQueryURL(null);
     setQueryFile(null);
     setResult(null);
     setErrorMsg('');
+    setAnalyzeMsg('Analisando rosto no servidor...');
   };
 
   const clearIndex = async () => {
@@ -392,7 +408,7 @@ export function FaceSearch({ onClose, userRole }: Props) {
               {searchState === 'analyzing' && (
                 <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
                   <Loader2 className="w-10 h-10 text-sigma-600 animate-spin" />
-                  <p className="text-title font-semibold">Analisando rosto no servidor...</p>
+                  <p className="text-title font-semibold">{analyzeMsg}</p>
                   <p className="text-subtle text-sm">InsightFace ArcFace · buffalo_l · 512 dimensões</p>
                 </div>
               )}

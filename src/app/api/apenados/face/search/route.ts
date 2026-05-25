@@ -97,8 +97,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
-  // Kick off cache warm-up in background if not ready yet
+  // Inicia aquecimento do cache se ainda não iniciado
   warmFaceCache();
+
+  // Se cache ainda não foi carregado, retorna 503 legível em vez de aguardar
+  // e arriscar que o Traefik corte a conexão com 502 após 60s.
+  const cacheStatus = getCacheStatus();
+  if (!cacheStatus.loaded) {
+    return NextResponse.json(
+      {
+        error: cacheStatus.loading
+          ? 'Índice de embeddings ainda carregando. Aguarde alguns segundos e tente novamente.'
+          : 'Índice de embeddings não carregado. Tente novamente em 30 segundos.',
+        cacheLoading: true,
+      },
+      { status: 503 },
+    );
+  }
 
   const formData = await req.formData();
   const file = formData.get('image') as File | null;
@@ -114,12 +129,10 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     await writeFile(tmpPath, Buffer.from(bytes));
 
-    // Run ArcFace analysis and load cache in parallel
+    // Roda análise Python — o cache já está carregado (verificado acima)
     const [analysis, faceCache] = await Promise.all([
       runAnalyze(tmpPath),
-      getFaceCache().catch((err) => {
-        throw new Error(`Cache de embeddings: ${err.message}`);
-      }),
+      getFaceCache(),
     ]);
 
     if (!analysis.faces || analysis.faces.length === 0) {
