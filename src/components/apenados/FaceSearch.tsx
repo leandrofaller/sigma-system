@@ -258,6 +258,13 @@ export function FaceSearch({ onClose, userRole }: Props) {
     setAnalyzeMsg('Analisando rosto no servidor...');
     setErrorMsg('');
     if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
+
+    // Após 6s sem resposta, avisa que o índice pode estar sendo carregado pela 1ª vez
+    const slowTimer = setTimeout(
+      () => setAnalyzeMsg('Carregando índice de embeddings (primeira vez após reinício)...'),
+      6000,
+    );
+
     try {
       const form = new FormData();
       form.append('image', file);
@@ -265,29 +272,30 @@ export function FaceSearch({ onClose, userRole }: Props) {
       form.append('minSimilarity', String(minSim));
 
       const res = await fetch('/api/apenados/face/search', { method: 'POST', body: form });
-      const data: SearchResult & { error?: string; cacheLoading?: boolean } = await res.json();
 
-      // 503 = cache de embeddings ainda carregando — retry automático em 5s
-      if (res.status === 503 && data.cacheLoading) {
-        setAnalyzeMsg('Carregando índice de embeddings... aguarde.');
-        retryRef.current = setTimeout(() => analyzeImage(file, minSim), 5000);
-        return;
+      // Resposta pode ser "Bad Gateway" (texto não-JSON) se Traefik interceptar
+      const text = await res.text();
+      let data: SearchResult & { error?: string } | null = null;
+      try { data = JSON.parse(text); } catch {
+        throw new Error(`Erro de gateway: ${text.slice(0, 120)}`);
       }
 
-      if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
+      if (!res.ok) throw new Error(data?.error || `Erro ${res.status}`);
 
-      if (!data.faces || data.faces.length === 0) {
-        setResult(data);
+      if (!data!.faces || data!.faces.length === 0) {
+        setResult(data!);
         setSearchState('no-face');
         return;
       }
 
-      setResult(data);
-      setSelectedFaceIdx(data.faces[0].index);
+      setResult(data!);
+      setSelectedFaceIdx(data!.faces[0].index);
       setSearchState('results');
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro no reconhecimento facial.');
       setSearchState('error');
+    } finally {
+      clearTimeout(slowTimer);
     }
   }, []);
 

@@ -1,18 +1,8 @@
 import { prisma } from './db';
 
-export interface CachedFace {
-  id: string;
-  name: string;
-  matricula: string | null;
-  unidade: string | null;
-  faccao: string | null;
-  photoPath: string | null;
-}
-
 export interface FaceCache {
-  meta: CachedFace[];
-  // Packed Float32Array: vecs[i*512 .. (i+1)*512] = embedding for meta[i]
-  vecs: Float32Array;
+  ids: string[];       // IDs dos apenados na mesma ordem que vecs
+  vecs: Float32Array;  // Packed: vecs[i*512 .. (i+1)*512] = embedding para ids[i]
   count: number;
   loadedAt: number;
 }
@@ -25,109 +15,110 @@ export interface CacheStatus {
   error: string | null;
 }
 
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutos
+const BATCH_SIZE = 30_000;
 
 let cache: FaceCache | null = null;
 let loadingPromise: Promise<FaceCache> | null = null;
 let lastError: string | null = null;
 
-function hexDecode(hex: string | null): string | null {
-  if (!hex) return null;
-  const s = Buffer.from(hex, 'hex').toString('utf8').replace(/\x00/g, '');
-  return s || null;
-}
-
+// Carrega embeddings em lotes de 30k com paginação por cursor (id > lastId).
+// Evita o O(n²) do OFFSET — cada lote usa o índice primário diretamente.
+// Usa translate() no PostgreSQL para remover null bytes sem hex-encoding,
+// reduzindo faceDescriptor de ~12KB (hex) para ~6KB (texto direto).
+// Pico de memória: ~370MB (vs 2.2GB da abordagem anterior).
 async function loadFromDB(): Promise<FaceCache> {
-  const rawRows = await prisma.$queryRaw<{
-    id: string; name: string;
-    matricula: string | null; unidade: string | null;
-    faccao: string | null; photoPath: string | null;
-    faceDescriptor: string;
-  }[]>`
-    SELECT
-      encode(id::bytea,               'hex') AS id,
-      encode(name::bytea,             'hex') AS name,
-      encode(matricula::bytea,        'hex') AS matricula,
-      encode(unidade::bytea,          'hex') AS unidade,
-      encode(faccao::bytea,           'hex') AS faccao,
-      encode("photoPath"::bytea,      'hex') AS "photoPath",
-      encode("faceDescriptor"::bytea, 'hex') AS "faceDescriptor"
-    FROM apenados
-    WHERE "faceDescriptor" IS NOT NULL
-  `;
+  const ids: string[] = [];
+  // Pre-aloca para 160k embeddings; dobra automaticamente se necessário
+  let vecsBuffer = new Float32Array(160_000 * 512);
+  let count = 0;
+  let lastId = '';
 
-  const meta: CachedFace[] = [];
-  const vecArrays: number[][] = [];
+  while (true) {
+    const batch = await prisma.$queryRaw<{ id: string; fd: string }[]>`
+      SELECT
+        encode(id::bytea, 'hex') AS id,
+        translate("faceDescriptor", chr(0)::text, '') AS fd
+      FROM apenados
+      WHERE "faceDescriptor" IS NOT NULL
+        AND "faceDescriptor" LIKE '[%'
+        AND id > ${lastId}
+      ORDER BY id
+      LIMIT ${BATCH_SIZE}
+    `;
 
-  for (const row of rawRows) {
-    const descHex = row.faceDescriptor;
-    if (!descHex) continue;
-    const descStr = Buffer.from(descHex, 'hex').toString('utf8').replace(/\x00/g, '');
-    if (!descStr.startsWith('[')) continue;
-    let arr: number[];
-    try { arr = JSON.parse(descStr); } catch { continue; }
-    if (!Array.isArray(arr) || arr.length !== 512) continue;
+    if (batch.length === 0) break;
 
-    meta.push({
-      id: Buffer.from(row.id, 'hex').toString('utf8'),
-      name: Buffer.from(row.name, 'hex').toString('utf8').replace(/\x00/g, ''),
-      matricula: hexDecode(row.matricula),
-      unidade: hexDecode(row.unidade),
-      faccao: hexDecode(row.faccao),
-      photoPath: hexDecode(row.photoPath),
-    });
-    vecArrays.push(arr);
+    for (const row of batch) {
+      if (!row.fd) continue;
+      let arr: number[];
+      try { arr = JSON.parse(row.fd); } catch { continue; }
+      if (!Array.isArray(arr) || arr.length !== 512) continue;
+
+      // Expande buffer se necessário
+      if ((count + 1) * 512 > vecsBuffer.length) {
+        const bigger = new Float32Array(vecsBuffer.length * 2);
+        bigger.set(vecsBuffer.subarray(0, count * 512));
+        vecsBuffer = bigger;
+      }
+
+      vecsBuffer.set(arr, count * 512);
+      ids.push(Buffer.from(row.id, 'hex').toString('utf8'));
+      count++;
+    }
+
+    // Avança cursor para o último id do lote (decodifica hex → cuid)
+    lastId = Buffer.from(batch[batch.length - 1].id, 'hex').toString('utf8');
+    if (batch.length < BATCH_SIZE) break;
   }
 
-  const count = meta.length;
-  const vecs = new Float32Array(count * 512);
-  for (let i = 0; i < count; i++) {
-    vecs.set(vecArrays[i], i * 512);
-  }
-
-  return { meta, vecs, count, loadedAt: Date.now() };
+  const vecs = count * 512 === vecsBuffer.length ? vecsBuffer : vecsBuffer.slice(0, count * 512);
+  return { ids, vecs, count, loadedAt: Date.now() };
 }
 
 function startLoad(): Promise<FaceCache> {
   lastError = null;
   loadingPromise = loadFromDB()
-    .then((c) => {
-      cache = c;
-      loadingPromise = null;
-      return c;
-    })
-    .catch((err) => {
-      lastError = err?.message ?? 'Erro desconhecido';
-      loadingPromise = null;
-      throw err;
-    });
+    .then((c) => { cache = c; loadingPromise = null; return c; })
+    .catch((err) => { lastError = err?.message ?? 'Erro desconhecido'; loadingPromise = null; throw err; });
   return loadingPromise;
 }
 
-// Non-blocking warm-up: starts loading in background, does not throw.
+// Inicia carregamento em background. Não lança exceção, não bloqueia.
 export function warmFaceCache(): void {
-  const now = Date.now();
   if (loadingPromise) return;
-  if (cache && now - cache.loadedAt < CACHE_TTL) return;
+  if (cache && Date.now() - cache.loadedAt < CACHE_TTL) return;
   startLoad().catch(() => {});
 }
 
-// Returns cache, waiting if it's currently loading. Throws on load error.
-export async function getFaceCache(forceRefresh = false): Promise<FaceCache> {
-  const now = Date.now();
-  if (!forceRefresh && cache && now - cache.loadedAt < CACHE_TTL) return cache;
-  if (loadingPromise) return loadingPromise;
-  return startLoad();
+// Aguarda o cache ficar pronto até timeoutMs. Lança erro se expirar ou falhar.
+export function awaitFaceCache(timeoutMs: number): Promise<FaceCache> {
+  warmFaceCache();
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    const check = () => {
+      if (cache && Date.now() - cache.loadedAt < CACHE_TTL) { resolve(cache); return; }
+      if (lastError) { reject(new Error(lastError)); return; }
+      if (Date.now() >= deadline) {
+        reject(new Error(
+          'Índice de rostos ainda carregando. Aguarde alguns instantes e tente novamente.'
+        ));
+        return;
+      }
+      setTimeout(check, 300);
+    };
+    check();
+  });
 }
 
-// Call after indexing new photos so the next search reloads.
+// Chama após indexar novas fotos para forçar recarga no próximo uso.
 export function invalidateFaceCache(): void {
   cache = null;
 }
 
 export function getCacheStatus(): CacheStatus {
   return {
-    loaded: cache !== null,
+    loaded: cache !== null && Date.now() - (cache.loadedAt ?? 0) < CACHE_TTL,
     loading: loadingPromise !== null,
     count: cache?.count ?? 0,
     loadedAt: cache?.loadedAt ?? null,

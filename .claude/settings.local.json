@@ -41,7 +41,8 @@
       "Bash(Get-ChildItem -Path \"d:\\\\AIP\\\\sigma-system\" -Recurse -Force)",
       "Bash(Select-Object -First 20)",
       "Bash(Format-Table FullName)",
-      "Bash(xargs grep -l \"IndexingStatusFloat\\\\|IndexingProvider\")"
+      "Bash(xargs grep -l \"IndexingStatusFloat\\\\|IndexingProvider\")",
+      "Bash(node -e ' *)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

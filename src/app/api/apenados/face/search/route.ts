@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
-import { getFaceCache, warmFaceCache, getCacheStatus } from '@/lib/face-cache';
+import { warmFaceCache, awaitFaceCache, getCacheStatus } from '@/lib/face-cache';
 
 export const maxDuration = 60;
 
@@ -58,8 +59,7 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
       proc.on('close', (code) => {
         const trimmed = stdout.trim();
         if (trimmed) {
-          const lines = trimmed.split('\n').filter(Boolean).reverse();
-          for (const line of lines) {
+          for (const line of trimmed.split('\n').filter(Boolean).reverse()) {
             try {
               const parsed = JSON.parse(line) as AnalyzeResult;
               if (parsed.error) { reject(new Error(parsed.error)); return; }
@@ -97,23 +97,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
-  // Inicia aquecimento do cache se ainda não iniciado
+  // Garante que o cache começou a carregar (não bloqueia)
   warmFaceCache();
-
-  // Se cache ainda não foi carregado, retorna 503 legível em vez de aguardar
-  // e arriscar que o Traefik corte a conexão com 502 após 60s.
-  const cacheStatus = getCacheStatus();
-  if (!cacheStatus.loaded) {
-    return NextResponse.json(
-      {
-        error: cacheStatus.loading
-          ? 'Índice de embeddings ainda carregando. Aguarde alguns segundos e tente novamente.'
-          : 'Índice de embeddings não carregado. Tente novamente em 30 segundos.',
-        cacheLoading: true,
-      },
-      { status: 503 },
-    );
-  }
 
   const formData = await req.formData();
   const file = formData.get('image') as File | null;
@@ -126,13 +111,13 @@ export async function POST(req: NextRequest) {
   const tmpPath = join(tmpdir(), `arcface_${randomUUID()}.${ext}`);
 
   try {
-    const bytes = await file.arrayBuffer();
-    await writeFile(tmpPath, Buffer.from(bytes));
+    await writeFile(tmpPath, Buffer.from(await file.arrayBuffer()));
 
-    // Roda análise Python — o cache já está carregado (verificado acima)
+    // Roda análise Python e aguarda cache em paralelo.
+    // Timeout de 55s para garantir que Next.js responde antes do Traefik (60s).
     const [analysis, faceCache] = await Promise.all([
       runAnalyze(tmpPath),
-      getFaceCache(),
+      awaitFaceCache(50_000),
     ]);
 
     if (!analysis.faces || analysis.faces.length === 0) {
@@ -141,42 +126,62 @@ export async function POST(req: NextRequest) {
         imageWidth: analysis.imageWidth,
         imageHeight: analysis.imageHeight,
         indexed: faceCache.count,
-        cacheAge: Math.round((Date.now() - faceCache.loadedAt) / 1000),
       });
     }
 
-    const { meta, vecs, count } = faceCache;
+    const { ids, vecs, count } = faceCache;
     const minSim01 = minSimilarity / 100;
 
-    const facesWithMatches = analysis.faces.map((face) => {
+    // Coleta todos os IDs com similaridade acima do mínimo, para cada rosto detectado
+    const allMatchIds = new Set<string>();
+    const facesWithHits = analysis.faces.map((face) => {
       const queryVec = new Float32Array(face.embedding);
-      const hits: Array<{ similarity: number; idx: number }> = [];
+      const hits: Array<{ idx: number; similarity: number }> = [];
 
-      // Tight loop over packed Float32Array — ~1-2s for 120k × 512
+      // Loop tight sobre Float32Array — ~1-2s para 120k × 512
       for (let i = 0; i < count; i++) {
         const offset = i * 512;
         let dot = 0;
-        for (let j = 0; j < 512; j++) {
-          dot += queryVec[j] * vecs[offset + j];
-        }
-        if (dot >= minSim01) hits.push({ similarity: dot, idx: i });
+        for (let j = 0; j < 512; j++) dot += queryVec[j] * vecs[offset + j];
+        if (dot >= minSim01) hits.push({ idx: i, similarity: dot });
       }
 
       hits.sort((a, b) => b.similarity - a.similarity);
-      const matches = hits.slice(0, topN).map(({ similarity, idx }) => ({
-        ...meta[idx],
-        similarity: toPercent(similarity),
-      }));
+      const topHits = hits.slice(0, topN);
+      topHits.forEach(h => allMatchIds.add(ids[h.idx]));
 
-      return { index: face.index, det_score: face.det_score, bbox: face.bbox, kps: face.kps, matches };
+      return { face, topHits };
     });
 
+    // Busca metadados apenas dos top-N IDs (query minúscula, não bloqueia)
+    const matchedRecords = allMatchIds.size > 0
+      ? await prisma.apenado.findMany({
+          where: { id: { in: Array.from(allMatchIds) } },
+          select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true },
+        })
+      : [];
+
+    const metaMap = new Map(matchedRecords.map(r => [r.id, r]));
+
+    const facesResult = facesWithHits.map(({ face, topHits }) => ({
+      index: face.index,
+      det_score: face.det_score,
+      bbox: face.bbox,
+      kps: face.kps,
+      matches: topHits
+        .map(({ idx, similarity }) => {
+          const meta = metaMap.get(ids[idx]);
+          if (!meta) return null;
+          return { ...meta, similarity: toPercent(similarity) };
+        })
+        .filter(Boolean),
+    }));
+
     return NextResponse.json({
-      faces: facesWithMatches,
+      faces: facesResult,
       imageWidth: analysis.imageWidth,
       imageHeight: analysis.imageHeight,
       indexed: count,
-      cacheAge: Math.round((Date.now() - faceCache.loadedAt) / 1000),
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -185,7 +190,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET — cache status (para debug)
+// GET — status do cache (debug)
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
