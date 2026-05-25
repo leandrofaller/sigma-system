@@ -1,6 +1,7 @@
 import { prisma } from './db';
 import { runIndexBatch } from './arcface-batch';
 import { getApenadosDir } from './storage';
+import { invalidateFaceCache } from './face-cache';
 
 const BATCH_SIZE = 30;
 const MAX_DURATION_MS = 170 * 60 * 1000; // 170 minutos
@@ -140,4 +141,6 @@ async function runLoop(): Promise<void> {
   }
 
   state.isRunning = false;
+  // Invalida o cache de embeddings para que a próxima busca reflita os novos dados
+  invalidateFaceCache();
 }
