@@ -13,6 +13,18 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
+def imread_safe(path: str):
+    """cv2.imread com correção de orientação EXIF.
+    Fotos tiradas em celular ficam rotacionadas sem isso — reduz det_score ou causa no_face."""
+    try:
+        from PIL import Image, ImageOps
+        import numpy as _np
+        pil = ImageOps.exif_transpose(Image.open(path).convert("RGB"))
+        return cv2.cvtColor(_np.array(pil), cv2.COLOR_RGB2BGR)
+    except Exception:
+        return cv2.imread(path)
+
+
 def compute_liveness(img, face):
     """Heuristica de anti-spoofing via analise de textura (sem modelo extra).
     Combina variancia Laplaciana, complexidade de gradiente e energia de alta frequencia.
@@ -77,7 +89,7 @@ def main():
         finally:
             sys.stdout = _real_stdout
 
-        img = cv2.imread(image_path)
+        img = imread_safe(image_path)
         if img is None:
             print(json.dumps({"error": f"Nao foi possivel ler a imagem: {image_path}"}))
             sys.exit(1)

@@ -73,11 +73,12 @@ export async function initPgVector(): Promise<{ ok: boolean; error?: string }> {
     await prisma.$executeRawUnsafe(
       `ALTER TABLE apenados ADD COLUMN IF NOT EXISTS "faceVector" vector(512)`,
     );
-    // HNSW: m=16 (conectividade), ef_construction=64 (qualidade do índice na construção)
+    // HNSW: m=32 (conectividade alta), ef_construction=128 (índice mais denso → melhor recall)
+    // Valores anteriores eram m=16/ef=64 — rebuild necessário para aplicar
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS apenados_face_hnsw_idx
       ON apenados USING hnsw ("faceVector" vector_cosine_ops)
-      WITH (m = 16, ef_construction = 64)
+      WITH (m = 32, ef_construction = 128)
     `);
     _available = true;
     return { ok: true };
@@ -176,36 +177,45 @@ export async function searchByVector(
   const maxDist = 1 - threshold; // distância coseno = 1 − similaridade
 
   try {
+    // SET LOCAL hnsw.ef_search = 100: aumenta candidatos avaliados pelo índice HNSW
+    // de 40 (padrão) para 100 → ~10-20% mais recall em buscas próximas do threshold.
+    // SET LOCAL é scoped à transação — seguro com connection pooling.
     let rows: Array<{ id: string; sim: number }>;
 
     if (excludeId) {
-      rows = await prisma.$queryRawUnsafe<Array<{ id: string; sim: number }>>(
-        `SELECT id, (1 - ("faceVector" <=> $1::vector)) AS sim
-         FROM apenados
-         WHERE "faceVector" IS NOT NULL
-           AND "photoPath" IS NOT NULL
-           AND id != $2
-           AND ("faceVector" <=> $1::vector) <= $3
-         ORDER BY "faceVector" <=> $1::vector ASC
-         LIMIT $4`,
-        vec,
-        excludeId,
-        maxDist,
-        topN,
-      );
+      rows = await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('SET LOCAL hnsw.ef_search = 100');
+        return tx.$queryRawUnsafe<Array<{ id: string; sim: number }>>(
+          `SELECT id, (1 - ("faceVector" <=> $1::vector)) AS sim
+           FROM apenados
+           WHERE "faceVector" IS NOT NULL
+             AND "photoPath" IS NOT NULL
+             AND id != $2
+             AND ("faceVector" <=> $1::vector) <= $3
+           ORDER BY "faceVector" <=> $1::vector ASC
+           LIMIT $4`,
+          vec,
+          excludeId,
+          maxDist,
+          topN,
+        );
+      });
     } else {
-      rows = await prisma.$queryRawUnsafe<Array<{ id: string; sim: number }>>(
-        `SELECT id, (1 - ("faceVector" <=> $1::vector)) AS sim
-         FROM apenados
-         WHERE "faceVector" IS NOT NULL
-           AND "photoPath" IS NOT NULL
-           AND ("faceVector" <=> $1::vector) <= $2
-         ORDER BY "faceVector" <=> $1::vector ASC
-         LIMIT $3`,
-        vec,
-        maxDist,
-        topN,
-      );
+      rows = await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('SET LOCAL hnsw.ef_search = 100');
+        return tx.$queryRawUnsafe<Array<{ id: string; sim: number }>>(
+          `SELECT id, (1 - ("faceVector" <=> $1::vector)) AS sim
+           FROM apenados
+           WHERE "faceVector" IS NOT NULL
+             AND "photoPath" IS NOT NULL
+             AND ("faceVector" <=> $1::vector) <= $2
+           ORDER BY "faceVector" <=> $1::vector ASC
+           LIMIT $3`,
+          vec,
+          maxDist,
+          topN,
+        );
+      });
     }
 
     return rows.map((r) => ({ id: r.id, similarity: r.sim }));

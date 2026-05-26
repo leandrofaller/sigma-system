@@ -29,6 +29,28 @@ def find_photo(uploads_dir: str, id_: str) -> str | None:
     return None
 
 
+def imread_safe(path: str):
+    """cv2.imread com correção de orientação EXIF.
+    Fotos tiradas em celular ficam rotacionadas sem isso — reduz det_score ou causa no_face."""
+    try:
+        from PIL import Image, ImageOps
+        import numpy as np
+        pil = ImageOps.exif_transpose(Image.open(path).convert("RGB"))
+        return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+    except Exception:
+        return cv2.imread(path)
+
+
+def best_face(faces):
+    """Seleciona o rosto principal: combina det_score (60%) + área normalizada (40%).
+    Evita selecionar rosto pequeno de fundo quando há múltiplos detectados."""
+    def score(f):
+        x1, y1, x2, y2 = f.bbox
+        area = max(0.0, (x2 - x1) * (y2 - y1))
+        return float(f.det_score) * 0.6 + min(area / 100_000.0, 1.0) * 0.4
+    return max(faces, key=score)
+
+
 def main():
     raw = sys.stdin.read().strip()
     if not raw:
@@ -81,7 +103,7 @@ def main():
             continue
 
         try:
-            img = cv2.imread(photo_path)
+            img = imread_safe(photo_path)
             if img is None:
                 print(json.dumps({"id": id_, "error": "nao foi possivel ler imagem"}), flush=True)
                 continue
@@ -91,8 +113,8 @@ def main():
                 print(json.dumps({"id": id_, "no_face": True}), flush=True)
                 continue
 
-            # Melhor rosto = maior det_score
-            best = max(faces, key=lambda f: float(f.det_score))
+            # Melhor rosto = maior det_score (60%) + maior área (40%)
+            best = best_face(faces)
             emb = best.normed_embedding.tolist()
 
             print(json.dumps({
