@@ -43,7 +43,9 @@
       "Bash(Format-Table FullName)",
       "Bash(xargs grep -l \"IndexingStatusFloat\\\\|IndexingProvider\")",
       "Bash(node -e ' *)",
-      "Bash(xargs grep -l \"photoHash\\\\|photoPath\\\\|DELETE.*foto\")"
+      "Bash(xargs grep -l \"photoHash\\\\|photoPath\\\\|DELETE.*foto\")",
+      "Bash(Test-Path \"f:\\\\relatorio_claude\\\\src\\\\app\\\\api\\\\apenados\\\\[id]\\\\foto\\\\rotate\\\\route.ts\")",
+      "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Directory)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

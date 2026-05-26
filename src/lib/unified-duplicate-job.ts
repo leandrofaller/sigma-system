@@ -9,6 +9,10 @@ const CONCURRENCY = 4;
 const DHASH_THRESHOLD = 3; // Hamming ≤ 3/64 bits — genuinamente quase idênticas
 const MAX_BUCKET_SIZE = 500; // Prevent O(n²) blowup with highly similar photos
 
+const FACE_SIM_THRESHOLD = 0.72; // cosine similarity ≥ 0.72 → mesmo indivíduo
+const FACE_HAMMING_THRESHOLD = 20; // pré-filtro SimHash: Hamming ≤ 20/64 bits (~91% recall)
+const FACE_BATCH_SIZE = 5000;
+
 export interface DupRecord {
   id: string;
   name: string;
@@ -21,7 +25,7 @@ export interface DupRecord {
 }
 
 export interface DupGroup {
-  type: 'exact' | 'similar';
+  type: 'exact' | 'similar' | 'face';
   records: DupRecord[];
 }
 
@@ -34,6 +38,7 @@ export interface UnifiedDupJobState {
   groups: DupGroup[];
   totalGroups: number;
   totalAnalyzed: number;
+  faceGroupsCount: number;
   error: string;
 }
 
@@ -44,6 +49,7 @@ let state: UnifiedDupJobState = {
   groups: [],
   totalGroups: 0,
   totalAnalyzed: 0,
+  faceGroupsCount: 0,
   error: '',
 };
 
@@ -124,6 +130,40 @@ function hammingDistance(a: string, b: string): number {
   }
 }
 
+// Fast 32-bit popcount using Hamming weight algorithm
+function popcount32(x: number): number {
+  x = x | 0;
+  x -= (x >>> 1) & 0x55555555;
+  x = (x & 0x33333333) + ((x >>> 2) & 0x33333333);
+  x = (x + (x >>> 4)) & 0x0f0f0f0f;
+  return (Math.imul(x, 0x01010101) >>> 24);
+}
+
+// Deterministic 64×512 random projection matrix for SimHash.
+// Seeded LCG so every run produces the same projections.
+function buildProjectionMatrix(): Float32Array {
+  const DIMS = 512;
+  const PROJ = 64;
+  const proj = new Float32Array(PROJ * DIMS);
+  let seed = 0xDEADBEEF >>> 0;
+  const lcg = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return (seed / 0xFFFFFFFF) * 2 - 1; // [-1, 1)
+  };
+  for (let p = 0; p < PROJ; p++) {
+    let norm = 0;
+    const base = p * DIMS;
+    for (let d = 0; d < DIMS; d++) {
+      const v = lcg();
+      proj[base + d] = v;
+      norm += v * v;
+    }
+    norm = Math.sqrt(norm);
+    for (let d = 0; d < DIMS; d++) proj[base + d] /= norm;
+  }
+  return proj;
+}
+
 interface RawRecord {
   id: string;
   name: string;
@@ -152,10 +192,105 @@ function makeFind(parent: Map<string, string>) {
   };
 }
 
+// ── Phase C: face-based duplicate detection using ArcFace embeddings ─────────
+async function runFacePhase(
+  idSet: Set<string>,
+  parent: Map<string, string>,
+  find: (x: string) => string,
+): Promise<void> {
+  const projMatrix = buildProjectionMatrix();
+  const DIMS = 512;
+  const PROJ = 64;
+
+  // Load embeddings cursor-paged, only for records in idSet
+  const ids: string[] = [];
+  const allVecs: Float32Array[] = [];
+  let cursor = '';
+
+  while (true) {
+    const batch = await prisma.$queryRaw<{ id: string; fd: string }[]>`
+      SELECT id, "faceDescriptor" AS fd
+      FROM apenados
+      WHERE "faceDescriptor" LIKE '[%'
+        AND id > ${cursor}
+      ORDER BY id ASC
+      LIMIT ${FACE_BATCH_SIZE}
+    `;
+    if (batch.length === 0) break;
+
+    for (const row of batch) {
+      if (!idSet.has(row.id)) continue; // only indexed records
+      try {
+        const arr: number[] = JSON.parse(row.fd);
+        if (!Array.isArray(arr) || arr.length !== DIMS) continue;
+        const vec = new Float32Array(DIMS);
+        for (let d = 0; d < DIMS; d++) vec[d] = arr[d];
+        ids.push(row.id);
+        allVecs.push(vec);
+      } catch {
+        // skip invalid
+      }
+    }
+
+    cursor = batch[batch.length - 1].id;
+    if (batch.length < FACE_BATCH_SIZE) break;
+    await new Promise<void>((r) => setImmediate(r));
+  }
+
+  const N = ids.length;
+  if (N < 2) return;
+
+  // Pack all vectors into a single Float32Array for cache-friendly access
+  const vecArray = new Float32Array(N * DIMS);
+  for (let i = 0; i < N; i++) vecArray.set(allVecs[i], i * DIMS);
+
+  // Compute 64-bit SimHash for each embedding (stored as two Int32 halves)
+  const simLo = new Int32Array(N); // bits 0-31
+  const simHi = new Int32Array(N); // bits 32-63
+
+  for (let i = 0; i < N; i++) {
+    let lo = 0, hi = 0;
+    const vBase = i * DIMS;
+    for (let p = 0; p < PROJ; p++) {
+      let dot = 0;
+      const pBase = p * DIMS;
+      for (let d = 0; d < DIMS; d++) dot += vecArray[vBase + d] * projMatrix[pBase + d];
+      if (dot > 0) {
+        if (p < 32) lo |= (1 << p);
+        else hi |= (1 << (p - 32));
+      }
+    }
+    simLo[i] = lo;
+    simHi[i] = hi;
+    if ((i + 1) % 2000 === 0) await new Promise<void>((r) => setImmediate(r));
+  }
+
+  // Pairwise Hamming scan + exact cosine verification for candidates
+  let iter = 0;
+  for (let i = 0; i < N - 1; i++) {
+    const iLo = simLo[i], iHi = simHi[i];
+    for (let j = i + 1; j < N; j++) {
+      const hamming = popcount32(iLo ^ simLo[j]) + popcount32(iHi ^ simHi[j]);
+      if (hamming <= FACE_HAMMING_THRESHOLD) {
+        // Exact cosine similarity (dot product on L2-normalized embeddings)
+        const iBase = i * DIMS, jBase = j * DIMS;
+        let dot = 0;
+        for (let d = 0; d < DIMS; d++) dot += vecArray[iBase + d] * vecArray[jBase + d];
+        if (dot >= FACE_SIM_THRESHOLD) {
+          const ra = find(ids[i]), rb = find(ids[j]);
+          if (ra !== rb) parent.set(ra, rb);
+        }
+      }
+      if (++iter % 100_000 === 0) await new Promise<void>((r) => setImmediate(r));
+    }
+  }
+}
+
 async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
   const idToRecord = new Map(records.map((r) => [r.id, r]));
   const parent = new Map<string, string>(records.map((r) => [r.id, r.id]));
   const find = makeFind(parent);
+  const pixelMergedIds = new Set<string>(); // IDs merged via pixel hashing (phases A & B)
 
   // ── Phase A: SHA-256 exact grouping ───────────────────────────────────────
   const bySha = new Map<string, string[]>();
@@ -171,6 +306,8 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
       const ra = find(ids[0]),
         rb = find(ids[i]);
       if (ra !== rb) parent.set(ra, rb);
+      pixelMergedIds.add(ids[0]);
+      pixelMergedIds.add(ids[i]);
     }
   }
 
@@ -230,8 +367,18 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
       const ra = find(idA),
         rb = find(idB);
       if (ra !== rb) parent.set(ra, rb);
+      pixelMergedIds.add(idA);
+      pixelMergedIds.add(idB);
     }
     if (++iteration % 50_000 === 0) await new Promise<void>((r) => setImmediate(r));
+  }
+
+  // ── Phase C: face similarity via ArcFace embeddings ──────────────────────
+  const idSet = new Set(records.map((r) => r.id));
+  try {
+    await runFacePhase(idSet, parent, find);
+  } catch {
+    // face phase failure is non-fatal — proceed with pixel-only groups
   }
 
   // ── Build output groups ───────────────────────────────────────────────────
@@ -252,8 +399,13 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
         return (b.photoQuality ?? 0) - (a.photoQuality ?? 0);
       });
       const sha = sorted[0].photoHashSha;
-      const type: 'exact' | 'similar' =
-        sha != null && sorted.every((r) => r.photoHashSha === sha) ? 'exact' : 'similar';
+      const allSameSha = sha != null && sorted.every((r) => r.photoHashSha === sha);
+      const hasPixelMerge = sorted.some((r) => pixelMergedIds.has(r.id));
+      const type: 'exact' | 'similar' | 'face' = allSameSha
+        ? 'exact'
+        : hasPixelMerge
+          ? 'similar'
+          : 'face';
       return {
         type,
         records: sorted.map(({ photoHashSha: _s, photoHash: _h, ...rest }) => rest),
@@ -346,6 +498,7 @@ async function runJob(): Promise<void> {
   `;
 
   const groups = await buildGroupsAsync(records);
+  const faceGroupsCount = groups.filter((g) => g.type === 'face').length;
 
   state = {
     phase: 'done',
@@ -354,6 +507,7 @@ async function runJob(): Promise<void> {
     groups,
     totalGroups: groups.length,
     totalAnalyzed: records.length,
+    faceGroupsCount,
     error: '',
   };
 }

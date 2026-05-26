@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Upload, Camera, Loader2, CheckCircle, User, Trash2 } from 'lucide-react';
+import { X, Upload, Camera, Loader2, CheckCircle, User, Trash2, RotateCcw, RotateCw } from 'lucide-react';
 import type { Apenado } from './ApenadoCard';
 
 interface Props {
@@ -29,6 +29,8 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
   const [uploading, setUploading] = useState(false);
   const [uploadedForId, setUploadedForId] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [photoVersion, setPhotoVersion] = useState(0);
+  const [rotating, setRotating] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -85,6 +87,23 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
       alert('Erro ao salvar.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRotate = async (degrees: 90 | 270) => {
+    if (!isEdit || !apenado?.id) return;
+    setRotating(true);
+    try {
+      const res = await fetch(`/api/apenados/${apenado.id}/foto/rotate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ degrees }),
+      });
+      if (!res.ok) { const d = await res.json(); alert(d.error || 'Erro ao rotar foto'); return; }
+      setPhotoVersion((v) => v + 1);
+      setPhotoPreview(`/api/apenados/${apenado.id}/foto?v=${photoVersion + 1}`);
+    } finally {
+      setRotating(false);
     }
   };
 
@@ -179,6 +198,26 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
                       <Camera className="w-5 h-5" /> Trocar foto
                     </div>
                   </div>
+                  {isEdit && apenado?.photoPath && !pendingFile && (
+                    <div className="absolute bottom-2 right-2 flex gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleRotate(270)}
+                        disabled={rotating || uploading}
+                        title="Rotar 90° esquerda"
+                        className="w-7 h-7 flex items-center justify-center bg-black/60 hover:bg-black/80 rounded-lg transition-colors disabled:opacity-40"
+                      >
+                        {rotating ? <Loader2 className="w-3.5 h-3.5 text-white animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 text-white" />}
+                      </button>
+                      <button
+                        onClick={() => handleRotate(90)}
+                        disabled={rotating || uploading}
+                        title="Rotar 90° direita"
+                        className="w-7 h-7 flex items-center justify-center bg-black/60 hover:bg-black/80 rounded-lg transition-colors disabled:opacity-40"
+                      >
+                        <RotateCw className="w-3.5 h-3.5 text-white" />
+                      </button>
+                    </div>
+                  )}
                   {uploading && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                       <Loader2 className="w-8 h-8 text-white animate-spin" />

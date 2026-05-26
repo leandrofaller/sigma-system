@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   X, ScanSearch, Loader2, Trash2, AlertTriangle, CheckCircle,
   RefreshCw, Users, Fingerprint, Waves, Zap, Clock, UserX,
-  RotateCcw, RotateCw, Filter,
+  RotateCcw, RotateCw, Filter, UserCheck,
 } from 'lucide-react';
 
 interface DupRecord {
@@ -19,7 +19,7 @@ interface DupRecord {
 }
 
 interface DupGroup {
-  type: 'exact' | 'similar';
+  type: 'exact' | 'similar' | 'face';
   records: DupRecord[];
 }
 
@@ -32,6 +32,7 @@ interface JobState {
   groups: DupGroup[];
   totalGroups: number;
   totalAnalyzed: number;
+  faceGroupsCount: number;
   error: string;
 }
 
@@ -349,12 +350,12 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                 )}
                 <div className="ml-auto flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
                   <Zap className="w-3.5 h-3.5" />
-                  SHA-256 + dHash · {jobState!.totalAnalyzed.toLocaleString('pt-BR')} fotos
+                  SHA-256 · dHash · ArcFace · {jobState!.totalAnalyzed.toLocaleString('pt-BR')} fotos
                 </div>
               </div>
 
               {/* Summary cards */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="card p-4 text-center">
                   <p className="text-2xl font-bold text-sigma-600">
                     {jobState!.totalAnalyzed.toLocaleString('pt-BR')}
@@ -384,6 +385,18 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                     {activeGroups.filter((g) => g.type === 'similar').length}
                   </p>
                   <p className="text-xs text-subtle mt-1">Grupos similares</p>
+                </div>
+                <div className="card p-4 text-center">
+                  <p
+                    className={`text-2xl font-bold ${
+                      activeGroups.filter((g) => g.type === 'face').length > 0
+                        ? 'text-teal-600'
+                        : 'text-green-600'
+                    }`}
+                  >
+                    {activeGroups.filter((g) => g.type === 'face').length}
+                  </p>
+                  <p className="text-xs text-subtle mt-1">Mesmo indivíduo</p>
                 </div>
               </div>
 
@@ -449,31 +462,49 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                 const qualities = group.records.map((r) => r.photoQuality ?? 0);
                 const groupMax = Math.max(...qualities);
                 const groupMin = Math.min(...qualities);
-                const isExact = group.type === 'exact';
+                const borderColor = group.type === 'exact'
+                  ? 'border-red-200 dark:border-red-800'
+                  : group.type === 'face'
+                    ? 'border-teal-200 dark:border-teal-800'
+                    : 'border-orange-200 dark:border-orange-800';
+                const headerColor = group.type === 'exact'
+                  ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                  : group.type === 'face'
+                    ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800'
+                    : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800';
+                const titleColor = group.type === 'exact'
+                  ? 'text-red-700 dark:text-red-400'
+                  : group.type === 'face'
+                    ? 'text-teal-700 dark:text-teal-400'
+                    : 'text-orange-700 dark:text-orange-400';
 
                 return (
                   <div
                     key={gi}
-                    className="border border-red-200 dark:border-red-800 rounded-xl overflow-hidden"
+                    className={`border ${borderColor} rounded-xl overflow-hidden`}
                   >
-                    <div className="flex items-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800">
-                      <Users className="w-4 h-4 text-red-500" />
-                      <span className="text-sm font-semibold text-red-700 dark:text-red-400">
+                    <div className={`flex items-center gap-2 px-4 py-3 ${headerColor} border-b`}>
+                      <Users className={`w-4 h-4 ${titleColor}`} />
+                      <span className={`text-sm font-semibold ${titleColor}`}>
                         Grupo {gi + 1} — {group.records.length} registros
                       </span>
                       <span
                         className={`ml-auto flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                          isExact
+                          group.type === 'exact'
                             ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
-                            : 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300'
+                            : group.type === 'face'
+                              ? 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300'
+                              : 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300'
                         }`}
                       >
-                        {isExact ? (
+                        {group.type === 'exact' ? (
                           <Fingerprint className="w-3 h-3" />
+                        ) : group.type === 'face' ? (
+                          <UserCheck className="w-3 h-3" />
                         ) : (
                           <Waves className="w-3 h-3" />
                         )}
-                        {isExact ? 'Idênticas' : 'Similares'}
+                        {group.type === 'exact' ? 'Idênticas' : group.type === 'face' ? 'Mesmo indivíduo' : 'Similares'}
                       </span>
                     </div>
                     <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
