@@ -115,9 +115,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const apenado = await prisma.apenado.findUnique({
     where: { id },
-    select: { photoPath: true, name: true, matricula: true },
+    select: { photoPath: true, photoHashSha: true, name: true, matricula: true },
   });
   if (!apenado?.photoPath) return NextResponse.json({ error: 'Sem foto' }, { status: 404 });
+
+  // ETag-based revalidation: browser always checks but gets 304 when unchanged.
+  // After rotation the hash changes → browser receives the updated image immediately.
+  const etag = apenado.photoHashSha ? `"${apenado.photoHashSha}"` : null;
+  const ifNoneMatch = req.headers.get('if-none-match');
+  if (etag && ifNoneMatch && ifNoneMatch === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        'Cache-Control': 'private, no-cache',
+        'ETag': etag,
+      },
+    });
+  }
 
   const filePath = getApenadoPhotoPath(apenado.photoPath);
   let buffer: Buffer;
@@ -136,11 +150,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ? `attachment; filename="${safeName}.${fileExt}"`
     : `inline; filename="${safeName}.${fileExt}"`;
 
-  return new Response(new Uint8Array(buffer), {
-    headers: {
-      'Content-Type': contentType,
-      'Content-Disposition': disposition,
-      'Cache-Control': 'private, max-age=3600',
-    },
-  });
+  const headers: Record<string, string> = {
+    'Content-Type': contentType,
+    'Content-Disposition': disposition,
+    'Cache-Control': 'private, no-cache',
+  };
+  if (etag) headers['ETag'] = etag;
+
+  return new Response(new Uint8Array(buffer), { headers });
 }
