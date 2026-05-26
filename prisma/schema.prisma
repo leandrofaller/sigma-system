@@ -433,6 +433,7 @@ model Apenado {
   faccao         String?
   notes          String?  @db.Text
   faceDescriptor String?  @db.Text
+  detScore       Float?
   ocrText        String?  @db.Text
   ocrName        String?
   createdAt   DateTime @default(now())
@@ -446,6 +447,7 @@ model Apenado {
   @@index([photoHash])
   @@index([photoHashSha])
   @@index([photoQuality])
+  @@index([detScore])
   @@map("apenados")
 }
 

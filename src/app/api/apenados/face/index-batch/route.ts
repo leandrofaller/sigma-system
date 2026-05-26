@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { join } from 'path';
 import { runIndexBatch, type IndexResult } from '@/lib/arcface-batch';
 import { getApenadosDir } from '@/lib/storage';
+import { pgvectorAvailable, upsertVector } from '@/lib/pgvector';
 
 export const maxDuration = 300;
 
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
   let skipped = 0;
   let errors = 0;
 
+  const pvecAvail = await pgvectorAvailable();
   const updates: Promise<any>[] = [];
 
   for (const r of results) {
@@ -43,9 +45,13 @@ export async function POST(req: NextRequest) {
       updates.push(
         prisma.apenado.update({
           where: { id: r.id },
-          data: { faceDescriptor: JSON.stringify(r.embedding) },
+          data: {
+            faceDescriptor: JSON.stringify(r.embedding),
+            ...(typeof r.det_score === 'number' ? { detScore: r.det_score } : {}),
+          },
         }),
       );
+      if (pvecAvail) upsertVector(r.id, r.embedding);
       faces++;
     } else if (r.no_face || r.no_photo) {
       skipped++;

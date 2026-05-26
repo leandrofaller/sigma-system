@@ -7,6 +7,7 @@ import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import { warmFaceCache, awaitFaceCache, getCacheStatus } from '@/lib/face-cache';
+import { pgvectorAvailable, searchByVector } from '@/lib/pgvector';
 
 export const maxDuration = 60;
 
@@ -97,13 +98,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
-  // Garante que o cache começou a carregar (não bloqueia)
+  // Threshold padrão configurável via env — 0.4 (40%) por padrão
+  const envDefaultSim = Math.round(parseFloat(process.env.FACE_SIMILARITY_THRESHOLD || '0.4') * 100);
+
+  // Inicia carregamento do cache em background (no-op se pgvector disponível e cache já carregado)
   warmFaceCache();
 
   const formData = await req.formData();
   const file = formData.get('image') as File | null;
-  const topN = parseInt((formData.get('topN') as string) || '20', 10);
-  const minSimilarity = parseInt((formData.get('minSimilarity') as string) || '30', 10);
+  const topN = Math.min(50, Math.max(1, parseInt((formData.get('topN') as string) || '20', 10)));
+  const minSimilarity = parseInt((formData.get('minSimilarity') as string) || String(envDefaultSim), 10);
 
   if (!file) return NextResponse.json({ error: 'Nenhuma imagem enviada' }, { status: 400 });
 
@@ -113,32 +117,78 @@ export async function POST(req: NextRequest) {
   try {
     await writeFile(tmpPath, Buffer.from(await file.arrayBuffer()));
 
-    // Roda análise Python e aguarda cache em paralelo.
-    // Timeout de 55s para garantir que Next.js responde antes do Traefik (60s).
-    const [analysis, faceCache] = await Promise.all([
+    const minSim01 = Math.max(0.1, Math.min(0.99, minSimilarity / 100));
+
+    // Checa pgvector e roda análise em paralelo
+    const [analysis, pvecAvail] = await Promise.all([
       runAnalyze(tmpPath),
-      awaitFaceCache(50_000),
+      pgvectorAvailable(),
     ]);
 
     if (!analysis.faces || analysis.faces.length === 0) {
+      const cacheStatus = getCacheStatus();
       return NextResponse.json({
         faces: [],
         imageWidth: analysis.imageWidth,
         imageHeight: analysis.imageHeight,
-        indexed: faceCache.count,
+        indexed: cacheStatus.count ?? 0,
+        backend: pvecAvail ? 'pgvector' : 'memory',
       });
     }
 
-    const { ids, vecs, count } = faceCache;
-    const minSim01 = minSimilarity / 100;
+    let facesResult: any[];
 
-    // Coleta todos os IDs com similaridade acima do mínimo, para cada rosto detectado
+    if (pvecAvail) {
+      // ── Caminho pgvector: busca SQL com índice HNSW (rápido, sem RAM) ──
+      const allMatchIds = new Set<string>();
+      const facesWithHits = await Promise.all(
+        analysis.faces.map(async (face) => {
+          const hits = await searchByVector(face.embedding, minSim01, topN);
+          hits.forEach((h) => allMatchIds.add(h.id));
+          return { face, hits };
+        }),
+      );
+
+      const matchedRecords = allMatchIds.size > 0
+        ? await prisma.apenado.findMany({
+            where: { id: { in: Array.from(allMatchIds) } },
+            select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true },
+          })
+        : [];
+      const metaMap = new Map(matchedRecords.map((r) => [r.id, r]));
+
+      facesResult = facesWithHits.map(({ face, hits }) => ({
+        index: face.index,
+        det_score: face.det_score,
+        bbox: face.bbox,
+        kps: face.kps,
+        matches: hits
+          .map(({ id, similarity }) => {
+            const meta = metaMap.get(id);
+            if (!meta) return null;
+            return { ...meta, similarity: toPercent(similarity) };
+          })
+          .filter(Boolean),
+      }));
+
+      return NextResponse.json({
+        faces: facesResult,
+        imageWidth: analysis.imageWidth,
+        imageHeight: analysis.imageHeight,
+        indexed: (await prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM apenados WHERE "faceVector" IS NOT NULL`)[0]?.c ?? 0,
+        backend: 'pgvector',
+      });
+    }
+
+    // ── Caminho em memória: varredura Float32Array (fallback) ──
+    const faceCache = await awaitFaceCache(50_000);
+    const { ids, vecs, count } = faceCache;
+
     const allMatchIds = new Set<string>();
     const facesWithHits = analysis.faces.map((face) => {
       const queryVec = new Float32Array(face.embedding);
       const hits: Array<{ idx: number; similarity: number }> = [];
 
-      // Loop tight sobre Float32Array — ~1-2s para 120k × 512
       for (let i = 0; i < count; i++) {
         const offset = i * 512;
         let dot = 0;
@@ -148,22 +198,19 @@ export async function POST(req: NextRequest) {
 
       hits.sort((a, b) => b.similarity - a.similarity);
       const topHits = hits.slice(0, topN);
-      topHits.forEach(h => allMatchIds.add(ids[h.idx]));
-
+      topHits.forEach((h) => allMatchIds.add(ids[h.idx]));
       return { face, topHits };
     });
 
-    // Busca metadados apenas dos top-N IDs (query minúscula, não bloqueia)
     const matchedRecords = allMatchIds.size > 0
       ? await prisma.apenado.findMany({
           where: { id: { in: Array.from(allMatchIds) } },
           select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true },
         })
       : [];
+    const metaMap = new Map(matchedRecords.map((r) => [r.id, r]));
 
-    const metaMap = new Map(matchedRecords.map(r => [r.id, r]));
-
-    const facesResult = facesWithHits.map(({ face, topHits }) => ({
+    facesResult = facesWithHits.map(({ face, topHits }) => ({
       index: face.index,
       det_score: face.det_score,
       bbox: face.bbox,
@@ -182,6 +229,7 @@ export async function POST(req: NextRequest) {
       imageWidth: analysis.imageWidth,
       imageHeight: analysis.imageHeight,
       indexed: count,
+      backend: 'memory',
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

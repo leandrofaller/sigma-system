@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { warmFaceCache, awaitFaceCache } from '@/lib/face-cache';
+import { pgvectorAvailable, searchByVector } from '@/lib/pgvector';
 
 const DIM = 512;
 
@@ -36,8 +37,35 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ similar: [], reason: 'invalid-descriptor', indexed: 0 });
   }
 
-  // Use in-memory face cache for fast scan — same cache used by face search
+  // Tenta pgvector primeiro (índice HNSW — rápido e sem RAM)
   warmFaceCache();
+  const pvecAvail = await pgvectorAvailable();
+
+  if (pvecAvail) {
+    const hits = await searchByVector(Array.from(queryVec), threshold, topN, id);
+    if (hits.length === 0) return NextResponse.json({ similar: [], indexed: 0, backend: 'pgvector' });
+
+    const matchIds = hits.map((h) => h.id);
+    const records = await prisma.apenado.findMany({
+      where: { id: { in: matchIds } },
+      select: { id: true, name: true, matricula: true, unidade: true, photoPath: true, photoQuality: true },
+    });
+    const meta = new Map(records.map((r) => [r.id, r]));
+    const similar = hits
+      .map(({ id: hid, similarity }) => {
+        const r = meta.get(hid);
+        if (!r) return null;
+        return { ...r, similarity: Math.round(similarity * 100) };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    const [{ c }] = await prisma.$queryRaw<[{ c: bigint }]>`
+      SELECT COUNT(*) AS c FROM apenados WHERE "faceVector" IS NOT NULL
+    `;
+    return NextResponse.json({ similar, indexed: Number(c), backend: 'pgvector' });
+  }
+
+  // Fallback: varredura em memória
   let cache;
   try {
     cache = await awaitFaceCache(50000);
@@ -53,7 +81,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const ids = cache.ids;
 
   // Dot-product scan (embeddings are L2-normalized → dot product = cosine similarity)
-  // Yield every 20k iterations to avoid blocking the Node event loop
   const candidates: Array<{ id: string; sim: number }> = [];
 
   for (let i = 0; i < N; i++) {
@@ -74,13 +101,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  // Sort descending, take topN
   candidates.sort((a, b) => b.sim - a.sim);
   const top = candidates.slice(0, topN);
 
-  if (top.length === 0) return NextResponse.json({ similar: [], indexed: N });
+  if (top.length === 0) return NextResponse.json({ similar: [], indexed: N, backend: 'memory' });
 
-  // Fetch metadata
   const matchIds = top.map((c) => c.id);
   const records = await prisma.apenado.findMany({
     where: { id: { in: matchIds } },
@@ -96,5 +121,5 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
 
-  return NextResponse.json({ similar, indexed: N });
+  return NextResponse.json({ similar, indexed: N, backend: 'memory' });
 }

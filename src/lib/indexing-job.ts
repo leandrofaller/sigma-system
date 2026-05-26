@@ -2,6 +2,7 @@ import { prisma } from './db';
 import { runIndexBatch } from './arcface-batch';
 import { getApenadosDir } from './storage';
 import { invalidateFaceCache } from './face-cache';
+import { pgvectorAvailable, upsertVector } from './pgvector';
 
 const BATCH_SIZE = 30;
 const MAX_DURATION_MS = 170 * 60 * 1000; // 170 minutos
@@ -107,6 +108,7 @@ async function runLoop(): Promise<void> {
     const ids = records.map((r) => r.id);
     const results = await runIndexBatch(ids, uploadsDir);
 
+    const pvecAvail = await pgvectorAvailable();
     const updates: Promise<any>[] = [];
     for (const r of results) {
       if (r.done) continue;
@@ -115,17 +117,21 @@ async function runLoop(): Promise<void> {
         updates.push(
           prisma.apenado.update({
             where: { id: r.id },
-            data: { faceDescriptor: JSON.stringify(r.embedding).replace(/\x00/g, '') },
+            data: {
+              faceDescriptor: JSON.stringify(r.embedding).replace(/\x00/g, ''),
+              ...(typeof r.det_score === 'number' ? { detScore: r.det_score } : {}),
+            },
           }),
         );
+        // Salva no índice vetorial pgvector se disponível (fire-and-forget)
+        if (pvecAvail) upsertVector(r.id, r.embedding);
         faces++;
       } else if (r.no_face || r.no_photo) {
         // Marca com sentinel para não reprocessar em execuções futuras.
-        // O campo fica não-nulo, excluindo o registro da fila de pendentes.
         updates.push(
           prisma.apenado.update({
             where: { id: r.id },
-            data: { faceDescriptor: FACE_NONE },
+            data: { faceDescriptor: FACE_NONE, detScore: null },
           }),
         );
         skipped++;

@@ -46,12 +46,18 @@
       "Bash(xargs grep -l \"photoHash\\\\|photoPath\\\\|DELETE.*foto\")",
       "Bash(Test-Path \"f:\\\\relatorio_claude\\\\src\\\\app\\\\api\\\\apenados\\\\[id]\\\\foto\\\\rotate\\\\route.ts\")",
       "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Directory)",
-      "Bash(mkdir -p \"f:/relatorio_claude/src/app/api/apenados/[id]/similar\")"
+      "Bash(mkdir -p \"f:/relatorio_claude/src/app/api/apenados/[id]/similar\")",
+      "Bash(xargs grep -l \"buffalo_l\\\\|FaceAnalysis\\\\|ARCFACE\")",
+      "Bash(Select-String -Path \"f:\\\\relatorio_claude\\\\Dockerfile\" -Pattern \"migrate|db push|prisma\")",
+      "Bash(mkdir -p \"f:/relatorio_claude/src/app/api/apenados/face/pgvector\")",
+      "Bash(mkdir -p \"f:/relatorio_claude/src/app/api/apenados/face/quality\")",
+      "Bash(mkdir -p \"f:/relatorio_claude/src/app/api/apenados/face/quality/reindex\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
       "f:\\relatorio_claude\\public",
-      "f:\\relatorio_claude\\src\\app\\api\\apenados\\[id]"
+      "f:\\relatorio_claude\\src\\app\\api\\apenados\\[id]",
+      "f:\\relatorio_claude\\src\\app\\api\\apenados\\face"
     ]
   }
 }

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   UserCheck, Search, Download, Plus, LayoutGrid, List,
-  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch, Trash2, AlertTriangle, ScanFace, FileSearch, HardDrive, FileImage,
+  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch, Trash2, AlertTriangle, ScanFace, FileSearch, HardDrive, FileImage, Activity,
 } from 'lucide-react';
 import { ApenadoCard, type Apenado } from './ApenadoCard';
 import { ApenadoModal } from './ApenadoModal';
@@ -13,6 +13,7 @@ import { DuplicateChecker } from './DuplicateChecker';
 import { FaceSearch } from './FaceSearch';
 import { AuditPanel } from './AuditPanel';
 import { NoFaceReviewer } from './NoFaceReviewer';
+import { FaceQualityDashboard } from './FaceQualityDashboard';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const SEARCH_PAGE_SIZE = 50;
@@ -71,6 +72,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
   const [faceSearchOpen, setFaceSearchOpen] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [noFaceOpen, setNoFaceOpen] = useState(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [lightbox, setLightbox] = useState<Apenado | null>(null);
@@ -378,6 +380,14 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                   className="flex items-center gap-2 text-sm font-medium text-orange-200 border border-orange-300/40 hover:bg-orange-300/10 px-4 py-2 rounded-xl transition-all"
                 >
                   <FileImage className="w-4 h-4" /> Fotos Suspeitas
+                </button>
+              )}
+              {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
+                <button
+                  onClick={() => setQualityOpen(true)}
+                  className="flex items-center gap-2 text-sm font-medium text-blue-200 border border-blue-300/40 hover:bg-blue-300/10 px-4 py-2 rounded-xl transition-all"
+                >
+                  <Activity className="w-4 h-4" /> Qualidade Facial
                 </button>
               )}
               {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
@@ -721,6 +731,10 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
             setStatsLocal((prev) => ({ ...prev, comFoto: Math.max(0, prev.comFoto - ids.length), semFoto: prev.semFoto + ids.length }));
           }}
         />
+      )}
+
+      {qualityOpen && (
+        <FaceQualityDashboard onClose={() => setQualityOpen(false)} />
       )}
 
       {bulkModal && (
