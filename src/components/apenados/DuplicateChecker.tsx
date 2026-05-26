@@ -24,8 +24,12 @@ interface SimilarResult {
   unindexed: 0;
 }
 
-interface SimilarNeedsIndexing {
-  needsIndexing: true;
+interface SimilarJobResponse {
+  isRunning: boolean;
+  totalAnalyzed: number;
+  totalGroups: number;
+  groups: DisplayRecord[][];
+  error: string;
   unindexed: number;
 }
 
@@ -181,6 +185,22 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
     }, 1500);
   }, []);
 
+  const pollSimilarJob = useCallback((onDone: (data: SimilarJobResponse) => void) => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch('/api/apenados/duplicates');
+        if (!res.ok) return;
+        const data: SimilarJobResponse = await res.json();
+        if (!data.isRunning) {
+          clearInterval(pollingRef.current!);
+          pollingRef.current = null;
+          onDone(data);
+        }
+      } catch {}
+    }, 1500);
+  }, []);
+
   const runCheck = useCallback(async (forceMode?: Mode) => {
     const m = forceMode ?? mode;
     setStatus('loading');
@@ -215,29 +235,33 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
       return;
     }
 
-    // Modo similar — GET síncrono (todas as fotos já indexadas pelo background job)
+    // Modo similar — POST inicia job em background, poll até concluir
     try {
-      const res = await fetch('/api/apenados/duplicates');
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Erro ${res.status}`);
+      const startRes = await fetch('/api/apenados/duplicates', { method: 'POST' });
+      if (!startRes.ok) {
+        const d = await startRes.json().catch(() => ({}));
+        if (startRes.status !== 409) throw new Error(d.error || `Erro ${startRes.status}`);
       }
-      const data: SimilarResult | SimilarNeedsIndexing = await res.json();
-      if (data.needsIndexing) {
-        // Não deveria chegar aqui pois bloqueamos o botão, mas trata defensivamente
-        await fetchPhotoAnalysis();
-        setStatus('idle');
-        return;
-      }
-      setSimilarResult(data as SimilarResult);
-      setAnalysisDuration(Date.now() - startRef.current);
-      setAnalyzedAt(new Date());
-      setStatus('done');
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro desconhecido.');
       setStatus('error');
+      return;
     }
-  }, [mode, pollExactJob, fetchPhotoAnalysis]);
+
+    pollSimilarJob((data) => {
+      if (data.error) { setErrorMsg(data.error); setStatus('error'); return; }
+      setSimilarResult({
+        groups: data.groups,
+        totalAnalyzed: data.totalAnalyzed,
+        totalGroups: data.totalGroups,
+        needsIndexing: false,
+        unindexed: 0,
+      });
+      setAnalysisDuration(Date.now() - startRef.current);
+      setAnalyzedAt(new Date());
+      setStatus('done');
+    });
+  }, [mode, pollExactJob, pollSimilarJob, fetchPhotoAnalysis]);
 
   const switchMode = (m: Mode) => {
     if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
