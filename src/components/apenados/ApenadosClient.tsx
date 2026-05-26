@@ -572,7 +572,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                     onClick={() => setLightbox(a)}
                   >
                     {a.photoPath ? (
-                      <img src={`/api/apenados/${a.id}/foto`} alt={a.name}
+                      <img src={`/api/apenados/${a.id}/foto${a._photoTs ? `?t=${a._photoTs}` : ''}`} alt={a.name}
                         loading="lazy"
                         className="w-full h-full object-cover"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />

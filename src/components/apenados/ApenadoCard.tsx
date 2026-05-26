@@ -12,6 +12,7 @@ export interface Apenado {
   notes?: string | null;
   createdAt: Date | string;
   photoQuality?: number | null;
+  _photoTs?: number;
 }
 
 function qualityPill(q: number | null | undefined) {
@@ -32,7 +33,9 @@ interface Props {
 
 export function ApenadoCard({ apenado, userRole, onEdit, onDelete, onPhotoClick }: Props) {
   const canDelete = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
-  const photoUrl = apenado.photoPath ? `/api/apenados/${apenado.id}/foto` : null;
+  const photoUrl = apenado.photoPath
+    ? `/api/apenados/${apenado.id}/foto${apenado._photoTs ? `?t=${apenado._photoTs}` : ''}`
+    : null;
   const initial = apenado.name.charAt(0).toUpperCase();
 
   const handleDownload = () => {

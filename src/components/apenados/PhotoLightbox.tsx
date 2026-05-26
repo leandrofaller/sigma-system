@@ -1,8 +1,18 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
-import { X, Download, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Loader2 } from 'lucide-react';
+import { useEffect, useCallback, useState, useRef } from 'react';
+import { X, Download, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Loader2, Users } from 'lucide-react';
 import type { Apenado } from './ApenadoCard';
+
+interface SimilarRecord {
+  id: string;
+  name: string;
+  matricula: string | null;
+  unidade: string | null;
+  photoPath: string | null;
+  photoQuality: number | null;
+  similarity: number;
+}
 
 interface Props {
   apenado: Apenado;
@@ -43,6 +53,48 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
   // Per-ID version map — persists across navigation so rotated photos stay updated
   const [photoVersions, setPhotoVersions] = useState<Map<string, number>>(() => new Map());
   const [rotating, setRotating] = useState(false);
+
+  // Similar faces panel
+  const [similarOpen, setSimilarOpen] = useState(false);
+  const [similarData, setSimilarData] = useState<SimilarRecord[]>([]);
+  const [similarLoading, setSimilarLoading] = useState(false);
+  const [similarIndexed, setSimilarIndexed] = useState(0);
+  const [similarReason, setSimilarReason] = useState('');
+  const similarFetchedFor = useRef<string | null>(null);
+
+  const fetchSimilar = useCallback(async (id: string) => {
+    if (similarFetchedFor.current === id) return;
+    similarFetchedFor.current = id;
+    setSimilarLoading(true);
+    setSimilarData([]);
+    setSimilarReason('');
+    try {
+      const res = await fetch(`/api/apenados/${id}/similar?threshold=60&topN=20`);
+      const data = await res.json();
+      setSimilarData(data.similar ?? []);
+      setSimilarIndexed(data.indexed ?? 0);
+      setSimilarReason(data.reason ?? '');
+    } catch {
+      setSimilarReason('error');
+    } finally {
+      setSimilarLoading(false);
+    }
+  }, []);
+
+  const handleToggleSimilar = useCallback(() => {
+    setSimilarOpen((v) => {
+      const next = !v;
+      if (next) fetchSimilar(apenado.id);
+      return next;
+    });
+  }, [apenado.id, fetchSimilar]);
+
+  // Reset similar panel when navigating to a new photo
+  useEffect(() => {
+    if (similarOpen) fetchSimilar(apenado.id);
+    else similarFetchedFor.current = null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apenado.id]);
 
   const photoVersion = photoVersions.get(apenado.id) ?? 0;
   const photoUrl = apenado.photoPath
@@ -159,6 +211,13 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
           {photoUrl && (
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
+                onClick={handleToggleSimilar}
+                title="Buscar indivíduo — localizar registros com a mesma face"
+                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${similarOpen ? 'bg-teal-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white'}`}
+              >
+                {similarLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+              </button>
+              <button
                 onClick={() => handleRotate(270)}
                 disabled={rotating}
                 title="Rotar 90° esquerda"
@@ -183,6 +242,67 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
             </div>
           )}
         </div>
+
+        {/* Similar faces panel — inside the rounded card, below info bar */}
+        {similarOpen && (
+          <div className="bg-gray-950/95 border-t border-white/10 px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white/60 text-xs font-semibold flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5" />
+                {similarLoading
+                  ? 'Buscando...'
+                  : similarData.length > 0
+                    ? `${similarData.length} registro${similarData.length !== 1 ? 's' : ''} similar${similarData.length !== 1 ? 'es' : ''} · threshold 60%`
+                    : similarReason === 'no-face'
+                      ? 'Sem rosto indexado neste registro'
+                      : similarReason === 'cache-unavailable'
+                        ? 'Cache de embeddings indisponível'
+                        : 'Nenhum indivíduo similar encontrado'}
+              </span>
+              {similarIndexed > 0 && (
+                <span className="text-white/30 text-[10px]">{similarIndexed.toLocaleString('pt-BR')} indexados</span>
+              )}
+            </div>
+
+            {similarLoading && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-6 h-6 text-teal-400 animate-spin" />
+              </div>
+            )}
+
+            {!similarLoading && similarData.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
+                {similarData.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => onNavigate({ ...r, faccao: null, notes: null, createdAt: '' } as Apenado)}
+                    className="flex-shrink-0 w-20 group/sim"
+                    title={`${r.name} · ${r.similarity}% similaridade`}
+                  >
+                    <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-800 ring-2 ring-transparent group-hover/sim:ring-teal-400 transition-all">
+                      {r.photoPath ? (
+                        <img
+                          src={`/api/apenados/${r.id}/foto`}
+                          alt={r.name}
+                          loading="lazy"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-700 to-teal-900">
+                          <span className="text-white font-bold text-lg">{r.name.charAt(0)}</span>
+                        </div>
+                      )}
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-1 py-0.5">
+                        <span className="text-teal-300 text-[9px] font-bold">{r.similarity}%</span>
+                      </div>
+                    </div>
+                    <p className="text-white/60 text-[9px] truncate mt-1 text-center leading-tight">{r.name.split(' ')[0]}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Keyboard hint */}

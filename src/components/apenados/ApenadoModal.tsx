@@ -24,7 +24,9 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
   });
   const [saving, setSaving] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(
-    apenado?.photoPath ? `/api/apenados/${apenado.id}/foto` : null
+    apenado?.photoPath
+      ? `/api/apenados/${apenado.id}/foto${apenado._photoTs ? `?t=${apenado._photoTs}` : ''}`
+      : null
   );
   const [uploading, setUploading] = useState(false);
   const [uploadedForId, setUploadedForId] = useState<string | null>(null);
@@ -77,9 +79,13 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
         try {
           await uploadPhoto(saved.id, pendingFile);
           saved.photoPath = `uploads/apenados/${saved.id}.jpg`;
+          saved._photoTs = Date.now();
         } catch (uploadErr: any) {
           alert(`Apenado salvo, mas houve um erro ao salvar a foto: ${uploadErr.message}`);
         }
+      } else if (photoVersion > 0) {
+        // Photo was rotated — stamp timestamp so card/lightbox bypass stale browser cache
+        saved._photoTs = Date.now();
       }
 
       onSaved(saved);

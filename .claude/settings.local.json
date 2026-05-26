@@ -45,11 +45,13 @@
       "Bash(node -e ' *)",
       "Bash(xargs grep -l \"photoHash\\\\|photoPath\\\\|DELETE.*foto\")",
       "Bash(Test-Path \"f:\\\\relatorio_claude\\\\src\\\\app\\\\api\\\\apenados\\\\[id]\\\\foto\\\\rotate\\\\route.ts\")",
-      "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Directory)"
+      "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Directory)",
+      "Bash(mkdir -p \"f:/relatorio_claude/src/app/api/apenados/[id]/similar\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
-      "f:\\relatorio_claude\\public"
+      "f:\\relatorio_claude\\public",
+      "f:\\relatorio_claude\\src\\app\\api\\apenados\\[id]"
     ]
   }
 }

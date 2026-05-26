@@ -125,6 +125,7 @@ export function NoFaceReviewer({ onClose, onPhotosRemoved }: Props) {
   const someSelected = selected.size > 0 && !allSelected;
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
@@ -273,9 +274,11 @@ export function NoFaceReviewer({ onClose, onPhotosRemoved }: Props) {
         </div>
       </div>
 
-      {/* Confirm dialog */}
+    </div>
+
+      {/* Confirm dialog — outside main modal to avoid z-index collision */}
       {showConfirm && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowConfirm(false)} />
           <div className="relative z-10 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-800">
             <div className="flex items-start gap-3 mb-4">
@@ -310,6 +313,6 @@ export function NoFaceReviewer({ onClose, onPhotosRemoved }: Props) {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
