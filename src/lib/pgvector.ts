@@ -127,6 +127,16 @@ export async function populateVectorsFromDescriptors(batchSize = 500): Promise<n
   return total;
 }
 
+/** Remove o faceVector de um apenado. Silencioso — não lança exceção. */
+export async function clearVector(id: string): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE apenados SET "faceVector" = NULL WHERE id = $1`,
+      id,
+    );
+  } catch {}
+}
+
 /**
  * Salva um embedding como faceVector para um apenado.
  * Não lança exceção — falhas são silenciosas para não bloquear o caminho principal.

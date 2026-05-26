@@ -7,6 +7,8 @@ import { createHash } from 'crypto';
 import sharp from 'sharp';
 import { assertUploadAllowed } from '@/lib/security';
 import { getApenadosDir, getApenadoPhotoPath } from '@/lib/storage';
+import { pgvectorAvailable, clearVector } from '@/lib/pgvector';
+import { invalidateFaceCache } from '@/lib/face-cache';
 
 
 const PHOTO_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'] as const;
@@ -102,8 +104,20 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   await prisma.apenado.update({
     where: { id },
-    data: { photoPath: null, photoHash: null, photoQuality: null, photoHashSha: null },
+    data: {
+      photoPath: null,
+      photoHash: null,
+      photoQuality: null,
+      photoHashSha: null,
+      faceDescriptor: null,
+      detScore: null,
+    },
   });
+
+  // Limpa o vector do índice HNSW e invalida o cache em memória
+  const pvecAvail = await pgvectorAvailable();
+  if (pvecAvail) clearVector(id);
+  invalidateFaceCache();
 
   return NextResponse.json({ ok: true });
 }
