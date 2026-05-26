@@ -25,6 +25,7 @@ interface DetectedFace {
   bbox: number[];   // [x1, y1, x2, y2] em pixels da imagem original
   kps: number[][];
   matches: FaceMatch[];
+  liveness_score?: number | null;
 }
 
 interface SearchResult {
@@ -488,6 +489,17 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                     displayHeight={faceDisplayHeight}
                   />
 
+                  {/* Banner liveness */}
+                  {selectedFace?.liveness_score != null && selectedFace.liveness_score < 0.4 && (
+                    <div className="flex items-center gap-2 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 px-4 py-2.5 text-sm text-orange-700 dark:text-orange-400">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                      <span>
+                        <strong>Atenção:</strong> possível apresentação de foto (índice de vivacidade:{' '}
+                        {Math.round(selectedFace.liveness_score * 100)}%). Confirme a identidade por outro meio.
+                      </span>
+                    </div>
+                  )}
+
                   {/* Controle de tamanho da prévia */}
                   <div className="flex items-center gap-2">
                     <ZoomOut className="w-3.5 h-3.5 text-subtle flex-shrink-0" />
@@ -517,6 +529,9 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                             }`}
                           >
                             #{i + 1} ({Math.round(f.det_score * 100)}%)
+                            {f.liveness_score != null && f.liveness_score < 0.4 && (
+                              <span className="ml-0.5 text-[9px] text-red-500 font-bold">⚠</span>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -543,7 +558,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                   </div>
 
                   {/* Resultados */}
-                  <div className="flex gap-3 text-sm">
+                  <div className="flex gap-3 text-sm flex-wrap items-center">
                     <span className="text-subtle">
                       <span className="font-bold text-title">{selectedFace?.matches.length ?? 0}</span> resultado{(selectedFace?.matches.length ?? 0) !== 1 ? 's' : ''}
                     </span>
@@ -551,6 +566,17 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                     <span className="text-subtle">
                       <span className="font-bold text-title">{result.indexed.toLocaleString('pt-BR')}</span> registros comparados
                     </span>
+                    {selectedFace?.liveness_score != null && (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        selectedFace.liveness_score >= 0.6
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                          : selectedFace.liveness_score >= 0.4
+                          ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                          : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                      }`}>
+                        Vivacidade: {Math.round(selectedFace.liveness_score * 100)}%
+                      </span>
+                    )}
                   </div>
 
                   {selectedFace && selectedFace.matches.length === 0 ? (

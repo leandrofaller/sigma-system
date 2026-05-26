@@ -17,6 +17,7 @@ interface ArcFace {
   bbox: number[];
   kps: number[][];
   embedding: number[];
+  liveness_score?: number | null;
 }
 
 interface AnalyzeResult {
@@ -162,6 +163,7 @@ export async function POST(req: NextRequest) {
         det_score: face.det_score,
         bbox: face.bbox,
         kps: face.kps,
+        liveness_score: face.liveness_score ?? null,
         matches: hits
           .map(({ id, similarity }) => {
             const meta = metaMap.get(id);
@@ -215,6 +217,7 @@ export async function POST(req: NextRequest) {
       det_score: face.det_score,
       bbox: face.bbox,
       kps: face.kps,
+      liveness_score: face.liveness_score ?? null,
       matches: topHits
         .map(({ idx, similarity }) => {
           const meta = metaMap.get(ids[idx]);
