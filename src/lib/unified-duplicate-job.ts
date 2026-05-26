@@ -6,7 +6,7 @@ import { getApenadoPhotoPath } from './storage';
 
 const BATCH_SIZE = 200;
 const CONCURRENCY = 4;
-const DHASH_THRESHOLD = 12; // Hamming ≤ 12/64 bits
+const DHASH_THRESHOLD = 3; // Hamming ≤ 3/64 bits — genuinamente quase idênticas
 const MAX_BUCKET_SIZE = 500; // Prevent O(n²) blowup with highly similar photos
 
 export interface DupRecord {
@@ -17,6 +17,7 @@ export interface DupRecord {
   faccao: string | null;
   photoPath: string | null;
   photoQuality: number | null;
+  hasFace: boolean;
 }
 
 export interface DupGroup {
@@ -133,6 +134,7 @@ interface RawRecord {
   photoHashSha: string | null;
   photoHash: string | null;
   photoQuality: number | null;
+  hasFace: boolean;
 }
 
 function makeFind(parent: Map<string, string>) {
@@ -244,7 +246,11 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
   return Array.from(groupMap.values())
     .filter((g) => g.length >= 2)
     .map((g) => {
-      const sorted = g.sort((a, b) => (b.photoQuality ?? 0) - (a.photoQuality ?? 0));
+      // Keeper: foto com rosto primeiro; dentro de cada tier, maior qualidade primeiro
+      const sorted = g.sort((a, b) => {
+        if (a.hasFace !== b.hasFace) return a.hasFace ? -1 : 1;
+        return (b.photoQuality ?? 0) - (a.photoQuality ?? 0);
+      });
       const sha = sorted[0].photoHashSha;
       const type: 'exact' | 'similar' =
         sha != null && sorted.every((r) => r.photoHashSha === sha) ? 'exact' : 'similar';
@@ -330,7 +336,8 @@ async function runJob(): Promise<void> {
 
   const records = await prisma.$queryRaw<RawRecord[]>`
     SELECT id, name, matricula, unidade, faccao, "photoPath",
-           "photoHashSha", "photoHash", "photoQuality"
+           "photoHashSha", "photoHash", "photoQuality",
+           ("faceDescriptor" IS NOT NULL AND "faceDescriptor" != '') AS "hasFace"
     FROM apenados
     WHERE "photoPath" IS NOT NULL
       AND "photoHash" IS NOT NULL

@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   X, ScanSearch, Loader2, Trash2, AlertTriangle, CheckCircle,
-  RefreshCw, Users, Fingerprint, Waves, Zap, Clock,
+  RefreshCw, Users, Fingerprint, Waves, Zap, Clock, UserX,
 } from 'lucide-react';
 
 interface DupRecord {
@@ -14,6 +14,7 @@ interface DupRecord {
   faccao: string | null;
   photoPath: string | null;
   photoQuality: number | null;
+  hasFace: boolean;
 }
 
 interface DupGroup {
@@ -425,6 +426,12 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                             {isKeeper && (
                               <div className="absolute top-1.5 left-1.5 z-10 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
                                 MANTER
+                              </div>
+                            )}
+                            {!record.hasFace && (
+                              <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 bg-gray-800/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                                <UserX className="w-2.5 h-2.5" />
+                                Sem rosto
                               </div>
                             )}
                             <div className="aspect-square bg-gray-200 dark:bg-gray-700 relative overflow-hidden">
