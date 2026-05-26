@@ -4,19 +4,26 @@ import { prisma } from '@/lib/db';
 import { getPhotoAnalysisState, startPhotoAnalysisJob } from '@/lib/photo-analysis-job';
 
 export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  try {
+    const session = await auth();
+    if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const jobState = getPhotoAnalysisState();
+    const jobState = getPhotoAnalysisState();
 
-  const unindexed = await prisma.apenado.count({
-    where: {
-      photoPath: { not: null },
-      OR: [{ photoHash: null }, { photoQuality: null }],
-    },
-  });
+    const unindexed = await prisma.apenado.count({
+      where: {
+        photoPath: { not: null },
+        OR: [{ photoHash: null }, { photoQuality: null }],
+      },
+    });
 
-  return NextResponse.json({ ...jobState, unindexed });
+    return NextResponse.json({ ...jobState, unindexed });
+  } catch (err: any) {
+    return NextResponse.json(
+      { isRunning: false, current: 0, total: 0, error: err?.message ?? 'Erro interno', unindexed: 0 },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST() {
