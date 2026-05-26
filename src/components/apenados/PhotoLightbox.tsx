@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useCallback, useState, useRef } from 'react';
-import { X, Download, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Loader2, Users } from 'lucide-react';
+import { X, Download, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Loader2, Users, Check, FolderPlus } from 'lucide-react';
 import type { Apenado } from './ApenadoCard';
 
 interface SimilarRecord {
@@ -19,12 +19,14 @@ interface Props {
   all: Apenado[];
   onClose: () => void;
   onNavigate: (a: Apenado) => void;
+  userRole?: string;
 }
 
-export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
+export function PhotoLightbox({ apenado, all, onClose, onNavigate, userRole }: Props) {
   const idx = all.findIndex((a) => a.id === apenado.id);
   const hasPrev = idx > 0;
   const hasNext = idx < all.length - 1;
+  const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
 
   const goPrev = useCallback(() => {
     if (hasPrev) onNavigate(all[idx - 1]);
@@ -62,6 +64,20 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
   const [similarReason, setSimilarReason] = useState('');
   const similarFetchedFor = useRef<string | null>(null);
 
+  // Group selection
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupSaving, setGroupSaving] = useState(false);
+
+  const resetSelection = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setCreateGroupOpen(false);
+    setGroupName('');
+  }, []);
+
   const fetchSimilar = useCallback(async (id: string) => {
     if (similarFetchedFor.current === id) return;
     similarFetchedFor.current = id;
@@ -85,16 +101,54 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
     setSimilarOpen((v) => {
       const next = !v;
       if (next) fetchSimilar(apenado.id);
+      else resetSelection();
       return next;
     });
-  }, [apenado.id, fetchSimilar]);
+  }, [apenado.id, fetchSimilar, resetSelection]);
 
   // Reset similar panel when navigating to a new photo
   useEffect(() => {
+    resetSelection();
     if (similarOpen) fetchSimilar(apenado.id);
     else similarFetchedFor.current = null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apenado.id]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim() || groupSaving) return;
+    setGroupSaving(true);
+    try {
+      const members = [...selectedIds].map((id) => ({
+        apenadoId: id,
+        similarity: similarData.find((r) => r.id === id)?.similarity ?? null,
+      }));
+      // Include base apenado if not already selected
+      if (!selectedIds.has(apenado.id)) {
+        members.push({ apenadoId: apenado.id, similarity: null });
+      }
+      const res = await fetch('/api/apenados/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: groupName.trim(), baseApenadoId: apenado.id, members }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        alert(d.error || 'Erro ao criar grupo');
+        return;
+      }
+      resetSelection();
+    } finally {
+      setGroupSaving(false);
+    }
+  };
 
   const photoVersion = photoVersions.get(apenado.id) ?? 0;
   const photoUrl = apenado.photoPath
@@ -243,25 +297,38 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
           )}
         </div>
 
-        {/* Similar faces panel — inside the rounded card, below info bar */}
+        {/* Similar faces panel */}
         {similarOpen && (
-          <div className="bg-gray-950/95 border-t border-white/10 px-4 py-3">
+          <div className="relative bg-gray-950/95 border-t border-white/10 px-4 py-3">
+            {/* Panel header */}
             <div className="flex items-center justify-between mb-2">
               <span className="text-white/60 text-xs font-semibold flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5" />
                 {similarLoading
                   ? 'Buscando...'
                   : similarData.length > 0
-                    ? `${similarData.length} registro${similarData.length !== 1 ? 's' : ''} similar${similarData.length !== 1 ? 'es' : ''} · threshold 60%`
+                    ? `${similarData.length} registro${similarData.length !== 1 ? 's' : ''} similar${similarData.length !== 1 ? 'es' : ''} · threshold 72%`
                     : similarReason === 'no-face'
                       ? 'Sem rosto indexado neste registro'
                       : similarReason === 'cache-unavailable'
                         ? 'Cache de embeddings indisponível'
                         : 'Nenhum indivíduo similar encontrado'}
               </span>
-              {similarIndexed > 0 && (
-                <span className="text-white/30 text-[10px]">{similarIndexed.toLocaleString('pt-BR')} indexados</span>
-              )}
+              <div className="flex items-center gap-2">
+                {similarIndexed > 0 && !selectMode && (
+                  <span className="text-white/30 text-[10px]">{similarIndexed.toLocaleString('pt-BR')} indexados</span>
+                )}
+                {isAdmin && similarData.length > 0 && !similarLoading && (
+                  <button
+                    onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); setCreateGroupOpen(false); }}
+                    className={`text-[10px] px-2 py-0.5 rounded-lg font-medium transition-colors ${
+                      selectMode ? 'bg-teal-500 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'
+                    }`}
+                  >
+                    {selectMode ? 'Cancelar' : 'Selecionar'}
+                  </button>
+                )}
+              </div>
             </div>
 
             {similarLoading && (
@@ -271,34 +338,102 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
             )}
 
             {!similarLoading && similarData.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
-                {similarData.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => onNavigate({ ...r, faccao: null, notes: null, createdAt: '' } as Apenado)}
-                    className="flex-shrink-0 w-20 group/sim"
-                    title={`${r.name} · ${r.similarity}% similaridade`}
-                  >
-                    <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-800 ring-2 ring-transparent group-hover/sim:ring-teal-400 transition-all">
-                      {r.photoPath ? (
-                        <img
-                          src={`/api/apenados/${r.id}/foto`}
-                          alt={r.name}
-                          loading="lazy"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-700 to-teal-900">
-                          <span className="text-white font-bold text-lg">{r.name.charAt(0)}</span>
+              <>
+                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
+                  {similarData.map((r) => {
+                    const isSelected = selectedIds.has(r.id);
+                    return (
+                      <button
+                        key={r.id}
+                        onClick={() => {
+                          if (selectMode) toggleSelect(r.id);
+                          else onNavigate({ ...r, faccao: null, notes: null, createdAt: '' } as Apenado);
+                        }}
+                        className="flex-shrink-0 w-20 group/sim"
+                        title={`${r.name} · ${r.similarity}% similaridade`}
+                      >
+                        <div className={`relative w-20 h-20 rounded-lg overflow-hidden bg-gray-800 ring-2 transition-all ${
+                          isSelected ? 'ring-teal-400' : 'ring-transparent group-hover/sim:ring-teal-400/50'
+                        }`}>
+                          {r.photoPath ? (
+                            <img
+                              src={`/api/apenados/${r.id}/foto`}
+                              alt={r.name}
+                              loading="lazy"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-700 to-teal-900">
+                              <span className="text-white font-bold text-lg">{r.name.charAt(0)}</span>
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-1 py-0.5">
+                            <span className="text-teal-300 text-[9px] font-bold">{r.similarity}%</span>
+                          </div>
+                          {/* Checkbox overlay in select mode */}
+                          {selectMode && (
+                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${
+                              isSelected ? 'bg-teal-500 border-teal-400' : 'bg-black/50 border-white/60'
+                            }`}>
+                              {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                            </div>
+                          )}
                         </div>
-                      )}
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-1 py-0.5">
-                        <span className="text-teal-300 text-[9px] font-bold">{r.similarity}%</span>
-                      </div>
-                    </div>
-                    <p className="text-white/60 text-[9px] truncate mt-1 text-center leading-tight">{r.name.split(' ')[0]}</p>
+                        <p className="text-white/60 text-[9px] truncate mt-1 text-center leading-tight">{r.name.split(' ')[0]}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Action bar when items selected */}
+                {selectMode && selectedIds.size > 0 && (
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10">
+                    <span className="text-white/50 text-[10px]">
+                      {selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}
+                    </span>
+                    <button
+                      onClick={() => setCreateGroupOpen(true)}
+                      className="flex items-center gap-1.5 text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" /> Criar grupo
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Mini-modal: create group */}
+            {createGroupOpen && (
+              <div className="absolute inset-0 bg-gray-950/97 rounded-b-none flex flex-col gap-3 p-4 z-10">
+                <p className="text-white font-semibold text-sm">Criar grupo de identificação</p>
+                <input
+                  autoFocus
+                  placeholder="Nome do grupo (ex: possível mesmo indivíduo)"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && groupName.trim() && handleCreateGroup()}
+                  className="bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-400 border border-white/10"
+                />
+                <p className="text-white/40 text-[10px]">
+                  {selectedIds.size} resultado{selectedIds.size !== 1 ? 's' : ''} selecionado{selectedIds.size !== 1 ? 's' : ''}
+                  {' + apenado base incluído automaticamente'}
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setCreateGroupOpen(false)}
+                    className="text-xs text-white/50 hover:text-white px-3 py-1.5 rounded-lg border border-white/20 transition-colors"
+                  >
+                    Cancelar
                   </button>
-                ))}
+                  <button
+                    onClick={handleCreateGroup}
+                    disabled={!groupName.trim() || groupSaving}
+                    className="flex items-center gap-1.5 text-xs font-semibold bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg transition-colors"
+                  >
+                    {groupSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Salvar grupo
+                  </button>
+                </div>
               </div>
             )}
           </div>

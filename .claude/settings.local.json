@@ -54,13 +54,26 @@
       "Bash(mkdir -p \"f:/relatorio_claude/src/app/api/apenados/face/quality/reindex\")",
       "WebFetch(domain:claude.ai)",
       "Bash(dir \"F:\\\\relatorio_claude\" /B)",
-      "PowerShell(Get-ChildItem \"F:\\\\relatorio_claude\\\\src\" -Recurse | Where-Object { $_.Name -match \"face|facial|recogni|detect|camera|webcam|video\" } | Select-Object FullName)"
+      "PowerShell(Get-ChildItem \"F:\\\\relatorio_claude\\\\src\" -Recurse | Where-Object { $_.Name -match \"face|facial|recogni|detect|camera|webcam|video\" } | Select-Object FullName)",
+      "PowerShell(npx prisma db push --accept-data-loss 2>&1)",
+      "PowerShell(tail -5)",
+      "Bash(mkdir -p \"f:/relatorio_claude/src/app/api/apenados/groups/[id]\")",
+      "PowerShell(cd f:\\\\relatorio_claude; npx tsc --noEmit 2>&1 | Where-Object { $_ -notmatch \"\\\\.next\" } | Select-Object -First 40)",
+      "PowerShell(cd f:\\\\relatorio_claude; $output = \\(npx tsc --noEmit 2>&1\\); $filtered = $output | Where-Object { $_ -notmatch \"\\\\.next\" }; $filtered | Out-String)",
+      "PowerShell(cd f:\\\\relatorio_claude; $output = npx tsc --noEmit 2>&1 | Out-String; $lines = $output -split \"`n\" | Where-Object { $_ -notmatch \"\\\\.next\" }; $lines -join \"`n\")",
+      "PowerShell(cd f:\\\\relatorio_claude; $result = npx tsc --noEmit 2>&1; Write-Host \\($result | Where-Object { $_ -notmatch \"\\\\.next\" } | Out-String\\))",
+      "PowerShell(cd f:\\\\relatorio_claude; $r = npx tsc --noEmit 2>&1; $r | Select-String -NotMatch \"\\\\.next\" | ForEach-Object { $_.Line } | Select-Object -First 40)",
+      "PowerShell(cd f:\\\\relatorio_claude; npx tsc --noEmit 2>&1 > C:\\\\Temp\\\\tsc_out.txt; Get-Content C:\\\\Temp\\\\tsc_out.txt | Where-Object { $_ -notmatch \"\\\\.next\" })",
+      "PowerShell(cd f:\\\\relatorio_claude; npx tsc --noEmit 2>&1 > \"$env:TEMP\\\\tsc_out.txt\"; Get-Content \"$env:TEMP\\\\tsc_out.txt\" | Where-Object { $_ -notmatch \"\\\\.next\" })",
+      "PowerShell(cd f:\\\\relatorio_claude; npx tsc --noEmit 2>&1 | Out-File -FilePath \"$env:TEMP\\\\tsc_out.txt\" -Encoding utf8; Get-Content \"$env:TEMP\\\\tsc_out.txt\" | Where-Object { $_ -notmatch \"\\\\.next\" })",
+      "PowerShell(cd f:\\\\relatorio_claude; npx tsc --noEmit 2>&1 | Out-File \"$env:TEMP\\\\tsc_out.txt\" -Encoding utf8; if \\(Test-Path \"$env:TEMP\\\\tsc_out.txt\"\\) { Get-Content \"$env:TEMP\\\\tsc_out.txt\" | Where-Object { $_ -notmatch \"\\\\.next\" } } else { Write-Host \"file not found\" })"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
       "f:\\relatorio_claude\\public",
       "f:\\relatorio_claude\\src\\app\\api\\apenados\\[id]",
-      "f:\\relatorio_claude\\src\\app\\api\\apenados\\face"
+      "f:\\relatorio_claude\\src\\app\\api\\apenados\\face",
+      "f:\\relatorio_claude\\src\\app\\api\\apenados\\groups"
     ]
   }
 }

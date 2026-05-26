@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   UserCheck, Search, Download, Plus, LayoutGrid, List,
-  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch, Trash2, AlertTriangle, ScanFace, HardDrive, FileImage, Activity,
+  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch, Trash2, AlertTriangle, ScanFace, HardDrive, FileImage, Activity, FolderOpen,
 } from 'lucide-react';
 import { ApenadoCard, type Apenado } from './ApenadoCard';
 import { ApenadoModal } from './ApenadoModal';
@@ -13,6 +13,7 @@ import { DuplicateChecker } from './DuplicateChecker';
 import { FaceSearch } from './FaceSearch';
 import { NoFaceReviewer } from './NoFaceReviewer';
 import { FaceQualityDashboard } from './FaceQualityDashboard';
+import { ApenadoGroupsModal } from './ApenadoGroupsModal';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const SEARCH_PAGE_SIZE = 50;
@@ -76,6 +77,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
   const [lightbox, setLightbox] = useState<Apenado | null>(null);
   const [bulkModal, setBulkModal] = useState<{ type: 'sem-foto' | 'clear-fotos'; count: number } | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [groupsOpen, setGroupsOpen] = useState(false);
 
   // Debounce
   useEffect(() => {
@@ -380,6 +382,12 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                   <Activity className="w-4 h-4" /> Qualidade Facial
                 </button>
               )}
+              <button
+                onClick={() => setGroupsOpen(true)}
+                className="flex items-center gap-2 text-sm font-medium text-purple-200 border border-purple-300/40 hover:bg-purple-300/10 px-4 py-2 rounded-xl transition-all"
+              >
+                <FolderOpen className="w-4 h-4" /> Grupos
+              </button>
               {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
                 <button
                   onClick={() => handleBulkClick('sem-foto')}
@@ -775,7 +783,12 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
           all={displayedItems}
           onClose={() => setLightbox(null)}
           onNavigate={setLightbox}
+          userRole={userRole}
         />
+      )}
+
+      {groupsOpen && (
+        <ApenadoGroupsModal onClose={() => setGroupsOpen(false)} userRole={userRole} />
       )}
     </div>
   );

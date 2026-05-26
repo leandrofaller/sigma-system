@@ -68,6 +68,7 @@ model User {
   relints          Relint[]
   debriefings      Debriefing[]
   apenados         Apenado[]
+  apenadoGroups    ApenadoGroup[]
   sentMessages     ChatMessage[]   @relation("SentMessages")
   receivedMessages ChatMessage[]   @relation("ReceivedMessages")
   auditLogs        AuditLog[]
@@ -440,6 +441,7 @@ model Apenado {
   updatedAt   DateTime @updatedAt
   createdById String?
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  groups      ApenadoGroupMember[]
 
   @@index([name])
   @@index([matricula])
@@ -484,4 +486,31 @@ model BoardComment {
 
   @@index([cardId, createdAt])
   @@map("board_comments")
+}
+
+model ApenadoGroup {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  baseApenadoId String?
+  createdAt     DateTime @default(now())
+  createdById   String?
+  createdBy     User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  members ApenadoGroupMember[]
+
+  @@map("apenado_groups")
+}
+
+model ApenadoGroupMember {
+  groupId    String
+  apenadoId  String
+  similarity Float?
+  addedAt    DateTime @default(now())
+
+  group   ApenadoGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  apenado Apenado      @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, apenadoId])
+  @@map("apenado_group_members")
 }
