@@ -40,15 +40,14 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
     return () => { document.body.style.overflow = ''; };
   }, []);
 
-  const [photoVersion, setPhotoVersion] = useState(0);
+  // Per-ID version map — persists across navigation so rotated photos stay updated
+  const [photoVersions, setPhotoVersions] = useState<Map<string, number>>(() => new Map());
   const [rotating, setRotating] = useState(false);
 
+  const photoVersion = photoVersions.get(apenado.id) ?? 0;
   const photoUrl = apenado.photoPath
     ? `/api/apenados/${apenado.id}/foto${photoVersion > 0 ? `?v=${photoVersion}` : ''}`
     : null;
-
-  // Reset version when navigating to a different apenado
-  useEffect(() => { setPhotoVersion(0); }, [apenado.id]);
 
   const handleRotate = async (degrees: 90 | 270) => {
     setRotating(true);
@@ -59,7 +58,11 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
         body: JSON.stringify({ degrees }),
       });
       if (!res.ok) { const d = await res.json(); alert(d.error || 'Erro ao rotar foto'); return; }
-      setPhotoVersion((v) => v + 1);
+      setPhotoVersions((prev) => {
+        const m = new Map(prev);
+        m.set(apenado.id, (m.get(apenado.id) ?? 0) + 1);
+        return m;
+      });
     } finally {
       setRotating(false);
     }
