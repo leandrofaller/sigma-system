@@ -17,11 +17,13 @@ def imread_safe(path: str):
     """cv2.imread com correção de orientação EXIF.
     Fotos tiradas em celular ficam rotacionadas sem isso — reduz det_score ou causa no_face."""
     try:
+        import cv2
         from PIL import Image, ImageOps
         import numpy as _np
         pil = ImageOps.exif_transpose(Image.open(path).convert("RGB"))
         return cv2.cvtColor(_np.array(pil), cv2.COLOR_RGB2BGR)
     except Exception:
+        import cv2
         return cv2.imread(path)
 
 
