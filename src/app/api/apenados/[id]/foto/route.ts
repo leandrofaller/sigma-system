@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { writeFile, mkdir, readFile, unlink } from 'fs/promises';
 import { join } from 'path';
+import { createHash } from 'crypto';
 import sharp from 'sharp';
 import { assertUploadAllowed } from '@/lib/security';
 import { getApenadosDir, getApenadoPhotoPath } from '@/lib/storage';
@@ -71,8 +72,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const filename = `${id}.webp`;
   await writeFile(join(dir, filename), webpBuffer);
 
+  const photoHashSha = createHash('sha256').update(webpBuffer).digest('hex');
   const photoPath = `uploads/apenados/${filename}`;
-  await prisma.apenado.update({ where: { id }, data: { photoPath, photoHash, photoQuality } });
+  await prisma.apenado.update({
+    where: { id },
+    data: { photoPath, photoHash, photoQuality, photoHashSha },
+  });
 
   return NextResponse.json({ photoPath });
 }
@@ -95,7 +100,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     await unlink(getApenadoPhotoPath(apenado.photoPath));
   } catch {}
 
-  await prisma.apenado.update({ where: { id }, data: { photoPath: null, photoHash: null, photoQuality: null } });
+  await prisma.apenado.update({
+    where: { id },
+    data: { photoPath: null, photoHash: null, photoQuality: null, photoHashSha: null },
+  });
 
   return NextResponse.json({ ok: true });
 }
