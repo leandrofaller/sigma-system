@@ -102,13 +102,28 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ started: true });
 }
 
-// DELETE — stop audit
+// DELETE — para o job OU reseta OCR de todos os registros para re-processar
+// Sem body   → para o job em andamento
+// { reset: true } → limpa ocrText/ocrName de todos (coloca de volta na fila da auditoria)
 export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   const user = session.user as any;
   if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+
+  if (body?.reset === true) {
+    // Para o job se estiver rodando
+    stopAudit();
+    // Reseta OCR de todos os registros processados para re-auditoria
+    const { count } = await prisma.apenado.updateMany({
+      where: { ocrText: { not: null } },
+      data: { ocrText: null, ocrName: null },
+    });
+    return NextResponse.json({ reset: count });
   }
 
   stopAudit();

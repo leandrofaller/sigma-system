@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X, FileSearch, Play, Square, RefreshCw, Loader2,
-  CheckCircle, AlertCircle, User, Pencil, CheckSquare, Square as SquareIcon,
+  CheckCircle, AlertCircle, User, Pencil, CheckSquare, Square as SquareIcon, RotateCcw,
 } from 'lucide-react';
 
 interface ApenadoRow {
@@ -63,6 +63,8 @@ export function AuditPanel({ onClose, onRenamed }: Props) {
   const [bulkRenaming, setBulkRenaming] = useState(false);
   const [bulkRenamed, setBulkRenamed] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resettingOcr, setResettingOcr] = useState(false);
+  const [ocrResetCount, setOcrResetCount] = useState<number | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchState = useCallback(async () => {
@@ -152,6 +154,27 @@ export function AuditPanel({ onClose, onRenamed }: Props) {
   const stopAudit = async () => {
     await fetch('/api/apenados/audit', { method: 'DELETE' });
     await fetchState();
+  };
+
+  const resetOcr = async () => {
+    if (!confirm('Isso vai limpar o OCR de todos os registros processados para re-análise com a nova lógica. Confirmar?')) return;
+    setResettingOcr(true);
+    setOcrResetCount(null);
+    try {
+      const res = await fetch('/api/apenados/audit', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reset: true }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setOcrResetCount(d.reset ?? 0);
+        await fetchState();
+        await fetchRows(filter, 1);
+      }
+    } finally {
+      setResettingOcr(false);
+    }
   };
 
   const renameOne = async (id: string, name: string) => {
@@ -291,9 +314,24 @@ export function AuditPanel({ onClose, onRenamed }: Props) {
                 <button
                   onClick={() => { fetchState(); fetchRows(filter, page); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-gray-300 text-sm rounded-lg transition-colors"
+                  title="Atualizar"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
+                {!auditState?.isRunning && (
+                  <button
+                    onClick={resetOcr}
+                    disabled={resettingOcr}
+                    title="Resetar OCR de todos os registros para re-análise"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-amber-600/80 disabled:opacity-50 text-gray-300 hover:text-white text-sm rounded-lg transition-colors"
+                  >
+                    {resettingOcr ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    {resettingOcr ? 'Resetando...' : 'Resetar OCR'}
+                  </button>
+                )}
+                {ocrResetCount !== null && (
+                  <span className="text-xs text-amber-400">{ocrResetCount} resetados</span>
+                )}
               </div>
             </div>
 
