@@ -11,6 +11,15 @@ export interface Apenado {
   photoPath: string | null;
   notes?: string | null;
   createdAt: Date | string;
+  photoQuality?: number | null;
+}
+
+function qualityPill(q: number | null | undefined) {
+  if (q === null || q === undefined) return null;
+  if (q < 50) return { label: 'Borrada', cls: 'bg-red-500/80 text-white' };
+  if (q < 150) return { label: 'Regular', cls: 'bg-yellow-500/80 text-white' };
+  if (q < 400) return { label: 'Boa', cls: 'bg-blue-500/80 text-white' };
+  return { label: 'Nítida', cls: 'bg-green-500/80 text-white' };
 }
 
 interface Props {
@@ -95,6 +104,11 @@ export function ApenadoCard({ apenado, userRole, onEdit, onDelete, onPhotoClick 
             </div>
           </div>
         )}
+        {apenado.photoPath && (() => { const p = qualityPill(apenado.photoQuality); return p ? (
+          <div className={`absolute bottom-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold leading-none pointer-events-none select-none ${p.cls}`}>
+            {p.label}
+          </div>
+        ) : null; })()}
       </div>
 
       {/* Info */}

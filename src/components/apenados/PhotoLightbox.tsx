@@ -143,7 +143,15 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
         {/* Info bar */}
         <div className="flex items-center gap-4 px-5 py-4 bg-gray-900/95">
           <div className="flex-1 min-w-0">
-            <p className="text-white font-bold text-sm truncate">{apenado.name}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-white font-bold text-sm truncate">{apenado.name}</p>
+              {apenado.photoPath && apenado.photoQuality !== undefined && apenado.photoQuality !== null && (() => {
+                const q = apenado.photoQuality!;
+                const cls = q < 50 ? 'bg-red-500/80' : q < 150 ? 'bg-yellow-500/80' : q < 400 ? 'bg-blue-500/80' : 'bg-green-500/80';
+                const label = q < 50 ? 'Borrada' : q < 150 ? 'Regular' : q < 400 ? 'Boa' : 'Nítida';
+                return <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold leading-none text-white flex-shrink-0 ${cls}`}>{label}</span>;
+              })()}
+            </div>
             <p className="text-gray-400 text-xs mt-0.5 truncate">
               {[apenado.matricula, apenado.unidade].filter(Boolean).join(' · ') || 'Sem matrícula'}
             </p>

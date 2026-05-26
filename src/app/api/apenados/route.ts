@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
         photoPath: true,
         notes: true,
         createdAt: true,
+        photoQuality: true,
       },
     }),
     prisma.apenado.count({ where }),
