@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const bytes = await file.arrayBuffer();
   const inputBuffer = Buffer.from(bytes);
 
-  const [webpBuffer, hashRaw] = await Promise.all([
+  const [webpBuffer, hashRaw, qualityResult] = await Promise.all([
     sharp(inputBuffer)
       .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 90 })
@@ -41,6 +41,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .grayscale()
       .raw()
       .toBuffer(),
+    sharp(inputBuffer)
+      .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
+      .grayscale()
+      .convolve({ width: 3, height: 3, kernel: [0, 1, 0, 1, -4, 1, 0, 1, 0] })
+      .raw()
+      .toBuffer({ resolveWithObject: true }),
   ]);
 
   // dHash: compare adjacent pixels in each row → 64-bit hash
@@ -52,13 +58,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   const photoHash = hash.toString(16).padStart(16, '0');
 
+  // Laplacian variance → nitidez (maior = mais nítida)
+  const { data: lapData, info: lapInfo } = qualityResult;
+  const lapN = lapInfo.width * lapInfo.height;
+  let lapSum = 0, lapSumSq = 0;
+  for (let i = 0; i < lapN; i++) { lapSum += lapData[i]; lapSumSq += lapData[i] * lapData[i]; }
+  const lapMean = lapSum / lapN;
+  const photoQuality = Math.round((lapSumSq / lapN - lapMean * lapMean) * 100) / 100;
+
   const dir = getApenadosDir();
   await mkdir(dir, { recursive: true });
   const filename = `${id}.webp`;
   await writeFile(join(dir, filename), webpBuffer);
 
   const photoPath = `uploads/apenados/${filename}`;
-  await prisma.apenado.update({ where: { id }, data: { photoPath, photoHash } });
+  await prisma.apenado.update({ where: { id }, data: { photoPath, photoHash, photoQuality } });
 
   return NextResponse.json({ photoPath });
 }
@@ -81,7 +95,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     await unlink(getApenadoPhotoPath(apenado.photoPath));
   } catch {}
 
-  await prisma.apenado.update({ where: { id }, data: { photoPath: null, photoHash: null } });
+  await prisma.apenado.update({ where: { id }, data: { photoPath: null, photoHash: null, photoQuality: null } });
 
   return NextResponse.json({ ok: true });
 }

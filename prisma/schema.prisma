@@ -429,6 +429,7 @@ model Apenado {
   photoPath      String?
   photoHash      String?
   photoHashSha   String?  @db.VarChar(64)
+  photoQuality   Float?
   faccao         String?
   notes          String?  @db.Text
   faceDescriptor String?  @db.Text
@@ -444,6 +445,7 @@ model Apenado {
   @@index([unidade])
   @@index([photoHash])
   @@index([photoHashSha])
+  @@index([photoQuality])
   @@map("apenados")
 }
 

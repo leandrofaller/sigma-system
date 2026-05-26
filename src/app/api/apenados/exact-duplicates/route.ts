@@ -60,7 +60,7 @@ export async function GET() {
 
   const records = await prisma.apenado.findMany({
     where: { photoHashSha: { in: hashes } },
-    select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true, photoHashSha: true },
+    select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true, photoHashSha: true, photoQuality: true },
     orderBy: { name: 'asc' },
   });
 

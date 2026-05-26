@@ -42,7 +42,8 @@
       "Bash(Select-Object -First 20)",
       "Bash(Format-Table FullName)",
       "Bash(xargs grep -l \"IndexingStatusFloat\\\\|IndexingProvider\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(xargs grep -l \"photoHash\\\\|photoPath\\\\|DELETE.*foto\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

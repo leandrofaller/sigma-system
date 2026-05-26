@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
-import sharp from 'sharp';
-import { getApenadoPhotoPath } from '@/lib/storage';
 
-// Maximum Hamming distance to consider two photos as duplicates
 const HAMMING_THRESHOLD = 10;
-// Max photos to index per request (avoid timeout)
-const INDEX_BATCH = 300;
-// Concurrency for hash computation
-const CONCURRENCY = 8;
 
 function hammingDistance(a: string, b: string): number {
   let diff = BigInt('0x' + a) ^ BigInt('0x' + b);
@@ -20,47 +11,19 @@ function hammingDistance(a: string, b: string): number {
   return n;
 }
 
-async function computeDHash(filePath: string): Promise<string | null> {
-  try {
-    const buf = await readFile(filePath);
-    const raw = await sharp(buf)
-      .resize(9, 8, { fit: 'fill', kernel: 'nearest' })
-      .grayscale()
-      .raw()
-      .toBuffer();
-    let hash = 0n;
-    for (let row = 0; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
-        hash = (hash << 1n) | (raw[row * 9 + col] > raw[row * 9 + col + 1] ? 1n : 0n);
-      }
-    }
-    return hash.toString(16).padStart(16, '0');
-  } catch {
-    return null;
-  }
+interface HashedRecord {
+  id: string;
+  name: string;
+  matricula: string | null;
+  unidade: string | null;
+  faccao: string | null;
+  photoPath: string | null;
+  photoHash: string;
+  photoQuality: number | null;
 }
 
-async function runWithConcurrency<T>(
-  tasks: (() => Promise<T>)[],
-  limit: number,
-): Promise<T[]> {
-  const results: T[] = [];
-  let i = 0;
-  async function worker() {
-    while (i < tasks.length) {
-      const idx = i++;
-      results[idx] = await tasks[idx]();
-    }
-  }
-  await Promise.all(Array.from({ length: limit }, worker));
-  return results;
-}
-
-function buildDuplicateGroups(
-  records: { id: string; name: string; matricula: string | null; unidade: string | null; faccao: string | null; photoPath: string | null; photoHash: string }[],
-): (typeof records[number])[][] {
-  // LSH banding: 4 bands × 16 bits each
-  // Two hashes with Hamming distance ≤ 10 are very likely to share at least one band
+function buildDuplicateGroups(records: HashedRecord[]): HashedRecord[][] {
+  // LSH banding: 4 bands × 16 bits — capta pares com Hamming ≤ 10
   const bandMaps: Map<string, string[]>[] = [new Map(), new Map(), new Map(), new Map()];
 
   for (const r of records) {
@@ -78,7 +41,6 @@ function buildDuplicateGroups(
     }
   }
 
-  // Collect candidate pairs from band collisions
   const candidatePairs = new Set<string>();
   for (const bm of bandMaps) {
     for (const ids of bm.values()) {
@@ -93,7 +55,6 @@ function buildDuplicateGroups(
     }
   }
 
-  // Union-Find for grouping
   const idToRecord = new Map(records.map((r) => [r.id, r]));
   const parent = new Map<string, string>(records.map((r) => [r.id, r.id]));
 
@@ -102,29 +63,27 @@ function buildDuplicateGroups(
     return parent.get(x)!;
   }
 
-  function union(x: string, y: string) {
-    const rx = find(x), ry = find(y);
-    if (rx !== ry) parent.set(rx, ry);
-  }
-
   for (const pair of candidatePairs) {
     const [idA, idB] = pair.split('|');
     const a = idToRecord.get(idA)!;
     const b = idToRecord.get(idB)!;
     if (hammingDistance(a.photoHash, b.photoHash) <= HAMMING_THRESHOLD) {
-      union(idA, idB);
+      const ra = find(idA), rb = find(idB);
+      if (ra !== rb) parent.set(ra, rb);
     }
   }
 
-  // Collect groups
-  const groupMap = new Map<string, typeof records>();
+  const groupMap = new Map<string, HashedRecord[]>();
   for (const r of records) {
     const root = find(r.id);
     if (!groupMap.has(root)) groupMap.set(root, []);
     groupMap.get(root)!.push(r);
   }
 
-  return Array.from(groupMap.values()).filter((g) => g.length >= 2);
+  return Array.from(groupMap.values())
+    .filter((g) => g.length >= 2)
+    // Melhor qualidade primeiro dentro de cada grupo
+    .map((g) => g.sort((a, b) => (b.photoQuality ?? 0) - (a.photoQuality ?? 0)));
 }
 
 export async function GET(req: NextRequest) {
@@ -136,52 +95,34 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
-  // Step 1: find photos without a stored hash (up to INDEX_BATCH)
-  const toIndex = await prisma.apenado.findMany({
-    where: { photoPath: { not: null }, photoHash: null },
-    select: { id: true, photoPath: true },
-    take: INDEX_BATCH,
+  // Verificar se há fotos sem índice de hash ou qualidade
+  const unindexed = await prisma.apenado.count({
+    where: {
+      photoPath: { not: null },
+      OR: [{ photoHash: null }, { photoQuality: null }],
+    },
   });
 
-  if (toIndex.length > 0) {
-    const tasks = toIndex.map((a) => async () => {
-      const filePath = getApenadoPhotoPath(a.photoPath!);
-      const hash = await computeDHash(filePath);
-      if (hash) {
-        await prisma.apenado.update({ where: { id: a.id }, data: { photoHash: hash } });
-      }
-      return hash;
-    });
-    await runWithConcurrency(tasks, CONCURRENCY);
+  if (unindexed > 0) {
+    return NextResponse.json({ needsIndexing: true, unindexed });
   }
 
-  // Step 2: count remaining unindexed
-  const remaining = await prisma.apenado.count({
-    where: { photoPath: { not: null }, photoHash: null },
-  });
+  // Query otimizada: $queryRaw exclui faceDescriptor TEXT (campo pesado) de 143k registros
+  const allHashed = await prisma.$queryRaw<HashedRecord[]>`
+    SELECT id, name, matricula, unidade, faccao, "photoPath", "photoHash", "photoQuality"
+    FROM apenados
+    WHERE "photoPath" IS NOT NULL
+      AND "photoHash" IS NOT NULL
+    ORDER BY name ASC
+  `;
 
-  // Step 3: fetch all hashed records and detect duplicates
-  const allHashed = await prisma.apenado.findMany({
-    where: { photoPath: { not: null }, photoHash: { not: null } },
-    select: {
-      id: true,
-      name: true,
-      matricula: true,
-      unidade: true,
-      faccao: true,
-      photoPath: true,
-      photoHash: true,
-    },
-    orderBy: { name: 'asc' },
-  });
-
-  const groups = buildDuplicateGroups(allHashed as any);
+  const groups = buildDuplicateGroups(allHashed);
 
   return NextResponse.json({
     groups,
     totalAnalyzed: allHashed.length,
     totalGroups: groups.length,
-    remaining,
-    indexedThisRun: toIndex.length,
+    needsIndexing: false,
+    unindexed: 0,
   });
 }

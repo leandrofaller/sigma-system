@@ -57,7 +57,7 @@ export async function DELETE(req: NextRequest) {
       // 1. Clear DB first
       const result = await prisma.apenado.updateMany({
         where: { photoPath: { not: null } },
-        data: { photoPath: null, photoHash: null },
+        data: { photoPath: null, photoHash: null, photoQuality: null },
       });
 
       // 2. Delete files from disk (best-effort)
