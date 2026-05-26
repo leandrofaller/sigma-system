@@ -14,22 +14,5 @@ export async function POST() {
     return NextResponse.json({ error: 'Acesso negado — requer SUPER_ADMIN' }, { status: 403 });
   }
 
-  const steps: string[] = [];
-  const errors: string[] = [];
-
-  const migrations = [
-    { col: 'ocrText',  sql: `ALTER TABLE apenados ADD COLUMN IF NOT EXISTS "ocrText" TEXT` },
-    { col: 'ocrName',  sql: `ALTER TABLE apenados ADD COLUMN IF NOT EXISTS "ocrName" TEXT` },
-  ];
-
-  for (const m of migrations) {
-    try {
-      await prisma.$executeRawUnsafe(m.sql);
-      steps.push(`${m.col}: OK`);
-    } catch (e: any) {
-      errors.push(`${m.col}: ${e.message}`);
-    }
-  }
-
-  return NextResponse.json({ steps, errors, success: errors.length === 0 });
+  return NextResponse.json({ steps: [], errors: [], success: true });
 }
