@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   X, ScanSearch, Loader2, Trash2, AlertTriangle, CheckCircle,
   RefreshCw, Users, Fingerprint, Waves, Zap, Clock, UserX,
+  RotateCcw, RotateCw, Filter,
 } from 'lucide-react';
 
 interface DupRecord {
@@ -63,6 +64,9 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   const [inlineError, setInlineError] = useState('');
   const [analyzedAt, setAnalyzedAt] = useState<Date | null>(null);
+  const [filterLargeGroups, setFilterLargeGroups] = useState(false);
+  const [rotatingId, setRotatingId] = useState<string | null>(null);
+  const [photoVersions, setPhotoVersions] = useState<Map<string, number>>(new Map());
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -134,6 +138,39 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
     }
   };
 
+  const handleRotate = async (record: DupRecord, degrees: 90 | 270) => {
+    setRotatingId(record.id);
+    try {
+      const res = await fetch(`/api/apenados/${record.id}/foto/rotate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ degrees }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Erro ao rotar foto'); return; }
+      setPhotoVersions((prev) => {
+        const m = new Map(prev);
+        m.set(record.id, (m.get(record.id) ?? 0) + 1);
+        return m;
+      });
+      setJobState((prev) =>
+        prev
+          ? {
+              ...prev,
+              groups: prev.groups.map((g) => ({
+                ...g,
+                records: g.records.map((r) =>
+                  r.id === record.id ? { ...r, photoQuality: data.photoQuality } : r,
+                ),
+              })),
+            }
+          : prev,
+      );
+    } finally {
+      setRotatingId(null);
+    }
+  };
+
   const handleBulkDelete = async () => {
     setShowBulkConfirm(false);
     setBulkDeleting(true);
@@ -158,9 +195,14 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
     }
   };
 
-  const activeGroups = (jobState?.groups ?? [])
+  const allActiveGroups = (jobState?.groups ?? [])
     .map((g) => ({ ...g, records: g.records.filter((r) => !deletedIds.has(r.id)) }))
     .filter((g) => g.records.length >= 2);
+
+  const hiddenLargeCount = filterLargeGroups ? allActiveGroups.filter((g) => g.records.length > 3).length : 0;
+  const activeGroups = filterLargeGroups
+    ? allActiveGroups.filter((g) => g.records.length <= 3)
+    : allActiveGroups;
 
   const pendingDeleteCount = activeGroups.reduce((sum, g) => sum + g.records.length - 1, 0);
   const isRunning = jobState?.phase === 'indexing' || jobState?.phase === 'detecting';
@@ -345,6 +387,33 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                 </div>
               </div>
 
+              {/* Filter toggle */}
+              {allActiveGroups.length > 0 && (
+                <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-2 text-sm text-subtle">
+                    <Filter className="w-3.5 h-3.5" />
+                    <span>Ocultar grupos com mais de 3 fotos</span>
+                    {filterLargeGroups && hiddenLargeCount > 0 && (
+                      <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-medium">
+                        {hiddenLargeCount} oculto{hiddenLargeCount !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setFilterLargeGroups((v) => !v)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      filterLargeGroups ? 'bg-sigma-600' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                        filterLargeGroups ? 'translate-x-4.5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
+
               {/* Bulk delete success */}
               {bulkDeletedCount !== null && (
                 <div className="flex items-center gap-3 px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
@@ -413,6 +482,8 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                         const qi = qualityInfo(record.photoQuality);
                         const normalized = normalizeQuality(record.photoQuality, groupMax, groupMin);
                         const isDeleting = deletingId === record.id;
+                        const isRotating = rotatingId === record.id;
+                        const photoVersion = photoVersions.get(record.id) ?? 0;
 
                         return (
                           <div
@@ -437,7 +508,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                             <div className="aspect-square bg-gray-200 dark:bg-gray-700 relative overflow-hidden">
                               {record.photoPath ? (
                                 <img
-                                  src={`/api/apenados/${record.id}/foto`}
+                                  src={`/api/apenados/${record.id}/foto${photoVersion > 0 ? `?v=${photoVersion}` : ''}`}
                                   alt={record.name}
                                   loading="lazy"
                                   className="w-full h-full object-cover"
@@ -449,7 +520,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                                   </span>
                                 </div>
                               )}
-                              {isDeleting && (
+                              {(isDeleting || isRotating) && (
                                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                                   <Loader2 className="w-6 h-6 text-white animate-spin" />
                                 </div>
@@ -488,13 +559,32 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                               )}
                             </div>
                             {record.photoPath && (
-                              <button
-                                onClick={() => handleDeletePhoto(record)}
-                                disabled={isDeleting}
-                                className="flex items-center gap-1 justify-center text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 border-t border-gray-100 dark:border-gray-800 px-2 py-2 transition-colors disabled:opacity-50"
-                              >
-                                <Trash2 className="w-3 h-3" /> Remover foto
-                              </button>
+                              <div className="border-t border-gray-100 dark:border-gray-800 flex">
+                                <button
+                                  onClick={() => handleRotate(record, 270)}
+                                  disabled={isDeleting || isRotating}
+                                  title="Rotar 90° esquerda"
+                                  className="flex-1 flex items-center justify-center py-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors disabled:opacity-40"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => handleRotate(record, 90)}
+                                  disabled={isDeleting || isRotating}
+                                  title="Rotar 90° direita"
+                                  className="flex-1 flex items-center justify-center py-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors border-l border-r border-gray-100 dark:border-gray-800 disabled:opacity-40"
+                                >
+                                  <RotateCw className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePhoto(record)}
+                                  disabled={isDeleting || isRotating}
+                                  title="Remover foto"
+                                  className="flex-1 flex items-center justify-center py-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors disabled:opacity-40"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
                             )}
                           </div>
                         );
@@ -512,7 +602,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
           <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3 flex-shrink-0 flex-wrap">
             <p className="text-xs text-subtle">
               {isDone
-                ? `${jobState!.totalAnalyzed.toLocaleString('pt-BR')} fotos · ${activeGroups.length} grupo${activeGroups.length !== 1 ? 's' : ''} com duplicatas`
+                ? `${jobState!.totalAnalyzed.toLocaleString('pt-BR')} fotos · ${allActiveGroups.length} grupo${allActiveGroups.length !== 1 ? 's' : ''} com duplicatas`
                 : jobState?.phase === 'indexing'
                   ? `Indexando... ${jobState.indexingCurrent.toLocaleString('pt-BR')} / ${jobState.indexingTotal.toLocaleString('pt-BR')}`
                   : 'Detectando grupos...'}
