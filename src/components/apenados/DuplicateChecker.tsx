@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   X, ScanSearch, Loader2, Trash2, AlertTriangle, CheckCircle,
   RefreshCw, Users, Fingerprint, Waves, Zap, Clock, UserX,
-  RotateCcw, RotateCw, Filter, UserCheck, Pencil,
+  RotateCcw, RotateCw, Filter, UserCheck, Pencil, CheckCheck,
 } from 'lucide-react';
 
 interface DupRecord {
@@ -66,11 +66,22 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
   const [inlineError, setInlineError] = useState('');
   const [analyzedAt, setAnalyzedAt] = useState<Date | null>(null);
   const [filterLargeGroups, setFilterLargeGroups] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<Set<'exact' | 'similar' | 'face'>>(new Set());
+  const [dismissedGroups, setDismissedGroups] = useState<Set<string>>(new Set());
+  const [showDismissed, setShowDismissed] = useState(false);
   const [rotatingId, setRotatingId] = useState<string | null>(null);
   const [photoVersions, setPhotoVersions] = useState<Map<string, number>>(new Map());
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load dismissed groups from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('dismissed_dup_groups_v1');
+      if (stored) setDismissedGroups(new Set(JSON.parse(stored)));
+    } catch {}
+  }, []);
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -78,6 +89,32 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
       pollingRef.current = null;
     }
   }, []);
+
+  const groupKey = (records: DupRecord[]) => records.map((r) => r.id).sort().join('|');
+
+  const handleDismiss = (group: DupGroup) => {
+    const key = groupKey(group.records);
+    setDismissedGroups((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      try { localStorage.setItem('dismissed_dup_groups_v1', JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  };
+
+  const handleUndismissAll = () => {
+    setDismissedGroups(new Set());
+    try { localStorage.removeItem('dismissed_dup_groups_v1'); } catch {}
+    setShowDismissed(false);
+  };
+
+  const toggleTypeFilter = (t: 'exact' | 'similar' | 'face') => {
+    setTypeFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t); else next.add(t);
+      return next;
+    });
+  };
 
   const startPolling = useCallback(() => {
     stopPolling();
@@ -238,10 +275,19 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
     .map((g) => ({ ...g, records: g.records.filter((r) => !deletedIds.has(r.id)) }))
     .filter((g) => g.records.length >= 2);
 
-  const hiddenLargeCount = filterLargeGroups ? allActiveGroups.filter((g) => g.records.length > 3).length : 0;
+  // Split dismissed vs visible
+  const undismissedGroups = allActiveGroups.filter((g) => !dismissedGroups.has(groupKey(g.records)));
+  const dismissedVisibleGroups = allActiveGroups.filter((g) => dismissedGroups.has(groupKey(g.records)));
+
+  // Apply type filter
+  const typeFilteredGroups = typeFilter.size === 0
+    ? undismissedGroups
+    : undismissedGroups.filter((g) => typeFilter.has(g.type));
+
+  const hiddenLargeCount = filterLargeGroups ? typeFilteredGroups.filter((g) => g.records.length > 3).length : 0;
   const activeGroups = filterLargeGroups
-    ? allActiveGroups.filter((g) => g.records.length <= 3)
-    : allActiveGroups;
+    ? typeFilteredGroups.filter((g) => g.records.length <= 3)
+    : typeFilteredGroups;
 
   const pendingDeleteCount = activeGroups.reduce((sum, g) => sum + g.records.length - 1, 0);
   const isRunning = jobState?.phase === 'indexing' || jobState?.phase === 'detecting';
@@ -438,30 +484,79 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                 </div>
               </div>
 
-              {/* Filter toggle */}
-              {allActiveGroups.length > 0 && (
-                <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center gap-2 text-sm text-subtle">
-                    <Filter className="w-3.5 h-3.5" />
-                    <span>Ocultar grupos com mais de 3 fotos</span>
-                    {filterLargeGroups && hiddenLargeCount > 0 && (
-                      <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-medium">
-                        {hiddenLargeCount} oculto{hiddenLargeCount !== 1 ? 's' : ''}
-                      </span>
+              {/* Filters */}
+              {undismissedGroups.length > 0 && (
+                <div className="space-y-2">
+                  {/* Type filter chips */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-subtle mr-1">
+                      <Filter className="w-3.5 h-3.5" />
+                      <span>Filtrar:</span>
+                    </div>
+                    {([
+                      { key: 'exact' as const, label: 'Idênticas', active: 'bg-red-600 text-white border-red-600', inactive: 'border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' },
+                      { key: 'similar' as const, label: 'Similares', active: 'bg-orange-500 text-white border-orange-500', inactive: 'border-orange-200 dark:border-orange-800 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20' },
+                      { key: 'face' as const, label: 'Mesmo indivíduo', active: 'bg-teal-600 text-white border-teal-600', inactive: 'border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20' },
+                    ] as const).map(({ key, label, active, inactive }) => {
+                      const count = undismissedGroups.filter((g) => g.type === key).length;
+                      const isOn = typeFilter.has(key);
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => toggleTypeFilter(key)}
+                          className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all ${isOn ? active : inactive}`}
+                        >
+                          {key === 'exact' ? <Fingerprint className="w-3 h-3" /> : key === 'face' ? <UserCheck className="w-3 h-3" /> : <Waves className="w-3 h-3" />}
+                          {label}
+                          <span className={`px-1 py-0.5 rounded text-[9px] font-bold leading-none ${isOn ? 'bg-white/25' : 'bg-gray-100 dark:bg-gray-700 text-subtle'}`}>
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {typeFilter.size > 0 && (
+                      <button
+                        onClick={() => setTypeFilter(new Set())}
+                        className="text-xs text-subtle hover:text-body transition-colors underline underline-offset-2"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                    {dismissedVisibleGroups.length > 0 && (
+                      <button
+                        onClick={() => setShowDismissed((v) => !v)}
+                        className="ml-auto flex items-center gap-1.5 text-xs text-subtle hover:text-body transition-colors"
+                      >
+                        <CheckCheck className="w-3.5 h-3.5 text-green-500" />
+                        {dismissedVisibleGroups.length} tratado{dismissedVisibleGroups.length !== 1 ? 's' : ''}
+                        {showDismissed ? ' — ocultar' : ' — ver'}
+                      </button>
                     )}
                   </div>
-                  <button
-                    onClick={() => setFilterLargeGroups((v) => !v)}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      filterLargeGroups ? 'bg-sigma-600' : 'bg-gray-300 dark:bg-gray-600'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                        filterLargeGroups ? 'translate-x-4.5' : 'translate-x-0.5'
+
+                  {/* Large groups toggle */}
+                  <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2 text-sm text-subtle">
+                      <span className="text-xs">Ocultar grupos com mais de 3 fotos</span>
+                      {filterLargeGroups && hiddenLargeCount > 0 && (
+                        <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-medium">
+                          {hiddenLargeCount} oculto{hiddenLargeCount !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setFilterLargeGroups((v) => !v)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                        filterLargeGroups ? 'bg-sigma-600' : 'bg-gray-300 dark:bg-gray-600'
                       }`}
-                    />
-                  </button>
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                          filterLargeGroups ? 'translate-x-4.5' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -527,7 +622,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                         Grupo {gi + 1} — {group.records.length} registros
                       </span>
                       <span
-                        className={`ml-auto flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                           group.type === 'exact'
                             ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
                             : group.type === 'face'
@@ -544,6 +639,14 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                         )}
                         {group.type === 'exact' ? 'Idênticas' : group.type === 'face' ? 'Mesmo indivíduo' : 'Similares'}
                       </span>
+                      <button
+                        onClick={() => handleDismiss(group)}
+                        title="Marcar como tratado — não aparece no próximo scan"
+                        className="ml-auto flex items-center gap-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 bg-white/60 dark:bg-gray-800/60 hover:bg-green-50 dark:hover:bg-green-900/20 px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 transition-all"
+                      >
+                        <CheckCheck className="w-3.5 h-3.5" />
+                        Tratado
+                      </button>
                     </div>
                     <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                       {group.records.map((record, ri) => {
@@ -700,6 +803,47 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                   </div>
                 );
               })}
+
+              {/* Dismissed groups section */}
+              {showDismissed && dismissedVisibleGroups.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+                    <div className="flex items-center gap-2 text-xs text-subtle">
+                      <CheckCheck className="w-3.5 h-3.5 text-green-500" />
+                      <span>{dismissedVisibleGroups.length} grupo{dismissedVisibleGroups.length !== 1 ? 's' : ''} marcado{dismissedVisibleGroups.length !== 1 ? 's' : ''} como tratado{dismissedVisibleGroups.length !== 1 ? 's' : ''}</span>
+                      <button onClick={handleUndismissAll} className="text-red-500 hover:text-red-600 underline underline-offset-2 transition-colors">
+                        Limpar todos
+                      </button>
+                    </div>
+                    <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+                  </div>
+                  {dismissedVisibleGroups.map((group, gi) => (
+                    <div key={gi} className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden opacity-60">
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50">
+                        <CheckCheck className="w-3.5 h-3.5 text-green-500" />
+                        <span className="text-xs text-subtle">
+                          Tratado — {group.records.map((r) => r.name).join(', ')}
+                        </span>
+                        <button
+                          onClick={() => {
+                            const key = groupKey(group.records);
+                            setDismissedGroups((prev) => {
+                              const next = new Set(prev);
+                              next.delete(key);
+                              try { localStorage.setItem('dismissed_dup_groups_v1', JSON.stringify([...next])); } catch {}
+                              return next;
+                            });
+                          }}
+                          className="ml-auto text-xs text-sigma-600 hover:text-sigma-700 font-medium transition-colors"
+                        >
+                          Restaurar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -709,7 +853,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
           <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3 flex-shrink-0 flex-wrap">
             <p className="text-xs text-subtle">
               {isDone
-                ? `${jobState!.totalAnalyzed.toLocaleString('pt-BR')} fotos · ${allActiveGroups.length} grupo${allActiveGroups.length !== 1 ? 's' : ''} com duplicatas`
+                ? `${jobState!.totalAnalyzed.toLocaleString('pt-BR')} fotos · ${undismissedGroups.length} grupo${undismissedGroups.length !== 1 ? 's' : ''} pendente${undismissedGroups.length !== 1 ? 's' : ''}${dismissedVisibleGroups.length > 0 ? ` · ${dismissedVisibleGroups.length} tratado${dismissedVisibleGroups.length !== 1 ? 's' : ''}` : ''}`
                 : jobState?.phase === 'indexing'
                   ? `Indexando... ${jobState.indexingCurrent.toLocaleString('pt-BR')} / ${jobState.indexingTotal.toLocaleString('pt-BR')}`
                   : 'Detectando grupos...'}
