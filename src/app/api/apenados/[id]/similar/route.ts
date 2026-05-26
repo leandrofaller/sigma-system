@@ -11,7 +11,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id } = await params;
   const searchParams = req.nextUrl.searchParams;
-  const threshold = Math.max(0.4, Math.min(0.99, parseFloat(searchParams.get('threshold') || '0.60')));
+  // threshold is sent as 0-100 integer (e.g. 72), stored as 0-1 decimal
+  const threshold = Math.max(0.4, Math.min(0.99, parseFloat(searchParams.get('threshold') || '72') / 100));
   const topN = Math.min(50, Math.max(1, parseInt(searchParams.get('topN') || '20', 10)));
 
   // Get query embedding from DB
@@ -37,7 +38,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Use in-memory face cache for fast scan — same cache used by face search
   warmFaceCache();
-  const cache = await awaitFaceCache(15000);
+  let cache;
+  try {
+    cache = await awaitFaceCache(50000);
+  } catch {
+    return NextResponse.json({ similar: [], reason: 'cache-unavailable', indexed: 0 });
+  }
   if (!cache || cache.count === 0) {
     return NextResponse.json({ similar: [], reason: 'cache-unavailable', indexed: 0 });
   }

@@ -256,6 +256,17 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
   const openNew = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (a: Apenado) => { setEditing(a); setModalOpen(true); };
 
+  const handleEditFromFaceSearch = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/apenados/${id}`);
+      if (!res.ok) return;
+      const apenado = await res.json();
+      setFaceSearchOpen(false);
+      setEditing(apenado);
+      setModalOpen(true);
+    } catch {}
+  }, []);
+
   const handleImported = useCallback(async () => {
     try {
       const res = await fetch('/api/apenados/stats');
@@ -660,7 +671,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
       )}
 
       {faceSearchOpen && (
-        <FaceSearch onClose={() => setFaceSearchOpen(false)} userRole={userRole} />
+        <FaceSearch onClose={() => setFaceSearchOpen(false)} userRole={userRole} onEditApenado={handleEditFromFaceSearch} />
       )}
 
       {dupCheckerOpen && (

@@ -73,7 +73,9 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
   const [photoVersions, setPhotoVersions] = useState<Map<string, number>>(new Map());
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [displayedGroupCount, setDisplayedGroupCount] = useState(20);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // Load dismissed groups from localStorage on mount
   useEffect(() => {
@@ -82,6 +84,11 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
       if (stored) setDismissedGroups(new Set(JSON.parse(stored)));
     } catch {}
   }, []);
+
+  // Reset pagination when scan completes or filters change
+  useEffect(() => {
+    setDisplayedGroupCount(20);
+  }, [jobState?.phase, typeFilter, filterLargeGroups]);
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -288,6 +295,17 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
   const activeGroups = filterLargeGroups
     ? typeFilteredGroups.filter((g) => g.records.length <= 3)
     : typeFilteredGroups;
+
+  // IntersectionObserver: load more groups when sentinel is visible
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) setDisplayedGroupCount((n) => n + 20);
+    }, { rootMargin: '300px' });
+    obs.observe(el);
+    return () => obs.disconnect();
+  });
 
   const pendingDeleteCount = activeGroups.reduce((sum, g) => sum + g.records.length - 1, 0);
   const isRunning = jobState?.phase === 'indexing' || jobState?.phase === 'detecting';
@@ -591,7 +609,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
               )}
 
               {/* Groups */}
-              {activeGroups.map((group, gi) => {
+              {activeGroups.slice(0, displayedGroupCount).map((group, gi) => {
                 const qualities = group.records.map((r) => r.photoQuality ?? 0);
                 const groupMax = Math.max(...qualities);
                 const groupMin = Math.min(...qualities);
@@ -803,6 +821,18 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                   </div>
                 );
               })}
+
+              {/* Load-more sentinel + button */}
+              {activeGroups.length > displayedGroupCount && (
+                <div ref={loadMoreRef} className="flex flex-col items-center gap-2 py-3">
+                  <button
+                    onClick={() => setDisplayedGroupCount((n) => n + 20)}
+                    className="text-xs font-medium text-sigma-600 hover:text-sigma-700 border border-sigma-200 dark:border-sigma-800 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 px-4 py-2 rounded-xl transition-colors"
+                  >
+                    Mostrar mais ({activeGroups.length - displayedGroupCount} grupo{activeGroups.length - displayedGroupCount !== 1 ? 's' : ''} restante{activeGroups.length - displayedGroupCount !== 1 ? 's' : ''})
+                  </button>
+                </div>
+              )}
 
               {/* Dismissed groups section */}
               {showDismissed && dismissedVisibleGroups.length > 0 && (

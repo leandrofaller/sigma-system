@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useIndexing } from '@/contexts/IndexingContext';
 import {
   X, ScanFace, Upload, Loader2, AlertTriangle, RefreshCw,
-  Database, Search, CheckCircle, Trash2, Users, ZoomIn, ZoomOut,
+  Database, Search, CheckCircle, Trash2, Users, ZoomIn, ZoomOut, Pencil,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ function fmtTime(seconds: number): string {
 
 // ─── MatchCard ────────────────────────────────────────────────────────────────
 
-function MatchCard({ match, rank }: { match: FaceMatch; rank: number }) {
+function MatchCard({ match, rank, onEdit }: { match: FaceMatch; rank: number; onEdit?: (id: string) => void }) {
   return (
     <div className={`rounded-xl border overflow-hidden ${
       match.similarity >= 70 ? 'border-green-200 dark:border-green-800'
@@ -103,9 +103,20 @@ function MatchCard({ match, rank }: { match: FaceMatch; rank: number }) {
           </p>
           {match.faccao && <p className="text-[10px] text-orange-600 dark:text-orange-400 font-medium mt-0.5">{match.faccao}</p>}
         </div>
-        <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-          <span className={`text-xl font-black tabular-nums ${simColor(match.similarity)}`}>{match.similarity}%</span>
-          <span className={`text-[10px] font-semibold ${simColor(match.similarity)}`}>{simLabel(match.similarity)}</span>
+        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+          <div className="flex flex-col items-end gap-0.5">
+            <span className={`text-xl font-black tabular-nums ${simColor(match.similarity)}`}>{match.similarity}%</span>
+            <span className={`text-[10px] font-semibold ${simColor(match.similarity)}`}>{simLabel(match.similarity)}</span>
+          </div>
+          {onEdit && (
+            <button
+              onClick={() => onEdit(match.id)}
+              title="Editar registro"
+              className="flex items-center gap-1 text-[10px] font-medium text-sigma-600 hover:text-sigma-700 bg-sigma-50 dark:bg-sigma-900/30 hover:bg-sigma-100 dark:hover:bg-sigma-900/50 px-2 py-0.5 rounded-lg transition-colors"
+            >
+              <Pencil className="w-2.5 h-2.5" /> Editar
+            </button>
+          )}
         </div>
       </div>
       <div className="h-1.5 bg-gray-100 dark:bg-gray-800">
@@ -212,9 +223,9 @@ function FaceCanvas({
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-interface Props { onClose: () => void; userRole: string }
+interface Props { onClose: () => void; userRole: string; onEditApenado?: (id: string) => void }
 
-export function FaceSearch({ onClose, userRole }: Props) {
+export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [tab, setTab] = useState<Tab>('search');
 
   // Search
@@ -550,7 +561,7 @@ export function FaceSearch({ onClose, userRole }: Props) {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {selectedFace?.matches.map((m, i) => <MatchCard key={m.id} match={m} rank={i + 1} />)}
+                      {selectedFace?.matches.map((m, i) => <MatchCard key={m.id} match={m} rank={i + 1} onEdit={onEditApenado} />)}
                     </div>
                   )}
                 </>

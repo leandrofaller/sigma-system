@@ -69,7 +69,7 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate }: Props) {
     setSimilarData([]);
     setSimilarReason('');
     try {
-      const res = await fetch(`/api/apenados/${id}/similar?threshold=60&topN=20`);
+      const res = await fetch(`/api/apenados/${id}/similar?threshold=72&topN=20`);
       const data = await res.json();
       setSimilarData(data.similar ?? []);
       setSimilarIndexed(data.indexed ?? 0);
