@@ -42,6 +42,7 @@ async function loadFromDB(): Promise<FaceCache> {
       FROM apenados
       WHERE "faceDescriptor" IS NOT NULL
         AND "faceDescriptor" LIKE '[%'
+        AND "photoPath" IS NOT NULL
         AND strpos(encode("faceDescriptor"::bytea, 'hex'), '00') = 0
         AND id > ${lastId}
       ORDER BY id

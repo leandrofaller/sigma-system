@@ -183,6 +183,7 @@ export async function searchByVector(
         `SELECT id, (1 - ("faceVector" <=> $1::vector)) AS sim
          FROM apenados
          WHERE "faceVector" IS NOT NULL
+           AND "photoPath" IS NOT NULL
            AND id != $2
            AND ("faceVector" <=> $1::vector) <= $3
          ORDER BY "faceVector" <=> $1::vector ASC
@@ -197,6 +198,7 @@ export async function searchByVector(
         `SELECT id, (1 - ("faceVector" <=> $1::vector)) AS sim
          FROM apenados
          WHERE "faceVector" IS NOT NULL
+           AND "photoPath" IS NOT NULL
            AND ("faceVector" <=> $1::vector) <= $2
          ORDER BY "faceVector" <=> $1::vector ASC
          LIMIT $3`,

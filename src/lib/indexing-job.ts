@@ -60,6 +60,12 @@ export function startJob(): void {
 async function runLoop(): Promise<void> {
   const uploadsDir = getApenadosDir();
 
+  // Limpa embeddings órfãos: registros sem foto mas com faceDescriptor (foto foi deletada).
+  await prisma.apenado.updateMany({
+    where: { photoPath: null, faceDescriptor: { not: null } },
+    data: { faceDescriptor: null, detScore: null },
+  });
+
   // Reseta registros com null bytes no faceDescriptor (forçam re-indexação limpa).
   // Compara via encode(bytea,'hex') — text funcs como position/REPLACE crasham em \x00.
   await prisma.$executeRaw`
