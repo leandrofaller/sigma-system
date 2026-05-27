@@ -4,6 +4,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { HeartbeatProvider } from '@/components/providers/HeartbeatProvider';
+import { IdleTimeoutProvider } from '@/components/providers/IdleTimeoutProvider';
 import { IndexingWrapper } from '@/components/providers/IndexingWrapper';
 import { Toaster } from '@/components/ui/Toaster';
 import { prisma } from '@/lib/db';
@@ -42,6 +43,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </div>
         </div>
         <HeartbeatProvider />
+        <IdleTimeoutProvider />
         <Toaster />
       </IndexingWrapper>
     </QueryProvider>
