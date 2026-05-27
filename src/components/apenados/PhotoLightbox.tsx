@@ -1,8 +1,20 @@
 'use client';
 
 import { useEffect, useCallback, useState, useRef } from 'react';
-import { X, Download, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Loader2, Users, Check, FolderPlus, Pencil } from 'lucide-react';
+import { X, Download, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Loader2, Users, Check, FolderPlus, Pencil, FolderOpen } from 'lucide-react';
 import type { Apenado } from './ApenadoCard';
+
+interface GroupMemberData {
+  apenadoId: string;
+  similarity: number | null;
+  apenado: { id: string; name: string; matricula: string | null; unidade: string | null; photoPath: string | null };
+}
+
+interface ApenadoGroupData {
+  id: string;
+  name: string;
+  members: GroupMemberData[];
+}
 
 interface SimilarRecord {
   id: string;
@@ -65,6 +77,12 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate, onEditApenado
   const [similarReason, setSimilarReason] = useState('');
   const similarFetchedFor = useRef<string | null>(null);
 
+  // Groups panel
+  const [groupsOpen, setGroupsOpen] = useState(false);
+  const [groupsData, setGroupsData] = useState<ApenadoGroupData[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const groupsFetchedFor = useRef<string | null>(null);
+
   // Group selection
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -77,6 +95,21 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate, onEditApenado
     setSelectedIds(new Set());
     setCreateGroupOpen(false);
     setGroupName('');
+  }, []);
+
+  const fetchGroups = useCallback(async (id: string) => {
+    if (groupsFetchedFor.current === id) return;
+    groupsFetchedFor.current = id;
+    setGroupsLoading(true);
+    setGroupsData([]);
+    try {
+      const res = await fetch('/api/apenados/groups');
+      const all: ApenadoGroupData[] = await res.json();
+      setGroupsData(all.filter((g) => g.members.some((m) => m.apenadoId === id)));
+    } catch {
+    } finally {
+      setGroupsLoading(false);
+    }
   }, []);
 
   const fetchSimilar = useCallback(async (id: string) => {
@@ -107,11 +140,21 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate, onEditApenado
     });
   }, [apenado.id, fetchSimilar, resetSelection]);
 
-  // Reset similar panel when navigating to a new photo
+  const handleToggleGroups = useCallback(() => {
+    setGroupsOpen((v) => {
+      const next = !v;
+      if (next) fetchGroups(apenado.id);
+      return next;
+    });
+  }, [apenado.id, fetchGroups]);
+
+  // Reset panels when navigating to a new photo
   useEffect(() => {
     resetSelection();
+    similarFetchedFor.current = null;
+    groupsFetchedFor.current = null;
     if (similarOpen) fetchSimilar(apenado.id);
-    else similarFetchedFor.current = null;
+    if (groupsOpen) fetchGroups(apenado.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apenado.id]);
 
@@ -271,6 +314,13 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate, onEditApenado
                 className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${similarOpen ? 'bg-teal-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white'}`}
               >
                 {similarLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={handleToggleGroups}
+                title="Grupos de identificação — ver membros dos grupos vinculados"
+                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${groupsOpen ? 'bg-purple-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white'}`}
+              >
+                {groupsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}
               </button>
               <button
                 onClick={() => handleRotate(270)}
@@ -448,6 +498,85 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate, onEditApenado
                 </div>
               </div>
             )}
+          </div>
+        )}
+        {/* Groups panel */}
+        {groupsOpen && (
+          <div className="bg-gray-950/95 border-t border-white/10 px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white/60 text-xs font-semibold flex items-center gap-1.5">
+                <FolderOpen className="w-3.5 h-3.5 text-purple-400" />
+                {groupsLoading
+                  ? 'Carregando grupos...'
+                  : groupsData.length === 0
+                    ? 'Não pertence a nenhum grupo'
+                    : `${groupsData.length} grupo${groupsData.length !== 1 ? 's' : ''} vinculado${groupsData.length !== 1 ? 's' : ''}`}
+              </span>
+            </div>
+
+            {groupsLoading && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+              </div>
+            )}
+
+            {!groupsLoading && groupsData.map((group) => (
+              <div key={group.id} className="mb-3 last:mb-0">
+                <p className="text-purple-400/70 text-[10px] font-semibold uppercase tracking-wider mb-1.5 truncate">
+                  {group.name}
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
+                  {group.members.map((m) => {
+                    const isCurrent = m.apenadoId === apenado.id;
+                    return (
+                      <div key={m.apenadoId} className="flex-shrink-0 w-16 group/grpm flex flex-col">
+                        <button
+                          onClick={() => {
+                            if (!isCurrent)
+                              onNavigate({ ...m.apenado, faccao: null, notes: null, createdAt: '', photoQuality: null } as Apenado);
+                          }}
+                          disabled={isCurrent}
+                          className="w-16 disabled:cursor-default"
+                          title={m.apenado.name}
+                        >
+                          <div className={`relative w-16 h-16 rounded-lg overflow-hidden bg-gray-800 ring-2 transition-all ${
+                            isCurrent
+                              ? 'ring-purple-400'
+                              : 'ring-transparent group-hover/grpm:ring-purple-400/50'
+                          }`}>
+                            {m.apenado.photoPath ? (
+                              <img
+                                src={`/api/apenados/${m.apenadoId}/foto`}
+                                alt={m.apenado.name}
+                                loading="lazy"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-700 to-purple-900">
+                                <span className="text-white font-bold">{m.apenado.name.charAt(0)}</span>
+                              </div>
+                            )}
+                            {isCurrent && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-purple-600/80 px-1 py-0.5 flex items-center justify-center">
+                                <span className="text-white text-[8px] font-bold">atual</span>
+                              </div>
+                            )}
+                            {!isCurrent && m.similarity != null && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-1 py-0.5">
+                                <span className="text-purple-300 text-[9px] font-bold">{m.similarity}%</span>
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                        <p className="text-white/50 text-[9px] truncate mt-1 text-center leading-tight">
+                          {m.apenado.name.split(' ')[0]}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
