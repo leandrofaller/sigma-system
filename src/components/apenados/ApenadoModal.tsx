@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Upload, Camera, Loader2, CheckCircle, User, Trash2, RotateCcw, RotateCw } from 'lucide-react';
+import { X, Upload, Camera, Loader2, CheckCircle, User, Trash2, RotateCcw, RotateCw, FolderOpen } from 'lucide-react';
 import type { Apenado } from './ApenadoCard';
 
 interface Props {
@@ -35,6 +35,11 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
   const [rotating, setRotating] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const [allGroups, setAllGroups] = useState<{ id: string; name: string }[]>([]);
+  const [initialGroupIds, setInitialGroupIds] = useState<Set<string>>(new Set());
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+  const [groupsLoading, setGroupsLoading] = useState(false);
 
   const inputCls = 'w-full input-base px-3 py-2 text-sm';
 
@@ -88,6 +93,27 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
         saved._photoTs = Date.now();
       }
 
+      if (isEdit) {
+        const toAdd = [...selectedGroupIds].filter((id) => !initialGroupIds.has(id));
+        const toRemove = [...initialGroupIds].filter((id) => !selectedGroupIds.has(id));
+        await Promise.all([
+          ...toAdd.map((gid) =>
+            fetch(`/api/apenados/groups/${gid}/members`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ apenadoId: saved.id }),
+            })
+          ),
+          ...toRemove.map((gid) =>
+            fetch(`/api/apenados/groups/${gid}/members`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ apenadoId: saved.id }),
+            })
+          ),
+        ]);
+      }
+
       onSaved(saved);
     } catch {
       alert('Erro ao salvar.');
@@ -139,6 +165,23 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
       if (photoPreview?.startsWith('blob:')) URL.revokeObjectURL(photoPreview);
     };
   }, [photoPreview]);
+
+  useEffect(() => {
+    if (!apenado?.id) return;
+    setGroupsLoading(true);
+    fetch('/api/apenados/groups')
+      .then((r) => r.json())
+      .then((groups: Array<{ id: string; name: string; members: Array<{ apenadoId: string }> }>) => {
+        setAllGroups(groups.map((g) => ({ id: g.id, name: g.name })));
+        const memberOf = new Set(
+          groups.filter((g) => g.members.some((m) => m.apenadoId === apenado.id)).map((g) => g.id)
+        );
+        setInitialGroupIds(memberOf);
+        setSelectedGroupIds(new Set(memberOf));
+      })
+      .catch(() => {})
+      .finally(() => setGroupsLoading(false));
+  }, [apenado?.id]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -308,6 +351,42 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
               />
             </div>
           </div>
+
+          {isEdit && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs font-semibold text-subtle uppercase tracking-wide">
+                <FolderOpen className="w-3.5 h-3.5" /> Grupos de identificação
+              </label>
+              {groupsLoading ? (
+                <div className="flex items-center gap-2 text-xs text-subtle">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando...
+                </div>
+              ) : allGroups.length === 0 ? (
+                <p className="text-xs text-subtle italic">Nenhum grupo criado</p>
+              ) : (
+                <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto">
+                  {allGroups.map((g) => (
+                    <label key={g.id} className="flex items-center gap-2.5 cursor-pointer group/grp">
+                      <input
+                        type="checkbox"
+                        checked={selectedGroupIds.has(g.id)}
+                        onChange={() =>
+                          setSelectedGroupIds((prev) => {
+                            const next = new Set(prev);
+                            next.has(g.id) ? next.delete(g.id) : next.add(g.id);
+                            return next;
+                          })
+                        }
+                        disabled={!canDeletePhoto}
+                        className="w-3.5 h-3.5 rounded accent-teal-500 disabled:opacity-50"
+                      />
+                      <span className="text-sm text-body group-hover/grp:text-title transition-colors">{g.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
