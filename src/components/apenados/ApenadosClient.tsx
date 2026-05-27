@@ -263,7 +263,18 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
       const res = await fetch(`/api/apenados/${id}`);
       if (!res.ok) return;
       const apenado = await res.json();
-      setFaceSearchOpen(false);
+      // Não fecha o FaceSearch — ApenadoModal renderiza depois no DOM e fica por cima
+      setEditing(apenado);
+      setModalOpen(true);
+    } catch {}
+  }, []);
+
+  const handleEditFromLightbox = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/apenados/${id}`);
+      if (!res.ok) return;
+      const apenado = await res.json();
+      setLightbox(null); // fecha lightbox para o modal de edição ocupar a tela
       setEditing(apenado);
       setModalOpen(true);
     } catch {}
@@ -371,7 +382,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                   onClick={() => setNoFaceOpen(true)}
                   className="flex items-center gap-2 text-sm font-medium text-orange-200 border border-orange-300/40 hover:bg-orange-300/10 px-4 py-2 rounded-xl transition-all"
                 >
-                  <FileImage className="w-4 h-4" /> Fotos Suspeitas
+                  <FileImage className="w-4 h-4" /> Fotos Duplicadas
                 </button>
               )}
               {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
@@ -662,15 +673,6 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
         </button>
       )}
 
-      {modalOpen && (
-        <ApenadoModal
-          apenado={editing}
-          onClose={() => { setModalOpen(false); setEditing(null); }}
-          onSaved={handleSaved}
-          userRole={userRole}
-        />
-      )}
-
       {importOpen && (
         <ImportarPastaModal
           onClose={() => setImportOpen(false)}
@@ -783,12 +785,23 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
           all={displayedItems}
           onClose={() => setLightbox(null)}
           onNavigate={setLightbox}
+          onEditApenado={handleEditFromLightbox}
           userRole={userRole}
         />
       )}
 
       {groupsOpen && (
         <ApenadoGroupsModal onClose={() => setGroupsOpen(false)} userRole={userRole} />
+      )}
+
+      {/* ApenadoModal renderiza por último para ficar acima de FaceSearch, PhotoLightbox e demais modais */}
+      {modalOpen && (
+        <ApenadoModal
+          apenado={editing}
+          onClose={() => { setModalOpen(false); setEditing(null); }}
+          onSaved={handleSaved}
+          userRole={userRole}
+        />
       )}
     </div>
   );

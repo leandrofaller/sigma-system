@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useCallback, useState, useRef } from 'react';
-import { X, Download, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Loader2, Users, Check, FolderPlus } from 'lucide-react';
+import { X, Download, ChevronLeft, ChevronRight, RotateCcw, RotateCw, Loader2, Users, Check, FolderPlus, Pencil } from 'lucide-react';
 import type { Apenado } from './ApenadoCard';
 
 interface SimilarRecord {
@@ -19,10 +19,11 @@ interface Props {
   all: Apenado[];
   onClose: () => void;
   onNavigate: (a: Apenado) => void;
+  onEditApenado?: (id: string) => void;
   userRole?: string;
 }
 
-export function PhotoLightbox({ apenado, all, onClose, onNavigate, userRole }: Props) {
+export function PhotoLightbox({ apenado, all, onClose, onNavigate, onEditApenado, userRole }: Props) {
   const idx = all.findIndex((a) => a.id === apenado.id);
   const hasPrev = idx > 0;
   const hasNext = idx < all.length - 1;
@@ -343,44 +344,55 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate, userRole }: P
                   {similarData.map((r) => {
                     const isSelected = selectedIds.has(r.id);
                     return (
-                      <button
-                        key={r.id}
-                        onClick={() => {
-                          if (selectMode) toggleSelect(r.id);
-                          else onNavigate({ ...r, faccao: null, notes: null, createdAt: '' } as Apenado);
-                        }}
-                        className="flex-shrink-0 w-20 group/sim"
-                        title={`${r.name} · ${r.similarity}% similaridade`}
-                      >
-                        <div className={`relative w-20 h-20 rounded-lg overflow-hidden bg-gray-800 ring-2 transition-all ${
-                          isSelected ? 'ring-teal-400' : 'ring-transparent group-hover/sim:ring-teal-400/50'
-                        }`}>
-                          {r.photoPath ? (
-                            <img
-                              src={`/api/apenados/${r.id}/foto`}
-                              alt={r.name}
-                              loading="lazy"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-700 to-teal-900">
-                              <span className="text-white font-bold text-lg">{r.name.charAt(0)}</span>
+                      <div key={r.id} className="flex-shrink-0 w-20 group/sim flex flex-col">
+                        <button
+                          onClick={() => {
+                            if (selectMode) toggleSelect(r.id);
+                            else onNavigate({ ...r, faccao: null, notes: null, createdAt: '' } as Apenado);
+                          }}
+                          className="w-20"
+                          title={`${r.name} · ${r.similarity}% similaridade`}
+                        >
+                          <div className={`relative w-20 h-20 rounded-lg overflow-hidden bg-gray-800 ring-2 transition-all ${
+                            isSelected ? 'ring-teal-400' : 'ring-transparent group-hover/sim:ring-teal-400/50'
+                          }`}>
+                            {r.photoPath ? (
+                              <img
+                                src={`/api/apenados/${r.id}/foto`}
+                                alt={r.name}
+                                loading="lazy"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-700 to-teal-900">
+                                <span className="text-white font-bold text-lg">{r.name.charAt(0)}</span>
+                              </div>
+                            )}
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-1 py-0.5">
+                              <span className="text-teal-300 text-[9px] font-bold">{r.similarity}%</span>
                             </div>
-                          )}
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-1 py-0.5">
-                            <span className="text-teal-300 text-[9px] font-bold">{r.similarity}%</span>
+                            {/* Checkbox overlay in select mode */}
+                            {selectMode && (
+                              <div className={`absolute top-1 left-1 w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${
+                                isSelected ? 'bg-teal-500 border-teal-400' : 'bg-black/50 border-white/60'
+                              }`}>
+                                {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                              </div>
+                            )}
                           </div>
-                          {/* Checkbox overlay in select mode */}
-                          {selectMode && (
-                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${
-                              isSelected ? 'bg-teal-500 border-teal-400' : 'bg-black/50 border-white/60'
-                            }`}>
-                              {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-white/60 text-[9px] truncate mt-1 text-center leading-tight">{r.name.split(' ')[0]}</p>
-                      </button>
+                          <p className="text-white/60 text-[9px] truncate mt-1 text-center leading-tight">{r.name.split(' ')[0]}</p>
+                        </button>
+                        {/* Botão editar — visível no hover, apenas para admins com handler */}
+                        {isAdmin && onEditApenado && (
+                          <button
+                            onClick={() => onEditApenado(r.id)}
+                            title={`Editar ${r.name}`}
+                            className="mt-0.5 flex items-center justify-center gap-0.5 text-[9px] font-medium text-white/40 hover:text-white bg-white/5 hover:bg-teal-600 rounded px-1 py-0.5 transition-colors opacity-0 group-hover/sim:opacity-100"
+                          >
+                            <Pencil className="w-2.5 h-2.5" /> Editar
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
