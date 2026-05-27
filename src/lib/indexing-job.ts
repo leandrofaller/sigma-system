@@ -4,7 +4,10 @@ import { getApenadosDir } from './storage';
 import { invalidateFaceCache } from './face-cache';
 import { pgvectorAvailable, upsertVector } from './pgvector';
 
-const BATCH_SIZE = 30;
+// 100 fotos por batch: buffalo_l carrega uma vez por processo Python (~5s startup).
+// Com 130k fotos: 1.300 starts × 5s = ~1.8h overhead vs 4.333 starts × 5s = ~6h com BATCH_SIZE=30.
+// Pico de RAM por batch: ~120MB (100 fotos × 1.2MB) — seguro em VPS com ≥2GB.
+const BATCH_SIZE = 100;
 const MAX_DURATION_MS = 170 * 60 * 1000; // 170 minutos
 
 // Sentinel gravado no banco para fotos sem rosto detectável ou sem arquivo.
@@ -96,6 +99,9 @@ async function runLoop(): Promise<void> {
   let skipped = 0;
   let errors = 0;
 
+  // Verifica pgvector uma vez antes do loop — é cacheado, mas evita chamada redundante a cada batch
+  const pvecAvail = await pgvectorAvailable();
+
   while (!stopFlag) {
     if (Date.now() - startTime >= MAX_DURATION_MS) {
       state.timedOut = true;
@@ -114,7 +120,6 @@ async function runLoop(): Promise<void> {
     const ids = records.map((r) => r.id);
     const results = await runIndexBatch(ids, uploadsDir);
 
-    const pvecAvail = await pgvectorAvailable();
     const updates: Promise<any>[] = [];
     for (const r of results) {
       if (r.done) continue;

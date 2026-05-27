@@ -183,7 +183,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Caminho em memória: varredura Float32Array (fallback) ──
-    const faceCache = await awaitFaceCache(50_000);
+    // maxDuration=60s → deixa 35s para análise Python + DB queries após o cache carregar
+    const faceCache = await awaitFaceCache(25_000);
     const { ids, vecs, count } = faceCache;
 
     const allMatchIds = new Set<string>();

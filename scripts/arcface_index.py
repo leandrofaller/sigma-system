@@ -20,6 +20,11 @@ warnings.filterwarnings('ignore')
 
 EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
 
+# Confiança mínima de detecção. Abaixo disso o embedding é pouco confiável
+# e polui o índice com vetores ruins → falsos positivos na busca.
+# RetinaFace: > 0.5 = confiável, 0.35-0.5 = marginal, < 0.35 = descarte.
+MIN_DET_SCORE = 0.35
+
 
 def find_photo(uploads_dir: str, id_: str) -> str | None:
     for ext in EXTENSIONS:
@@ -117,6 +122,17 @@ def main():
 
             # Melhor rosto = maior det_score (60%) + maior área (40%)
             best = best_face(faces)
+
+            # Descarta embeddings com confiança abaixo do mínimo — vetores ruins
+            # causam falsos positivos na busca e degradam a qualidade do índice.
+            if float(best.det_score) < MIN_DET_SCORE:
+                print(json.dumps({
+                    "id": id_,
+                    "no_face": True,
+                    "low_det_score": round(float(best.det_score), 4),
+                }), flush=True)
+                continue
+
             emb = best.normed_embedding.tolist()
 
             print(json.dumps({
