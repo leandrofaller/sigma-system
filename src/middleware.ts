@@ -90,6 +90,14 @@ export default auth((req) => {
     }
   }
 
+  // Redireciona /apenados para versão mobile quando acessado de celular
+  if (isLoggedIn && nextUrl.pathname === '/apenados' && nextUrl.searchParams.get('desktop') !== '1') {
+    const ua = req.headers.get('user-agent') || '';
+    if (MOBILE_UA_REGEX.test(ua)) {
+      return NextResponse.redirect(buildRedirect(req, '/apenados/mobile'));
+    }
+  }
+
   // Seta cookie de dispositivo em visitantes novos (pass-through com cookie)
   if (needsCookie) {
     const res = NextResponse.next();

@@ -65,6 +65,9 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate, onEditApenado
     return () => { document.body.style.overflow = ''; };
   }, []);
 
+  // Swipe gesture tracking
+  const touchStartX = useRef<number | null>(null);
+
   // Per-ID version map — persists across navigation so rotated photos stay updated
   const [photoVersions, setPhotoVersions] = useState<Map<string, number>>(() => new Map());
   const [rotating, setRotating] = useState(false);
@@ -234,6 +237,15 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate, onEditApenado
         className="relative flex flex-col rounded-2xl overflow-hidden shadow-2xl"
         style={{ maxWidth: 'min(640px, 95vw)', width: '100%', maxHeight: '92vh' }}
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+        onTouchEnd={(e) => {
+          if (touchStartX.current === null) return;
+          const delta = e.changedTouches[0].clientX - touchStartX.current;
+          touchStartX.current = null;
+          if (Math.abs(delta) < 50) return;
+          if (delta < 0 && hasNext) goNext();
+          if (delta > 0 && hasPrev) goPrev();
+        }}
       >
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 py-3 bg-gray-900/95">
