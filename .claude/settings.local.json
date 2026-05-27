@@ -66,7 +66,8 @@
       "PowerShell(cd f:\\\\relatorio_claude; npx tsc --noEmit 2>&1 > C:\\\\Temp\\\\tsc_out.txt; Get-Content C:\\\\Temp\\\\tsc_out.txt | Where-Object { $_ -notmatch \"\\\\.next\" })",
       "PowerShell(cd f:\\\\relatorio_claude; npx tsc --noEmit 2>&1 > \"$env:TEMP\\\\tsc_out.txt\"; Get-Content \"$env:TEMP\\\\tsc_out.txt\" | Where-Object { $_ -notmatch \"\\\\.next\" })",
       "PowerShell(cd f:\\\\relatorio_claude; npx tsc --noEmit 2>&1 | Out-File -FilePath \"$env:TEMP\\\\tsc_out.txt\" -Encoding utf8; Get-Content \"$env:TEMP\\\\tsc_out.txt\" | Where-Object { $_ -notmatch \"\\\\.next\" })",
-      "PowerShell(cd f:\\\\relatorio_claude; npx tsc --noEmit 2>&1 | Out-File \"$env:TEMP\\\\tsc_out.txt\" -Encoding utf8; if \\(Test-Path \"$env:TEMP\\\\tsc_out.txt\"\\) { Get-Content \"$env:TEMP\\\\tsc_out.txt\" | Where-Object { $_ -notmatch \"\\\\.next\" } } else { Write-Host \"file not found\" })"
+      "PowerShell(cd f:\\\\relatorio_claude; npx tsc --noEmit 2>&1 | Out-File \"$env:TEMP\\\\tsc_out.txt\" -Encoding utf8; if \\(Test-Path \"$env:TEMP\\\\tsc_out.txt\"\\) { Get-Content \"$env:TEMP\\\\tsc_out.txt\" | Where-Object { $_ -notmatch \"\\\\.next\" } } else { Write-Host \"file not found\" })",
+      "Bash(git pull *)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
