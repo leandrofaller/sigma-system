@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { formatDate } from '@/lib/utils';
 import { Printer } from 'lucide-react';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 interface FormData {
   number: string;
@@ -252,7 +253,7 @@ export function DebriefingPreview({ form }: Props) {
             if (!block.content) return null;
             const isHtml = block.content.trimStart().startsWith('<');
             return isHtml
-              ? <div key={i} className="tiptap-print-content" style={{ textAlign: 'justify', fontSize: '11pt', lineHeight: '1.6', marginBottom: '12px' }} dangerouslySetInnerHTML={{ __html: block.content }} />
+              ? <div key={i} className="tiptap-print-content" style={{ textAlign: 'justify', fontSize: '11pt', lineHeight: '1.6', marginBottom: '12px' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.content) }} />
               : <div key={i} style={para}>{block.content}</div>;
           }
           if (block.type === 'row') {

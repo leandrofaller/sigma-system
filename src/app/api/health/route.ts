@@ -1,15 +1,18 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getApenadosDir } from '@/lib/storage';
 import fs from 'fs';
 import path from 'path';
 
 export async function GET() {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
   const diagnostics: any = {
     status: 'ok',
     timestamp: new Date().toISOString(),
     env: {
-      UPLOAD_DIR: process.env.UPLOAD_DIR || null,
       NODE_ENV: process.env.NODE_ENV || null,
     },
   };
@@ -27,15 +30,13 @@ export async function GET() {
   try {
     const apenadosDir = getApenadosDir();
     diagnostics.apenadosDir = {
-      path: apenadosDir,
       exists: fs.existsSync(apenadosDir),
     };
 
     if (diagnostics.apenadosDir.exists) {
       const files = fs.readdirSync(apenadosDir);
       diagnostics.apenadosDir.fileCount = files.length;
-      diagnostics.apenadosDir.sampleFiles = files.slice(0, 10);
-      
+
       // Check write permission
       const testFile = path.join(apenadosDir, '.write-test-health');
       try {
@@ -53,4 +54,3 @@ export async function GET() {
   const statusCode = diagnostics.status === 'ok' ? 200 : 503;
   return NextResponse.json(diagnostics, { status: statusCode });
 }
-

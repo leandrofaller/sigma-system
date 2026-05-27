@@ -70,7 +70,17 @@
       "Bash(git pull *)",
       "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\" -Recurse -Directory -Name)",
       "Bash(Get-ChildItem -Path \"f:\\\\relatorio_claude\\\\src\" -Recurse -Directory)",
-      "Bash(xargs grep -l \"NextAuth\\\\|getServerSession\\\\|middleware\")"
+      "Bash(xargs grep -l \"NextAuth\\\\|getServerSession\\\\|middleware\")",
+      "Bash(xargs grep -l \"executeRawUnsafe\\\\|sql\\\\|queryRaw\\\\|prisma\\\\.\")",
+      "Bash(grep -r \"executeRawUnsafe\\\\|queryRaw\\\\|sql\\\\`\" src --include=\"*.ts\")",
+      "Bash(xargs head -50)",
+      "Bash(xargs grep -l \"formData\\\\|upload\\\\|file\")",
+      "Bash(xargs grep -l \"findMany\\\\|findFirst\")",
+      "Bash(xargs wc -l)",
+      "Bash(xargs grep -l \"authorization\\\\|groupId\\\\|role\")",
+      "Bash(xargs grep -L \"auth\\(\\)\")",
+      "Bash(npm list *)",
+      "PowerShell(git -C \"F:\\\\relatorio_claude\" ls-files .env)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

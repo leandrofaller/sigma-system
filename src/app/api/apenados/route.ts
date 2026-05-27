@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import type { Prisma } from '@prisma/client';
+import { z } from 'zod';
+
+const createApenadoSchema = z.object({
+  name: z.string().min(1).max(200),
+  matricula: z.string().max(50).optional().nullable(),
+  unidade: z.string().max(100).optional().nullable(),
+  faccao: z.string().max(100).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -56,11 +65,12 @@ export async function POST(req: NextRequest) {
 
   const user = session.user as any;
   const body = await req.json();
-  const { name, matricula, unidade, faccao, notes } = body;
-
-  if (!name?.trim()) {
-    return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
+  const parsed = createApenadoSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Dados inválidos', details: parsed.error.flatten() }, { status: 400 });
   }
+
+  const { name, matricula, unidade, faccao, notes } = parsed.data;
 
   const apenado = await prisma.apenado.create({
     data: {

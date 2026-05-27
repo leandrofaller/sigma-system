@@ -72,8 +72,8 @@ export async function queryAI(userId: string, query: string, context?: string): 
           generationConfig: { maxOutputTokens: 2000 },
         };
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, body: JSON.stringify(requestBody) }
     );
     if (!geminiRes.ok) {
       const errJson = await geminiRes.json().catch(() => ({}));

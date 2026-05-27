@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { unlink } from 'fs/promises';
-import { join } from 'path';
 import { getApenadoPhotoPath } from '@/lib/storage';
+import { z } from 'zod';
+
+const apenadoSchema = z.object({
+  name: z.string().min(1).max(200),
+  matricula: z.string().max(50).optional().nullable(),
+  unidade: z.string().max(100).optional().nullable(),
+  faccao: z.string().max(100).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -26,13 +34,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
+  const user = session.user as any;
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+  }
+
   const { id } = await params;
   const body = await req.json();
-  const { name, matricula, unidade, faccao, notes } = body;
-
-  if (!name?.trim()) {
-    return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 });
+  const parsed = apenadoSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Dados inválidos', details: parsed.error.flatten() }, { status: 400 });
   }
+
+  const { name, matricula, unidade, faccao, notes } = parsed.data;
 
   const apenado = await prisma.apenado.update({
     where: { id },
