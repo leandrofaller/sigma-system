@@ -713,7 +713,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                 <p className="text-sm text-subtle">{endingMission.title} — {endingMission.destination}</p>
               </div>
               {endingMission.startKm != null && (
-                <p className="text-xs text-subtle">KM Inicial: <span className="font-bold text-body">{endingMission.startKm.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
+                <p className="text-xs text-subtle">KM Inicial: <span className="font-bold text-body">{endingMission.startKm.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span></p>
               )}
               <FieldLabel>KM Final</FieldLabel>
               <input

@@ -583,7 +583,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                           </div>
                         ) : (
                           <span className="flex items-center gap-1.5 flex-wrap">
-                            <span>KM Inicial: <span className="font-bold">{viewingMission.startKm.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+                             <span>KM Inicial: <span className="font-bold">{viewingMission.startKm.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span></span>
                             {viewingMission.status === 'IN_PROGRESS' && (
                               <button
                                 onClick={() => setEditingStartKm({ open: true, value: String(viewingMission.startKm) })}
@@ -594,10 +594,10 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                               </button>
                             )}
                             {viewingMission.endKm != null && (
-                              <span> — KM Final: <span className="font-bold">{viewingMission.endKm.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+                               <span> — KM Final: <span className="font-bold">{viewingMission.endKm.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span></span>
                             )}
                             {viewingMission.endKm != null && (
-                              <span className="text-sigma-600">(Total: {(viewingMission.endKm - viewingMission.startKm).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km)</span>
+                               <span className="text-sigma-600">(Total: {(viewingMission.endKm - viewingMission.startKm).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} km)</span>
                             )}
                           </span>
                         )}
