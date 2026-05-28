@@ -200,13 +200,46 @@ async function login(page: Page, unidadeId: string): Promise<boolean> {
     )
   }
 
-  // Seleciona perfil e unidade
-  // Usa .nth() em vez de :first-of-type / :last-of-type — os dois <select> ficam
-  // em <div> diferentes, então cada um é "last-of-type" dentro do seu pai e o
-  // seletor CSS resolve para 2 elementos, causando timeout.
-  await page.locator('select').nth(0).waitFor({ state: 'visible', timeout: 10_000 })
-  await page.locator('select').nth(0).selectOption(SIPE_PERFIL)
-  await page.locator('select').nth(1).selectOption(unidadeId)
+  // Wait for selects to be attached in the DOM
+  await page.locator('select').nth(0).waitFor({ state: 'attached', timeout: 10_000 })
+  await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 10_000 })
+
+  // Select profile via page.evaluate to bypass Chosen hiding the select element
+  await page.evaluate((perfil) => {
+    const selects = document.querySelectorAll('select')
+    const selectPerfil = selects[0] as HTMLSelectElement
+    if (selectPerfil) {
+      selectPerfil.value = perfil
+      selectPerfil.dispatchEvent(new Event('change', { bubbles: true }))
+      const w = window as any
+      if (w.$) {
+        try {
+          w.$(selectPerfil).trigger('chosen:updated')
+          w.$(selectPerfil).trigger('change')
+        } catch {}
+      }
+    }
+  }, SIPE_PERFIL)
+
+  // Give Chosen/AJAX a brief moment to update
+  await page.waitForTimeout(1000)
+
+  // Select unit via page.evaluate
+  await page.evaluate((unidade) => {
+    const selects = document.querySelectorAll('select')
+    const selectUnidade = selects[1] as HTMLSelectElement
+    if (selectUnidade) {
+      selectUnidade.value = unidade
+      selectUnidade.dispatchEvent(new Event('change', { bubbles: true }))
+      const w = window as any
+      if (w.$) {
+        try {
+          w.$(selectUnidade).trigger('chosen:updated')
+          w.$(selectUnidade).trigger('change')
+        } catch {}
+      }
+    }
+  }, unidadeId)
 
   const submitBtn2 =
     (await page.$('button[type="submit"]')) ??

@@ -7,7 +7,7 @@ import {
   detectAndMarkCrashedJobs,
 } from '@/lib/sipe-scraper'
 
-export const UNIDADES: Record<string, string> = {
+const UNIDADES: Record<string, string> = {
   '3': 'CENTRO DE DETENÇÃO PROVISÓRIO DE PORTO VELHO - CDPPVH',
   '1': 'PENITENCIÁRIA ESTADUAL EDVAN MARIANO ROSENDO - PANDA',
   '5': 'PENITENCIÁRIA ESTADUAL SUELY MARIA MENDONÇA',
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   await detectAndMarkCrashedJobs()
 
   // Parse body safely (allow empty body)
-  let body = {}
+  let body: { unidadeId?: string; tipo?: string; resumeJobId?: string } = {}
   try {
     const contentLength = req.headers.get('content-length')
     if (contentLength && parseInt(contentLength) > 0) {
