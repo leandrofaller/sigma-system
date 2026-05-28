@@ -876,11 +876,14 @@ async function scrapeApenadoFicha(page: Page, sipeId: number): Promise<void> {
     });
 
     if (photoSrc) {
+      // Remove o sufixo _fotoUsuario da URL para baixar a imagem original sem o filtro/marca d'água do SIPE
+      const cleanPhotoSrc = photoSrc.replace('_fotoUsuario', '');
+
       let base64Data: string | null = null;
-      if (photoSrc.startsWith('data:image/')) {
-        base64Data = photoSrc;
+      if (cleanPhotoSrc.startsWith('data:image/')) {
+        base64Data = cleanPhotoSrc;
       } else {
-        const absoluteUrl = new URL(photoSrc, page.url()).href;
+        const absoluteUrl = new URL(cleanPhotoSrc, page.url()).href;
         base64Data = await page.evaluate(async (url) => {
           try {
             const res = await fetch(url);
