@@ -549,7 +549,7 @@ async function coletarIdsApenados(
   // Consulta o objeto DataTables diretamente na memória da página.
   // Em modo client-side, dt.rows() retorna TODAS as linhas independente de paginação.
   // Em modo server-side, retorna apenas a página atual (estratégia B cobre esse caso).
-  const idsViaApi = await page.evaluate(() => {
+  const apenadosViaApi = await page.evaluate(() => {
     try {
       const w = window as any
       // Suporte a DataTables 1.x (fnTables) e 2.x (tables())
@@ -557,26 +557,48 @@ async function coletarIdsApenados(
         w.$.fn?.dataTable?.fnTables?.(true) ??
         w.DataTable?.tables?.({ visible: true, hidden: false }) ??
         []
-      if (!tables.length) return [] as number[]
+      if (!tables.length) return []
       const dt = w.$(tables[0]).DataTable()
       
       // Se a tabela possuir mais de uma página, significa que está paginada no servidor.
       // Nesse caso, a Estratégia A em memória não obterá todos os dados; abortamos para ir para a B ou C.
       const info = dt.page.info()
       if (info.pages > 1) {
-        return [] as number[]
+        return []
       }
+
+      // Descobre os índices de código e cela na tabela
+      const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
+      const codigoIndex = headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD'
+      })
+      const celaIndex = headers.findIndex(h => (h.textContent ?? '').toUpperCase().trim() === 'CELA')
 
       const data: any[] = dt.rows().data().toArray()
       return data
-        .map((row: any) => parseInt(Array.isArray(row) ? row[0] : (row.id ?? row.sipeId ?? '')))
-        .filter((id: number) => !isNaN(id) && id > 0)
-    } catch { return [] as number[] }
-  }).catch(() => [] as number[])
+        .map((row: any) => {
+          let id = NaN
+          let cela = ''
+          if (Array.isArray(row)) {
+            id = parseInt(row[codigoIndex >= 0 ? codigoIndex : 0])
+            if (celaIndex >= 0) cela = (row[celaIndex] ?? '').toString().trim()
+          } else if (row) {
+            id = parseInt(row.id ?? row.sipeId ?? '')
+            cela = (row.cela ?? '').toString().trim()
+          }
+          return { id, cela }
+        })
+        .filter(item => !isNaN(item.id) && item.id > 0)
+    } catch { return [] }
+  }).catch(() => [])
 
-  if (idsViaApi.length > 0) {
-    log(jobId, `⚡ Estratégia A (DataTables JS API): ${idsViaApi.length} IDs`)
-    return [...new Set(idsViaApi as number[])]
+  if (apenadosViaApi.length > 0) {
+    log(jobId, `⚡ Estratégia A (DataTables JS API): ${apenadosViaApi.length} IDs`)
+    for (const item of apenadosViaApi) {
+      if (item.cela) listagemInfoCache.set(item.id, { cela: item.cela })
+    }
+    return [...new Set(apenadosViaApi.map(item => item.id))]
   }
 
   log(jobId, '⚠️ Estratégia A sem resultado — tentando estratégia B (fetch direto paginado)')
@@ -584,16 +606,24 @@ async function coletarIdsApenados(
   // ── Estratégia B: fetch direto com cookies de sessão (paginado em lotes) ──
   // Obtém a URL AJAX do DataTables e realiza requisições de API sequenciais em lotes
   // para burlar o limite do servidor, sendo infinitamente mais rápido que clicks no DOM.
-  const idsViaFetch = await page.evaluate(async (baseUrl: string) => {
+  const apenadosViaFetch = await page.evaluate(async (baseUrl: string) => {
     try {
       const w = window as any
       const tables: Element[] = w.$.fn?.dataTable?.fnTables?.(true) ?? []
-      if (!tables.length) return [] as number[]
+      if (!tables.length) return []
       const dt = w.$(tables[0]).DataTable()
       const settings = dt.settings()[0]
       const rawUrl: string = settings?.ajax?.url ?? settings?.ajax ?? settings?.sAjaxSource ?? ''
-      if (!rawUrl) return [] as number[]
+      if (!rawUrl) return []
       const ajaxUrl = rawUrl.startsWith('http') ? rawUrl : baseUrl + rawUrl
+
+      // Descobre os índices de código e cela na tabela
+      const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
+      const codigoIndex = headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD'
+      })
+      const celaIndex = headers.findIndex(h => (h.textContent ?? '').toUpperCase().trim() === 'CELA')
 
       let allRows: any[] = []
       let start = 0
@@ -636,14 +666,28 @@ async function coletarIdsApenados(
       }
 
       return allRows
-        .map((r: any) => parseInt(Array.isArray(r) ? r[0] : (r.id ?? r.sipeId ?? '')))
-        .filter((id: number) => !isNaN(id) && id > 0)
-    } catch { return [] as number[] }
-  }, SIPE_URL).catch(() => [] as number[])
+        .map((row: any) => {
+          let id = NaN
+          let cela = ''
+          if (Array.isArray(row)) {
+            id = parseInt(row[codigoIndex >= 0 ? codigoIndex : 0])
+            if (celaIndex >= 0) cela = (row[celaIndex] ?? '').toString().trim()
+          } else if (row) {
+            id = parseInt(row.id ?? row.sipeId ?? '')
+            cela = (row.cela ?? '').toString().trim()
+          }
+          return { id, cela }
+        })
+        .filter(item => !isNaN(item.id) && item.id > 0)
+    } catch { return [] }
+  }, SIPE_URL).catch(() => [])
 
-  if (idsViaFetch.length > 0) {
-    log(jobId, `⚡ Estratégia B (fetch direto paginado): ${idsViaFetch.length} IDs`)
-    return [...new Set(idsViaFetch as number[])]
+  if (apenadosViaFetch.length > 0) {
+    log(jobId, `⚡ Estratégia B (fetch direto paginado): ${apenadosViaFetch.length} IDs`)
+    for (const item of apenadosViaFetch) {
+      if (item.cela) listagemInfoCache.set(item.id, { cela: item.cela })
+    }
+    return [...new Set(apenadosViaFetch.map(item => item.id))]
   }
 
   log(jobId, '⚠️ Estratégia B sem resultado — usando estratégia C (DOM + paginação)')
@@ -825,6 +869,20 @@ async function scrapeApenadoFicha(
       return el?.options[el.selectedIndex]?.text?.trim() || null
     }
 
+    // Busca textual de contingência para cela e unidade no corpo da página (caso o cache da listagem falhe)
+    const bodyText = document.body?.innerText || ''
+    let celaFicha = null
+    const celaMatch = bodyText.match(/Cela:\s*([^\n]+)/i) || bodyText.match(/Cela\s*-\s*([^\n]+)/i)
+    if (celaMatch) {
+      celaFicha = celaMatch[1].trim()
+    }
+
+    let unidadeFicha = null
+    const unidadeMatch = bodyText.match(/Unidade:\s*([^\n]+)/i) || bodyText.match(/Estabelecimento:\s*([^\n]+)/i) || bodyText.match(/Unidade\s*Prisional:\s*([^\n]+)/i)
+    if (unidadeMatch) {
+      unidadeFicha = unidadeMatch[1].trim()
+    }
+
     return {
       nome: val('nomeapenado'),
       nomeOutro: val('nomefalso'),
@@ -860,6 +918,8 @@ async function scrapeApenadoFicha(
           (document.querySelector('[name="faccao_id"]') as HTMLInputElement)
             ?.value || '0'
         ) || null,
+      celaFicha,
+      unidadeFicha,
     }
   })
 
@@ -953,8 +1013,9 @@ async function scrapeApenadoFicha(
     // Falha silenciosa de foto
   }
 
-  // Recupera cela do cache obtido na listagem
-  const cela = listagemInfoCache.get(sipeId)?.cela ?? null;
+  // Recupera cela do cache obtido na listagem (prioridade) ou tenta ler do corpo do perfil
+  const cela = listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? null;
+  const unidade = unidadeNome ?? dados.unidadeFicha ?? null;
 
   const upsertData = {
     nome: dados.nome || 'SEM NOME',
@@ -988,7 +1049,7 @@ async function scrapeApenadoFicha(
     oficioEntrada: dados.oficioEntrada,
     faccaoId,
     photoPath,
-    unidade: unidadeNome || undefined,
+    unidade: unidade || undefined,
     cela: cela || undefined,
     ultimaSyncAt: new Date(),
   }
