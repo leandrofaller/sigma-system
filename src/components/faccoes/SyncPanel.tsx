@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
   RefreshCw, Play, CheckCircle, XCircle, Clock,
-  AlertCircle, RotateCcw, Pause, Wifi, WifiOff, Trash2,
+  AlertCircle, RotateCcw, Pause, Wifi, WifiOff, Trash2, ShieldAlert,
 } from 'lucide-react'
 
 const UNIDADES = [
@@ -176,6 +176,8 @@ export function SyncPanel() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [confirmClearAll, setConfirmClearAll] = useState(false)
+  const [clearingAll, setClearingAll] = useState(false)
 
   const fetchJobs = useCallback(async () => {
     const res = await fetch('/api/sipe/sync')
@@ -257,6 +259,28 @@ export function SyncPanel() {
       toast.error('Erro de conexão')
     } finally {
       setClearing(false)
+    }
+  }
+
+  const clearAllData = async () => {
+    setClearingAll(true)
+    try {
+      const res = await fetch('/api/sipe/clear-all', { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Erro ao limpar dados')
+        return
+      }
+      const { deletados } = data
+      toast.success(
+        `Dados removidos: ${deletados.apenados} apenados, ${deletados.advogados} advogados, ${deletados.faccoes} facções`
+      )
+      setConfirmClearAll(false)
+      fetchJobs()
+    } catch {
+      toast.error('Erro de conexão')
+    } finally {
+      setClearingAll(false)
     }
   }
 
@@ -486,6 +510,59 @@ export function SyncPanel() {
             )
           })}
         </div>
+      </div>
+
+      {/* Zona de Risco — apenas Superadmin */}
+      <div className="bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-200 dark:border-red-900/40 p-5">
+        <div className="flex items-start gap-3 mb-4">
+          <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">Zona de Risco</h3>
+            <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+              Esta ação apaga permanentemente <strong>todos</strong> os dados sincronizados do SIPE — apenados, facções, advogados, processos, históricos e o histórico de sincronizações. Use somente para resetar a base antes de uma nova sincronização completa.
+            </p>
+          </div>
+        </div>
+
+        {confirmClearAll ? (
+          <div className="bg-white dark:bg-gray-900 border border-red-300 dark:border-red-800 rounded-lg p-4 space-y-3">
+            <p className="text-sm font-medium text-red-700 dark:text-red-300">
+              Tem certeza? Esta ação <strong>não pode ser desfeita</strong>.
+            </p>
+            <p className="text-xs text-red-600 dark:text-red-400">
+              Todos os dados do SIPE serão removidos permanentemente do banco de dados.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={clearAllData}
+                disabled={clearingAll || isActive}
+                className="flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-800 disabled:bg-gray-400 text-white rounded-lg text-sm font-bold transition-colors"
+              >
+                {clearingAll ? (
+                  <><RefreshCw className="w-4 h-4 animate-spin" /> Limpando...</>
+                ) : (
+                  <><Trash2 className="w-4 h-4" /> Sim, apagar tudo</>
+                )}
+              </button>
+              <button
+                onClick={() => setConfirmClearAll(false)}
+                disabled={clearingAll}
+                className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmClearAll(true)}
+            disabled={isActive}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            Limpar todos os dados do SIPE
+          </button>
+        )}
       </div>
     </div>
   )

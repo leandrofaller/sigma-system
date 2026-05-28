@@ -800,7 +800,7 @@ async function scrapeAdvogados(page: Page, jobId: string): Promise<void> {
 
   const links = await page.$$eval(
     'tbody a[href*="/detalhaclientes"]',
-    (els) =>
+    (els: Element[]) =>
       (els as HTMLAnchorElement[]).map((el) => ({
         href: el.getAttribute('href'),
         id: el.href.match(/\/advogados\/(\d+)\//)?.[1],
@@ -894,7 +894,7 @@ export async function scrapeFaccoes(): Promise<void> {
 
     const options = await page.$$eval(
       'select option',
-      (opts) =>
+      (opts: Element[]) =>
         (opts as HTMLOptionElement[])
           .filter((o) => o.value && o.value !== '0' && o.value !== '')
           .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
