@@ -425,13 +425,13 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
       try {
         await withRetry(async () => {
           try {
-            await scrapeApenadoFicha(page, sipeId)
+            await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
           } catch (err: any) {
             if (err?.message === 'SESSAO_EXPIRADA') {
               log(jobId, 'Sessão expirada detectada. Re-autenticando no SIPE...')
               await login(page, unidadeId)
               // Retry loading the profile after logging back in
-              await scrapeApenadoFicha(page, sipeId)
+              await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
             } else {
               throw err
             }
@@ -513,6 +513,9 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   }
   throw new Error('unreachable')
 }
+
+// Cache temporário para associar dados coletados da listagem geral aos apenados
+const listagemInfoCache = new Map<number, { cela?: string }>()
 
 // ── ID collection ─────────────────────────────────────────────
 
@@ -656,6 +659,9 @@ async function coletarIdsApenados(
   }).catch(() => {})
   await page.waitForTimeout(1500)
 
+  // Limpa o cache a cada nova coleta
+  listagemInfoCache.clear()
+
   // Descobre dinamicamente qual coluna se refere ao código do apenado (SIPE ID)
   const codigoColIndex = await page.evaluate(() => {
     try {
@@ -668,7 +674,18 @@ async function coletarIdsApenados(
     } catch { return 0 }
   }).catch(() => 0)
 
+  // Descobre dinamicamente qual coluna se refere à cela do apenado
+  const celaColIndex = await page.evaluate(() => {
+    try {
+      const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
+      return headers.findIndex(h => (h.textContent ?? '').toUpperCase().trim() === 'CELA')
+    } catch { return -1 }
+  }).catch(() => -1)
+
   log(jobId, `🔍 Identificada coluna de IDs na posição (0-index): ${codigoColIndex}`)
+  if (celaColIndex >= 0) {
+    log(jobId, `🔍 Identificada coluna de CELA na posição (0-index): ${celaColIndex}`)
+  }
 
   const ids = new Set<number>()
 
@@ -678,10 +695,21 @@ async function coletarIdsApenados(
     for (const row of rows) {
       const cells = await row.$$('td, th')
       if (cells.length <= codigoColIndex) continue
-      const cell = cells[codigoColIndex]
-      if (!cell) continue
-      const id = parseInt((await cell.innerText()).trim())
-      if (!isNaN(id)) ids.add(id)
+      
+      const idCell = cells[codigoColIndex]
+      if (!idCell) continue
+      const id = parseInt((await idCell.innerText()).trim())
+      if (isNaN(id)) continue
+
+      ids.add(id)
+
+      // Salva a cela correspondente no cache em memória
+      if (celaColIndex >= 0 && cells.length > celaColIndex) {
+        const celaText = (await cells[celaColIndex].innerText()).trim()
+        if (celaText) {
+          listagemInfoCache.set(id, { cela: celaText })
+        }
+      }
     }
   }
 
@@ -744,7 +772,11 @@ async function coletarIdsApenados(
 
 // ── Ficha scraping ────────────────────────────────────────────
 
-async function scrapeApenadoFicha(page: Page, sipeId: number): Promise<void> {
+async function scrapeApenadoFicha(
+  page: Page,
+  sipeId: number,
+  unidadeNome?: string | null
+): Promise<void> {
   const response = await page.goto(`${SIPE_URL}/apenados/${sipeId}/editar`, {
     waitUntil: 'domcontentloaded',
     timeout: 45_000,
@@ -921,6 +953,9 @@ async function scrapeApenadoFicha(page: Page, sipeId: number): Promise<void> {
     // Falha silenciosa de foto
   }
 
+  // Recupera cela do cache obtido na listagem
+  const cela = listagemInfoCache.get(sipeId)?.cela ?? null;
+
   const upsertData = {
     nome: dados.nome || 'SEM NOME',
     nomeOutro: dados.nomeOutro,
@@ -953,6 +988,8 @@ async function scrapeApenadoFicha(page: Page, sipeId: number): Promise<void> {
     oficioEntrada: dados.oficioEntrada,
     faccaoId,
     photoPath,
+    unidade: unidadeNome || undefined,
+    cela: cela || undefined,
     ultimaSyncAt: new Date(),
   }
 
