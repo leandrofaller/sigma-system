@@ -119,6 +119,8 @@ function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; onClick:
 }
 
 function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; onClose: () => void }) {
+  const [isZoomed, setIsZoomed] = useState(false)
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -126,7 +128,12 @@ function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; onClose
           <div className="flex items-start justify-between gap-4">
             <div className="flex gap-4 items-center">
               {/* Foto grande */}
-              <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-red-400 to-red-600 shadow-md flex items-center justify-center text-white font-bold text-3xl">
+              <div
+                onClick={() => apenado.photoPath && setIsZoomed(true)}
+                className={`w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-red-400 to-red-600 shadow-md flex items-center justify-center text-white font-bold text-4xl select-none ${
+                  apenado.photoPath ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all' : ''
+                }`}
+              >
                 {apenado.photoPath ? (
                   <img
                     src={`/api/sipe/apenados/${apenado.id}/foto`}
@@ -244,6 +251,34 @@ function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; onClose
           )}
         </div>
       </div>
+
+      {/* Lightbox para zoom da imagem */}
+      {isZoomed && apenado.photoPath && (
+        <div
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md cursor-zoom-out p-4"
+          onClick={() => setIsZoomed(false)}
+        >
+          <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
+            <img
+              src={`/api/sipe/apenados/${apenado.id}/foto`}
+              alt={apenado.nome}
+              className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl border border-gray-800"
+            />
+            <div className="bg-black/60 text-white px-4 py-2 rounded-full text-sm font-semibold backdrop-blur-sm">
+              {apenado.nome}
+            </div>
+            <button
+              className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white p-2 rounded-full transition-colors backdrop-blur-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsZoomed(false)
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
