@@ -379,105 +379,109 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
     log(jobId, 'Login realizado com sucesso')
 
     // ── Phase 1: collect IDs (or load from checkpoint) ────────
-    let ids: number[]
-
-    if (job.idsColetados) {
-      // Resume: reuse previously collected list
-      ids = JSON.parse(job.idsColetados) as number[]
-      // Determine which IDs remain (after cursor)
-      const cursor = job.ultimoIdProcessado ?? null
-      if (cursor !== null) {
-        const cursorIndex = ids.indexOf(cursor)
-        ids = cursorIndex >= 0 ? ids.slice(cursorIndex + 1) : ids
-      }
-      const alreadyDone = (job.processado ?? 0)
-      refreshMemory(jobId, {
-        fase: 'Retomando scraping de apenados...',
-        total: (JSON.parse(job.idsColetados) as number[]).length,
-        processado: alreadyDone,
-        ultimoLog: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
-      })
-      await dbProgress(jobId, {
-        log: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
-        fase: 'Retomando',
-      })
+    if (job.tipo === 'ADVOGADOS') {
+      log(jobId, 'Modo específico: Scraping apenas de Advogados + Atendimentos')
     } else {
-      // Fresh start: collect all IDs
-      refreshMemory(jobId, { fase: 'Coletando lista de apenados...' })
-      await dbProgress(jobId, { fase: 'Coletando IDs', log: 'Coletando lista de apenados...' })
+      let ids: number[]
 
-      ids = await coletarIdsApenados(page, unidadeId, jobId, job.unidadeNome)
-
-      // Persist checkpoint
-      await dbProgress(jobId, {
-        idsColetados: JSON.stringify(ids),
-        total: ids.length,
-        log: `${ids.length} apenados encontrados — iniciando scraping`,
-        fase: 'Scraping apenados',
-      })
-      refreshMemory(jobId, {
-        total: ids.length,
-        fase: 'Scraping apenados',
-        ultimoLog: `${ids.length} apenados encontrados`,
-      })
-    }
-
-    // ── Phase 2: scrape each profile ──────────────────────────
-    let lastProcessedId: number | undefined
-    for (const sipeId of ids) {
-      if (globalThis.__sipeStopFlag) {
-        await dbProgress(jobId, {
-          status: 'INTERRUPTED',
-          finalizadoEm: new Date(),
-          log: 'Sincronização interrompida pelo usuário',
+      if (job.idsColetados) {
+        // Resume: reuse previously collected list
+        ids = JSON.parse(job.idsColetados) as number[]
+        // Determine which IDs remain (after cursor)
+        const cursor = job.ultimoIdProcessado ?? null
+        if (cursor !== null) {
+          const cursorIndex = ids.indexOf(cursor)
+          ids = cursorIndex >= 0 ? ids.slice(cursorIndex + 1) : ids
+        }
+        const alreadyDone = (job.processado ?? 0)
+        refreshMemory(jobId, {
+          fase: 'Retomando scraping de apenados...',
+          total: (JSON.parse(job.idsColetados) as number[]).length,
+          processado: alreadyDone,
+          ultimoLog: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
         })
-        refreshMemory(jobId, { status: 'INTERRUPTED' })
-        return
+        await dbProgress(jobId, {
+          log: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
+          fase: 'Retomando',
+        })
+      } else {
+        // Fresh start: collect all IDs
+        refreshMemory(jobId, { fase: 'Coletando lista de apenados...' })
+        await dbProgress(jobId, { fase: 'Coletando IDs', log: 'Coletando lista de apenados...' })
+
+        ids = await coletarIdsApenados(page, unidadeId, jobId, job.unidadeNome)
+
+        // Persist checkpoint
+        await dbProgress(jobId, {
+          idsColetados: JSON.stringify(ids),
+          total: ids.length,
+          log: `${ids.length} apenados encontrados — iniciando scraping`,
+          fase: 'Scraping apenados',
+        })
+        refreshMemory(jobId, {
+          total: ids.length,
+          fase: 'Scraping apenados',
+          ultimoLog: `${ids.length} apenados encontrados`,
+        })
       }
 
-      try {
-        await withRetry(async () => {
-          try {
-            await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
-          } catch (err: any) {
-            if (err?.message === 'SESSAO_EXPIRADA') {
-              log(jobId, 'Sessão expirada detectada. Re-autenticando no SIPE...')
-              await login(page, unidadeId)
-              // Retry loading the profile after logging back in
+      // ── Phase 2: scrape each profile ──────────────────────────
+      let lastProcessedId: number | undefined
+      for (const sipeId of ids) {
+        if (globalThis.__sipeStopFlag) {
+          await dbProgress(jobId, {
+            status: 'INTERRUPTED',
+            finalizadoEm: new Date(),
+            log: 'Sincronização interrompida pelo usuário',
+          })
+          refreshMemory(jobId, { status: 'INTERRUPTED' })
+          return
+        }
+
+        try {
+          await withRetry(async () => {
+            try {
               await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
-            } else {
-              throw err
+            } catch (err: any) {
+              if (err?.message === 'SESSAO_EXPIRADA') {
+                log(jobId, 'Sessão expirada detectada. Re-autenticando no SIPE...')
+                await login(page, unidadeId)
+                // Retry loading the profile after logging back in
+                await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
+              } else {
+                throw err
+              }
             }
-          }
-        })
-        lastProcessedId = sipeId
-        globalThis.__sipeState!.processado++
-        globalThis.__sipeState!.pct = globalThis.__sipeState!.total
-          ? Math.round(
-              (globalThis.__sipeState!.processado / globalThis.__sipeState!.total) * 100
-            )
-          : 0
+          })
+          lastProcessedId = sipeId
+          globalThis.__sipeState!.processado++
+          globalThis.__sipeState!.pct = globalThis.__sipeState!.total
+            ? Math.round(
+                (globalThis.__sipeState!.processado / globalThis.__sipeState!.total) * 100
+              )
+            : 0
 
-        // Persiste cursor a cada registro para recovery sem perda em crash/restart
-        await dbProgress(jobId, {
-          processado: globalThis.__sipeState!.processado,
-          ultimoIdProcessado: sipeId,
-        })
-        // Polite delay
-        await page.waitForTimeout(300 + Math.random() * 500)
-      } catch (err) {
-        globalThis.__sipeState!.erros++
-        const msg = `Erro apenado #${sipeId} (após 3 tentativas): ${err}`
-        globalThis.__sipeState!.ultimoLog = msg
-        await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
+          // Persiste cursor a cada registro para recovery sem perda em crash/restart
+          await dbProgress(jobId, {
+            processado: globalThis.__sipeState!.processado,
+            ultimoIdProcessado: sipeId,
+          })
+          // Polite delay
+          await page.waitForTimeout(300 + Math.random() * 500)
+        } catch (err) {
+          globalThis.__sipeState!.erros++
+          const msg = `Erro apenado #${sipeId} (após 3 tentativas): ${err}`
+          globalThis.__sipeState!.ultimoLog = msg
+          await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
+        }
       }
-    }
 
-    // Final cursor flush — use the actual last processed ID, not ids[last]
-    await dbProgress(jobId, {
-      processado: globalThis.__sipeState!.processado,
-      ...(lastProcessedId !== undefined ? { ultimoIdProcessado: lastProcessedId } : {}),
-    })
+      // Final cursor flush — use the actual last processed ID, not ids[last]
+      await dbProgress(jobId, {
+        processado: globalThis.__sipeState!.processado,
+        ...(lastProcessedId !== undefined ? { ultimoIdProcessado: lastProcessedId } : {}),
+      })
+    }
 
     // ── Phase 3: advogados ────────────────────────────────────
     refreshMemory(jobId, { fase: 'Scraping advogados...' })
@@ -486,8 +490,9 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
 
     // ── Done ──────────────────────────────────────────────────
     const summary =
-      `Concluído: ${globalThis.__sipeState!.processado} apenados processados, ` +
-      `${globalThis.__sipeState!.erros} erros`
+      job.tipo === 'ADVOGADOS'
+        ? `Concluído: Sincronização de advogados realizada com sucesso, ${globalThis.__sipeState!.erros} erros`
+        : `Concluído: ${globalThis.__sipeState!.processado} apenados processados, ${globalThis.__sipeState!.erros} erros`
 
     globalThis.__sipeState = {
       ...globalThis.__sipeState!,
@@ -1298,16 +1303,42 @@ async function scrapeAdvogados(page: Page, jobId: string): Promise<void> {
 
   log(jobId, `Advogados encontrados para detalhamento: ${linksDetails.length}`)
   if (globalThis.__sipeState) {
-    globalThis.__sipeState.fase = `Scraping advogados (${linksDetails.length})`
+    globalThis.__sipeState.fase = 'Sincronizando advogados...'
+    globalThis.__sipeState.total = linksDetails.length
+    globalThis.__sipeState.processado = 0
+    globalThis.__sipeState.pct = 0
   }
+  await dbProgress(jobId, {
+    total: linksDetails.length,
+    processado: 0,
+  })
 
+  let idx = 0
   for (const link of linksDetails) {
     if (!link.href || !link.id || globalThis.__sipeStopFlag) continue
     try {
       await scrapeAdvogadoDetalhe(page, parseInt(link.id))
+      idx++
+      if (globalThis.__sipeState) {
+        globalThis.__sipeState.processado = idx
+        globalThis.__sipeState.pct = Math.round((idx / linksDetails.length) * 100)
+      }
+      await dbProgress(jobId, {
+        processado: idx,
+      })
       await page.waitForTimeout(200 + Math.random() * 300)
     } catch (err) {
-      log(jobId, `Erro advogado #${link.id}: ${err}`)
+      if (globalThis.__sipeState) {
+        globalThis.__sipeState.erros++
+      }
+      const msg = `Erro advogado #${link.id}: ${err}`
+      if (globalThis.__sipeState) {
+        globalThis.__sipeState.ultimoLog = msg
+      }
+      await dbProgress(jobId, {
+        erros: globalThis.__sipeState?.erros ?? undefined,
+        log: msg
+      })
     }
   }
 }

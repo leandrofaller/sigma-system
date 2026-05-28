@@ -114,6 +114,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
+  // ── Advogados-only sync ──
+  if (tipo === 'ADVOGADOS') {
+    const job = await prisma.sipeSyncJob.create({
+      data: {
+        tipo: 'ADVOGADOS',
+        unidade: unidadeId,
+        unidadeNome,
+        status: 'RUNNING',
+        iniciadoEm: new Date(),
+        criadoPor: session.user.id,
+      },
+    })
+
+    startSipeSync(job.id, unidadeId)
+    return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
+  }
+
   // ── Full apenados + advogados sync ──
   const job = await prisma.sipeSyncJob.create({
     data: {
