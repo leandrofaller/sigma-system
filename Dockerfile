@@ -29,19 +29,15 @@ RUN SHARP_VER=$(node -p "require('./sharp_pkg.json').version") && \
 # Stage 3: Runner — Debian slim com Python/InsightFace (glibc, compativel com wheels Python)
 FROM node:20-slim AS runner
 
+# Ferramentas gerais + dependências de sistema do Chromium headless (Playwright)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssl \
-    gosu \
-    postgresql-client \
-    zip \
-    python3 \
-    python3-venv \
-    python3-dev \
-    build-essential \
-    cmake \
-    libglib2.0-0 \
-    tesseract-ocr \
-    tesseract-ocr-por \
+    openssl gosu postgresql-client zip \
+    python3 python3-venv python3-dev build-essential cmake \
+    libglib2.0-0 tesseract-ocr tesseract-ocr-por \
+    libgbm1 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+    libcups2 libdbus-1-3 libdrm2 libxcomposite1 libxdamage1 \
+    libxfixes3 libxkbcommon0 libxrandr2 libxtst6 libxshmfence1 \
+    libasound2t64 fonts-liberation libvulkan1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -49,7 +45,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN groupadd --system --gid 1001 nodejs && \
-    useradd --system --uid 1001 --gid nodejs nextjs
+    useradd --system --uid 1001 --gid nodejs nextjs && \
+    mkdir -p /home/nextjs && chown 1001:1001 /home/nextjs
 
 # ARG force-invalida cache do registry (muda o valor para rebustar)
 ARG PIP_CACHE_BUST=2026-05-20a
@@ -84,6 +81,15 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
+
+# Garante que o pacote completo do playwright (incluindo cli.js) está disponível
+# O standalone do Next.js rastreia apenas arquivos importados — cli.js não é importado
+COPY --from=builder /app/node_modules/playwright ./node_modules/playwright
+COPY --from=builder /app/node_modules/playwright-core ./node_modules/playwright-core
+
+# Baixa o binário do Chromium como usuário nextjs — corresponde ao caminho em runtime:
+# /home/nextjs/.cache/ms-playwright/
+RUN HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium
 
 # Copia o Prisma client e CLI completos para o runner
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
