@@ -453,18 +453,32 @@ async function coletarIdsApenados(
     waitUntil: 'networkidle',
   })
 
-  // Show all rows
-  try {
-    const selectValue = await page.inputValue('select[name*="DataTables_Table"]').catch(() => null)
-    log(jobId, `🔍 SELECT DataTables encontrado, valor atual: ${selectValue}`)
-  } catch {
-    log(jobId, `⚠️ Não conseguiu ler valor do select DataTables`)
+  // Try to show more rows - test multiple values
+  const rowsToShow = ['-1', '100', '500', '1000', '10000']
+  let rowsFound = 0
+  let selectedValue = '-1'
+
+  for (const value of rowsToShow) {
+    try {
+      await page.selectOption('select[name*="DataTables_Table"]', value).catch(() => {})
+      await page.waitForTimeout(800)
+
+      const testRows = await page.$$('table tbody tr')
+      rowsFound = testRows.length
+
+      log(jobId, `🔄 Testado select=${value}: ${rowsFound} linhas encontradas`)
+
+      if (rowsFound > 10) {
+        selectedValue = value
+        log(jobId, `✅ Select ${value} funcionou! ${rowsFound} linhas encontradas`)
+        break
+      }
+    } catch (err) {
+      log(jobId, `⚠️ Erro ao testar select=${value}`)
+    }
   }
 
-  await page
-    .selectOption('select[name*="DataTables_Table"]', '-1')
-    .catch(() => {})
-  await page.waitForTimeout(1000)
+  log(jobId, `🎯 Usando select=${selectedValue} com ${rowsFound} linhas`)
 
   const extractIds = async () => {
     const rows = await page.$$('table tbody tr')
