@@ -20,6 +20,9 @@
 import { chromium, Browser, BrowserContext, Page } from 'playwright'
 import { existsSync } from 'fs'
 import { prisma } from './db'
+import sharp from 'sharp'
+import { join } from 'path'
+import { getApenadosDir } from './storage'
 
 // ── Config ────────────────────────────────────────────────────
 const SIPE_URL = 'https://sipe.sejus.ro.gov.br'
@@ -691,6 +694,84 @@ async function scrapeApenadoFicha(page: Page, sipeId: number): Promise<void> {
     faccaoId = faccao?.id ?? null
   }
 
+  // --- Extração de Imagem ---
+  let photoPath: string | null = null;
+  try {
+    const photoSrc = await page.evaluate(() => {
+      const imgs = Array.from(document.querySelectorAll('img'));
+      for (const img of imgs) {
+        const src = img.src || '';
+        const alt = (img.alt || '').toLowerCase();
+        const id = (img.id || '').toLowerCase();
+        const className = (img.className || '').toLowerCase();
+        
+        if (
+          id.includes('foto') || id.includes('profile') || id.includes('avatar') || id.includes('apenado') ||
+          className.includes('foto') || className.includes('profile') || className.includes('avatar') || className.includes('apenado') ||
+          alt.includes('foto') || alt.includes('profile') || alt.includes('avatar') || alt.includes('apenado') ||
+          src.includes('/foto') || src.includes('/photo') || src.includes('/imagem') || src.includes('/getFoto') || src.includes('/arquivo')
+        ) {
+          return src;
+        }
+      }
+      
+      const containerImg = document.querySelector('.foto, .foto-apenado, .profile-image, #foto img') as HTMLImageElement;
+      if (containerImg) return containerImg.src;
+
+      const candidates = imgs.filter(img => {
+        const src = (img.src || '').toLowerCase();
+        return !src.includes('logo') && !src.includes('sejus') && !src.includes('governo') && !src.includes('brasao') && !src.includes('bandeira') && !src.includes('icon');
+      });
+      if (candidates.length > 0) {
+        return candidates[0].src;
+      }
+      
+      return null;
+    });
+
+    if (photoSrc) {
+      let base64Data: string | null = null;
+      if (photoSrc.startsWith('data:image/')) {
+        base64Data = photoSrc;
+      } else {
+        const absoluteUrl = new URL(photoSrc, page.url()).href;
+        base64Data = await page.evaluate(async (url) => {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) return null;
+            const blob = await res.blob();
+            return new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+          } catch {
+            return null;
+          }
+        }, absoluteUrl);
+      }
+
+      if (base64Data && base64Data.includes(',')) {
+        const base64Content = base64Data.split(',')[1];
+        const imageBuffer = Buffer.from(base64Content, 'base64');
+
+        const webpBuffer = await sharp(imageBuffer)
+          .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 90 })
+          .toBuffer();
+
+        const dir = getApenadosDir();
+        const { mkdir, writeFile } = await import('fs/promises');
+        await mkdir(dir, { recursive: true });
+        const filename = `sipe-${sipeId}.webp`;
+        await writeFile(join(dir, filename), webpBuffer);
+        photoPath = `uploads/apenados/${filename}`;
+      }
+    }
+  } catch (err) {
+    // Falha silenciosa de foto
+  }
+
   const upsertData = {
     nome: dados.nome || 'SEM NOME',
     nomeOutro: dados.nomeOutro,
@@ -722,6 +803,7 @@ async function scrapeApenadoFicha(page: Page, sipeId: number): Promise<void> {
     presoOriundo: dados.presoOriundo,
     oficioEntrada: dados.oficioEntrada,
     faccaoId,
+    photoPath,
     ultimaSyncAt: new Date(),
   }
 

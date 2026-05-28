@@ -539,6 +539,7 @@ model SipeApenadoImportado {
   sipeId         Int     @unique
   apenadoLocalId String?
   apenado        Apenado? @relation(fields: [apenadoLocalId], references: [id], onDelete: SetNull)
+  photoPath      String?
 
   nome             String
   nomeOutro        String?

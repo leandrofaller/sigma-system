@@ -26,6 +26,7 @@ interface ApenadoImportado {
   dataEntrada: string | null
   tempoPena: string | null
   monitorado: boolean | null
+  photoPath: string | null
   faccao: Faccao | null
   alcunhas: Alcunha[]
   processos: Processo[]
@@ -39,37 +40,58 @@ function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; onClick:
       onClick={onClick}
       className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:border-red-300 dark:hover:border-red-700 hover:shadow-md transition-all cursor-pointer"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-gray-900 dark:text-white text-sm truncate">{apenado.nome}</span>
-            {apenado.faccao && (
-              <span
-                className="px-2 py-0.5 rounded-full text-xs font-bold text-white"
-                style={{ backgroundColor: apenado.faccao.cor || '#ef4444' }}
-              >
-                {apenado.faccao.sigla || apenado.faccao.nome}
-              </span>
-            )}
-          </div>
-          {apenado.alcunhas.length > 0 && (
-            <p className="text-xs text-gray-500 mt-0.5">
-              {apenado.alcunhas.map(a => `"${a.alcunha}"`).join(', ')}
-            </p>
+      <div className="flex gap-4">
+        {/* Foto */}
+        <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-red-400 to-red-600 shadow-sm flex items-center justify-center text-white font-bold text-lg">
+          {apenado.photoPath ? (
+            <img
+              src={`/api/sipe/apenados/${apenado.id}/foto`}
+              alt={apenado.nome}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <span>{apenado.nome.charAt(0)}</span>
           )}
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-            {apenado.dataNascimento && <span>Nasc: {apenado.dataNascimento}</span>}
-            {apenado.rg && <span>RG: {apenado.rg}</span>}
-            {apenado.cpf && <span>CPF: {apenado.cpf}</span>}
-          </div>
         </div>
-        <div className="text-right text-xs text-gray-500 shrink-0">
-          <p className="font-mono text-gray-400">#{apenado.sipeId}</p>
-          {apenado.regime && (
-            <span className="inline-block mt-1 px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400">
-              {apenado.regime}
-            </span>
-          )}
+
+        {/* Informações */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-gray-900 dark:text-white text-sm truncate">{apenado.nome}</span>
+                {apenado.faccao && (
+                  <span
+                    className="px-2 py-0.5 rounded-full text-xs font-bold text-white shrink-0"
+                    style={{ backgroundColor: apenado.faccao.cor || '#ef4444' }}
+                  >
+                    {apenado.faccao.sigla || apenado.faccao.nome}
+                  </span>
+                )}
+              </div>
+              {apenado.alcunhas.length > 0 && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {apenado.alcunhas.map(a => `"${a.alcunha}"`).join(', ')}
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+                {apenado.dataNascimento && <span>Nasc: {apenado.dataNascimento}</span>}
+                {apenado.rg && <span>RG: {apenado.rg}</span>}
+                {apenado.cpf && <span>CPF: {apenado.cpf}</span>}
+              </div>
+            </div>
+            <div className="text-right text-xs text-gray-500 shrink-0">
+              <p className="font-mono text-gray-400">#{apenado.sipeId}</p>
+              {apenado.regime && (
+                <span className="inline-block mt-1 px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400">
+                  {apenado.regime}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -102,12 +124,30 @@ function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; onClose
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">{apenado.nome}</h2>
-              {apenado.nomeOutro && <p className="text-sm text-gray-500">Também: {apenado.nomeOutro}</p>}
-              {apenado.alcunhas.length > 0 && (
-                <p className="text-sm text-gray-500">Alcunha: {apenado.alcunhas.map(a => `"${a.alcunha}"`).join(', ')}</p>
-              )}
+            <div className="flex gap-4 items-center">
+              {/* Foto grande */}
+              <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-red-400 to-red-600 shadow-md flex items-center justify-center text-white font-bold text-3xl">
+                {apenado.photoPath ? (
+                  <img
+                    src={`/api/sipe/apenados/${apenado.id}/foto`}
+                    alt={apenado.nome}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <span>{apenado.nome.charAt(0)}</span>
+                )}
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{apenado.nome}</h2>
+                {apenado.nomeOutro && <p className="text-sm text-gray-500 mt-1">Também: {apenado.nomeOutro}</p>}
+                {apenado.alcunhas.length > 0 && (
+                  <p className="text-sm text-gray-500 mt-0.5">Alcunha: {apenado.alcunhas.map(a => `"${a.alcunha}"`).join(', ')}</p>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {apenado.faccao && (
