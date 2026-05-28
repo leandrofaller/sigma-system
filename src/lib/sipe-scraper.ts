@@ -1089,7 +1089,7 @@ export async function scrapeFaccoes(): Promise<void> {
     if (!m) return
 
     await page.goto(`${SIPE_URL}/apenados/${parseInt(m[1])}/faccao`, { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('select', { timeout: 10_000 })
+    await page.locator('select').first().waitFor({ state: 'attached', timeout: 10_000 })
 
     const options = await page.$$eval(
       'select option',
