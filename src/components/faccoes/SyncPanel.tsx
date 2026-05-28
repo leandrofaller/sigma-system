@@ -7,7 +7,8 @@ import {
   AlertCircle, RotateCcw, Pause, Wifi, WifiOff, Trash2, ShieldAlert,
 } from 'lucide-react'
 
-const UNIDADES = [
+// Lista de fallback usada quando o SIPE estiver inacessível
+const UNIDADES_FALLBACK = [
   { id: '3',  nome: 'CDPPVH - Centro de Detenção Provisório de Porto Velho' },
   { id: '1',  nome: 'PANDA - Penitenciária Edvan Mariano Rosendo' },
   { id: '5',  nome: 'Penitenciária Estadual Suely Maria Mendonça' },
@@ -19,6 +20,8 @@ const UNIDADES = [
   { id: '12', nome: 'CRVG - Centro de Ressocialização Vale do Guaporé' },
   { id: '25', nome: 'Centro de Ressocialização Jonas Ferreti' },
 ]
+
+interface Unidade { id: string; nome: string }
 
 interface SyncJob {
   id: string
@@ -178,6 +181,27 @@ export function SyncPanel() {
   const [clearing, setClearing] = useState(false)
   const [confirmClearAll, setConfirmClearAll] = useState(false)
   const [clearingAll, setClearingAll] = useState(false)
+  const [unidades, setUnidades] = useState<Unidade[]>(UNIDADES_FALLBACK)
+  const [loadingUnidades, setLoadingUnidades] = useState(true)
+
+  // Busca a lista real de unidades do SIPE (com cache de 24h no servidor)
+  useEffect(() => {
+    let cancelled = false
+    setLoadingUnidades(true)
+    fetch('/api/sipe/unidades')
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`status ${res.status}`)
+        const data = await res.json()
+        if (!cancelled && data.unidades?.length > 0) {
+          setUnidades(data.unidades)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) toast.warning('Lista de unidades carregada do cache local — SIPE pode estar inacessível')
+      })
+      .finally(() => { if (!cancelled) setLoadingUnidades(false) })
+    return () => { cancelled = true }
+  }, [])
 
   const fetchJobs = useCallback(async () => {
     const res = await fetch('/api/sipe/sync')
@@ -308,16 +332,21 @@ export function SyncPanel() {
         </h2>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Unidade Prisional
-          </label>
+          <div className="flex items-center gap-2 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Unidade Prisional
+            </label>
+            {loadingUnidades && (
+              <RefreshCw className="w-3 h-3 text-gray-400 animate-spin" aria-label="Carregando unidades..." />
+            )}
+          </div>
           <select
             value={selectedUnidade}
             onChange={(e) => setSelectedUnidade(e.target.value)}
-            disabled={isActive || loading}
-            className="w-full max-w-md rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            disabled={isActive || loading || loadingUnidades}
+            className="w-full max-w-md rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:opacity-60"
           >
-            {UNIDADES.map((u) => (
+            {unidades.map((u) => (
               <option key={u.id} value={u.id}>{u.nome}</option>
             ))}
           </select>
