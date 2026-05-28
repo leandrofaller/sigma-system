@@ -1622,60 +1622,86 @@ export async function scrapeFaccoes(): Promise<void> {
   try {
     await login(page, SIPE_UNIDADE)
 
-    await page.goto(`${SIPE_URL}/apenados/index`, { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('tbody', { timeout: 15_000 }).catch(() => {})
-    const firstLink = await page.$('tbody a[href*="/selecionarOpcao"]')
-    if (!firstLink) return
-
-    const href = await firstLink.getAttribute('href')
-    if (!href) return
-    const m = href.match(/\/apenados\/(\d+)\//)
-    if (!m) return
-
-    const apenadoId = parseInt(m[1])
     let options: { value: string; text: string }[] = []
     let extraido = false
     let erroOriginal: any = null
 
-    // Tentativa 1: Página dedicada de facção
-    try {
-      await page.goto(`${SIPE_URL}/apenados/${apenadoId}/faccao`, { waitUntil: 'domcontentloaded', timeout: 20_000 })
-      const selectLocator = page.locator('select[name="faccao_id"], select').first()
-      await selectLocator.waitFor({ state: 'attached', timeout: 5_000 })
-      
-      options = await selectLocator.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
-        opts
-          .filter((o) => o.value && o.value !== '0' && o.value !== '')
-          .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
-      )
-      if (options.length > 0) {
-        extraido = true
-      }
-    } catch (err) {
-      erroOriginal = err
-    }
-
-    // Tentativa 2: Página de edição da ficha do apenado (Fallback)
-    if (!extraido) {
+    // Tentamos com os primeiros 5 apenados da listagem para evitar casos em que o perfil
+    // de um apenado específico não exiba ou não possua acesso ao dropdown de facção.
+    for (let i = 0; i < 5; i++) {
       try {
-        await page.goto(`${SIPE_URL}/apenados/${apenadoId}/editar`, { waitUntil: 'domcontentloaded', timeout: 25_000 })
-        const selectLocator = page.locator('select[name="faccao_id"], select[name*="faccao"]').first()
-        await selectLocator.waitFor({ state: 'attached', timeout: 10_000 })
+        await page.goto(`${SIPE_URL}/apenados/index`, { waitUntil: 'domcontentloaded' })
+        await page.waitForSelector('tbody', { timeout: 15_000 }).catch(() => {})
         
-        options = await selectLocator.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
-          opts
-            .filter((o) => o.value && o.value !== '0' && o.value !== '')
-            .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
-        )
-        if (options.length > 0) {
-          extraido = true
+        const links = await page.$$('tbody a[href*="/selecionarOpcao"]')
+        if (links.length <= i) {
+          break;
+        }
+
+        const link = links[i];
+        const href = await link.getAttribute('href');
+        if (!href) continue;
+        const m = href.match(/\/apenados\/(\d+)\//);
+        if (!m) continue;
+        const apenadoId = parseInt(m[1]);
+
+        // Clica no link de seleção para registrar o apenado ativo na sessão do servidor do SIPE
+        try {
+          await link.click();
+          await page.waitForTimeout(1500); // Aguarda o redirecionamento/seleção
+        } catch (err) {
+          // Fallback silencioso: prossegue mesmo se o clique falhar
+        }
+
+        // Tentativa 1: Página dedicada de facção
+        try {
+          await page.goto(`${SIPE_URL}/apenados/${apenadoId}/faccao`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+          const selectLocator = page.locator('select[name="faccao_id"], select').first()
+          await selectLocator.waitFor({ state: 'attached', timeout: 3_000 })
+          
+          options = await selectLocator.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
+            opts
+              .filter((o) => o.value && o.value !== '0' && o.value !== '')
+              .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
+          )
+          if (options.length > 0) {
+            extraido = true;
+            break; // Sucesso: sai do loop de apenados
+          }
+        } catch (err) {
+          erroOriginal = err;
+        }
+
+        // Tentativa 2: Página de edição cadastral (Fallback)
+        if (!extraido) {
+          try {
+            await page.goto(`${SIPE_URL}/apenados/${apenadoId}/editar`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+            const selectLocator = page.locator('select[name="faccao_id"], select[name*="faccao"]').first()
+            await selectLocator.waitFor({ state: 'attached', timeout: 4_000 })
+            
+            options = await selectLocator.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
+              opts
+                .filter((o) => o.value && o.value !== '0' && o.value !== '')
+                .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
+            )
+            if (options.length > 0) {
+              extraido = true;
+              break; // Sucesso: sai do loop de apenados
+            }
+          } catch (err) {
+            // Ignora erro e tenta o próximo apenado
+          }
         }
       } catch (err) {
-        throw new Error(
-          `Não foi possível carregar a lista de facções em nenhuma das páginas do apenado. ` +
-          `Erro original na página /faccao: ${(erroOriginal as any)?.message || erroOriginal}. Erro no fallback /editar: ${(err as any)?.message || err}`
-        )
+        // Se houver algum erro grave no loop de indexação, tenta o próximo
       }
+    }
+
+    if (!extraido) {
+      throw new Error(
+        `Não foi possível carregar a lista de facções em nenhum dos primeiros 5 apenados da lista. ` +
+        `Erro original na página /faccao do último apenado testado: ${(erroOriginal as any)?.message || erroOriginal}`
+      )
     }
 
     for (const opt of options) {
