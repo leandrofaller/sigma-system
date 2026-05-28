@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgbm1 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
     libcups2 libdbus-1-3 libdrm2 libxcomposite1 libxdamage1 \
     libxfixes3 libxkbcommon0 libxrandr2 libxtst6 libxshmfence1 \
-    libasound2t64 fonts-liberation libvulkan1 \
+    libasound2 fonts-liberation libvulkan1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
