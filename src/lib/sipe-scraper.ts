@@ -454,6 +454,13 @@ async function coletarIdsApenados(
   })
 
   // Show all rows
+  try {
+    const selectValue = await page.inputValue('select[name*="DataTables_Table"]').catch(() => null)
+    log(jobId, `🔍 SELECT DataTables encontrado, valor atual: ${selectValue}`)
+  } catch {
+    log(jobId, `⚠️ Não conseguiu ler valor do select DataTables`)
+  }
+
   await page
     .selectOption('select[name*="DataTables_Table"]', '-1')
     .catch(() => {})
@@ -461,6 +468,8 @@ async function coletarIdsApenados(
 
   const extractIds = async () => {
     const rows = await page.$$('table tbody tr')
+    log(jobId, `📊 DEBUG: Total de <tr> encontrados: ${rows.length}`)
+
     for (const row of rows) {
       const cell = await row.$('th, td:first-child')
       if (!cell) continue
@@ -471,6 +480,7 @@ async function coletarIdsApenados(
 
   await extractIds()
   log(jobId, `IDs principais: ${ids.size}`)
+  log(jobId, `🔍 DEBUG: IDs extraídos (primeiros 20): ${Array.from(ids).slice(0, 20).join(', ')}`)
 
   // Also iterate per-cell links
   const carcLinks = await page.$$eval(
@@ -478,21 +488,27 @@ async function coletarIdsApenados(
     (els) => els.map((el) => (el as HTMLAnchorElement).getAttribute('href'))
   )
 
+  log(jobId, `🔗 DEBUG: Total de links '/fichaCela' encontrados: ${carcLinks.length}`)
+
   for (const url of carcLinks) {
     if (!url) continue
     try {
       await page.goto(`${SIPE_URL}${url}`, { waitUntil: 'networkidle' })
+      const sizeBefore = ids.size
       await page
         .selectOption('select[name*="DataTables_Table"]', '-1')
         .catch(() => {})
       await page.waitForTimeout(400)
       await extractIds()
-    } catch {
-      // ignore individual cell errors
+      const sizeAfter = ids.size
+      log(jobId, `  ├─ Link: ${url} → +${sizeAfter - sizeBefore} novos IDs`)
+    } catch (err) {
+      log(jobId, `  ├─ ❌ Erro ao processar ${url}: ${String(err).slice(0, 50)}`)
     }
   }
 
-  log(jobId, `Total IDs coletados: ${ids.size}`)
+  log(jobId, `✅ Total IDs coletados: ${ids.size}`)
+  log(jobId, `🔍 DEBUG: Todos os IDs: ${Array.from(ids).join(', ')}`)
   return [...ids]
 }
 
