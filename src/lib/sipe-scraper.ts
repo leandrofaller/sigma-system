@@ -534,46 +534,46 @@ async function coletarIdsApenados(
     await extractIds()
 
     let pageNum = 1
-    let temProxima = true
-    while (temProxima) {
-      const botaoProxima = await page
-        .locator('a:has-text("Próxima"), a:has-text("Next"), button:has-text("Próxima")')
-        .first()
-        .isVisible()
-        .catch(() => false)
-
-      if (!botaoProxima) {
+    let emptyConsecutivos = 0
+    const MAX_VAZIAS = 3 // para após 3 páginas sem IDs novos
+    let continuar = true
+    while (continuar) {
+      // Para quando o botão não existe OU quando está desabilitado (classe "disabled")
+      const botaoLocator = page.locator('a:has-text("Próxima"), a:has-text("Next"), li.next > a, [data-dt-idx="next"] a').first()
+      const botaoVisivel = await botaoLocator.isVisible().catch(() => false)
+      if (!botaoVisivel) {
         log(jobId, `📄 Fim da paginação (página ${pageNum})`)
-        temProxima = false
-        continue
+        break
+      }
+      // DataTables mantém o botão visível mas adiciona "disabled" na última página
+      const botaoDisabled = await botaoLocator.evaluate((el: Element) =>
+        el.closest('li')?.classList.contains('disabled') || el.classList.contains('disabled') || (el as HTMLAnchorElement).tabIndex === -1
+      ).catch(() => false)
+      if (botaoDisabled) {
+        log(jobId, `📄 Fim da paginação — botão desabilitado (página ${pageNum})`)
+        break
       }
 
       try {
         pageNum++
-        const selectors = [
-          'a:has-text("Próxima")',
-          'a:has-text("Next")',
-          'li.next > a',
-          '[data-dt-idx="next"] a',
-        ]
-        let clicked = false
-        for (const sel of selectors) {
-          try {
-            const elem = page.locator(sel).first()
-            if (await elem.isVisible()) {
-              await elem.click()
-              clicked = true
-              break
-            }
-          } catch { /* tenta próximo seletor */ }
-        }
-        if (!clicked) { temProxima = false; continue }
-        await page.waitForTimeout(1200)
+        await botaoLocator.click()
+        await page.waitForTimeout(1000)
         const before = ids.size
         await extractIds()
-        log(jobId, `📄 Página ${pageNum}: +${ids.size - before} IDs (total: ${ids.size})`)
+        const novos = ids.size - before
+        log(jobId, `📄 Página ${pageNum}: +${novos} IDs (total: ${ids.size})`)
+
+        if (novos === 0) {
+          emptyConsecutivos++
+          if (emptyConsecutivos >= MAX_VAZIAS) {
+            log(jobId, `📄 ${MAX_VAZIAS} páginas consecutivas sem IDs novos — encerrando paginação`)
+            continuar = false
+          }
+        } else {
+          emptyConsecutivos = 0
+        }
       } catch {
-        temProxima = false
+        continuar = false
       }
     }
   }
