@@ -512,15 +512,37 @@ async function coletarIdsApenados(
         pageNum++
         log(jobId, `📄 Navegando para próxima página ${pageNum}...`)
 
-        // Clicar próxima
-        await page
-          .locator('a:has-text("Próxima"), a:has-text("Next"), button:has-text("Próxima")')
-          .first()
-          .click()
+        // Clicar próxima - tenta múltiplos seletores
+        let clicked = false
+        const selectors = [
+          'a:has-text("Próxima")',
+          'a:has-text("Next")',
+          'button:has-text("Próxima")',
+          'li.next > a',
+          '[data-dt-idx="next"] a'
+        ]
 
-        // Aguardar carregamento
-        await page.waitForLoadState('networkidle')
-        await page.waitForTimeout(500)
+        for (const sel of selectors) {
+          try {
+            const elem = await page.locator(sel).first()
+            if (await elem.isVisible()) {
+              await elem.click()
+              clicked = true
+              break
+            }
+          } catch {
+            // try next selector
+          }
+        }
+
+        if (!clicked) {
+          log(jobId, `  ├─ ⚠️ Nenhum botão encontrado`)
+          temProxima = false
+          continue
+        }
+
+        // Aguardar carregamento simples (sem estado)
+        await page.waitForTimeout(1200)
 
         // Selecionar todos novamente
         for (const value of rowsToShow) {
@@ -541,7 +563,8 @@ async function coletarIdsApenados(
 
         log(jobId, `  ├─ Página ${pageNum}: +${rowsDepois - rowsAntes} novos IDs (total: ${rowsDepois})`)
       } catch (err) {
-        log(jobId, `  ├─ ❌ Erro ao navegar próxima página: ${String(err).slice(0, 50)}`)
+        const errMsg = String(err).slice(0, 100)
+        log(jobId, `  ├─ ❌ Erro ao navegar próxima página: ${errMsg}`)
         temProxima = false
       }
     } else {
