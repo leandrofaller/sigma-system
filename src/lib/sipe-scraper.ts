@@ -2,11 +2,19 @@
  * SIPE Scraper — Playwright-based crawler for sipe.sejus.ro.gov.br
  *
  * Design (mirrors ArcFace indexing-job pattern):
- * - Module-level singleton state (fast SSE streaming without DB reads)
+ * - globalThis singleton state (survives Next.js module isolation across routes)
  * - DB-persisted checkpoint (survives VPS restarts / process crashes)
  * - Cursor-based resume: stores collected IDs + last processed SIPE ID
  * - Crash detection: jobs RUNNING with no `ultimaAtividade` update in 10 min
  *   are auto-transitioned to INTERRUPTED and can be resumed
+ *
+ * ⚠️  Why globalThis?
+ *   Next.js App Router bundles each route file separately, so module-level
+ *   `let` variables in sipe-scraper.ts produce DIFFERENT instances when
+ *   imported by sync/route.ts, sync/stream/route.ts, and sync/stop/route.ts.
+ *   globalThis is the single shared namespace for the whole Node.js process,
+ *   guaranteeing that getSipeState() and stopSipeJob() see the same object
+ *   as startSipeSync() regardless of which route called them.
  */
 
 import { chromium, Browser, BrowserContext, Page } from 'playwright'
@@ -23,7 +31,7 @@ const SIPE_UNIDADE = process.env.SIPE_UNIDADE ?? '3'  // CDPPVH
 /** ms without a heartbeat before a job is considered crashed */
 const CRASH_TIMEOUT_MS = 10 * 60 * 1000 // 10 min
 
-// ── In-memory singleton (like ArcFace indexing-job) ──────────
+// ── Shared singleton via globalThis (survives module isolation) ──────────
 
 export interface SipeSyncProgress {
   jobId: string
@@ -38,15 +46,23 @@ export interface SipeSyncProgress {
   pct: number
 }
 
-let activeState: SipeSyncProgress | null = null
-let stopFlag = false
+declare global {
+  // eslint-disable-next-line no-var
+  var __sipeState: SipeSyncProgress | null
+  // eslint-disable-next-line no-var
+  var __sipeStopFlag: boolean
+}
+
+// Initialize once per process; no-op on hot-reloads
+if (globalThis.__sipeState === undefined) globalThis.__sipeState = null
+if (globalThis.__sipeStopFlag === undefined) globalThis.__sipeStopFlag = false
 
 export function getSipeState(): SipeSyncProgress | null {
-  return activeState
+  return globalThis.__sipeState
 }
 
 export function stopSipeJob(): void {
-  stopFlag = true
+  globalThis.__sipeStopFlag = true
 }
 
 // ── Crash detection helper ────────────────────────────────────
@@ -143,11 +159,13 @@ async function dbProgress(
 }
 
 /** Sync DB → in-memory state */
-function refreshMemory(jobId: string, patch: Partial<SipeSyncProgress>) {
-  if (!activeState) return
-  Object.assign(activeState, patch)
-  if (activeState.total > 0) {
-    activeState.pct = Math.round((activeState.processado / activeState.total) * 100)
+function refreshMemory(_jobId: string, patch: Partial<SipeSyncProgress>) {
+  if (!globalThis.__sipeState) return
+  Object.assign(globalThis.__sipeState, patch)
+  if (globalThis.__sipeState.total > 0) {
+    globalThis.__sipeState.pct = Math.round(
+      (globalThis.__sipeState.processado / globalThis.__sipeState.total) * 100
+    )
   }
 }
 
@@ -158,10 +176,10 @@ function refreshMemory(jobId: string, patch: Partial<SipeSyncProgress>) {
  * Runs entirely in background — returns immediately.
  */
 export function startSipeSync(jobId: string, unidadeId: string): void {
-  if (activeState?.status === 'RUNNING') return
+  if (globalThis.__sipeState?.status === 'RUNNING') return
 
-  stopFlag = false
-  activeState = {
+  globalThis.__sipeStopFlag = false
+  globalThis.__sipeState = {
     jobId,
     status: 'RUNNING',
     fase: 'Iniciando...',
@@ -175,7 +193,7 @@ export function startSipeSync(jobId: string, unidadeId: string): void {
 
   runScrape(jobId, unidadeId).catch(async (err) => {
     const msg = err?.message ?? String(err)
-    activeState = { ...activeState!, status: 'FAILED', ultimoLog: msg }
+    globalThis.__sipeState = { ...globalThis.__sipeState!, status: 'FAILED', ultimoLog: msg }
     await dbProgress(jobId, {
       status: 'FAILED',
       finalizadoEm: new Date(),
@@ -195,9 +213,9 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
   const job = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
   if (!job) throw new Error('Job não encontrado')
 
+  // Job is already RUNNING in DB (set at creation time in the route).
+  // Just persist the first log entry and update fase.
   await dbProgress(jobId, {
-    status: 'RUNNING',
-    iniciadoEm: job.iniciadoEm ?? new Date(),
     log: 'Iniciando sessão no SIPE...',
     fase: 'Login',
   })
@@ -257,8 +275,9 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
     }
 
     // ── Phase 2: scrape each profile ──────────────────────────
+    let lastProcessedId: number | undefined
     for (const sipeId of ids) {
-      if (stopFlag) {
+      if (globalThis.__sipeStopFlag) {
         await dbProgress(jobId, {
           status: 'INTERRUPTED',
           finalizadoEm: new Date(),
@@ -270,32 +289,35 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
 
       try {
         await scrapeApenadoFicha(page, sipeId)
-        activeState!.processado++
-        activeState!.pct = activeState!.total
-          ? Math.round((activeState!.processado / activeState!.total) * 100)
+        lastProcessedId = sipeId
+        globalThis.__sipeState!.processado++
+        globalThis.__sipeState!.pct = globalThis.__sipeState!.total
+          ? Math.round(
+              (globalThis.__sipeState!.processado / globalThis.__sipeState!.total) * 100
+            )
           : 0
 
         // Persist cursor every 5 records (reduce DB load)
-        if (activeState!.processado % 5 === 0) {
+        if (globalThis.__sipeState!.processado % 5 === 0) {
           await dbProgress(jobId, {
-            processado: activeState!.processado,
+            processado: globalThis.__sipeState!.processado,
             ultimoIdProcessado: sipeId,
           })
         }
         // Polite delay
         await page.waitForTimeout(300 + Math.random() * 500)
       } catch (err) {
-        activeState!.erros++
+        globalThis.__sipeState!.erros++
         const msg = `Erro apenado #${sipeId}: ${err}`
-        activeState!.ultimoLog = msg
-        await dbProgress(jobId, { erros: activeState!.erros, log: msg })
+        globalThis.__sipeState!.ultimoLog = msg
+        await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
       }
     }
 
-    // Final cursor flush
+    // Final cursor flush — use the actual last processed ID, not ids[last]
     await dbProgress(jobId, {
-      processado: activeState!.processado,
-      ultimoIdProcessado: ids[ids.length - 1],
+      processado: globalThis.__sipeState!.processado,
+      ...(lastProcessedId !== undefined ? { ultimoIdProcessado: lastProcessedId } : {}),
     })
 
     // ── Phase 3: advogados ────────────────────────────────────
@@ -305,10 +327,15 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
 
     // ── Done ──────────────────────────────────────────────────
     const summary =
-      `Concluído: ${activeState!.processado} apenados processados, ` +
-      `${activeState!.erros} erros`
+      `Concluído: ${globalThis.__sipeState!.processado} apenados processados, ` +
+      `${globalThis.__sipeState!.erros} erros`
 
-    activeState = { ...activeState!, status: 'COMPLETED', fase: 'Concluído', ultimoLog: summary }
+    globalThis.__sipeState = {
+      ...globalThis.__sipeState!,
+      status: 'COMPLETED',
+      fase: 'Concluído',
+      ultimoLog: summary,
+    }
     await dbProgress(jobId, {
       status: 'COMPLETED',
       finalizadoEm: new Date(),
@@ -321,7 +348,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
 }
 
 function log(jobId: string, msg: string) {
-  if (activeState) activeState.ultimoLog = msg
+  if (globalThis.__sipeState) globalThis.__sipeState.ultimoLog = msg
   // Fire-and-forget DB log (no await to keep scraping fast)
   dbProgress(jobId, { log: msg }).catch(() => {})
 }
@@ -569,12 +596,12 @@ async function scrapeAdvogados(page: Page, jobId: string): Promise<void> {
   )
 
   log(jobId, `Advogados encontrados: ${links.length}`)
-  if (activeState) {
-    activeState.fase = `Scraping advogados (${links.length})`
+  if (globalThis.__sipeState) {
+    globalThis.__sipeState.fase = `Scraping advogados (${links.length})`
   }
 
   for (const link of links) {
-    if (!link.href || !link.id || stopFlag) continue
+    if (!link.href || !link.id || globalThis.__sipeStopFlag) continue
     try {
       await scrapeAdvogadoDetalhe(page, parseInt(link.id))
       await page.waitForTimeout(200 + Math.random() * 300)

@@ -106,13 +106,14 @@ export async function POST(req: NextRequest) {
       tipo: 'APENADOS',
       unidade: unidadeId,
       unidadeNome,
-      status: 'PENDING',
+      status: 'RUNNING',
+      iniciadoEm: new Date(),
       criadoPor: session.user.id,
     },
   })
 
   startSipeSync(job.id, unidadeId)
-  return NextResponse.json({ jobId: job.id, status: 'PENDING' })
+  return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
 }
 
 export async function GET() {
