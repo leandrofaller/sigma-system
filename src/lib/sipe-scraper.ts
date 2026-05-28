@@ -18,6 +18,7 @@
  */
 
 import { chromium, Browser, BrowserContext, Page } from 'playwright'
+import { existsSync } from 'fs'
 import { prisma } from './db'
 
 // ── Config ────────────────────────────────────────────────────
@@ -102,9 +103,34 @@ export async function detectAndMarkCrashedJobs(): Promise<void> {
 
 let browserInstance: Browser | null = null
 
+/**
+ * Tenta localizar um executável Chromium instalado no sistema operacional.
+ * Usado como fallback quando o binário empacotado pelo Playwright não está disponível
+ * (comum em VPS Linux onde `playwright install` foi executado por usuário diferente).
+ */
+function findSystemChromium(): string | undefined {
+  // Variável de ambiente tem prioridade (ex: PLAYWRIGHT_EXECUTABLE_PATH=/usr/bin/chromium)
+  if (process.env.PLAYWRIGHT_EXECUTABLE_PATH) return process.env.PLAYWRIGHT_EXECUTABLE_PATH
+
+  const candidates = [
+    '/usr/bin/chromium-browser',   // Ubuntu/Debian padrão
+    '/usr/bin/chromium',           // Debian / Arch
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/snap/bin/chromium',          // Snap
+    '/usr/local/bin/chromium',
+  ]
+  return candidates.find(existsSync)
+}
+
 async function getBrowser(): Promise<Browser> {
   if (!browserInstance || !browserInstance.isConnected()) {
-    browserInstance = await chromium.launch({ headless: true })
+    const executablePath = findSystemChromium()
+    browserInstance = await chromium.launch({
+      headless: true,
+      // Se encontrou Chromium do sistema, usa ele; caso contrário, usa o binário do Playwright
+      ...(executablePath ? { executablePath } : {}),
+    })
   }
   return browserInstance
 }
