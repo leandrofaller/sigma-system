@@ -73,12 +73,25 @@ export function stopSipeJob(): void {
  */
 export async function detectAndMarkCrashedJobs(): Promise<void> {
   const cutoff = new Date(Date.now() - CRASH_TIMEOUT_MS)
+  // Jobs PENDING há mais de 2 minutos nunca chegaram a iniciar
+  const pendingCutoff = new Date(Date.now() - 2 * 60 * 1000)
+
   await prisma.sipeSyncJob.updateMany({
     where: {
-      status: 'RUNNING',
       OR: [
-        { ultimaAtividade: { lt: cutoff } },
-        { ultimaAtividade: null, iniciadoEm: { lt: cutoff } },
+        // RUNNING sem heartbeat recente
+        {
+          status: 'RUNNING',
+          OR: [
+            { ultimaAtividade: { lt: cutoff } },
+            { ultimaAtividade: null, iniciadoEm: { lt: cutoff } },
+          ],
+        },
+        // PENDING travado (nunca chegou a iniciar)
+        {
+          status: 'PENDING',
+          createdAt: { lt: pendingCutoff },
+        },
       ],
     },
     data: { status: 'INTERRUPTED' },

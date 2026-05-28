@@ -11,11 +11,22 @@ export async function POST() {
 
   stopSipeJob()
 
-  // Update DB immediately so crash-detection doesn't re-mark it later
   const state = getSipeState()
   if (state?.jobId) {
+    // Scraper ativo em memória: atualiza pelo jobId específico
     await prisma.sipeSyncJob.update({
       where: { id: state.jobId },
+      data: {
+        status: 'INTERRUPTED',
+        finalizadoEm: new Date(),
+        log: 'Interrompido pelo usuário via botão de parada',
+      },
+    }).catch(() => {})
+  } else {
+    // Sem estado em memória (job stale / processo reiniciado):
+    // marca qualquer RUNNING ou PENDING como INTERRUPTED
+    await prisma.sipeSyncJob.updateMany({
+      where: { status: { in: ['RUNNING', 'PENDING'] } },
       data: {
         status: 'INTERRUPTED',
         finalizadoEm: new Date(),
