@@ -484,9 +484,11 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
     }
 
     // ── Phase 3: advogados ────────────────────────────────────
-    refreshMemory(jobId, { fase: 'Scraping advogados...' })
-    await dbProgress(jobId, { fase: 'Advogados', log: 'Iniciando scraping de advogados...' })
-    await scrapeAdvogados(page, jobId)
+    if (job.tipo === 'ADVOGADOS') {
+      refreshMemory(jobId, { fase: 'Scraping advogados...' })
+      await dbProgress(jobId, { fase: 'Advogados', log: 'Iniciando scraping de advogados...' })
+      await scrapeAdvogados(page, jobId)
+    }
 
     // ── Done ──────────────────────────────────────────────────
     const summary =

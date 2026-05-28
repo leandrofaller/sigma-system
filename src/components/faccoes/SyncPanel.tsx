@@ -368,7 +368,7 @@ export function SyncPanel() {
             className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
           >
             {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            Sincronizar Apenados + Advogados
+            Sincronizar Apenas Apenados
           </button>
 
           <button
