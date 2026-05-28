@@ -494,10 +494,63 @@ async function coletarIdsApenados(
 
   await extractIds()
   log(jobId, `IDs principais: ${ids.size}`)
-  log(jobId, `🔍 DEBUG: IDs extraídos (primeiros 20): ${Array.from(ids).slice(0, 20).join(', ')}`)
 
-  // Note: Removed per-cell link iteration due to URL format issues
-  // The main extraction from the table above should capture all IDs
+  // Paginação - tentar iterar por próximas páginas
+  let pageNum = 1
+  let temProxima = true
+
+  while (temProxima) {
+    // Procurar por botão de próxima página
+    const botaoProxima = await page
+      .locator('a:has-text("Próxima"), a:has-text("Next"), button:has-text("Próxima")')
+      .first()
+      .isVisible()
+      .catch(() => false)
+
+    if (botaoProxima) {
+      try {
+        pageNum++
+        log(jobId, `📄 Navegando para próxima página ${pageNum}...`)
+
+        // Clicar próxima
+        await page
+          .locator('a:has-text("Próxima"), a:has-text("Next"), button:has-text("Próxima")')
+          .first()
+          .click()
+
+        // Aguardar carregamento
+        await page.waitForLoadState('networkidle')
+        await page.waitForTimeout(500)
+
+        // Selecionar todos novamente
+        for (const value of rowsToShow) {
+          try {
+            await page.selectOption('select[name*="DataTables_Table"]', value).catch(() => {})
+            await page.waitForTimeout(500)
+            const testRows = await page.$$('table tbody tr')
+            if (testRows.length > 10) break
+          } catch {
+            // ignore
+          }
+        }
+
+        // Extrair IDs da nova página
+        const rowsAntes = ids.size
+        await extractIds()
+        const rowsDepois = ids.size
+
+        log(jobId, `  ├─ Página ${pageNum}: +${rowsDepois - rowsAntes} novos IDs (total: ${rowsDepois})`)
+      } catch (err) {
+        log(jobId, `  ├─ ❌ Erro ao navegar próxima página: ${String(err).slice(0, 50)}`)
+        temProxima = false
+      }
+    } else {
+      temProxima = false
+      log(jobId, `📄 Fim da paginação (página ${pageNum})`)
+    }
+  }
+
+  log(jobId, `🔍 DEBUG: IDs extraídos (primeiros 20): ${Array.from(ids).slice(0, 20).join(', ')}`)
 
   log(jobId, `✅ Total IDs coletados: ${ids.size}`)
   if (ids.size <= 50) {
