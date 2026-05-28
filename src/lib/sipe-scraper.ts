@@ -540,6 +540,14 @@ async function coletarIdsApenados(
         []
       if (!tables.length) return [] as number[]
       const dt = w.$(tables[0]).DataTable()
+      
+      // Se a tabela possuir mais de uma página, significa que está paginada no servidor.
+      // Nesse caso, a Estratégia A em memória não obterá todos os dados; abortamos para ir para a B ou C.
+      const info = dt.page.info()
+      if (info.pages > 1) {
+        return [] as number[]
+      }
+
       const data: any[] = dt.rows().data().toArray()
       return data
         .map((row: any) => parseInt(Array.isArray(row) ? row[0] : (row.id ?? row.sipeId ?? '')))
@@ -552,12 +560,11 @@ async function coletarIdsApenados(
     return [...new Set(idsViaApi as number[])]
   }
 
-  log(jobId, '⚠️ Estratégia A sem resultado — tentando estratégia B (fetch direto)')
+  log(jobId, '⚠️ Estratégia A sem resultado — tentando estratégia B (fetch direto paginado)')
 
-  // ── Estratégia B: fetch direto com cookies de sessão ─────────
-  // Obtém a URL AJAX configurada no DataTables e faz um fetch com length=-1.
-  // Funciona para DataTables server-side. Reutiliza os cookies de sessão
-  // do Playwright (credentials: 'include').
+  // ── Estratégia B: fetch direto com cookies de sessão (paginado em lotes) ──
+  // Obtém a URL AJAX do DataTables e realiza requisições de API sequenciais em lotes
+  // para burlar o limite do servidor, sendo infinitamente mais rápido que clicks no DOM.
   const idsViaFetch = await page.evaluate(async (baseUrl: string) => {
     try {
       const w = window as any
@@ -569,28 +576,54 @@ async function coletarIdsApenados(
       if (!rawUrl) return [] as number[]
       const ajaxUrl = rawUrl.startsWith('http') ? rawUrl : baseUrl + rawUrl
 
-      const params = new URLSearchParams({
-        draw: '1', start: '0', length: '-1',
-        'columns[0][data]': '0',
-        'order[0][column]': '0', 'order[0][dir]': 'asc',
-      })
-      const res = await fetch(ajaxUrl, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
-      })
-      if (!res.ok) return [] as number[]
-      const json = await res.json()
-      const rows: any[] = json?.data ?? json?.aaData ?? []
-      return rows
+      let allRows: any[] = []
+      let start = 0
+      const length = 500 // Lote seguro e de alto desempenho
+      let draw = 1
+      let hasMore = true
+
+      while (hasMore) {
+        const params = new URLSearchParams({
+          draw: String(draw++),
+          start: String(start),
+          length: String(length),
+          'columns[0][data]': '0',
+          'order[0][column]': '0',
+          'order[0][dir]': 'asc',
+        })
+
+        const res = await fetch(ajaxUrl, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        })
+
+        if (!res.ok) break
+
+        const json = await res.json()
+        const rows: any[] = json?.data ?? json?.aaData ?? []
+        if (rows.length === 0) break
+
+        allRows = allRows.concat(rows)
+
+        const totalRecords = json.recordsFiltered ?? json.recordsTotal ?? rows.length
+        start += length
+
+        // Se já puxamos tudo ou se o lote atual retornou menos que o solicitado (fim da lista)
+        if (allRows.length >= totalRecords || rows.length < length) {
+          hasMore = false
+        }
+      }
+
+      return allRows
         .map((r: any) => parseInt(Array.isArray(r) ? r[0] : (r.id ?? r.sipeId ?? '')))
         .filter((id: number) => !isNaN(id) && id > 0)
     } catch { return [] as number[] }
   }, SIPE_URL).catch(() => [] as number[])
 
   if (idsViaFetch.length > 0) {
-    log(jobId, `⚡ Estratégia B (fetch direto): ${idsViaFetch.length} IDs`)
+    log(jobId, `⚡ Estratégia B (fetch direto paginado): ${idsViaFetch.length} IDs`)
     return [...new Set(idsViaFetch as number[])]
   }
 
