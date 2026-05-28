@@ -1521,16 +1521,51 @@ export async function scrapeFaccoes(): Promise<void> {
     const m = href.match(/\/apenados\/(\d+)\//)
     if (!m) return
 
-    await page.goto(`${SIPE_URL}/apenados/${parseInt(m[1])}/faccao`, { waitUntil: 'domcontentloaded' })
-    await page.locator('select').first().waitFor({ state: 'attached', timeout: 10_000 })
+    const apenadoId = parseInt(m[1])
+    let options: { value: string; text: string }[] = []
+    let extraido = false
+    let erroOriginal: any = null
 
-    const options = await page.$$eval(
-      'select option',
-      (opts: Element[]) =>
-        (opts as HTMLOptionElement[])
+    // Tentativa 1: Página dedicada de facção
+    try {
+      await page.goto(`${SIPE_URL}/apenados/${apenadoId}/faccao`, { waitUntil: 'domcontentloaded', timeout: 20_000 })
+      const selectLocator = page.locator('select[name="faccao_id"], select').first()
+      await selectLocator.waitFor({ state: 'attached', timeout: 5_000 })
+      
+      options = await selectLocator.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
+        opts
           .filter((o) => o.value && o.value !== '0' && o.value !== '')
           .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
-    )
+      )
+      if (options.length > 0) {
+        extraido = true
+      }
+    } catch (err) {
+      erroOriginal = err
+    }
+
+    // Tentativa 2: Página de edição da ficha do apenado (Fallback)
+    if (!extraido) {
+      try {
+        await page.goto(`${SIPE_URL}/apenados/${apenadoId}/editar`, { waitUntil: 'domcontentloaded', timeout: 25_000 })
+        const selectLocator = page.locator('select[name="faccao_id"], select[name*="faccao"]').first()
+        await selectLocator.waitFor({ state: 'attached', timeout: 10_000 })
+        
+        options = await selectLocator.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
+          opts
+            .filter((o) => o.value && o.value !== '0' && o.value !== '')
+            .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
+        )
+        if (options.length > 0) {
+          extraido = true
+        }
+      } catch (err) {
+        throw new Error(
+          `Não foi possível carregar a lista de facções em nenhuma das páginas do apenado. ` +
+          `Erro original na página /faccao: ${(erroOriginal as any)?.message || erroOriginal}. Erro no fallback /editar: ${(err as any)?.message || err}`
+        )
+      }
+    }
 
     for (const opt of options) {
       const id = parseInt(opt.value)
