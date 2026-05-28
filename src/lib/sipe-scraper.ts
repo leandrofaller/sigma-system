@@ -1053,6 +1053,7 @@ async function scrapeApenadoFicha(
 
   // --- Extração de Imagem ---
   let photoPath: string | null = null;
+  let fotoAtualizada = false;
   try {
     const photoSrc = await page.evaluate(() => {
       const imgs = Array.from(document.querySelectorAll('img'));
@@ -1121,10 +1122,31 @@ async function scrapeApenadoFicha(
           .toBuffer();
 
         const dir = getApenadosDir();
-        const { mkdir, writeFile } = await import('fs/promises');
+        const { mkdir, writeFile, readFile } = await import('fs/promises');
+        const { createHash } = await import('crypto');
         await mkdir(dir, { recursive: true });
         const filename = `sipe-${sipeId}.webp`;
-        await writeFile(join(dir, filename), webpBuffer);
+        const localPath = join(dir, filename);
+
+        let shouldWrite = true;
+        if (existsSync(localPath)) {
+          try {
+            const existingBuffer = await readFile(localPath);
+            const currentHash = createHash('sha256').update(webpBuffer).digest('hex');
+            const existingHash = createHash('sha256').update(existingBuffer).digest('hex');
+            if (currentHash === existingHash) {
+              shouldWrite = false;
+            }
+          } catch {
+            // Em caso de erro ao ler o arquivo existente, prossegue sobrescrevendo
+          }
+        }
+
+        if (shouldWrite) {
+          await writeFile(localPath, webpBuffer);
+          fotoAtualizada = true;
+        }
+
         photoPath = `uploads/apenados/${filename}`;
       }
     }
@@ -1160,14 +1182,19 @@ async function scrapeApenadoFicha(
     });
   } else {
     const updateData: any = {};
-    if (photoPath && localApenado.photoPath !== photoPath) {
+    // Só atualiza a foto local se for detectada alteração (fotoAtualizada === true)
+    // ou se o apenado local atualmente estiver sem foto cadastrada.
+    if (photoPath && (fotoAtualizada || !localApenado.photoPath)) {
       updateData.photoPath = photoPath;
-      // Reseta hashes para forçar re-indexação facial no job em background
-      updateData.photoHash = null;
-      updateData.photoQuality = null;
-      updateData.photoHashSha = null;
-      updateData.faceDescriptor = null;
-      updateData.detScore = null;
+      
+      // Reseta hashes para forçar re-indexação facial no job em background apenas se a foto mudou
+      if (fotoAtualizada) {
+        updateData.photoHash = null;
+        updateData.photoQuality = null;
+        updateData.photoHashSha = null;
+        updateData.faceDescriptor = null;
+        updateData.detScore = null;
+      }
     }
     
     if (!localApenado.matricula && (dados.rji || dados.cpf)) {
