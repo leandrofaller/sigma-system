@@ -521,10 +521,26 @@ async function coletarIdsApenados(
   unidadeId: string,
   jobId: string
 ): Promise<number[]> {
-  await page.goto(`${SIPE_URL}/listagem/${unidadeId}/carceragem`, {
-    waitUntil: 'domcontentloaded',
-  })
-  await page.waitForSelector('table', { timeout: 30_000 })
+  let tableFound = false
+  try {
+    log(jobId, `Acessando listagem geral: ${SIPE_URL}/listagem/geral`)
+    await page.goto(`${SIPE_URL}/listagem/geral`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20_000,
+    })
+    await page.waitForSelector('table', { timeout: 15_000 })
+    tableFound = true
+  } catch (err) {
+    log(jobId, `⚠️ Falha ao carregar listagem geral, tentando carceragem...`)
+  }
+
+  if (!tableFound) {
+    await page.goto(`${SIPE_URL}/listagem/${unidadeId}/carceragem`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
+    })
+    await page.waitForSelector('table', { timeout: 30_000 })
+  }
 
   // ── Estratégia A: DataTables JS API ──────────────────────────
   // Consulta o objeto DataTables diretamente na memória da página.
