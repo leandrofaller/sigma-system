@@ -576,6 +576,19 @@ model SipeApenadoImportado {
   faccaoId  String?
   faccao    SipeFaccao? @relation(fields: [faccaoId], references: [id], onDelete: SetNull)
 
+  // Endereço residencial
+  logradouro   String?
+  numero       String?
+  complemento  String?
+  bairro       String?
+  cidade       String?
+  uf           String?
+  cep          String?
+
+  // Histórico
+  celeAtual            String?
+  ultimaMovimentacao   DateTime?
+
   ultimaSyncAt DateTime @default(now())
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -584,6 +597,8 @@ model SipeApenadoImportado {
   alcunhas         SipeAlcunha[]
   vinculosAdvogado SipeVinculoAdvogado[]
   vinculosVisitante SipeVinculoVisitante[]
+  historicos       SipeHistorico[]
+  documentos       SipeDocumento[]
 
   @@index([nome])
   @@index([cpf])
@@ -680,6 +695,38 @@ model SipeVinculoVisitante {
   @@index([apenadoId])
   @@index([visitanteId])
   @@map("sipe_vinculos_visitantes")
+}
+
+model SipeHistorico {
+  id        String               @id @default(cuid())
+  apenadoId String
+  apenado   SipeApenadoImportado @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+  tipo      String               // "MOVIMENTACAO", "DISCIPLINA", "TRANSFERENCIA", etc
+  descricao String               @db.Text
+  datahora  DateTime?
+  cela      String?
+  unidade   String?
+  createdAt DateTime             @default(now())
+
+  @@index([apenadoId])
+  @@index([tipo])
+  @@map("sipe_historicos")
+}
+
+model SipeDocumento {
+  id           String               @id @default(cuid())
+  apenadoId    String
+  apenado      SipeApenadoImportado @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+  nome         String
+  tipo         String               // "FOTO", "CERTIFICADO", "RESULTADO_EXAME", etc
+  dataAnexo    DateTime?
+  urlDownload  String?
+  descricao    String?              @db.Text
+  createdAt    DateTime             @default(now())
+
+  @@index([apenadoId])
+  @@index([tipo])
+  @@map("sipe_documentos")
 }
 
 model SipeSyncJob {
