@@ -423,7 +423,20 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
       }
 
       try {
-        await withRetry(() => scrapeApenadoFicha(page, sipeId))
+        await withRetry(async () => {
+          try {
+            await scrapeApenadoFicha(page, sipeId)
+          } catch (err: any) {
+            if (err?.message === 'SESSAO_EXPIRADA') {
+              log(jobId, 'Sessão expirada detectada. Re-autenticando no SIPE...')
+              await login(page, unidadeId)
+              // Retry loading the profile after logging back in
+              await scrapeApenadoFicha(page, sipeId)
+            } else {
+              throw err
+            }
+          }
+        })
         lastProcessedId = sipeId
         globalThis.__sipeState!.processado++
         globalThis.__sipeState!.pct = globalThis.__sipeState!.total
@@ -490,7 +503,10 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn()
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.message === 'APENADO_NAO_ENCONTRADO') {
+        throw err
+      }
       if (i === attempts - 1) throw err
       await new Promise(r => setTimeout(r, 2000 * (i + 1))) // 2s, 4s, 6s
     }
@@ -664,8 +680,40 @@ async function coletarIdsApenados(
 // ── Ficha scraping ────────────────────────────────────────────
 
 async function scrapeApenadoFicha(page: Page, sipeId: number): Promise<void> {
-  await page.goto(`${SIPE_URL}/apenados/${sipeId}/editar`, { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('[name="nomeapenado"]', { timeout: 15_000 })
+  const response = await page.goto(`${SIPE_URL}/apenados/${sipeId}/editar`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 45_000,
+  })
+
+  // Detect session expiration / redirect to login page
+  const currentUrl = page.url()
+  if (
+    currentUrl.includes('/login') ||
+    currentUrl === `${SIPE_URL}/` ||
+    currentUrl === `${SIPE_URL}` ||
+    currentUrl.includes('/selectRole')
+  ) {
+    throw new Error('SESSAO_EXPIRADA')
+  }
+
+  // Detect HTTP errors
+  const status = response?.status()
+  if (status && (status === 404 || status === 403 || status === 500)) {
+    throw new Error('APENADO_NAO_ENCONTRADO')
+  }
+
+  // Fast check for not found errors in body text
+  const bodyText = await page.innerText('body').catch(() => '')
+  if (
+    bodyText.includes('não encontrado') ||
+    bodyText.includes('Não foi possível encontrar') ||
+    bodyText.includes('Registro não encontrado') ||
+    bodyText.includes('404')
+  ) {
+    throw new Error('APENADO_NAO_ENCONTRADO')
+  }
+
+  await page.waitForSelector('[name="nomeapenado"]', { timeout: 30_000 })
 
   const dados = await page.evaluate(() => {
     const val = (name: string) =>
