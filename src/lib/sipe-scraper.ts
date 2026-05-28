@@ -1242,21 +1242,66 @@ async function scrapeAdvogados(page: Page, jobId: string): Promise<void> {
   await page.selectOption('select[name*="DataTables_Table"]', '-1').catch(() => {})
   await page.waitForTimeout(1000)
 
-  const links = await page.$$eval(
-    'tbody a[href*="/detalhaclientes"]',
-    (els: Element[]) =>
-      (els as HTMLAnchorElement[]).map((el) => ({
-        href: el.getAttribute('href'),
-        id: el.href.match(/\/advogados\/(\d+)\//)?.[1],
-      }))
-  )
+  const linksSet = new Set<string>()
+  const linksDetails: { href: string; id: string }[] = []
 
-  log(jobId, `Advogados encontrados: ${links.length}`)
-  if (globalThis.__sipeState) {
-    globalThis.__sipeState.fase = `Scraping advogados (${links.length})`
+  const extractLinks = async () => {
+    const currentLinks = await page.$$eval(
+      'tbody a[href*="/detalhaclientes"]',
+      (els: Element[]) =>
+        (els as HTMLAnchorElement[]).map((el) => ({
+          href: el.getAttribute('href') ?? '',
+          id: el.href.match(/\/advogados\/(\d+)\//)?.[1] ?? '',
+        }))
+    )
+    for (const link of currentLinks) {
+      if (link.href && link.id && !linksSet.has(link.id)) {
+        linksSet.add(link.id)
+        linksDetails.push(link)
+      }
+    }
   }
 
-  for (const link of links) {
+  await extractLinks()
+
+  // Loop de paginação caso a seleção de '-1' seja ignorada pelo servidor (server-side pagination)
+  let pageNum = 1
+  let continuar = true
+  while (continuar) {
+    const botaoLocator = page
+      .locator('a:has-text("Próxima"), a:has-text("Next"), li.next > a, [data-dt-idx="next"] a, a:has-text("»"), a:has-text(">>")')
+      .first()
+    const botaoVisivel = await botaoLocator.isVisible().catch(() => false)
+    if (!botaoVisivel) break
+
+    const botaoDisabled = await botaoLocator.evaluate((el: Element) =>
+      el.closest('li')?.classList.contains('disabled') ||
+      el.classList.contains('disabled') ||
+      (el as HTMLAnchorElement).tabIndex === -1
+    ).catch(() => false)
+    if (botaoDisabled) break
+
+    try {
+      pageNum++
+      await botaoLocator.click()
+      await page.waitForTimeout(1000)
+      const before = linksDetails.length
+      await extractLinks()
+      const novos = linksDetails.length - before
+      if (novos === 0) {
+        continuar = false
+      }
+    } catch {
+      continuar = false
+    }
+  }
+
+  log(jobId, `Advogados encontrados para detalhamento: ${linksDetails.length}`)
+  if (globalThis.__sipeState) {
+    globalThis.__sipeState.fase = `Scraping advogados (${linksDetails.length})`
+  }
+
+  for (const link of linksDetails) {
     if (!link.href || !link.id || globalThis.__sipeStopFlag) continue
     try {
       await scrapeAdvogadoDetalhe(page, parseInt(link.id))
@@ -1286,32 +1331,84 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> 
     update: { nome, oab, cpf, telefone, dataCadastro },
   })
 
-  const blocos = text.split('Informações do Apenado').slice(1)
-  for (const bloco of blocos) {
-    const nomeApenado = bloco.match(/Nome Apenado\s+([^\n]+)/)?.[1]?.trim()
-    const cpfApenado = bloco.match(/Cpf\s+([^\n]+)/)?.[1]?.trim()
-    if (!nomeApenado) continue
+  // Extração estruturada de apenados atendidos a partir do DOM (resolve o rótulo "Cpf" que na verdade é o SIPE ID)
+  const apenadosAtendidos = await page.evaluate(() => {
+    const tabelas = Array.from(document.querySelectorAll('table#simple-table'))
+    return tabelas.map(tabela => {
+      const ddElements = Array.from(tabela.querySelectorAll('dd'))
+      const dtElements = Array.from(tabela.querySelectorAll('dt'))
+      
+      const getValByDt = (label: string) => {
+        const index = dtElements.findIndex(dt => (dt.textContent ?? '').toLowerCase().includes(label.toLowerCase()))
+        return index >= 0 && ddElements[index] ? (ddElements[index].textContent ?? '').trim() : ''
+      }
 
-    const importado =
-      (cpfApenado
-        ? await prisma.sipeApenadoImportado.findFirst({ where: { cpf: cpfApenado } })
-        : null) ??
-      (await prisma.sipeApenadoImportado.findFirst({
-        where: { nome: nomeApenado },
-      }))
+      return {
+        nome: getValByDt('Nome Apenado'),
+        sipeIdText: getValByDt('Cpf'), // O rótulo "Cpf" contém na verdade o SIPE ID do apenado nesta tela
+        dataNascimento: getValByDt('Data Nascimento'),
+        unidade: getValByDt('Unidade Prisional'),
+        cela: getValByDt('Cela'),
+        tempoPena: getValByDt('Tempo de Pena')
+      }
+    }).filter(ap => ap.nome && ap.sipeIdText)
+  })
 
-    if (importado) {
-      await prisma.sipeVinculoAdvogado.upsert({
-        where: {
-          apenadoId_advogadoId: {
-            apenadoId: importado.id,
-            advogadoId: adv.id,
-          },
-        },
-        create: { apenadoId: importado.id, advogadoId: adv.id },
-        update: { ativo: true },
+  for (const ap of apenadosAtendidos) {
+    const apenadoSipeId = parseInt(ap.sipeIdText)
+    if (isNaN(apenadoSipeId) || apenadoSipeId <= 0) continue
+
+    // Tenta encontrar o apenado pelo SIPE ID
+    let apenado = await prisma.sipeApenadoImportado.findUnique({
+      where: { sipeId: apenadoSipeId }
+    })
+
+    if (!apenado) {
+      // Se o apenado ainda não foi importado, criamos um registro stub parcial
+      apenado = await prisma.sipeApenadoImportado.create({
+        data: {
+          sipeId: apenadoSipeId,
+          nome: ap.nome,
+          dataNascimento: ap.dataNascimento || null,
+          unidade: ap.unidade || null,
+          cela: ap.cela || null,
+          tempoPena: ap.tempoPena || null,
+          ultimaSyncAt: new Date()
+        }
       })
+    } else {
+      // Se ele já existe, atualiza informações básicas de cela e unidade se estiverem nulas/vazias
+      const updateData: any = {}
+      if (!apenado.unidade && ap.unidade) updateData.unidade = ap.unidade
+      if (!apenado.cela && ap.cela) updateData.cela = ap.cela
+      if (!apenado.tempoPena && ap.tempoPena) updateData.tempoPena = ap.tempoPena
+      if (!apenado.dataNascimento && ap.dataNascimento) updateData.dataNascimento = ap.dataNascimento
+
+      if (Object.keys(updateData).length > 0) {
+        await prisma.sipeApenadoImportado.update({
+          where: { id: apenado.id },
+          data: updateData
+        })
+      }
     }
+
+    // Cria ou ativa o vínculo de atendimento com o advogado
+    await prisma.sipeVinculoAdvogado.upsert({
+      where: {
+        apenadoId_advogadoId: {
+          apenadoId: apenado.id,
+          advogadoId: adv.id
+        }
+      },
+      create: {
+        apenadoId: apenado.id,
+        advogadoId: adv.id,
+        ativo: true
+      },
+      update: {
+        ativo: true
+      }
+    })
   }
 }
 
