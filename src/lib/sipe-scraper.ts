@@ -619,6 +619,9 @@ async function scrapeApenadoFicha(page: Page, sipeId: number): Promise<void> {
   await Promise.all([
     scrapeProcessos(page, sipeId, apenado.id),
     scrapeAlcunhas(page, sipeId, apenado.id),
+    scrapeEndereço(page, sipeId, apenado.id),
+    scrapeHistorico(page, sipeId, apenado.id),
+    scrapeDocumentos(page, sipeId, apenado.id),
   ])
 }
 
@@ -800,6 +803,137 @@ export async function scrapeFaccoes(): Promise<void> {
     }
   } finally {
     await context.close()
+  }
+}
+
+async function scrapeEndereço(
+  page: Page,
+  sipeId: number,
+  apenadoId: string,
+): Promise<void> {
+  try {
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/endereco`, {
+      waitUntil: 'networkidle',
+    })
+
+    const endereco = await page.evaluate(() => {
+      const val = (name: string) =>
+        (
+          document.querySelector(`[name="${name}"]`) as HTMLInputElement | null
+        )?.value?.trim() || null
+
+      return {
+        logradouro: val('logradouro'),
+        numero: val('numero'),
+        complemento: val('complemento'),
+        bairro: val('bairro'),
+        cidade: val('cidade'),
+        uf: val('uf'),
+        cep: val('cep'),
+      }
+    })
+
+    // Atualizar apenado com endereço
+    await prisma.sipeApenadoImportado.update({
+      where: { id: apenadoId },
+      data: {
+        logradouro: endereco.logradouro,
+        numero: endereco.numero,
+        complemento: endereco.complemento,
+        bairro: endereco.bairro,
+        cidade: endereco.cidade,
+        uf: endereco.uf,
+        cep: endereco.cep,
+      },
+    })
+  } catch (err) {
+    // Silently ignore if page doesn't exist
+  }
+}
+
+async function scrapeHistorico(
+  page: Page,
+  sipeId: number,
+  apenadoId: string,
+): Promise<void> {
+  try {
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/movimentacoes`, {
+      waitUntil: 'networkidle',
+    })
+
+    const rows = await page.$$('table tbody tr')
+    for (const row of rows) {
+      const cells = await row.$$('td')
+      if (cells.length < 2) continue
+
+      const tipo = (await cells[0]?.innerText())?.trim() || 'MOVIMENTACAO'
+      const data = (await cells[1]?.innerText())?.trim()
+      const descricao = (await cells[2]?.innerText())?.trim() || ''
+
+      if (!data) continue
+
+      await prisma.sipeHistorico.upsert({
+        where: {
+          // Usar combinação unique já que não há ID único no SIPE
+          id: `${apenadoId}-${tipo}-${data}-${descricao}`.substring(0, 50),
+        },
+        create: {
+          apenadoId,
+          tipo,
+          descricao,
+          datahora: new Date(data),
+        },
+        update: {
+          descricao,
+          datahora: new Date(data),
+        },
+      })
+    }
+  } catch (err) {
+    // Silently ignore if page doesn't exist
+  }
+}
+
+async function scrapeDocumentos(
+  page: Page,
+  sipeId: number,
+  apenadoId: string,
+): Promise<void> {
+  try {
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/documentos`, {
+      waitUntil: 'networkidle',
+    })
+
+    const rows = await page.$$('table tbody tr')
+    for (const row of rows) {
+      const cells = await row.$$('td')
+      if (cells.length < 1) continue
+
+      const nome = (await cells[0]?.innerText())?.trim() || ''
+      const tipo = (await cells[1]?.innerText())?.trim() || 'DOCUMENTO'
+      const data = (await cells[2]?.innerText())?.trim()
+
+      if (!nome) continue
+
+      await prisma.sipeDocumento.upsert({
+        where: {
+          // Usar combinação única
+          id: `${apenadoId}-${nome}-${data}`.substring(0, 50),
+        },
+        create: {
+          apenadoId,
+          nome,
+          tipo,
+          dataAnexo: data ? new Date(data) : undefined,
+        },
+        update: {
+          tipo,
+          dataAnexo: data ? new Date(data) : undefined,
+        },
+      })
+    }
+  } catch (err) {
+    // Silently ignore if page doesn't exist
   }
 }
 
