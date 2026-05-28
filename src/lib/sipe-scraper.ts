@@ -198,9 +198,12 @@ async function login(page: Page, unidadeId: string): Promise<boolean> {
   }
 
   // Seleciona perfil e unidade
-  await page.waitForSelector('select', { timeout: 10_000 })
-  await page.selectOption('select:first-of-type', SIPE_PERFIL)
-  await page.selectOption('select:last-of-type', unidadeId)
+  // Usa .nth() em vez de :first-of-type / :last-of-type — os dois <select> ficam
+  // em <div> diferentes, então cada um é "last-of-type" dentro do seu pai e o
+  // seletor CSS resolve para 2 elementos, causando timeout.
+  await page.locator('select').nth(0).waitFor({ state: 'visible', timeout: 10_000 })
+  await page.locator('select').nth(0).selectOption(SIPE_PERFIL)
+  await page.locator('select').nth(1).selectOption(unidadeId)
 
   const submitBtn2 =
     (await page.$('button[type="submit"]')) ??

@@ -71,16 +71,20 @@ export async function GET(_req: NextRequest) {
 
     // Aguarda página de seleção de perfil/unidade
     await page.waitForURL('**/selectRole**', { timeout: 30_000 })
-    await page.waitForSelector('select:last-of-type', { timeout: 10_000 })
+    // Usa nth(1) em vez de :last-of-type — os dois <select> ficam em <div>
+    // diferentes, então cada um é "last-of-type" dentro do seu pai e o seletor
+    // CSS resolvia para 2 elementos. nth(1) é explícito e não ambíguo.
+    await page.locator('select').nth(1).waitFor({ state: 'visible', timeout: 10_000 })
 
-    // Lê todas as opções do dropdown de unidade (segundo select)
-    const unidades = await page.$$eval(
-      'select:last-of-type option',
-      (opts: Element[]) =>
-        (opts as HTMLOptionElement[])
-          .filter((o) => o.value && o.value !== '' && o.value !== '0')
-          .map((o) => ({ id: o.value, nome: o.textContent?.trim() ?? '' }))
-    )
+    // Lê todas as opções do segundo select (dropdown de unidade)
+    const unidades = await page.evaluate(() => {
+      const selects = document.querySelectorAll('select')
+      if (selects.length < 2) return [] as Array<{ id: string; nome: string }>
+      const unitSelect = selects[1] as HTMLSelectElement
+      return Array.from(unitSelect.options)
+        .filter((o) => o.value && o.value !== '' && o.value !== '0')
+        .map((o) => ({ id: o.value, nome: (o.textContent ?? '').trim() }))
+    })
 
     if (unidades.length === 0) {
       throw new Error('Nenhuma unidade encontrada no dropdown — estrutura da página pode ter mudado')
