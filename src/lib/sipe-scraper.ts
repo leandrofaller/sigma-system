@@ -1364,7 +1364,7 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> 
     update: { nome, oab, cpf, telefone, dataCadastro },
   })
 
-  // Extração estruturada de apenados atendidos a partir do DOM (resolve o rótulo "Cpf" que na verdade é o SIPE ID)
+  // Extração estruturada de apenados atendidos a partir do DOM (resolve o rótulo "Cpf" que na verdade é o SIPE ID ou CPF)
   const apenadosAtendidos = await page.evaluate(() => {
     const tabelas = Array.from(document.querySelectorAll('table#simple-table'))
     return tabelas.map(tabela => {
@@ -1376,36 +1376,89 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> 
         return index >= 0 && ddElements[index] ? (ddElements[index].textContent ?? '').trim() : ''
       }
 
+      const getHrefByDt = (label: string) => {
+        const index = dtElements.findIndex(dt => (dt.textContent ?? '').toLowerCase().includes(label.toLowerCase()))
+        if (index >= 0 && ddElements[index]) {
+          const a = ddElements[index].querySelector('a')
+          return a ? a.getAttribute('href') : null
+        }
+        return null
+      }
+
       return {
         nome: getValByDt('Nome Apenado'),
-        sipeIdText: getValByDt('Cpf'), // O rótulo "Cpf" contém na verdade o SIPE ID do apenado nesta tela
+        sipeIdText: getValByDt('Cpf'), // O rótulo "Cpf" pode conter na verdade o SIPE ID ou o CPF do apenado
+        href: getHrefByDt('Nome Apenado'), // Tenta extrair o link do nome, onde geralmente está o SIPE ID correto
         dataNascimento: getValByDt('Data Nascimento'),
         unidade: getValByDt('Unidade Prisional'),
         cela: getValByDt('Cela'),
         tempoPena: getValByDt('Tempo de Pena')
       }
-    }).filter(ap => ap.nome && ap.sipeIdText)
+    }).filter(ap => ap.nome && (ap.sipeIdText || ap.href))
   })
 
   for (const ap of apenadosAtendidos) {
-    const apenadoSipeId = parseInt(ap.sipeIdText)
-    if (isNaN(apenadoSipeId) || apenadoSipeId <= 0) continue
+    let apenadoSipeId: number | null = null
 
-    // Tenta encontrar o apenado pelo SIPE ID
-    let apenado = await prisma.sipeApenadoImportado.findUnique({
-      where: { sipeId: apenadoSipeId }
-    })
+    // 1. Tenta extrair o SIPE ID correto do link href do nome (ex: /apenados/123456/editar)
+    if (ap.href) {
+      const match = ap.href.match(/\/apenados\/(\d+)/)
+      if (match) {
+        const parsed = parseInt(match[1])
+        if (!isNaN(parsed) && parsed > 0 && parsed <= 2147483647) {
+          apenadoSipeId = parsed
+        }
+      }
+    }
 
+    // 2. Se não conseguiu pelo link, limpa caracteres especiais do campo "Cpf" e tenta usar se não estourar Int32
+    if (!apenadoSipeId && ap.sipeIdText) {
+      const apenasDigitos = ap.sipeIdText.replace(/\D/g, '')
+      const parsed = parseInt(apenasDigitos)
+      if (!isNaN(parsed) && parsed > 0 && parsed <= 2147483647) {
+        apenadoSipeId = parsed
+      }
+    }
+
+    // Tenta encontrar o apenado no banco pelo sipeId se tivermos um válido
+    let apenado = null
+    if (apenadoSipeId) {
+      apenado = await prisma.sipeApenadoImportado.findUnique({
+        where: { sipeId: apenadoSipeId }
+      })
+    }
+
+    // 3. Fallback: Se não encontramos por sipeId, tenta buscar por Nome exato
+    if (!apenado && ap.nome) {
+      apenado = await prisma.sipeApenadoImportado.findFirst({
+        where: { nome: ap.nome }
+      })
+    }
+
+    // 4. Se não encontramos o apenado, criamos um registro stub parcial
     if (!apenado) {
-      // Se o apenado ainda não foi importado, criamos um registro stub parcial
+      // Se não temos um sipeId válido para criar o registro (ex: CPF maior que 2147483647),
+      // geramos um ID fictício negativo e único para manter integridade no banco
+      if (!apenadoSipeId) {
+        const menorIdApenado = await prisma.sipeApenadoImportado.findFirst({
+          where: { sipeId: { lt: 0 } },
+          orderBy: { sipeId: 'asc' },
+          select: { sipeId: true }
+        })
+        apenadoSipeId = menorIdApenado ? menorIdApenado.sipeId - 1 : -1000
+      }
+
+      const cpfLimpo = ap.sipeIdText ? ap.sipeIdText.replace(/\D/g, '') : null
+
       apenado = await prisma.sipeApenadoImportado.create({
         data: {
           sipeId: apenadoSipeId,
-          nome: ap.nome,
+          nome: ap.nome || 'SEM NOME',
           dataNascimento: ap.dataNascimento || null,
           unidade: ap.unidade || null,
           cela: ap.cela || null,
           tempoPena: ap.tempoPena || null,
+          cpf: cpfLimpo && cpfLimpo.length === 11 ? cpfLimpo : null,
           ultimaSyncAt: new Date()
         }
       })
@@ -1416,6 +1469,11 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> 
       if (!apenado.cela && ap.cela) updateData.cela = ap.cela
       if (!apenado.tempoPena && ap.tempoPena) updateData.tempoPena = ap.tempoPena
       if (!apenado.dataNascimento && ap.dataNascimento) updateData.dataNascimento = ap.dataNascimento
+
+      const cpfLimpo = ap.sipeIdText ? ap.sipeIdText.replace(/\D/g, '') : ''
+      if (!apenado.cpf && cpfLimpo.length === 11) {
+        updateData.cpf = cpfLimpo
+      }
 
       if (Object.keys(updateData).length > 0) {
         await prisma.sipeApenadoImportado.update({
