@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit';
+import { parsePortugueseFloat } from '@/lib/utils';
 
 function parseDateOnly(str: string): Date {
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
@@ -60,7 +61,7 @@ export async function PATCH(
         }
         data.status = 'IN_PROGRESS';
         data.startedAt = now;
-        data.startKm = parseFloat(body.startKm);
+        data.startKm = parsePortugueseFloat(body.startKm);
         if (body.placa !== undefined) data.placa = body.placa || null;
       }
 
@@ -72,7 +73,7 @@ export async function PATCH(
         if (body.endKm === undefined || body.endKm === null || body.endKm === '') {
           return NextResponse.json({ error: 'KM final é obrigatório para finalizar' }, { status: 400 });
         }
-        const endKmFloat = parseFloat(body.endKm);
+        const endKmFloat = parsePortugueseFloat(body.endKm);
         if (mission.startKm != null && endKmFloat < mission.startKm) {
           return NextResponse.json({ error: 'KM final não pode ser menor que o inicial' }, { status: 400 });
         }
@@ -118,7 +119,7 @@ export async function PATCH(
       if (body.groupId !== undefined) data.groupId = body.groupId || null;
       // startKm editável após início (correção de valor digitado errado)
       if (body.startKm !== undefined && mission.status === 'IN_PROGRESS') {
-        const km = parseFloat(body.startKm)
+        const km = parsePortugueseFloat(body.startKm)
         if (isNaN(km) || km < 0) {
           return NextResponse.json({ error: 'KM inicial inválido' }, { status: 400 })
         }

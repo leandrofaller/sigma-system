@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit';
+import { parsePortugueseFloat } from '@/lib/utils';
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
         endDate: endDate ? new Date(endDate) : null,
         status: startNow ? 'IN_PROGRESS' : 'PLANNED',
         startedAt: startNow ? now : null,
-        startKm: startNow && startKm ? parseFloat(startKm) : null,
+        startKm: startNow && startKm ? parsePortugueseFloat(startKm) : null,
         participants: participants || [],
         userId: user.id,
         groupId: groupId || user.groupId,

@@ -64,3 +64,51 @@ export function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
 }
+
+export function parsePortugueseFloat(value: string | number | undefined | null): number {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === 'number') return value;
+  
+  let cleanValue = String(value).trim();
+  if (!cleanValue) return 0;
+
+  // Replace multiple spaces
+  cleanValue = cleanValue.replace(/\s+/g, '');
+
+  // If both dot and comma are present:
+  // e.g. "80.000,50" -> dot is thousands, comma is decimal
+  if (cleanValue.includes('.') && cleanValue.includes(',')) {
+    cleanValue = cleanValue.replace(/\./g, '').replace(/,/g, '.');
+    return parseFloat(cleanValue);
+  }
+
+  // If there's only a comma:
+  // e.g. "80000,50" or "80,50" -> comma is decimal
+  if (cleanValue.includes(',')) {
+    cleanValue = cleanValue.replace(/,/g, '.');
+    return parseFloat(cleanValue);
+  }
+
+  // If there's only a dot:
+  // e.g. "80.000" or "80.50" or "80.5" or "1.500"
+  if (cleanValue.includes('.')) {
+    const parts = cleanValue.split('.');
+    if (parts.length > 2) {
+      // e.g. "1.234.567" -> multiple dots means thousands separators
+      cleanValue = cleanValue.replace(/\./g, '');
+    } else if (parts.length === 2) {
+      const decimalPart = parts[1];
+      // In Brazil: "80.000" (3 digits) means 80000.
+      // "80.50" (2 digits) means 80.5.
+      // "80.5" (1 digit) means 80.5.
+      // So if the part after the dot has exactly 3 digits, we treat it as a thousands separator and remove the dot.
+      // Otherwise, we keep the dot as the decimal separator.
+      if (decimalPart.length === 3) {
+        cleanValue = cleanValue.replace(/\./g, '');
+      }
+    }
+  }
+
+  const result = parseFloat(cleanValue);
+  return isNaN(result) ? 0 : result;
+}

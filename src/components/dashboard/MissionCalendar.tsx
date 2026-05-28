@@ -16,6 +16,7 @@ import {
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { parsePortugueseFloat } from '@/lib/utils';
 
 interface Mission {
   id: string;
@@ -254,12 +255,12 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
       toast.error('Esta missão está agendada para data futura — não é possível iniciar antes.');
       return;
     }
-    updateMissionStatus(viewingMission.id, 'IN_PROGRESS', { placa: startInput.placa.trim().toUpperCase(), startKm: startInput.km });
+    updateMissionStatus(viewingMission.id, 'IN_PROGRESS', { placa: startInput.placa.trim().toUpperCase(), startKm: parsePortugueseFloat(startInput.km) });
   };
 
   const saveStartKm = async () => {
     if (!viewingMission) return;
-    const km = parseFloat(editingStartKm.value);
+    const km = parsePortugueseFloat(editingStartKm.value);
     if (!editingStartKm.value || isNaN(km) || km < 0) {
       toast.error('Informe um KM inicial válido');
       return;
@@ -269,7 +270,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
       const res = await fetch(`/api/missions/${viewingMission.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startKm: editingStartKm.value }),
+        body: JSON.stringify({ startKm: km }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -290,12 +291,13 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
   const submitEnd = () => {
     if (!viewingMission) return;
     if (!endInput.km) { toast.error('Informe o KM final'); return; }
-    if (viewingMission.startKm != null && parseInt(endInput.km) < viewingMission.startKm) {
+    const parsedEndKm = parsePortugueseFloat(endInput.km);
+    if (viewingMission.startKm != null && parsedEndKm < viewingMission.startKm) {
       toast.error('KM final não pode ser menor que o inicial');
       return;
     }
     updateMissionStatus(viewingMission.id, 'COMPLETED', {
-      endKm: endInput.km,
+      endKm: parsedEndKm,
       endNote: endInput.note || null,
     });
   };
@@ -556,9 +558,8 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                         {editingStartKm.open ? (
                           <div className="flex items-center gap-2">
                             <input
-                              type="number"
+                              type="text"
                               inputMode="decimal"
-                              step="0.01"
                               autoFocus
                               value={editingStartKm.value}
                               onChange={e => setEditingStartKm(s => ({ ...s, value: e.target.value }))}
@@ -653,7 +654,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                     />
                     <div className="flex gap-2">
                       <input
-                        type="number" inputMode="decimal" step="0.01"
+                        type="text" inputMode="decimal"
                         placeholder="Ex: 14200.50"
                         value={startInput.km}
                         onChange={e => setStartInput({ ...startInput, km: e.target.value })}
@@ -679,7 +680,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                       Finalizar viagem — informe o KM final. Hora de chegada será registrada automaticamente.
                     </p>
                     <input
-                      type="number" inputMode="decimal" step="0.01"
+                      type="text" inputMode="decimal"
                       placeholder="Ex: 14523.75" autoFocus
                       value={endInput.km}
                       onChange={e => setEndInput({ ...endInput, km: e.target.value })}

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parsePortugueseFloat } from '@/lib/utils';
 import {
   Plus, MapPin, Clock, CheckCircle2, X, Loader2,
   Navigation, Zap, Monitor, Pencil, AlertTriangle,
@@ -220,7 +221,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
       };
       if (form.startNow) {
         payload.startNow = true;
-        payload.startKm = form.startKm;
+        payload.startKm = parsePortugueseFloat(form.startKm);
       }
 
       const res = await fetch('/api/missions', {
@@ -264,7 +265,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
       const res = await fetch(`/api/missions/${startingMission.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'IN_PROGRESS', startKm: startKmValue, placa: placaValue.trim().toUpperCase() }),
+        body: JSON.stringify({ status: 'IN_PROGRESS', startKm: parsePortugueseFloat(startKmValue), placa: placaValue.trim().toUpperCase() }),
       });
       if (res.ok) {
         const updated = await res.json();
@@ -311,7 +312,8 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
       toast.error('Informe o KM final');
       return;
     }
-    if (endingMission.startKm != null && parseInt(endKmValue) < endingMission.startKm) {
+    const parsedEndKm = parsePortugueseFloat(endKmValue);
+    if (endingMission.startKm != null && parsedEndKm < endingMission.startKm) {
       toast.error('KM final não pode ser menor que o inicial');
       return;
     }
@@ -322,7 +324,7 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'COMPLETED',
-          endKm: endKmValue,
+          endKm: parsedEndKm,
           endNote: endNoteValue || null,
           endDate: new Date().toISOString(),
         }),
@@ -601,8 +603,8 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                     </FieldLabel>
                     <input
                       required
-                      type="number"
-                      inputMode="numeric"
+                      type="text"
+                      inputMode="decimal"
                       value={form.startKm}
                       onChange={e => setForm({ ...form, startKm: e.target.value })}
                       placeholder="Quilometragem atual do veículo"
@@ -716,9 +718,8 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
               <FieldLabel>KM Final</FieldLabel>
               <input
                 autoFocus
-                type="number"
+                type="text"
                 inputMode="decimal"
-                step="0.01"
                 value={endKmValue}
                 onChange={e => setEndKmValue(e.target.value)}
                 placeholder="Ex: 14523.75"
@@ -788,9 +789,8 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
               />
               <FieldLabel>KM Inicial</FieldLabel>
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
-                step="0.01"
                 value={startKmValue}
                 onChange={e => setStartKmValue(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') confirmStart(); }}
