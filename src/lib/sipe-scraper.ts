@@ -128,6 +128,15 @@ async function getBrowser(): Promise<Browser> {
     const executablePath = findSystemChromium()
     browserInstance = await chromium.launch({
       headless: true,
+      // Flags obrigatórias para Docker (sem seccomp/AppArmor por padrão)
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',   // evita crash por /dev/shm lotado em container
+        '--disable-gpu',
+        '--disable-extensions',
+        '--disable-background-networking',
+      ],
       // Se encontrou Chromium do sistema, usa ele; caso contrário, usa o binário do Playwright
       ...(executablePath ? { executablePath } : {}),
     })
@@ -375,7 +384,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
       }
 
       try {
-        await scrapeApenadoFicha(page, sipeId)
+        await withRetry(() => scrapeApenadoFicha(page, sipeId))
         lastProcessedId = sipeId
         globalThis.__sipeState!.processado++
         globalThis.__sipeState!.pct = globalThis.__sipeState!.total
@@ -384,18 +393,16 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
             )
           : 0
 
-        // Persist cursor every 5 records (reduce DB load)
-        if (globalThis.__sipeState!.processado % 5 === 0) {
-          await dbProgress(jobId, {
-            processado: globalThis.__sipeState!.processado,
-            ultimoIdProcessado: sipeId,
-          })
-        }
+        // Persiste cursor a cada registro para recovery sem perda em crash/restart
+        await dbProgress(jobId, {
+          processado: globalThis.__sipeState!.processado,
+          ultimoIdProcessado: sipeId,
+        })
         // Polite delay
         await page.waitForTimeout(300 + Math.random() * 500)
       } catch (err) {
         globalThis.__sipeState!.erros++
-        const msg = `Erro apenado #${sipeId}: ${err}`
+        const msg = `Erro apenado #${sipeId} (após 3 tentativas): ${err}`
         globalThis.__sipeState!.ultimoLog = msg
         await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
       }
@@ -440,6 +447,18 @@ function log(jobId: string, msg: string) {
   dbProgress(jobId, { log: msg }).catch(() => {})
 }
 
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn()
+    } catch (err) {
+      if (i === attempts - 1) throw err
+      await new Promise(r => setTimeout(r, 2000 * (i + 1))) // 2s, 4s, 6s
+    }
+  }
+  throw new Error('unreachable')
+}
+
 // ── ID collection ─────────────────────────────────────────────
 
 async function coletarIdsApenados(
@@ -449,138 +468,121 @@ async function coletarIdsApenados(
 ): Promise<number[]> {
   const ids = new Set<number>()
 
-  await page.goto(`${SIPE_URL}/listagem/${unidadeId}/carceragem`, {
-    waitUntil: 'networkidle',
-  })
-
-  // Try to show more rows - test multiple values
-  const rowsToShow = ['-1', '100', '500', '1000', '10000']
-  let rowsFound = 0
-  let selectedValue = '-1'
-
-  for (const value of rowsToShow) {
+  // Intercepta respostas XHR do DataTables — pega todos os registros de uma vez
+  const responseHandler = async (response: Parameters<Parameters<typeof page.on<'response'>>[1]>[0]) => {
+    const url = response.url()
+    if (!url.includes('/listagem/') && !url.includes('draw=')) return
     try {
-      await page.selectOption('select[name*="DataTables_Table"]', value).catch(() => {})
-      await page.waitForTimeout(800)
-
-      const testRows = await page.$$('table tbody tr')
-      rowsFound = testRows.length
-
-      log(jobId, `🔄 Testado select=${value}: ${rowsFound} linhas encontradas`)
-
-      if (rowsFound > 10) {
-        selectedValue = value
-        log(jobId, `✅ Select ${value} funcionou! ${rowsFound} linhas encontradas`)
-        break
+      const json = await response.json()
+      // DataTables retorna { data: [[col0, col1, ...], ...] }
+      if (Array.isArray(json?.data)) {
+        for (const row of json.data) {
+          const id = parseInt(row[0])
+          if (!isNaN(id) && id > 0) ids.add(id)
+        }
+        log(jobId, `⚡ Interceptação XHR: ${ids.size} IDs via DataTables`)
       }
-    } catch (err) {
-      log(jobId, `⚠️ Erro ao testar select=${value}`)
-    }
+    } catch { /* não era JSON — ignora */ }
   }
+  page.on('response', responseHandler)
 
-  log(jobId, `🎯 Usando select=${selectedValue} com ${rowsFound} linhas`)
+  await page.goto(`${SIPE_URL}/listagem/${unidadeId}/carceragem`, {
+    waitUntil: 'domcontentloaded',
+  })
+  await page.waitForSelector('table', { timeout: 30_000 })
 
-  const extractIds = async () => {
-    const rows = await page.$$('table tbody tr')
-    log(jobId, `📊 DEBUG: Total de <tr> encontrados: ${rows.length}`)
+  // Força DataTables a buscar todos os registros de uma vez (length=-1)
+  await page.evaluate(() => {
+    try {
+      const w = window as any
+      const dt = w.$?.('table').DataTable?.()
+      if (dt) dt.page.len(-1).draw()
+    } catch { /* DataTables não disponível */ }
+  }).catch(() => {})
 
-    for (const row of rows) {
-      const cell = await row.$('th, td:first-child')
-      if (!cell) continue
-      const id = parseInt((await cell.innerText()).trim())
-      if (!isNaN(id)) ids.add(id)
+  // Aguarda a resposta XHR processar
+  await page.waitForTimeout(2000)
+  page.off('response', responseHandler)
+
+  // Fallback via DOM + paginação se a interception não capturou nada
+  if (ids.size === 0) {
+    log(jobId, '⚠️ Interception XHR sem resultado — usando fallback DOM + paginação')
+
+    const rowsToShow = ['-1', '100', '500', '1000', '10000']
+    for (const value of rowsToShow) {
+      try {
+        await page.selectOption('select[name*="DataTables_Table"]', value).catch(() => {})
+        await page.waitForTimeout(800)
+        const testRows = await page.$$('table tbody tr')
+        if (testRows.length > 10) {
+          log(jobId, `✅ Select ${value} funcionou: ${testRows.length} linhas`)
+          break
+        }
+      } catch { /* ignore */ }
     }
-  }
 
-  await extractIds()
-  log(jobId, `IDs principais: ${ids.size}`)
+    const extractIds = async () => {
+      const rows = await page.$$('table tbody tr')
+      for (const row of rows) {
+        const cell = await row.$('th, td:first-child')
+        if (!cell) continue
+        const id = parseInt((await cell.innerText()).trim())
+        if (!isNaN(id)) ids.add(id)
+      }
+    }
 
-  // Paginação - tentar iterar por próximas páginas
-  let pageNum = 1
-  let temProxima = true
+    await extractIds()
 
-  while (temProxima) {
-    // Procurar por botão de próxima página
-    const botaoProxima = await page
-      .locator('a:has-text("Próxima"), a:has-text("Next"), button:has-text("Próxima")')
-      .first()
-      .isVisible()
-      .catch(() => false)
+    let pageNum = 1
+    let temProxima = true
+    while (temProxima) {
+      const botaoProxima = await page
+        .locator('a:has-text("Próxima"), a:has-text("Next"), button:has-text("Próxima")')
+        .first()
+        .isVisible()
+        .catch(() => false)
 
-    if (botaoProxima) {
+      if (!botaoProxima) {
+        log(jobId, `📄 Fim da paginação (página ${pageNum})`)
+        temProxima = false
+        continue
+      }
+
       try {
         pageNum++
-        log(jobId, `📄 Navegando para próxima página ${pageNum}...`)
-
-        // Clicar próxima - tenta múltiplos seletores
-        let clicked = false
         const selectors = [
           'a:has-text("Próxima")',
           'a:has-text("Next")',
-          'button:has-text("Próxima")',
           'li.next > a',
-          '[data-dt-idx="next"] a'
+          '[data-dt-idx="next"] a',
         ]
-
+        let clicked = false
         for (const sel of selectors) {
           try {
-            const elem = await page.locator(sel).first()
+            const elem = page.locator(sel).first()
             if (await elem.isVisible()) {
               await elem.click()
               clicked = true
               break
             }
-          } catch {
-            // try next selector
-          }
+          } catch { /* tenta próximo seletor */ }
         }
-
-        if (!clicked) {
-          log(jobId, `  ├─ ⚠️ Nenhum botão encontrado`)
-          temProxima = false
-          continue
-        }
-
-        // Aguardar carregamento simples (sem estado)
+        if (!clicked) { temProxima = false; continue }
         await page.waitForTimeout(1200)
-
-        // Selecionar todos novamente
-        for (const value of rowsToShow) {
-          try {
-            await page.selectOption('select[name*="DataTables_Table"]', value).catch(() => {})
-            await page.waitForTimeout(500)
-            const testRows = await page.$$('table tbody tr')
-            if (testRows.length > 10) break
-          } catch {
-            // ignore
-          }
-        }
-
-        // Extrair IDs da nova página
-        const rowsAntes = ids.size
+        const before = ids.size
         await extractIds()
-        const rowsDepois = ids.size
-
-        log(jobId, `  ├─ Página ${pageNum}: +${rowsDepois - rowsAntes} novos IDs (total: ${rowsDepois})`)
-      } catch (err) {
-        const errMsg = String(err).slice(0, 100)
-        log(jobId, `  ├─ ❌ Erro ao navegar próxima página: ${errMsg}`)
+        log(jobId, `📄 Página ${pageNum}: +${ids.size - before} IDs (total: ${ids.size})`)
+      } catch {
         temProxima = false
       }
-    } else {
-      temProxima = false
-      log(jobId, `📄 Fim da paginação (página ${pageNum})`)
     }
   }
 
-  log(jobId, `🔍 DEBUG: IDs extraídos (primeiros 20): ${Array.from(ids).slice(0, 20).join(', ')}`)
-
   log(jobId, `✅ Total IDs coletados: ${ids.size}`)
   if (ids.size <= 50) {
-    log(jobId, `🔍 DEBUG: Todos os IDs: ${Array.from(ids).sort((a, b) => a - b).join(', ')}`)
+    log(jobId, `🔍 Todos os IDs: ${[...ids].sort((a, b) => a - b).join(', ')}`)
   } else {
-    log(jobId, `🔍 DEBUG: IDs (primeiros 30): ${Array.from(ids).sort((a, b) => a - b).slice(0, 30).join(', ')}`)
-    log(jobId, `🔍 DEBUG: IDs (últimos 30): ${Array.from(ids).sort((a, b) => a - b).slice(-30).join(', ')}`)
+    log(jobId, `🔍 IDs (primeiros 30): ${[...ids].sort((a, b) => a - b).slice(0, 30).join(', ')}`)
   }
   return [...ids]
 }
@@ -588,9 +590,8 @@ async function coletarIdsApenados(
 // ── Ficha scraping ────────────────────────────────────────────
 
 async function scrapeApenadoFicha(page: Page, sipeId: number): Promise<void> {
-  await page.goto(`${SIPE_URL}/apenados/${sipeId}/editar`, {
-    waitUntil: 'networkidle',
-  })
+  await page.goto(`${SIPE_URL}/apenados/${sipeId}/editar`, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[name="nomeapenado"]', { timeout: 15_000 })
 
   const dados = await page.evaluate(() => {
     const val = (name: string) =>
@@ -707,9 +708,8 @@ async function scrapeProcessos(
   apenadoId: string
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/incluirProcessos`, {
-      waitUntil: 'networkidle',
-    })
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/incluirProcessos`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('body', { timeout: 10_000 })
     const text = await page.innerText('body')
     const processoRegex = /(\d+) - NÚMERO PROCESSO: ([^\n/]*)/g
     let m
@@ -737,9 +737,8 @@ async function scrapeAlcunhas(
   apenadoId: string
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/alcunhas`, {
-      waitUntil: 'networkidle',
-    })
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/alcunhas`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
     const rows = await page.$$('table tbody tr')
     for (const row of rows) {
       const cells = await row.$$('td')
@@ -759,9 +758,8 @@ async function scrapeAlcunhas(
 // ── Advogados ─────────────────────────────────────────────────
 
 async function scrapeAdvogados(page: Page, jobId: string): Promise<void> {
-  await page.goto(`${SIPE_URL}/advogados/listaradvogados`, {
-    waitUntil: 'networkidle',
-  })
+  await page.goto(`${SIPE_URL}/advogados/listaradvogados`, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('table', { timeout: 15_000 }).catch(() => {})
   await page.selectOption('select[name*="DataTables_Table"]', '-1').catch(() => {})
   await page.waitForTimeout(1000)
 
@@ -791,9 +789,8 @@ async function scrapeAdvogados(page: Page, jobId: string): Promise<void> {
 }
 
 async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> {
-  await page.goto(`${SIPE_URL}/advogados/${sipeId}/detalhaclientes`, {
-    waitUntil: 'networkidle',
-  })
+  await page.goto(`${SIPE_URL}/advogados/${sipeId}/detalhaclientes`, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('body', { timeout: 10_000 })
   const text = await page.innerText('body')
 
   const nome = text.match(/Nome do Advogado\s+([^\n]+)/)?.[1]?.trim()
@@ -847,7 +844,8 @@ export async function scrapeFaccoes(): Promise<void> {
   try {
     await login(page, SIPE_UNIDADE)
 
-    await page.goto(`${SIPE_URL}/apenados/index`, { waitUntil: 'networkidle' })
+    await page.goto(`${SIPE_URL}/apenados/index`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('tbody', { timeout: 15_000 }).catch(() => {})
     const firstLink = await page.$('tbody a[href*="/selecionarOpcao"]')
     if (!firstLink) return
 
@@ -856,9 +854,8 @@ export async function scrapeFaccoes(): Promise<void> {
     const m = href.match(/\/apenados\/(\d+)\//)
     if (!m) return
 
-    await page.goto(`${SIPE_URL}/apenados/${parseInt(m[1])}/faccao`, {
-      waitUntil: 'networkidle',
-    })
+    await page.goto(`${SIPE_URL}/apenados/${parseInt(m[1])}/faccao`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('select', { timeout: 10_000 })
 
     const options = await page.$$eval(
       'select option',
@@ -888,9 +885,8 @@ async function scrapeEndereço(
   apenadoId: string,
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/endereco`, {
-      waitUntil: 'networkidle',
-    })
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/endereco`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('[name="logradouro"], body', { timeout: 10_000 })
 
     const endereco = await page.evaluate(() => {
       const val = (name: string) =>
@@ -933,9 +929,8 @@ async function scrapeHistorico(
   apenadoId: string,
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/movimentacoes`, {
-      waitUntil: 'networkidle',
-    })
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/movimentacoes`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
 
     const rows = await page.$$('table tbody tr')
     for (const row of rows) {
@@ -976,9 +971,8 @@ async function scrapeDocumentos(
   apenadoId: string,
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/documentos`, {
-      waitUntil: 'networkidle',
-    })
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/documentos`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
 
     const rows = await page.$$('table tbody tr')
     for (const row of rows) {
