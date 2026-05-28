@@ -184,21 +184,22 @@ export function SyncPanel() {
   const [unidades, setUnidades] = useState<Unidade[]>(UNIDADES_FALLBACK)
   const [loadingUnidades, setLoadingUnidades] = useState(true)
 
+  const [unidadesFromSipe, setUnidadesFromSipe] = useState(false)
+
   // Busca a lista real de unidades do SIPE (com cache de 24h no servidor)
   useEffect(() => {
     let cancelled = false
     setLoadingUnidades(true)
     fetch('/api/sipe/unidades')
       .then(async (res) => {
-        if (!res.ok) throw new Error(`status ${res.status}`)
+        if (!res.ok) return // mantém fallback silenciosamente
         const data = await res.json()
         if (!cancelled && data.unidades?.length > 0) {
           setUnidades(data.unidades)
+          setUnidadesFromSipe(!!data.fromSipe)
         }
       })
-      .catch(() => {
-        if (!cancelled) toast.warning('Lista de unidades carregada do cache local — SIPE pode estar inacessível')
-      })
+      .catch(() => { /* mantém fallback silenciosamente */ })
       .finally(() => { if (!cancelled) setLoadingUnidades(false) })
     return () => { cancelled = true }
   }, [])
@@ -350,6 +351,11 @@ export function SyncPanel() {
               <option key={u.id} value={u.id}>{u.nome}</option>
             ))}
           </select>
+          {!loadingUnidades && !unidadesFromSipe && (
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              Lista local — SIPE inacessível ou credenciais não configuradas
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-3">

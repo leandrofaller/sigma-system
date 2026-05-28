@@ -12,6 +12,20 @@ globalThis.__sipeUnidadesCache = globalThis.__sipeUnidadesCache ?? null
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24 horas
 const SIPE_URL = 'https://sipe.sejus.ro.gov.br'
 
+// Lista estática de fallback — usada quando o SIPE está inacessível
+const UNIDADES_FALLBACK: Array<{ id: string; nome: string }> = [
+  { id: '3',  nome: 'CENTRO DE DETENÇÃO PROVISÓRIO DE PORTO VELHO - CDPPVH' },
+  { id: '1',  nome: 'PENITENCIÁRIA ESTADUAL EDVAN MARIANO ROSENDO - PANDA' },
+  { id: '5',  nome: 'PENITENCIÁRIA ESTADUAL SUELY MARIA MENDONÇA' },
+  { id: '6',  nome: 'UNIDADE PROVISÓRIA DE SEGURANÇA ESPECIAL - UPES' },
+  { id: '9',  nome: 'COLÔNIA AGRÍCOLA PENAL ÊNIO PINHEIRO DOS SANTOS' },
+  { id: '16', nome: 'PENITENCIÁRIA ESTADUAL ARUANA - PEA' },
+  { id: '17', nome: 'PENITENCIÁRIA ESTADUAL MILTON SOARES DE CARVALHO' },
+  { id: '91', nome: 'PENITENCIÁRIA ESTADUAL JORGE THIAGO AGUIAR AFONSO' },
+  { id: '12', nome: 'CENTRO DE RESSOCIALIZAÇÃO VALE DO GUAPORÉ - CRVG' },
+  { id: '25', nome: 'CENTRO DE RESSOCIALIZAÇÃO JONAS FERRETI' },
+]
+
 export async function GET(_req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
@@ -21,17 +35,15 @@ export async function GET(_req: NextRequest) {
   // Serve do cache se ainda válido
   const cache = globalThis.__sipeUnidadesCache
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
-    return NextResponse.json({ unidades: cache.data, fromCache: true })
+    return NextResponse.json({ unidades: cache.data, fromSipe: true, fromCache: true })
   }
 
   const cpf = process.env.SIPE_CPF ?? ''
   const senha = process.env.SIPE_SENHA ?? ''
 
+  // Sem credenciais configuradas → retorna fallback imediatamente (sem tentar abrir browser)
   if (!cpf || !senha) {
-    return NextResponse.json(
-      { error: 'Credenciais SIPE não configuradas (SIPE_CPF / SIPE_SENHA)' },
-      { status: 503 }
-    )
+    return NextResponse.json({ unidades: UNIDADES_FALLBACK, fromSipe: false, fromCache: false })
   }
 
   let browser = null
@@ -87,19 +99,16 @@ export async function GET(_req: NextRequest) {
     })
 
     if (unidades.length === 0) {
-      throw new Error('Nenhuma unidade encontrada no dropdown — estrutura da página pode ter mudado')
+      throw new Error('Nenhuma unidade encontrada — estrutura da página pode ter mudado')
     }
 
     // Persiste no cache
     globalThis.__sipeUnidadesCache = { data: unidades, fetchedAt: Date.now() }
 
-    return NextResponse.json({ unidades, fromCache: false })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    return NextResponse.json(
-      { error: `Falha ao buscar unidades do SIPE: ${message}` },
-      { status: 503 }
-    )
+    return NextResponse.json({ unidades, fromSipe: true, fromCache: false })
+  } catch {
+    // SIPE inacessível ou falha no scrape → retorna fallback sem expor erro ao cliente
+    return NextResponse.json({ unidades: UNIDADES_FALLBACK, fromSipe: false, fromCache: false })
   } finally {
     if (browser) await browser.close().catch(() => {})
   }
