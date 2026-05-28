@@ -22,7 +22,7 @@ export async function GET() {
     apenadosPorSituacao,
     ultimaSync,
   ] = await Promise.all([
-    prisma.sipeApenadoImportado.count(),
+    prisma.sipeApenadoImportado.count({ where: { sexo: { not: null } } }),
     prisma.sipeAdvogado.count(),
     prisma.sipeFaccao.count(),
     prisma.sipeVinculoAdvogado.count({ where: { ativo: true } }),
@@ -34,21 +34,21 @@ export async function GET() {
     prisma.sipeApenadoImportado.groupBy({
       by: ['faccaoId'],
       _count: { _all: true },
-      where: { faccaoId: { not: null } },
+      where: { faccaoId: { not: null }, sexo: { not: null } },
     }),
 
     // Breakdown by regime
     prisma.sipeApenadoImportado.groupBy({
       by: ['regime'],
       _count: { _all: true },
-      where: { regime: { not: null } },
+      where: { regime: { not: null }, sexo: { not: null } },
     }),
 
     // Breakdown by situation
     prisma.sipeApenadoImportado.groupBy({
       by: ['situacao'],
       _count: { _all: true },
-      where: { situacao: { not: null } },
+      where: { situacao: { not: null }, sexo: { not: null } },
     }),
 
     // Last successful sync

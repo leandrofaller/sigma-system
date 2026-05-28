@@ -16,16 +16,16 @@ const SIPE_URL = 'https://sipe.sejus.ro.gov.br'
 
 // Lista estática de fallback — usada apenas quando o banco estiver vazio e o SIPE inacessível
 const UNIDADES_FALLBACK: Array<{ id: string; nome: string }> = [
-  { id: '3',  nome: 'CENTRO DE DETENÇÃO PROVISÓRIO DE PORTO VELHO - CDPPVH' },
-  { id: '1',  nome: 'PENITENCIÁRIA ESTADUAL EDVAN MARIANO ROSENDO - PANDA' },
-  { id: '5',  nome: 'PENITENCIÁRIA ESTADUAL SUELY MARIA MENDONÇA' },
-  { id: '6',  nome: 'UNIDADE PROVISÓRIA DE SEGURANÇA ESPECIAL - UPES' },
-  { id: '9',  nome: 'COLÔNIA AGRÍCOLA PENAL ÊNIO PINHEIRO DOS SANTOS' },
-  { id: '16', nome: 'PENITENCIÁRIA ESTADUAL ARUANA - PEA' },
-  { id: '17', nome: 'PENITENCIÁRIA ESTADUAL MILTON SOARES DE CARVALHO' },
-  { id: '91', nome: 'PENITENCIÁRIA ESTADUAL JORGE THIAGO AGUIAR AFONSO' },
-  { id: '12', nome: 'CENTRO DE RESSOCIALIZAÇÃO VALE DO GUAPORÉ - CRVG' },
-  { id: '25', nome: 'CENTRO DE RESSOCIALIZAÇÃO JONAS FERRETI' },
+  { id: '3',  nome: 'CDPPVH - Centro de Detenção Provisório de Porto Velho' },
+  { id: '1',  nome: 'PANDA - Penitenciária Edvan Mariano Rosendo' },
+  { id: '5',  nome: 'Penitenciária Estadual Suely Maria Mendonça' },
+  { id: '6',  nome: 'UPES - Unidade Provisória de Segurança Especial' },
+  { id: '9',  nome: 'CAPEP I - Colônia Agrícola Penal Ênio Pinheiro' },
+  { id: '16', nome: 'PEA - Penitenciária Estadual Aruana' },
+  { id: '17', nome: 'Penitenciária Milton Soares de Carvalho' },
+  { id: '91', nome: 'Penitenciária Jorge Thiago Aguiar Afonso' },
+  { id: '12', nome: 'CRVG - Centro de Ressocialização Vale do Guaporé' },
+  { id: '25', nome: 'Centro de Ressocialização Jonas Ferreti' },
 ]
 
 function findSystemChromium(): string | undefined {

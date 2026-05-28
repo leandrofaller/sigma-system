@@ -8,16 +8,16 @@ import {
 } from '@/lib/sipe-scraper'
 
 const UNIDADES: Record<string, string> = {
-  '3': 'CENTRO DE DETENÇÃO PROVISÓRIO DE PORTO VELHO - CDPPVH',
-  '1': 'PENITENCIÁRIA ESTADUAL EDVAN MARIANO ROSENDO - PANDA',
-  '5': 'PENITENCIÁRIA ESTADUAL SUELY MARIA MENDONÇA',
-  '6': 'UNIDADE PROVISÓRIA DE SEGURANÇA ESPECIAL - UPES',
-  '9': 'COLÔNIA AGRÍCOLA PENAL ÊNIO PINHEIRO DOS SANTOS',
-  '16': 'PENITENCIÁRIA ESTADUAL ARUANA - PEA',
-  '17': 'PENITENCIÁRIA ESTADUAL MILTON SOARES DE CARVALHO',
-  '91': 'PENITENCIÁRIA ESTADUAL JORGE THIAGO AGUIAR AFONSO',
-  '12': 'CENTRO DE RESSOCIALIZAÇÃO VALE DO GUAPORÉ - CRVG',
-  '25': 'CENTRO DE RESSOCIALIZAÇÃO JONAS FERRETI',
+  '3': 'CDPPVH - Centro de Detenção Provisório de Porto Velho',
+  '1': 'PANDA - Penitenciária Edvan Mariano Rosendo',
+  '5': 'Penitenciária Estadual Suely Maria Mendonça',
+  '6': 'UPES - Unidade Provisória de Segurança Especial',
+  '9': 'CAPEP I - Colônia Agrícola Penal Ênio Pinheiro',
+  '16': 'PEA - Penitenciária Estadual Aruana',
+  '17': 'Penitenciária Milton Soares de Carvalho',
+  '91': 'Penitenciária Jorge Thiago Aguiar Afonso',
+  '12': 'CRVG - Centro de Ressocialização Vale do Guaporé',
+  '25': 'Centro de Ressocialização Jonas Ferreti',
 }
 
 export async function POST(req: NextRequest) {
@@ -78,7 +78,19 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const unidadeNome = UNIDADES[unidadeId] ?? `Unidade ${unidadeId}`
+  let unidadeNome = UNIDADES[unidadeId] ?? `Unidade ${unidadeId}`
+  try {
+    const config = await prisma.systemConfig.findUnique({
+      where: { key: 'sipe_unidades' },
+    })
+    if (config && Array.isArray(config.value)) {
+      const list = config.value as Array<{ id: string; nome: string }>
+      const found = list.find((u) => u.id === unidadeId)
+      if (found) {
+        unidadeNome = found.nome
+      }
+    }
+  } catch {}
 
   // ── Factions-only sync ──
   if (tipo === 'FACCOES') {

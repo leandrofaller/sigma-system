@@ -9,7 +9,7 @@ interface Advogado { id: string; nome: string; oab: string | null }
 interface VinculoAdvogado { advogado: Advogado }
 interface Processo { id: string; numero: string | null; vara: string | null; artigos: string[] }
 
-interface ApenadoImportado {
+export interface ApenadoImportado {
   id: string
   sipeId: number
   nome: string
@@ -118,7 +118,7 @@ function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; onClick:
   )
 }
 
-function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; onClose: () => void }) {
+export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; onClose: () => void }) {
   const [isZoomed, setIsZoomed] = useState(false)
 
   return (

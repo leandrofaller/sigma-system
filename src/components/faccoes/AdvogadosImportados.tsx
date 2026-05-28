@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Search, ChevronLeft, ChevronRight, Briefcase, Users, Phone, Shield } from 'lucide-react'
+import { toast } from 'sonner'
+import { ApenadoModal } from './ApenadosImportados'
 
 interface Faccao { nome: string; sigla: string | null; cor: string }
 interface Alcunha { alcunha: string }
@@ -73,7 +75,15 @@ function AdvogadoCard({ advogado, onClick }: { advogado: Advogado; onClick: () =
   )
 }
 
-function AdvogadoModal({ advogado, onClose }: { advogado: Advogado; onClose: () => void }) {
+function AdvogadoModal({
+  advogado,
+  onClose,
+  onApenadoClick,
+}: {
+  advogado: Advogado
+  onClose: () => void
+  onApenadoClick: (id: string) => void
+}) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -110,7 +120,12 @@ function AdvogadoModal({ advogado, onClose }: { advogado: Advogado; onClose: () 
               {advogado.vinculos.map(v => (
                 <div key={v.apenado.id} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{v.apenado.nome}</p>
+                    <button
+                      onClick={() => onApenadoClick(v.apenado.id)}
+                      className="text-sm font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-left hover:underline truncate block"
+                    >
+                      {v.apenado.nome}
+                    </button>
                     {v.apenado.alcunhas.length > 0 && (
                       <p className="text-xs text-gray-500">{v.apenado.alcunhas.map(a => `"${a.alcunha}"`).join(', ')}</p>
                     )}
@@ -145,6 +160,25 @@ export function AdvogadosImportados() {
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<Advogado | null>(null)
+  const [selectedApenado, setSelectedApenado] = useState<any | null>(null)
+  const [loadingApenado, setLoadingApenado] = useState(false)
+
+  const handleApenadoClick = async (apenadoId: string) => {
+    setLoadingApenado(true)
+    try {
+      const res = await fetch(`/api/sipe/apenados/${apenadoId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSelectedApenado(data)
+      } else {
+        toast.error('Erro ao buscar detalhes do apenado')
+      }
+    } catch {
+      toast.error('Erro de conexão ao buscar apenado')
+    } finally {
+      setLoadingApenado(false)
+    }
+  }
 
   const fetchAdvogados = useCallback(async () => {
     setLoading(true)
@@ -209,7 +243,29 @@ export function AdvogadosImportados() {
         </div>
       )}
 
-      {selected && <AdvogadoModal advogado={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <AdvogadoModal
+          advogado={selected}
+          onClose={() => setSelected(null)}
+          onApenadoClick={handleApenadoClick}
+        />
+      )}
+
+      {selectedApenado && (
+        <ApenadoModal
+          apenado={selectedApenado}
+          onClose={() => setSelectedApenado(null)}
+        />
+      )}
+
+      {loadingApenado && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-xl flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm font-medium text-gray-900 dark:text-white">Buscando ficha do apenado...</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
