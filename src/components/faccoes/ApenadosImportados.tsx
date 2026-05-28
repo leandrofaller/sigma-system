@@ -1,0 +1,318 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase } from 'lucide-react'
+
+interface Alcunha { alcunha: string }
+interface Faccao { id: string; nome: string; sigla: string | null; cor: string }
+interface Advogado { id: string; nome: string; oab: string | null }
+interface VinculoAdvogado { advogado: Advogado }
+interface Processo { id: string; numero: string | null; vara: string | null; artigos: string[] }
+
+interface ApenadoImportado {
+  id: string
+  sipeId: number
+  nome: string
+  nomeOutro: string | null
+  cpf: string | null
+  rg: string | null
+  dataNascimento: string | null
+  etnia: string | null
+  sexo: string | null
+  unidade: string | null
+  cela: string | null
+  regime: string | null
+  situacao: string | null
+  dataEntrada: string | null
+  tempoPena: string | null
+  monitorado: boolean | null
+  faccao: Faccao | null
+  alcunhas: Alcunha[]
+  processos: Processo[]
+  vinculosAdvogado: VinculoAdvogado[]
+  ultimaSyncAt: string
+}
+
+function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:border-red-300 dark:hover:border-red-700 hover:shadow-md transition-all cursor-pointer"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-gray-900 dark:text-white text-sm truncate">{apenado.nome}</span>
+            {apenado.faccao && (
+              <span
+                className="px-2 py-0.5 rounded-full text-xs font-bold text-white"
+                style={{ backgroundColor: apenado.faccao.cor || '#ef4444' }}
+              >
+                {apenado.faccao.sigla || apenado.faccao.nome}
+              </span>
+            )}
+          </div>
+          {apenado.alcunhas.length > 0 && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              {apenado.alcunhas.map(a => `"${a.alcunha}"`).join(', ')}
+            </p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+            {apenado.dataNascimento && <span>Nasc: {apenado.dataNascimento}</span>}
+            {apenado.rg && <span>RG: {apenado.rg}</span>}
+            {apenado.cpf && <span>CPF: {apenado.cpf}</span>}
+          </div>
+        </div>
+        <div className="text-right text-xs text-gray-500 shrink-0">
+          <p className="font-mono text-gray-400">#{apenado.sipeId}</p>
+          {apenado.regime && (
+            <span className="inline-block mt-1 px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400">
+              {apenado.regime}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center gap-4 text-xs text-gray-500">
+        {apenado.unidade && (
+          <span className="truncate flex-1">{apenado.unidade}</span>
+        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {apenado.processos.length > 0 && (
+            <span className="flex items-center gap-1">
+              <FileText className="w-3 h-3" />
+              {apenado.processos.length} processo{apenado.processos.length > 1 ? 's' : ''}
+            </span>
+          )}
+          {apenado.vinculosAdvogado.length > 0 && (
+            <span className="flex items-center gap-1">
+              <Briefcase className="w-3 h-3" />
+              {apenado.vinculosAdvogado.length} advogado{apenado.vinculosAdvogado.length > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">{apenado.nome}</h2>
+              {apenado.nomeOutro && <p className="text-sm text-gray-500">Também: {apenado.nomeOutro}</p>}
+              {apenado.alcunhas.length > 0 && (
+                <p className="text-sm text-gray-500">Alcunha: {apenado.alcunhas.map(a => `"${a.alcunha}"`).join(', ')}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {apenado.faccao && (
+                <span className="px-3 py-1 rounded-full text-sm font-bold text-white" style={{ backgroundColor: apenado.faccao.cor || '#ef4444' }}>
+                  {apenado.faccao.nome}
+                </span>
+              )}
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Dados Pessoais */}
+          <section>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+              <User className="w-4 h-4" /> Dados Pessoais
+            </h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {[
+                ['SIPE ID', `#${apenado.sipeId}`],
+                ['CPF', apenado.cpf],
+                ['RG', apenado.rg ? `${apenado.rg} ${apenado.rg}` : null],
+                ['Data Nasc.', apenado.dataNascimento],
+                ['Sexo', apenado.sexo],
+                ['Etnia', apenado.etnia],
+              ].map(([label, value]) => value ? (
+                <div key={String(label)}>
+                  <p className="text-xs text-gray-500">{label}</p>
+                  <p className="text-gray-900 dark:text-white font-medium">{value}</p>
+                </div>
+              ) : null)}
+            </div>
+          </section>
+
+          {/* Dados Prisionais */}
+          <section>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+              <Shield className="w-4 h-4" /> Situação Prisional
+            </h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {[
+                ['Unidade', apenado.unidade],
+                ['Cela', apenado.cela],
+                ['Regime', apenado.regime],
+                ['Situação', apenado.situacao],
+                ['Entrada', apenado.dataEntrada],
+                ['Pena', apenado.tempoPena],
+                ['Monitorado', apenado.monitorado === true ? 'Sim' : apenado.monitorado === false ? 'Não' : null],
+              ].map(([label, value]) => value != null ? (
+                <div key={String(label)}>
+                  <p className="text-xs text-gray-500">{label}</p>
+                  <p className="text-gray-900 dark:text-white font-medium">{value}</p>
+                </div>
+              ) : null)}
+            </div>
+          </section>
+
+          {/* Processos */}
+          {apenado.processos.length > 0 && (
+            <section>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <FileText className="w-4 h-4" /> Processos
+              </h3>
+              <div className="space-y-2">
+                {apenado.processos.map(p => (
+                  <div key={p.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm">
+                    <p className="font-mono text-xs text-gray-500">{p.numero || 'Nº não informado'}</p>
+                    {p.vara && <p className="text-gray-700 dark:text-gray-300">{p.vara}</p>}
+                    {p.artigos.length > 0 && (
+                      <p className="text-xs text-red-600 dark:text-red-400 mt-1">{p.artigos.join(' · ')}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Advogados */}
+          {apenado.vinculosAdvogado.length > 0 && (
+            <section>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <Briefcase className="w-4 h-4" /> Advogados
+              </h3>
+              <div className="space-y-2">
+                {apenado.vinculosAdvogado.map(v => (
+                  <div key={v.advogado.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm">
+                    <span className="font-medium text-gray-900 dark:text-white">{v.advogado.nome}</span>
+                    {v.advogado.oab && <span className="text-xs text-gray-500">OAB {v.advogado.oab}</span>}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function ApenadosImportados() {
+  const [apenados, setApenados] = useState<ApenadoImportado[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [q, setQ] = useState('')
+  const [faccaoId, setFaccaoId] = useState('')
+  const [faccoes, setFaccoes] = useState<Faccao[]>([])
+  const [loading, setLoading] = useState(false)
+  const [selected, setSelected] = useState<ApenadoImportado | null>(null)
+
+  const fetchFaccoes = async () => {
+    const res = await fetch('/api/sipe/faccoes')
+    if (res.ok) setFaccoes(await res.json())
+  }
+
+  const fetchApenados = useCallback(async () => {
+    setLoading(true)
+    const params = new URLSearchParams({ page: String(page), limit: '24' })
+    if (q) params.set('q', q)
+    if (faccaoId) params.set('faccaoId', faccaoId)
+
+    const res = await fetch(`/api/sipe/apenados?${params}`)
+    if (res.ok) {
+      const data = await res.json()
+      setApenados(data.apenados)
+      setTotal(data.total)
+      setTotalPages(data.totalPages)
+    }
+    setLoading(false)
+  }, [page, q, faccaoId])
+
+  useEffect(() => { fetchFaccoes() }, [])
+  useEffect(() => { fetchApenados() }, [fetchApenados])
+
+  return (
+    <div className="flex flex-col h-full min-h-0 gap-4">
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-3">
+        <div className="flex-1 min-w-48 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar por nome, CPF, RG ou alcunha..."
+            value={q}
+            onChange={e => { setQ(e.target.value); setPage(1) }}
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          />
+        </div>
+        <select
+          value={faccaoId}
+          onChange={e => { setFaccaoId(e.target.value); setPage(1) }}
+          className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+        >
+          <option value="">Todas as facções</option>
+          {faccoes.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+        </select>
+        <div className="flex items-center text-sm text-gray-500">
+          {total} apenado{total !== 1 ? 's' : ''}
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center h-40 text-gray-400">Carregando...</div>
+        ) : apenados.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
+            <Shield className="w-8 h-8 opacity-30" />
+            <p className="text-sm">Nenhum apenado importado ainda</p>
+            <p className="text-xs">Use a aba Sincronização para importar dados do SIPE</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {apenados.map(a => (
+              <ApenadoCard key={a.id} apenado={a} onClick={() => setSelected(a)} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Paginação */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-sm text-gray-600 dark:text-gray-400">
+            Página {page} de {totalPages}
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {selected && <ApenadoModal apenado={selected} onClose={() => setSelected(null)} />}
+    </div>
+  )
+}

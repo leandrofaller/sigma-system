@@ -441,7 +441,8 @@ model Apenado {
   updatedAt   DateTime @updatedAt
   createdById String?
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  groups      ApenadoGroupMember[]
+  groups           ApenadoGroupMember[]
+  sipeImportacoes  SipeApenadoImportado[]
 
   @@index([name])
   @@index([matricula])
@@ -513,4 +514,189 @@ model ApenadoGroupMember {
 
   @@id([groupId, apenadoId])
   @@map("apenado_group_members")
+}
+
+// ── SIPE Integration ──────────────────────────────────────────
+
+model SipeFaccao {
+  id        String   @id @default(cuid())
+  sipeId    Int      @unique
+  nome      String
+  sigla     String?
+  cor       String?  @default("#ef4444")
+  descricao String?  @db.Text
+  ativa     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  apenados SipeApenadoImportado[]
+
+  @@map("sipe_faccoes")
+}
+
+model SipeApenadoImportado {
+  id             String  @id @default(cuid())
+  sipeId         Int     @unique
+  apenadoLocalId String?
+  apenado        Apenado? @relation(fields: [apenadoLocalId], references: [id], onDelete: SetNull)
+
+  nome             String
+  nomeOutro        String?
+  cpf              String?
+  rg               String?
+  rgOrgao          String?
+  dataNascimento   String?
+  naturalidade     String?
+  sexo             String?
+  etnia            String?
+  orientacaoSexual String?
+  tipoSanguineo    String?
+  grauInstrucao    String?
+  religiao         String?
+  estadoCivil      String?
+  nomeConjuge      String?
+  qtdFilhos        Int?
+  nomeMae          String?
+  nomePai          String?
+  telefone         String?
+  rji              String?
+
+  unidade      String?
+  cela         String?
+  regime       String?
+  situacao     String?
+  dataEntrada  String?
+  dataPrisao   String?
+  tempoPena    String?
+  monitorado   Boolean?
+  intramuro    Boolean?
+  presoOriundo String?
+  oficioEntrada String?
+
+  faccaoId  String?
+  faccao    SipeFaccao? @relation(fields: [faccaoId], references: [id], onDelete: SetNull)
+
+  ultimaSyncAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  processos        SipeProcesso[]
+  alcunhas         SipeAlcunha[]
+  vinculosAdvogado SipeVinculoAdvogado[]
+  vinculosVisitante SipeVinculoVisitante[]
+
+  @@index([nome])
+  @@index([cpf])
+  @@index([faccaoId])
+  @@map("sipe_apenados_importados")
+}
+
+model SipeAlcunha {
+  id        String               @id @default(cuid())
+  apenadoId String
+  apenado   SipeApenadoImportado @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+  alcunha   String
+  createdAt DateTime             @default(now())
+
+  @@index([apenadoId])
+  @@map("sipe_alcunhas")
+}
+
+model SipeProcesso {
+  id             String               @id @default(cuid())
+  apenadoId      String
+  apenado        SipeApenadoImportado @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+  sipeProcessoId Int?
+  numero         String?
+  vara           String?
+  artigos        String[]
+  tempoPena      String?
+  principal      Boolean              @default(false)
+  createdAt      DateTime             @default(now())
+
+  @@index([apenadoId])
+  @@map("sipe_processos")
+}
+
+model SipeAdvogado {
+  id           String   @id @default(cuid())
+  sipeId       Int      @unique
+  nome         String
+  oab          String?
+  cpf          String?
+  endereco     String?
+  telefone     String?
+  dataCadastro String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  vinculos SipeVinculoAdvogado[]
+
+  @@index([nome])
+  @@index([oab])
+  @@map("sipe_advogados")
+}
+
+model SipeVisitante {
+  id         String   @id @default(cuid())
+  nome       String
+  cpf        String?
+  parentesco String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  vinculos SipeVinculoVisitante[]
+
+  @@index([nome])
+  @@index([cpf])
+  @@map("sipe_visitantes")
+}
+
+model SipeVinculoAdvogado {
+  id         String               @id @default(cuid())
+  apenadoId  String
+  apenado    SipeApenadoImportado @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+  advogadoId String
+  advogado   SipeAdvogado         @relation(fields: [advogadoId], references: [id], onDelete: Cascade)
+  ativo      Boolean              @default(true)
+  createdAt  DateTime             @default(now())
+
+  @@unique([apenadoId, advogadoId])
+  @@index([apenadoId])
+  @@index([advogadoId])
+  @@map("sipe_vinculos_advogados")
+}
+
+model SipeVinculoVisitante {
+  id          String               @id @default(cuid())
+  apenadoId   String
+  apenado     SipeApenadoImportado @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+  visitanteId String
+  visitante   SipeVisitante        @relation(fields: [visitanteId], references: [id], onDelete: Cascade)
+  ativo       Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+
+  @@unique([apenadoId, visitanteId])
+  @@index([apenadoId])
+  @@index([visitanteId])
+  @@map("sipe_vinculos_visitantes")
+}
+
+model SipeSyncJob {
+  id           String    @id @default(cuid())
+  status       String    @default("PENDING")
+  tipo         String
+  unidade      String?
+  unidadeNome  String?
+  total        Int?
+  processado   Int       @default(0)
+  erros        Int       @default(0)
+  log          String?   @db.Text
+  iniciadoEm   DateTime?
+  finalizadoEm DateTime?
+  criadoPor    String?
+  createdAt    DateTime  @default(now())
+
+  @@index([status])
+  @@map("sipe_sync_jobs")
 }
