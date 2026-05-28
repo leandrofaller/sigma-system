@@ -656,13 +656,29 @@ async function coletarIdsApenados(
   }).catch(() => {})
   await page.waitForTimeout(1500)
 
+  // Descobre dinamicamente qual coluna se refere ao código do apenado (SIPE ID)
+  const codigoColIndex = await page.evaluate(() => {
+    try {
+      const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
+      const index = headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD'
+      })
+      return index >= 0 ? index : 0
+    } catch { return 0 }
+  }).catch(() => 0)
+
+  log(jobId, `🔍 Identificada coluna de IDs na posição (0-index): ${codigoColIndex}`)
+
   const ids = new Set<number>()
 
   const extractIds = async () => {
     const rows = await page.$$('table tbody tr')
     log(jobId, `📊 <tr> visíveis no DOM: ${rows.length}`)
     for (const row of rows) {
-      const cell = await row.$('th, td:first-child')
+      const cells = await row.$$('td, th')
+      if (cells.length <= codigoColIndex) continue
+      const cell = cells[codigoColIndex]
       if (!cell) continue
       const id = parseInt((await cell.innerText()).trim())
       if (!isNaN(id)) ids.add(id)
@@ -677,7 +693,7 @@ async function coletarIdsApenados(
   let continuar = true
   while (continuar) {
     const botaoLocator = page
-      .locator('a:has-text("Próxima"), a:has-text("Next"), li.next > a, [data-dt-idx="next"] a')
+      .locator('a:has-text("Próxima"), a:has-text("Next"), li.next > a, [data-dt-idx="next"] a, a:has-text("»"), a:has-text(">>")')
       .first()
     const botaoVisivel = await botaoLocator.isVisible().catch(() => false)
     if (!botaoVisivel) {
