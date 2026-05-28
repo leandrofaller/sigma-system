@@ -147,19 +147,67 @@ async function createSession(): Promise<BrowserContext> {
 // ── SIPE authentication ───────────────────────────────────────
 
 async function login(page: Page, unidadeId: string): Promise<boolean> {
-  await page.goto(`${SIPE_URL}/`, { waitUntil: 'networkidle' })
-  const cpfInput = await page.$('input[placeholder*="CPF"]')
-  if (!cpfInput) return false
+  // Timeout maior para servidores governamentais lentos
+  await page.goto(`${SIPE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+
+  // Aguarda o formulário aparecer (até 30s)
+  await page.waitForSelector('input[type="password"]', { timeout: 30_000 })
+
+  // Preenche CPF — tenta placeholder*="CPF" e fallback para primeiro input de texto
+  const cpfInput =
+    (await page.$('input[placeholder*="CPF"]')) ??
+    (await page.$('input[name*="cpf"], input[name*="login"], input[type="text"]'))
+  if (!cpfInput) {
+    throw new Error(
+      `Campo CPF não encontrado na página de login. URL atual: ${page.url()}`
+    )
+  }
 
   await cpfInput.fill(SIPE_CPF)
   await page.fill('input[type="password"]', SIPE_SENHA)
-  await page.click('button[type="submit"]')
-  await page.waitForURL('**/selectRole**', { timeout: 15_000 })
 
+  // Clica no submit — tenta button[type="submit"] e fallback para qualquer botão
+  const submitBtn =
+    (await page.$('button[type="submit"]')) ??
+    (await page.$('input[type="submit"]')) ??
+    (await page.$('button'))
+  if (!submitBtn) throw new Error('Botão de submit não encontrado na página de login')
+  await submitBtn.click()
+
+  // Aguarda redirecionamento para selectRole (servidor pode ser lento — 30s)
+  try {
+    await page.waitForURL('**/selectRole**', { timeout: 30_000 })
+  } catch {
+    // Captura estado real da página para diagnóstico
+    const url = page.url()
+    const bodyText = await page.innerText('body').catch(() => '')
+    const errorMsg = bodyText.slice(0, 300).replace(/\s+/g, ' ').trim()
+    throw new Error(
+      `Login não redirecionou para /selectRole. URL atual: ${url}` +
+      (errorMsg ? ` | Página: ${errorMsg}` : '')
+    )
+  }
+
+  // Seleciona perfil e unidade
+  await page.waitForSelector('select', { timeout: 10_000 })
   await page.selectOption('select:first-of-type', SIPE_PERFIL)
   await page.selectOption('select:last-of-type', unidadeId)
-  await page.click('button[type="submit"]')
-  await page.waitForURL('**/home**', { timeout: 15_000 })
+
+  const submitBtn2 =
+    (await page.$('button[type="submit"]')) ??
+    (await page.$('input[type="submit"]')) ??
+    (await page.$('button'))
+  if (!submitBtn2) throw new Error('Botão de submit não encontrado na página selectRole')
+  await submitBtn2.click()
+
+  // Aguarda /home (30s)
+  try {
+    await page.waitForURL('**/home**', { timeout: 30_000 })
+  } catch {
+    const url = page.url()
+    throw new Error(`Seleção de perfil não redirecionou para /home. URL atual: ${url}`)
+  }
+
   return true
 }
 
