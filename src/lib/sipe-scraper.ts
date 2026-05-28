@@ -221,8 +221,18 @@ async function login(page: Page, unidadeId: string): Promise<boolean> {
     }
   }, SIPE_PERFIL)
 
-  // Give Chosen/AJAX a brief moment to update
-  await page.waitForTimeout(1000)
+  // Aguarda dinamicamente até que a unidade desejada esteja disponível nas options do segundo select
+  try {
+    await page.waitForFunction((unidade) => {
+      const selects = document.querySelectorAll('select')
+      const selectUnidade = selects[1] as HTMLSelectElement
+      if (!selectUnidade) return false
+      const options = Array.from(selectUnidade.options)
+      return options.some(opt => opt.value === unidade)
+    }, unidadeId, { timeout: 15_000 })
+  } catch (err) {
+    // Se estourar o timeout, ainda tenta prosseguir (fallback)
+  }
 
   // Select unit via page.evaluate
   await page.evaluate((unidade) => {
@@ -240,6 +250,9 @@ async function login(page: Page, unidadeId: string): Promise<boolean> {
       }
     }
   }, unidadeId)
+
+  // Pequeno delay para garantir estabilização da reatividade jQuery/Chosen
+  await page.waitForTimeout(500)
 
   const submitBtn2 =
     (await page.$('button[type="submit"]')) ??
@@ -393,7 +406,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
       refreshMemory(jobId, { fase: 'Coletando lista de apenados...' })
       await dbProgress(jobId, { fase: 'Coletando IDs', log: 'Coletando lista de apenados...' })
 
-      ids = await coletarIdsApenados(page, unidadeId, jobId)
+      ids = await coletarIdsApenados(page, unidadeId, jobId, job.unidadeNome)
 
       // Persist checkpoint
       await dbProgress(jobId, {
@@ -493,10 +506,12 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
   }
 }
 
+let logPromiseChain = Promise.resolve()
+
 function log(jobId: string, msg: string) {
   if (globalThis.__sipeState) globalThis.__sipeState.ultimoLog = msg
-  // Fire-and-forget DB log (no await to keep scraping fast)
-  dbProgress(jobId, { log: msg }).catch(() => {})
+  // Enfileira a escrita de log para evitar condições de corrida no banco de dados
+  logPromiseChain = logPromiseChain.then(() => dbProgress(jobId, { log: msg })).catch(() => {})
 }
 
 async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
@@ -522,8 +537,105 @@ const listagemInfoCache = new Map<number, { cela?: string }>()
 async function coletarIdsApenados(
   page: Page,
   unidadeId: string,
-  jobId: string
+  jobId: string,
+  unidadeNomeEsperada?: string | null
 ): Promise<number[]> {
+  // Validação da unidade ativa no menu superior do SIPE para garantir a troca correta
+  if (unidadeNomeEsperada) {
+    try {
+      // Garante que o menu superior carregou completamente antes de inspecionar
+      await page.waitForSelector('a[name="btnMudaUnidade"]', { timeout: 10_000 }).catch(() => {})
+
+      let unidadeAtiva = await page.evaluate(() => {
+        const el = document.querySelector('a[name="btnMudaUnidade"]') as HTMLAnchorElement | null
+        return el ? el.getAttribute('title')?.toUpperCase().trim() || '' : ''
+      }).catch(() => '')
+
+      const esperadaClean = unidadeNomeEsperada.toUpperCase().trim()
+      log(jobId, `Unidade ativa na sessão SIPE: "${unidadeAtiva}" | Esperada: "${esperadaClean}"`)
+
+      // Se a unidade ativa for vazia (não detectada) ou diferente da esperada, força a troca
+      if (!unidadeAtiva || (!unidadeAtiva.includes(esperadaClean) && !esperadaClean.includes(unidadeAtiva))) {
+        log(jobId, `⚠️ Unidade divergente ou não detectada! Forçando troca de papel no SIPE para ID #${unidadeId}...`)
+        
+        // Vai para a tela de seleção de papel
+        await page.goto(`${SIPE_URL}/selectRole/1`, { waitUntil: 'domcontentloaded' }).catch(async () => {
+          await page.goto(`${SIPE_URL}/selectRole`, { waitUntil: 'domcontentloaded' })
+        })
+
+        await page.locator('select').nth(0).waitFor({ state: 'attached', timeout: 10_000 })
+        await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 10_000 })
+
+        // 1. Altera perfil
+        await page.evaluate((perfil) => {
+          const selects = document.querySelectorAll('select')
+          const selectPerfil = selects[0] as HTMLSelectElement
+          if (selectPerfil) {
+            selectPerfil.value = perfil
+            selectPerfil.dispatchEvent(new Event('change', { bubbles: true }))
+            const w = window as any
+            if (w.$) {
+              try {
+                w.$(selectPerfil).trigger('chosen:updated')
+                w.$(selectPerfil).trigger('change')
+              } catch {}
+            }
+          }
+        }, SIPE_PERFIL)
+
+        // 2. Aguarda o AJAX popular as unidades para este perfil
+        try {
+          await page.waitForFunction((unidade) => {
+            const selects = document.querySelectorAll('select')
+            const selectUnidade = selects[1] as HTMLSelectElement
+            if (!selectUnidade) return false
+            const options = Array.from(selectUnidade.options)
+            return options.some(opt => opt.value === unidade)
+          }, unidadeId, { timeout: 15_000 })
+        } catch (err) {
+          // Fallback se estourar tempo
+        }
+
+        // 3. Altera a unidade
+        await page.evaluate((unidade) => {
+          const selects = document.querySelectorAll('select')
+          const selectUnidade = selects[1] as HTMLSelectElement
+          if (selectUnidade) {
+            selectUnidade.value = unidade
+            selectUnidade.dispatchEvent(new Event('change', { bubbles: true }))
+            const w = window as any
+            if (w.$) {
+              try {
+                w.$(selectUnidade).trigger('chosen:updated')
+                w.$(selectUnidade).trigger('change')
+              } catch {}
+            }
+          }
+        }, unidadeId)
+
+        // 4. Pequeno delay de propagação
+        await page.waitForTimeout(500)
+
+        const submitBtn = (await page.$('button[type="submit"]')) ?? (await page.$('input[type="submit"]'))
+        if (submitBtn) {
+          await submitBtn.click()
+          await page.waitForURL('**/home**', { timeout: 20_000 })
+          
+          // Validação final de confirmação
+          await page.waitForSelector('a[name="btnMudaUnidade"]', { timeout: 10_000 }).catch(() => {})
+          unidadeAtiva = await page.evaluate(() => {
+            const el = document.querySelector('a[name="btnMudaUnidade"]') as HTMLAnchorElement | null
+            return el ? el.getAttribute('title')?.toUpperCase().trim() || '' : ''
+          }).catch(() => '')
+          
+          log(jobId, `✅ Unidade após troca de papel no SIPE: "${unidadeAtiva}"`)
+        }
+      }
+    } catch (err) {
+      log(jobId, `⚠️ Falha ao verificar/alterar unidade ativa no menu: ${err}`)
+    }
+  }
+
   let tableFound = false
   try {
     log(jobId, `Acessando listagem geral: ${SIPE_URL}/listagem/geral`)
