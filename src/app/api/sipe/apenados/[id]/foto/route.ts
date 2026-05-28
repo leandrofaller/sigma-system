@@ -11,11 +11,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const apenado = await prisma.sipeApenadoImportado.findUnique({
     where: { id },
-    select: { photoPath: true, nome: true },
+    select: {
+      photoPath: true,
+      nome: true,
+      apenado: {
+        select: { photoPath: true }
+      }
+    },
   });
-  if (!apenado?.photoPath) return NextResponse.json({ error: 'Sem foto' }, { status: 404 });
+  
+  const finalPhotoPath = apenado?.photoPath || apenado?.apenado?.photoPath;
+  if (!finalPhotoPath) return NextResponse.json({ error: 'Sem foto' }, { status: 404 });
 
-  const filePath = getApenadoPhotoPath(apenado.photoPath);
+  const filePath = getApenadoPhotoPath(finalPhotoPath);
   let buffer: Buffer;
   try {
     buffer = await readFile(filePath);

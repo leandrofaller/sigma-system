@@ -1136,6 +1136,58 @@ async function scrapeApenadoFicha(
   const cela = listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? null;
   const unidade = unidadeNome ?? dados.unidadeFicha ?? null;
 
+  // --- Integração com Identificação de Apenados (tabela Apenado local) ---
+  const nomeApenadoUpper = (dados.nome || 'SEM NOME').trim().toUpperCase();
+  let faccaoNome: string | null = null;
+  if (faccaoId) {
+    const faccaoObj = await prisma.sipeFaccao.findUnique({ where: { id: faccaoId } });
+    faccaoNome = faccaoObj?.nome ?? null;
+  }
+
+  let localApenado = await prisma.apenado.findFirst({
+    where: { name: nomeApenadoUpper }
+  });
+
+  if (!localApenado) {
+    localApenado = await prisma.apenado.create({
+      data: {
+        name: nomeApenadoUpper,
+        matricula: dados.rji || dados.cpf || null,
+        unidade: unidade || null,
+        faccao: faccaoNome || null,
+        photoPath: photoPath || null,
+      }
+    });
+  } else {
+    const updateData: any = {};
+    if (photoPath && localApenado.photoPath !== photoPath) {
+      updateData.photoPath = photoPath;
+      // Reseta hashes para forçar re-indexação facial no job em background
+      updateData.photoHash = null;
+      updateData.photoQuality = null;
+      updateData.photoHashSha = null;
+      updateData.faceDescriptor = null;
+      updateData.detScore = null;
+    }
+    
+    if (!localApenado.matricula && (dados.rji || dados.cpf)) {
+      updateData.matricula = dados.rji || dados.cpf;
+    }
+    if (!localApenado.unidade && unidade) {
+      updateData.unidade = unidade;
+    }
+    if (!localApenado.faccao && faccaoNome) {
+      updateData.faccao = faccaoNome;
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      localApenado = await prisma.apenado.update({
+        where: { id: localApenado.id },
+        data: updateData
+      });
+    }
+  }
+
   const upsertData = {
     nome: dados.nome || 'SEM NOME',
     nomeOutro: dados.nomeOutro,
@@ -1435,6 +1487,29 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> 
       })
     }
 
+    // --- Integração com Identificação de Apenados (tabela Apenado local) ---
+    const nomeApenadoUpper = (ap.nome || 'SEM NOME').trim().toUpperCase();
+    let localApenado = await prisma.apenado.findFirst({
+      where: { name: nomeApenadoUpper }
+    });
+
+    if (!localApenado) {
+      localApenado = await prisma.apenado.create({
+        data: {
+          name: nomeApenadoUpper,
+          unidade: ap.unidade || null,
+          photoPath: null
+        }
+      });
+    } else {
+      if (!localApenado.unidade && ap.unidade) {
+        localApenado = await prisma.apenado.update({
+          where: { id: localApenado.id },
+          data: { unidade: ap.unidade }
+        });
+      }
+    }
+
     // 4. Se não encontramos o apenado, criamos um registro stub parcial
     if (!apenado) {
       // Se não temos um sipeId válido para criar o registro (ex: CPF maior que 2147483647),
@@ -1459,6 +1534,8 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> 
           cela: ap.cela || null,
           tempoPena: ap.tempoPena || null,
           cpf: cpfLimpo && cpfLimpo.length === 11 ? cpfLimpo : null,
+          photoPath: localApenado.photoPath, // Copia a foto do apenado local se existir
+          apenadoLocalId: localApenado.id, // Vincula à identificação local
           ultimaSyncAt: new Date()
         }
       })
@@ -1469,6 +1546,13 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> 
       if (!apenado.cela && ap.cela) updateData.cela = ap.cela
       if (!apenado.tempoPena && ap.tempoPena) updateData.tempoPena = ap.tempoPena
       if (!apenado.dataNascimento && ap.dataNascimento) updateData.dataNascimento = ap.dataNascimento
+
+      if (!apenado.apenadoLocalId) {
+        updateData.apenadoLocalId = localApenado.id
+      }
+      if (!apenado.photoPath && localApenado.photoPath) {
+        updateData.photoPath = localApenado.photoPath
+      }
 
       const cpfLimpo = ap.sipeIdText ? ap.sipeIdText.replace(/\D/g, '') : ''
       if (!apenado.cpf && cpfLimpo.length === 11) {
