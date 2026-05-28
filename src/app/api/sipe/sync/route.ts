@@ -32,7 +32,18 @@ export async function POST(req: NextRequest) {
   // Auto-detect crashed jobs before starting new one
   await detectAndMarkCrashedJobs()
 
-  const body = await req.json()
+  // Parse body safely (allow empty body)
+  let body = {}
+  try {
+    const contentLength = req.headers.get('content-length')
+    if (contentLength && parseInt(contentLength) > 0) {
+      body = await req.json()
+    }
+  } catch {
+    // If no body or invalid JSON, use defaults
+    body = {}
+  }
+
   const { unidadeId = '3', tipo = 'APENADOS', resumeJobId } = body
 
   // ── Resume an interrupted job ──
