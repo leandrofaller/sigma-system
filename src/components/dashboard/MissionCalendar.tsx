@@ -96,6 +96,9 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
   const [endInput, setEndInput] = useState<{ open: boolean; km: string; note: string }>({ open: false, km: '', note: '' });
   const [confirmCancel, setConfirmCancel] = useState(false);
 
+  // Edição inline do KM inicial pós-início
+  const [editingStartKm, setEditingStartKm] = useState<{ open: boolean; value: string }>({ open: false, value: '' });
+
   const [municipioSearch, setMunicipioSearch] = useState('');
 
   // Form state — agendamento NÃO pede KM nem hora; só data
@@ -252,6 +255,36 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
       return;
     }
     updateMissionStatus(viewingMission.id, 'IN_PROGRESS', { placa: startInput.placa.trim().toUpperCase(), startKm: startInput.km });
+  };
+
+  const saveStartKm = async () => {
+    if (!viewingMission) return;
+    const km = parseFloat(editingStartKm.value);
+    if (!editingStartKm.value || isNaN(km) || km < 0) {
+      toast.error('Informe um KM inicial válido');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/missions/${viewingMission.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startKm: editingStartKm.value }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMissions(ms => ms.map(m => m.id === data.id ? data : m));
+        setViewingMission(data);
+        setEditingStartKm({ open: false, value: '' });
+        toast.success('KM inicial atualizado');
+      } else {
+        toast.error(data.error || 'Erro ao salvar KM inicial');
+      }
+    } catch {
+      toast.error('Erro ao salvar KM inicial');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const submitEnd = () => {
@@ -517,12 +550,57 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                     </div>
                   )}
                   {viewingMission.startKm != null && (
-                    <div className="flex items-center gap-3 text-sm text-body">
-                      <div className="w-4 h-4 text-sigma-500 flex items-center justify-center font-bold text-[10px]">KM</div>
-                      <span>KM Inicial: <span className="font-bold">{viewingMission.startKm?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        {viewingMission.endKm != null && <span> — KM Final: <span className="font-bold">{viewingMission.endKm.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>}
-                        {viewingMission.endKm != null && viewingMission.startKm != null && <span className="ml-2 text-sigma-600">(Total: {(viewingMission.endKm - viewingMission.startKm).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km)</span>}
-                      </span>
+                    <div className="flex items-start gap-3 text-sm text-body">
+                      <div className="w-4 h-4 text-sigma-500 flex items-center justify-center font-bold text-[10px] mt-0.5">KM</div>
+                      <div className="flex-1 min-w-0">
+                        {editingStartKm.open ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              step="0.01"
+                              autoFocus
+                              value={editingStartKm.value}
+                              onChange={e => setEditingStartKm(s => ({ ...s, value: e.target.value }))}
+                              onKeyDown={e => { if (e.key === 'Enter') saveStartKm(); if (e.key === 'Escape') setEditingStartKm({ open: false, value: '' }); }}
+                              className="w-36 input-base px-2 py-1 text-sm"
+                              placeholder="Ex: 14200.50"
+                            />
+                            <button
+                              onClick={saveStartKm}
+                              disabled={loading}
+                              className="px-2 py-1 bg-sigma-600 hover:bg-sigma-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors"
+                            >
+                              Salvar
+                            </button>
+                            <button
+                              onClick={() => setEditingStartKm({ open: false, value: '' })}
+                              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="flex items-center gap-1.5 flex-wrap">
+                            <span>KM Inicial: <span className="font-bold">{viewingMission.startKm.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+                            {viewingMission.status === 'IN_PROGRESS' && (
+                              <button
+                                onClick={() => setEditingStartKm({ open: true, value: String(viewingMission.startKm) })}
+                                className="p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-gray-400 hover:text-sigma-600 transition-colors"
+                                title="Corrigir KM inicial"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            )}
+                            {viewingMission.endKm != null && (
+                              <span> — KM Final: <span className="font-bold">{viewingMission.endKm.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+                            )}
+                            {viewingMission.endKm != null && (
+                              <span className="text-sigma-600">(Total: {(viewingMission.endKm - viewingMission.startKm).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km)</span>
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
                   <div className="flex items-center gap-3 text-sm text-body">

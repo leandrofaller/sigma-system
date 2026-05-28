@@ -98,9 +98,10 @@ export async function PATCH(
       }
     } else {
       // ===== Edição de campos do agendamento (sem mudar status) =====
-      // Só permite editar campos do agendamento se ainda está PLANNED
+      // Só permite editar campos do agendamento se ainda está PLANNED,
+      // com exceção de endNote e startKm (editável após início para correção).
       if (mission.status !== 'PLANNED') {
-        const allowedAfterStart = ['endNote']; // outros campos pós-início são bloqueados
+        const allowedAfterStart = ['endNote', 'startKm', 'placa'];
         const attempted = Object.keys(body).filter(k => !allowedAfterStart.includes(k));
         if (attempted.length > 0) {
           return NextResponse.json({
@@ -115,6 +116,17 @@ export async function PATCH(
       if (body.endDate !== undefined) data.endDate = body.endDate ? new Date(body.endDate) : null;
       if (body.participants !== undefined) data.participants = body.participants;
       if (body.groupId !== undefined) data.groupId = body.groupId || null;
+      // startKm editável após início (correção de valor digitado errado)
+      if (body.startKm !== undefined && mission.status === 'IN_PROGRESS') {
+        const km = parseFloat(body.startKm)
+        if (isNaN(km) || km < 0) {
+          return NextResponse.json({ error: 'KM inicial inválido' }, { status: 400 })
+        }
+        data.startKm = km
+      }
+      if (body.placa !== undefined && mission.status === 'IN_PROGRESS') {
+        data.placa = body.placa || null
+      }
     }
 
     const updated = await prisma.mission.update({
