@@ -519,9 +519,9 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                   {viewingMission.startKm != null && (
                     <div className="flex items-center gap-3 text-sm text-body">
                       <div className="w-4 h-4 text-sigma-500 flex items-center justify-center font-bold text-[10px]">KM</div>
-                      <span>KM Inicial: <span className="font-bold">{viewingMission.startKm}</span>
-                        {viewingMission.endKm != null && <span> — KM Final: <span className="font-bold">{viewingMission.endKm}</span></span>}
-                        {viewingMission.endKm != null && <span className="ml-2 text-sigma-600">(Total: {viewingMission.endKm - viewingMission.startKm} km)</span>}
+                      <span>KM Inicial: <span className="font-bold">{viewingMission.startKm?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        {viewingMission.endKm != null && <span> — KM Final: <span className="font-bold">{viewingMission.endKm.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>}
+                        {viewingMission.endKm != null && viewingMission.startKm != null && <span className="ml-2 text-sigma-600">(Total: {(viewingMission.endKm - viewingMission.startKm).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km)</span>}
                       </span>
                     </div>
                   )}
@@ -575,8 +575,8 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                     />
                     <div className="flex gap-2">
                       <input
-                        type="number" inputMode="numeric"
-                        placeholder="KM Inicial"
+                        type="number" inputMode="decimal" step="0.01"
+                        placeholder="Ex: 14200.50"
                         value={startInput.km}
                         onChange={e => setStartInput({ ...startInput, km: e.target.value })}
                         onKeyDown={e => { if (e.key === 'Enter') submitStart(); }}
@@ -601,8 +601,8 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                       Finalizar viagem — informe o KM final. Hora de chegada será registrada automaticamente.
                     </p>
                     <input
-                      type="number" inputMode="numeric"
-                      placeholder="KM Final" autoFocus
+                      type="number" inputMode="decimal" step="0.01"
+                      placeholder="Ex: 14523.75" autoFocus
                       value={endInput.km}
                       onChange={e => setEndInput({ ...endInput, km: e.target.value })}
                       className="w-full input-base px-4 py-2"

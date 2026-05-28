@@ -162,7 +162,7 @@ export function MissionReport({ missions, groups, users, isAdmin, currentUserId 
         <SummaryCard
           icon={Gauge}
           label="KM Percorridos"
-          value={stats.totalKm.toLocaleString('pt-BR')}
+          value={stats.totalKm.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           accent="green"
         />
         <SummaryCard
@@ -304,10 +304,10 @@ export function MissionReport({ missions, groups, users, isAdmin, currentUserId 
                     <td className="px-4 py-3">{statusBadge(m.status)}</td>
                     <td className="px-4 py-3 text-xs text-right font-mono whitespace-nowrap">
                       {km != null ? (
-                        <span className="font-bold text-sigma-600 dark:text-sigma-400">{km.toLocaleString('pt-BR')} km</span>
+                        <span className="font-bold text-sigma-600 dark:text-sigma-400">{km.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km</span>
                       ) : (
                         <span className="text-subtle">
-                          {m.startKm != null ? `${m.startKm} → ?` : '—'}
+                          {m.startKm != null ? `${m.startKm.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} → ?` : '—'}
                         </span>
                       )}
                     </td>

@@ -60,7 +60,7 @@ export async function PATCH(
         }
         data.status = 'IN_PROGRESS';
         data.startedAt = now;
-        data.startKm = parseInt(body.startKm);
+        data.startKm = parseFloat(body.startKm);
         if (body.placa !== undefined) data.placa = body.placa || null;
       }
 
@@ -72,13 +72,13 @@ export async function PATCH(
         if (body.endKm === undefined || body.endKm === null || body.endKm === '') {
           return NextResponse.json({ error: 'KM final é obrigatório para finalizar' }, { status: 400 });
         }
-        const endKmInt = parseInt(body.endKm);
-        if (mission.startKm != null && endKmInt < mission.startKm) {
+        const endKmFloat = parseFloat(body.endKm);
+        if (mission.startKm != null && endKmFloat < mission.startKm) {
           return NextResponse.json({ error: 'KM final não pode ser menor que o inicial' }, { status: 400 });
         }
         data.status = 'COMPLETED';
         data.endedAt = now;
-        data.endKm = endKmInt;
+        data.endKm = endKmFloat;
         if (body.endNote !== undefined) data.endNote = body.endNote || null;
       }
 

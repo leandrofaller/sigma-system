@@ -711,16 +711,17 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                 <p className="text-sm text-subtle">{endingMission.title} — {endingMission.destination}</p>
               </div>
               {endingMission.startKm != null && (
-                <p className="text-xs text-subtle">KM Inicial: <span className="font-bold text-body">{endingMission.startKm}</span></p>
+                <p className="text-xs text-subtle">KM Inicial: <span className="font-bold text-body">{endingMission.startKm.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
               )}
               <FieldLabel>KM Final</FieldLabel>
               <input
                 autoFocus
                 type="number"
-                inputMode="numeric"
+                inputMode="decimal"
+                step="0.01"
                 value={endKmValue}
                 onChange={e => setEndKmValue(e.target.value)}
-                placeholder="Ex: 14523"
+                placeholder="Ex: 14523.75"
                 className="w-full input-base px-4 py-4 text-lg font-bold"
               />
               <FieldLabel>Observação (opcional)</FieldLabel>
@@ -788,11 +789,12 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
               <FieldLabel>KM Inicial</FieldLabel>
               <input
                 type="number"
-                inputMode="numeric"
+                inputMode="decimal"
+                step="0.01"
                 value={startKmValue}
                 onChange={e => setStartKmValue(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') confirmStart(); }}
-                placeholder="Ex: 14200"
+                placeholder="Ex: 14200.50"
                 className="w-full input-base px-4 py-4 text-lg font-bold"
               />
               <div className="flex gap-3 pt-1">

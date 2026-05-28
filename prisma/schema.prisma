@@ -343,8 +343,8 @@ model Mission {
   status      MissionStatus @default(PLANNED)
   participants String[]      @default([])
   placa       String?
-  startKm     Int?
-  endKm       Int?
+  startKm     Float?
+  endKm       Float?
   userId      String
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   groupId     String?

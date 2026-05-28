@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
         endDate: endDate ? new Date(endDate) : null,
         status: startNow ? 'IN_PROGRESS' : 'PLANNED',
         startedAt: startNow ? now : null,
-        startKm: startNow && startKm ? parseInt(startKm) : null,
+        startKm: startNow && startKm ? parseFloat(startKm) : null,
         participants: participants || [],
         userId: user.id,
         groupId: groupId || user.groupId,
