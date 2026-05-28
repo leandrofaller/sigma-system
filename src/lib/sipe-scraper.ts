@@ -466,115 +466,150 @@ async function coletarIdsApenados(
   unidadeId: string,
   jobId: string
 ): Promise<number[]> {
-  const ids = new Set<number>()
-
-  // Intercepta respostas XHR do DataTables — pega todos os registros de uma vez
-  const responseHandler = async (response: Parameters<Parameters<typeof page.on<'response'>>[1]>[0]) => {
-    const url = response.url()
-    if (!url.includes('/listagem/') && !url.includes('draw=')) return
-    try {
-      const json = await response.json()
-      // DataTables retorna { data: [[col0, col1, ...], ...] }
-      if (Array.isArray(json?.data)) {
-        for (const row of json.data) {
-          const id = parseInt(row[0])
-          if (!isNaN(id) && id > 0) ids.add(id)
-        }
-        log(jobId, `⚡ Interceptação XHR: ${ids.size} IDs via DataTables`)
-      }
-    } catch { /* não era JSON — ignora */ }
-  }
-  page.on('response', responseHandler)
-
   await page.goto(`${SIPE_URL}/listagem/${unidadeId}/carceragem`, {
     waitUntil: 'domcontentloaded',
   })
   await page.waitForSelector('table', { timeout: 30_000 })
 
-  // Força DataTables a buscar todos os registros de uma vez (length=-1)
+  // ── Estratégia A: DataTables JS API ──────────────────────────
+  // Consulta o objeto DataTables diretamente na memória da página.
+  // Em modo client-side, dt.rows() retorna TODAS as linhas independente de paginação.
+  // Em modo server-side, retorna apenas a página atual (estratégia B cobre esse caso).
+  const idsViaApi = await page.evaluate(() => {
+    try {
+      const w = window as any
+      // Suporte a DataTables 1.x (fnTables) e 2.x (tables())
+      const tables: Element[] =
+        w.$.fn?.dataTable?.fnTables?.(true) ??
+        w.DataTable?.tables?.({ visible: true, hidden: false }) ??
+        []
+      if (!tables.length) return [] as number[]
+      const dt = w.$(tables[0]).DataTable()
+      const data: any[] = dt.rows().data().toArray()
+      return data
+        .map((row: any) => parseInt(Array.isArray(row) ? row[0] : (row.id ?? row.sipeId ?? '')))
+        .filter((id: number) => !isNaN(id) && id > 0)
+    } catch { return [] as number[] }
+  }).catch(() => [] as number[])
+
+  if (idsViaApi.length > 0) {
+    log(jobId, `⚡ Estratégia A (DataTables JS API): ${idsViaApi.length} IDs`)
+    return [...new Set(idsViaApi as number[])]
+  }
+
+  log(jobId, '⚠️ Estratégia A sem resultado — tentando estratégia B (fetch direto)')
+
+  // ── Estratégia B: fetch direto com cookies de sessão ─────────
+  // Obtém a URL AJAX configurada no DataTables e faz um fetch com length=-1.
+  // Funciona para DataTables server-side. Reutiliza os cookies de sessão
+  // do Playwright (credentials: 'include').
+  const idsViaFetch = await page.evaluate(async (baseUrl: string) => {
+    try {
+      const w = window as any
+      const tables: Element[] = w.$.fn?.dataTable?.fnTables?.(true) ?? []
+      if (!tables.length) return [] as number[]
+      const dt = w.$(tables[0]).DataTable()
+      const settings = dt.settings()[0]
+      const rawUrl: string = settings?.ajax?.url ?? settings?.ajax ?? settings?.sAjaxSource ?? ''
+      if (!rawUrl) return [] as number[]
+      const ajaxUrl = rawUrl.startsWith('http') ? rawUrl : baseUrl + rawUrl
+
+      const params = new URLSearchParams({
+        draw: '1', start: '0', length: '-1',
+        'columns[0][data]': '0',
+        'order[0][column]': '0', 'order[0][dir]': 'asc',
+      })
+      const res = await fetch(ajaxUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      })
+      if (!res.ok) return [] as number[]
+      const json = await res.json()
+      const rows: any[] = json?.data ?? json?.aaData ?? []
+      return rows
+        .map((r: any) => parseInt(Array.isArray(r) ? r[0] : (r.id ?? r.sipeId ?? '')))
+        .filter((id: number) => !isNaN(id) && id > 0)
+    } catch { return [] as number[] }
+  }, SIPE_URL).catch(() => [] as number[])
+
+  if (idsViaFetch.length > 0) {
+    log(jobId, `⚡ Estratégia B (fetch direto): ${idsViaFetch.length} IDs`)
+    return [...new Set(idsViaFetch as number[])]
+  }
+
+  log(jobId, '⚠️ Estratégia B sem resultado — usando estratégia C (DOM + paginação)')
+
+  // ── Estratégia C: DOM + paginação com saída inteligente ──────
+  // Força DataTables a exibir todas as linhas via API JS antes de ler o DOM.
   await page.evaluate(() => {
     try {
       const w = window as any
-      const dt = w.$?.('table').DataTable?.()
-      if (dt) dt.page.len(-1).draw()
+      const tables: Element[] = w.$.fn?.dataTable?.fnTables?.(true) ?? []
+      if (tables.length) w.$(tables[0]).DataTable().page.len(-1).draw()
     } catch { /* DataTables não disponível */ }
   }).catch(() => {})
+  await page.waitForTimeout(1500)
 
-  // Aguarda a resposta XHR processar
-  await page.waitForTimeout(2000)
-  page.off('response', responseHandler)
+  const ids = new Set<number>()
 
-  // Fallback via DOM + paginação se a interception não capturou nada
-  if (ids.size === 0) {
-    log(jobId, '⚠️ Interception XHR sem resultado — usando fallback DOM + paginação')
+  const extractIds = async () => {
+    const rows = await page.$$('table tbody tr')
+    log(jobId, `📊 <tr> visíveis no DOM: ${rows.length}`)
+    for (const row of rows) {
+      const cell = await row.$('th, td:first-child')
+      if (!cell) continue
+      const id = parseInt((await cell.innerText()).trim())
+      if (!isNaN(id)) ids.add(id)
+    }
+  }
 
-    const rowsToShow = ['-1', '100', '500', '1000', '10000']
-    for (const value of rowsToShow) {
-      try {
-        await page.selectOption('select[name*="DataTables_Table"]', value).catch(() => {})
-        await page.waitForTimeout(800)
-        const testRows = await page.$$('table tbody tr')
-        if (testRows.length > 10) {
-          log(jobId, `✅ Select ${value} funcionou: ${testRows.length} linhas`)
-          break
-        }
-      } catch { /* ignore */ }
+  await extractIds()
+
+  let pageNum = 1
+  let emptyConsecutivos = 0
+  const MAX_VAZIAS = 3
+  let continuar = true
+  while (continuar) {
+    const botaoLocator = page
+      .locator('a:has-text("Próxima"), a:has-text("Next"), li.next > a, [data-dt-idx="next"] a')
+      .first()
+    const botaoVisivel = await botaoLocator.isVisible().catch(() => false)
+    if (!botaoVisivel) {
+      log(jobId, `📄 Fim da paginação (página ${pageNum})`)
+      break
+    }
+    const botaoDisabled = await botaoLocator.evaluate((el: Element) =>
+      el.closest('li')?.classList.contains('disabled') ||
+      el.classList.contains('disabled') ||
+      (el as HTMLAnchorElement).tabIndex === -1
+    ).catch(() => false)
+    if (botaoDisabled) {
+      log(jobId, `📄 Fim da paginação — botão desabilitado (página ${pageNum})`)
+      break
     }
 
-    const extractIds = async () => {
-      const rows = await page.$$('table tbody tr')
-      for (const row of rows) {
-        const cell = await row.$('th, td:first-child')
-        if (!cell) continue
-        const id = parseInt((await cell.innerText()).trim())
-        if (!isNaN(id)) ids.add(id)
-      }
-    }
+    try {
+      pageNum++
+      await botaoLocator.click()
+      await page.waitForTimeout(1000)
+      const before = ids.size
+      await extractIds()
+      const novos = ids.size - before
+      log(jobId, `📄 Página ${pageNum}: +${novos} IDs (total: ${ids.size})`)
 
-    await extractIds()
-
-    let pageNum = 1
-    let emptyConsecutivos = 0
-    const MAX_VAZIAS = 3 // para após 3 páginas sem IDs novos
-    let continuar = true
-    while (continuar) {
-      // Para quando o botão não existe OU quando está desabilitado (classe "disabled")
-      const botaoLocator = page.locator('a:has-text("Próxima"), a:has-text("Next"), li.next > a, [data-dt-idx="next"] a').first()
-      const botaoVisivel = await botaoLocator.isVisible().catch(() => false)
-      if (!botaoVisivel) {
-        log(jobId, `📄 Fim da paginação (página ${pageNum})`)
-        break
-      }
-      // DataTables mantém o botão visível mas adiciona "disabled" na última página
-      const botaoDisabled = await botaoLocator.evaluate((el: Element) =>
-        el.closest('li')?.classList.contains('disabled') || el.classList.contains('disabled') || (el as HTMLAnchorElement).tabIndex === -1
-      ).catch(() => false)
-      if (botaoDisabled) {
-        log(jobId, `📄 Fim da paginação — botão desabilitado (página ${pageNum})`)
-        break
-      }
-
-      try {
-        pageNum++
-        await botaoLocator.click()
-        await page.waitForTimeout(1000)
-        const before = ids.size
-        await extractIds()
-        const novos = ids.size - before
-        log(jobId, `📄 Página ${pageNum}: +${novos} IDs (total: ${ids.size})`)
-
-        if (novos === 0) {
-          emptyConsecutivos++
-          if (emptyConsecutivos >= MAX_VAZIAS) {
-            log(jobId, `📄 ${MAX_VAZIAS} páginas consecutivas sem IDs novos — encerrando paginação`)
-            continuar = false
-          }
-        } else {
-          emptyConsecutivos = 0
+      if (novos === 0) {
+        emptyConsecutivos++
+        if (emptyConsecutivos >= MAX_VAZIAS) {
+          log(jobId, `📄 ${MAX_VAZIAS} páginas consecutivas sem IDs novos — encerrando`)
+          continuar = false
         }
-      } catch {
-        continuar = false
+      } else {
+        emptyConsecutivos = 0
       }
+    } catch {
+      continuar = false
     }
   }
 
