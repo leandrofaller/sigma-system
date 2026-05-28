@@ -482,33 +482,16 @@ async function coletarIdsApenados(
   log(jobId, `IDs principais: ${ids.size}`)
   log(jobId, `🔍 DEBUG: IDs extraídos (primeiros 20): ${Array.from(ids).slice(0, 20).join(', ')}`)
 
-  // Also iterate per-cell links
-  const carcLinks = await page.$$eval(
-    'a[href*="/fichaCela"]',
-    (els) => els.map((el) => (el as HTMLAnchorElement).getAttribute('href'))
-  )
-
-  log(jobId, `🔗 DEBUG: Total de links '/fichaCela' encontrados: ${carcLinks.length}`)
-
-  for (const url of carcLinks) {
-    if (!url) continue
-    try {
-      await page.goto(`${SIPE_URL}${url}`, { waitUntil: 'networkidle' })
-      const sizeBefore = ids.size
-      await page
-        .selectOption('select[name*="DataTables_Table"]', '-1')
-        .catch(() => {})
-      await page.waitForTimeout(400)
-      await extractIds()
-      const sizeAfter = ids.size
-      log(jobId, `  ├─ Link: ${url} → +${sizeAfter - sizeBefore} novos IDs`)
-    } catch (err) {
-      log(jobId, `  ├─ ❌ Erro ao processar ${url}: ${String(err).slice(0, 50)}`)
-    }
-  }
+  // Note: Removed per-cell link iteration due to URL format issues
+  // The main extraction from the table above should capture all IDs
 
   log(jobId, `✅ Total IDs coletados: ${ids.size}`)
-  log(jobId, `🔍 DEBUG: Todos os IDs: ${Array.from(ids).join(', ')}`)
+  if (ids.size <= 50) {
+    log(jobId, `🔍 DEBUG: Todos os IDs: ${Array.from(ids).sort((a, b) => a - b).join(', ')}`)
+  } else {
+    log(jobId, `🔍 DEBUG: IDs (primeiros 30): ${Array.from(ids).sort((a, b) => a - b).slice(0, 30).join(', ')}`)
+    log(jobId, `🔍 DEBUG: IDs (últimos 30): ${Array.from(ids).sort((a, b) => a - b).slice(-30).join(', ')}`)
+  }
   return [...ids]
 }
 
