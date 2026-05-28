@@ -6,13 +6,15 @@ import { SyncPanel } from './SyncPanel'
 import { ApenadosImportados } from './ApenadosImportados'
 import { AdvogadosImportados } from './AdvogadosImportados'
 import { FaccoesPanel } from './FaccoesPanel'
-import { Shield, Users, Briefcase, RefreshCw } from 'lucide-react'
+import { DashboardPanel } from './DashboardPanel'
+import { Shield, Users, Briefcase, RefreshCw, BarChart2 } from 'lucide-react'
 
 export function FaccoesClient() {
-  const [activeTab, setActiveTab] = useState('apenados')
+  const [activeTab, setActiveTab] = useState('dashboard')
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
@@ -27,9 +29,14 @@ export function FaccoesClient() {
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex-1 min-h-0 p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
           <TabsList className="mb-4 w-fit">
+            <TabsTrigger value="dashboard" className="gap-2">
+              <BarChart2 className="w-4 h-4" />
+              Dashboard
+            </TabsTrigger>
             <TabsTrigger value="apenados" className="gap-2">
               <Users className="w-4 h-4" />
               Apenados
@@ -48,11 +55,15 @@ export function FaccoesClient() {
             </TabsTrigger>
           </TabsList>
 
+          <TabsContent value="dashboard" className="flex-1 min-h-0 mt-0 overflow-y-auto">
+            <DashboardPanel />
+          </TabsContent>
+
           <TabsContent value="apenados" className="flex-1 min-h-0 mt-0">
             <ApenadosImportados />
           </TabsContent>
 
-          <TabsContent value="faccoes" className="flex-1 min-h-0 mt-0">
+          <TabsContent value="faccoes" className="flex-1 min-h-0 mt-0 overflow-y-auto">
             <FaccoesPanel />
           </TabsContent>
 
@@ -60,7 +71,7 @@ export function FaccoesClient() {
             <AdvogadosImportados />
           </TabsContent>
 
-          <TabsContent value="sync" className="flex-1 min-h-0 mt-0">
+          <TabsContent value="sync" className="flex-1 min-h-0 mt-0 overflow-y-auto">
             <SyncPanel />
           </TabsContent>
         </Tabs>

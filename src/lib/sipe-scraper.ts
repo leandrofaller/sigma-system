@@ -1,11 +1,75 @@
+/**
+ * SIPE Scraper — Playwright-based crawler for sipe.sejus.ro.gov.br
+ *
+ * Design (mirrors ArcFace indexing-job pattern):
+ * - Module-level singleton state (fast SSE streaming without DB reads)
+ * - DB-persisted checkpoint (survives VPS restarts / process crashes)
+ * - Cursor-based resume: stores collected IDs + last processed SIPE ID
+ * - Crash detection: jobs RUNNING with no `ultimaAtividade` update in 10 min
+ *   are auto-transitioned to INTERRUPTED and can be resumed
+ */
+
 import { chromium, Browser, BrowserContext, Page } from 'playwright'
 import { prisma } from './db'
 
+// ── Config ────────────────────────────────────────────────────
 const SIPE_URL = 'https://sipe.sejus.ro.gov.br'
-const SIPE_CPF = process.env.SIPE_CPF || ''
-const SIPE_SENHA = process.env.SIPE_SENHA || ''
-const SIPE_PERFIL = process.env.SIPE_PERFIL || '2' // Master
-const SIPE_UNIDADE = process.env.SIPE_UNIDADE || '3' // CDPPVH
+// env vars set in .env; fallback to empty so TS is happy
+const SIPE_CPF = process.env.SIPE_CPF ?? ''
+const SIPE_SENHA = process.env.SIPE_SENHA ?? ''
+const SIPE_PERFIL = process.env.SIPE_PERFIL ?? '2'   // Master
+const SIPE_UNIDADE = process.env.SIPE_UNIDADE ?? '3'  // CDPPVH
+
+/** ms without a heartbeat before a job is considered crashed */
+const CRASH_TIMEOUT_MS = 10 * 60 * 1000 // 10 min
+
+// ── In-memory singleton (like ArcFace indexing-job) ──────────
+
+export interface SipeSyncProgress {
+  jobId: string
+  status: 'RUNNING' | 'COMPLETED' | 'FAILED' | 'INTERRUPTED'
+  fase: string
+  total: number
+  processado: number
+  erros: number
+  ultimoLog: string
+  startTime: number
+  /** Percentage 0-100 */
+  pct: number
+}
+
+let activeState: SipeSyncProgress | null = null
+let stopFlag = false
+
+export function getSipeState(): SipeSyncProgress | null {
+  return activeState
+}
+
+export function stopSipeJob(): void {
+  stopFlag = true
+}
+
+// ── Crash detection helper ────────────────────────────────────
+
+/**
+ * Call this on module init or before starting a new job.
+ * Jobs stuck in RUNNING with no heartbeat are moved to INTERRUPTED.
+ */
+export async function detectAndMarkCrashedJobs(): Promise<void> {
+  const cutoff = new Date(Date.now() - CRASH_TIMEOUT_MS)
+  await prisma.sipeSyncJob.updateMany({
+    where: {
+      status: 'RUNNING',
+      OR: [
+        { ultimaAtividade: { lt: cutoff } },
+        { ultimaAtividade: null, iniciadoEm: { lt: cutoff } },
+      ],
+    },
+    data: { status: 'INTERRUPTED' },
+  })
+}
+
+// ── Browser pool ──────────────────────────────────────────────
 
 let browserInstance: Browser | null = null
 
@@ -18,180 +82,323 @@ async function getBrowser(): Promise<Browser> {
 
 async function createSession(): Promise<BrowserContext> {
   const browser = await getBrowser()
-  const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+  return browser.newContext({
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+      'Chrome/120.0.0.0 Safari/537.36',
   })
-  return context
 }
 
-async function login(page: Page): Promise<boolean> {
-  await page.goto(`${SIPE_URL}/`, { waitUntil: 'networkidle' })
+// ── SIPE authentication ───────────────────────────────────────
 
-  const cpfInput = await page.$('input[name="cpf"], input[placeholder*="CPF"]')
+async function login(page: Page, unidadeId: string): Promise<boolean> {
+  await page.goto(`${SIPE_URL}/`, { waitUntil: 'networkidle' })
+  const cpfInput = await page.$('input[placeholder*="CPF"]')
   if (!cpfInput) return false
 
   await cpfInput.fill(SIPE_CPF)
   await page.fill('input[type="password"]', SIPE_SENHA)
   await page.click('button[type="submit"]')
-  await page.waitForURL('**/selectRole**', { timeout: 10000 })
+  await page.waitForURL('**/selectRole**', { timeout: 15_000 })
 
-  // Seleciona perfil e unidade
-  await page.selectOption('select[name="perfil"], select:first-of-type', SIPE_PERFIL)
-  await page.selectOption('select:last-of-type', SIPE_UNIDADE)
+  await page.selectOption('select:first-of-type', SIPE_PERFIL)
+  await page.selectOption('select:last-of-type', unidadeId)
   await page.click('button[type="submit"]')
-  await page.waitForURL('**/home**', { timeout: 10000 })
-
+  await page.waitForURL('**/home**', { timeout: 15_000 })
   return true
 }
 
-async function updateJobProgress(jobId: string, update: {
-  processado?: number
-  erros?: number
-  log?: string
-  status?: string
-  total?: number
-  finalizadoEm?: Date
-  iniciadoEm?: Date
-}) {
+// ── DB progress helpers ───────────────────────────────────────
+
+async function dbProgress(
+  jobId: string,
+  patch: {
+    status?: string
+    fase?: string
+    processado?: number
+    erros?: number
+    total?: number
+    log?: string
+    idsColetados?: string
+    ultimoIdProcessado?: number
+    iniciadoEm?: Date
+    finalizadoEm?: Date
+  }
+) {
   const current = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
   if (!current) return
 
   await prisma.sipeSyncJob.update({
     where: { id: jobId },
     data: {
-      ...update,
-      log: update.log
-        ? (current.log ? current.log + '\n' + update.log : update.log)
+      ...patch,
+      ultimaAtividade: new Date(),
+      log: patch.log
+        ? current.log
+          ? current.log + '\n' + patch.log
+          : patch.log
         : undefined,
     },
   })
 }
 
-// ── Scraping de apenados por unidade ──────────────────────────
+/** Sync DB → in-memory state */
+function refreshMemory(jobId: string, patch: Partial<SipeSyncProgress>) {
+  if (!activeState) return
+  Object.assign(activeState, patch)
+  if (activeState.total > 0) {
+    activeState.pct = Math.round((activeState.processado / activeState.total) * 100)
+  }
+}
 
-export async function scrapeApenadosPorUnidade(
-  jobId: string,
-  unidadeId: string,
-  unidadeNome: string
-) {
+// ── Main entry points ─────────────────────────────────────────
+
+/**
+ * Start a new sync job or resume an interrupted one.
+ * Runs entirely in background — returns immediately.
+ */
+export function startSipeSync(jobId: string, unidadeId: string): void {
+  if (activeState?.status === 'RUNNING') return
+
+  stopFlag = false
+  activeState = {
+    jobId,
+    status: 'RUNNING',
+    fase: 'Iniciando...',
+    total: 0,
+    processado: 0,
+    erros: 0,
+    ultimoLog: '',
+    startTime: Date.now(),
+    pct: 0,
+  }
+
+  runScrape(jobId, unidadeId).catch(async (err) => {
+    const msg = err?.message ?? String(err)
+    activeState = { ...activeState!, status: 'FAILED', ultimoLog: msg }
+    await dbProgress(jobId, {
+      status: 'FAILED',
+      finalizadoEm: new Date(),
+      log: `Erro fatal: ${msg}`,
+    })
+  })
+}
+
+/** Resume an INTERRUPTED job without re-collecting IDs */
+export function resumeSipeSync(jobId: string, unidadeId: string): void {
+  startSipeSync(jobId, unidadeId) // startSipeSync detects existing IDs in DB
+}
+
+// ── Core scrape loop ──────────────────────────────────────────
+
+async function runScrape(jobId: string, unidadeId: string): Promise<void> {
+  const job = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
+  if (!job) throw new Error('Job não encontrado')
+
+  await dbProgress(jobId, {
+    status: 'RUNNING',
+    iniciadoEm: job.iniciadoEm ?? new Date(),
+    log: 'Iniciando sessão no SIPE...',
+    fase: 'Login',
+  })
+  refreshMemory(jobId, { fase: 'Login', ultimoLog: 'Iniciando sessão no SIPE...' })
+
   const context = await createSession()
   const page = await context.newPage()
 
   try {
-    await updateJobProgress(jobId, {
-      status: 'RUNNING',
-      iniciadoEm: new Date(),
-      log: `Iniciando scraping da unidade ${unidadeNome}`,
-    })
-
-    const ok = await login(page)
+    const ok = await login(page, unidadeId)
     if (!ok) throw new Error('Falha no login do SIPE')
 
-    await updateJobProgress(jobId, { log: 'Login realizado com sucesso' })
+    log(jobId, 'Login realizado com sucesso')
 
-    // Coleta IDs da listagem da carceragem
-    const apenadoIds = await coletarIdsApenados(page, unidadeId, jobId)
+    // ── Phase 1: collect IDs (or load from checkpoint) ────────
+    let ids: number[]
 
-    await updateJobProgress(jobId, {
-      total: apenadoIds.length,
-      log: `Encontrados ${apenadoIds.length} apenados`,
-    })
+    if (job.idsColetados) {
+      // Resume: reuse previously collected list
+      ids = JSON.parse(job.idsColetados) as number[]
+      // Determine which IDs remain (after cursor)
+      const cursor = job.ultimoIdProcessado ?? null
+      if (cursor !== null) {
+        const cursorIndex = ids.indexOf(cursor)
+        ids = cursorIndex >= 0 ? ids.slice(cursorIndex + 1) : ids
+      }
+      const alreadyDone = (job.processado ?? 0)
+      refreshMemory(jobId, {
+        fase: 'Retomando scraping de apenados...',
+        total: (JSON.parse(job.idsColetados) as number[]).length,
+        processado: alreadyDone,
+        ultimoLog: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
+      })
+      await dbProgress(jobId, {
+        log: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
+        fase: 'Retomando',
+      })
+    } else {
+      // Fresh start: collect all IDs
+      refreshMemory(jobId, { fase: 'Coletando lista de apenados...' })
+      await dbProgress(jobId, { fase: 'Coletando IDs', log: 'Coletando lista de apenados...' })
 
-    let processado = 0
-    let erros = 0
+      ids = await coletarIdsApenados(page, unidadeId, jobId)
 
-    for (const sipeId of apenadoIds) {
+      // Persist checkpoint
+      await dbProgress(jobId, {
+        idsColetados: JSON.stringify(ids),
+        total: ids.length,
+        log: `${ids.length} apenados encontrados — iniciando scraping`,
+        fase: 'Scraping apenados',
+      })
+      refreshMemory(jobId, {
+        total: ids.length,
+        fase: 'Scraping apenados',
+        ultimoLog: `${ids.length} apenados encontrados`,
+      })
+    }
+
+    // ── Phase 2: scrape each profile ──────────────────────────
+    for (const sipeId of ids) {
+      if (stopFlag) {
+        await dbProgress(jobId, {
+          status: 'INTERRUPTED',
+          finalizadoEm: new Date(),
+          log: 'Sincronização interrompida pelo usuário',
+        })
+        refreshMemory(jobId, { status: 'INTERRUPTED' })
+        return
+      }
+
       try {
-        await scrapeApenadoFicha(page, sipeId, jobId)
-        processado++
-        await updateJobProgress(jobId, { processado })
+        await scrapeApenadoFicha(page, sipeId)
+        activeState!.processado++
+        activeState!.pct = activeState!.total
+          ? Math.round((activeState!.processado / activeState!.total) * 100)
+          : 0
+
+        // Persist cursor every 5 records (reduce DB load)
+        if (activeState!.processado % 5 === 0) {
+          await dbProgress(jobId, {
+            processado: activeState!.processado,
+            ultimoIdProcessado: sipeId,
+          })
+        }
+        // Polite delay
         await page.waitForTimeout(300 + Math.random() * 500)
       } catch (err) {
-        erros++
-        await updateJobProgress(jobId, {
-          erros,
-          log: `Erro ao processar apenado ${sipeId}: ${err}`,
-        })
+        activeState!.erros++
+        const msg = `Erro apenado #${sipeId}: ${err}`
+        activeState!.ultimoLog = msg
+        await dbProgress(jobId, { erros: activeState!.erros, log: msg })
       }
     }
 
-    // Scrape de advogados da unidade
-    await updateJobProgress(jobId, { log: 'Iniciando scraping de advogados...' })
+    // Final cursor flush
+    await dbProgress(jobId, {
+      processado: activeState!.processado,
+      ultimoIdProcessado: ids[ids.length - 1],
+    })
+
+    // ── Phase 3: advogados ────────────────────────────────────
+    refreshMemory(jobId, { fase: 'Scraping advogados...' })
+    await dbProgress(jobId, { fase: 'Advogados', log: 'Iniciando scraping de advogados...' })
     await scrapeAdvogados(page, jobId)
 
-    await updateJobProgress(jobId, {
+    // ── Done ──────────────────────────────────────────────────
+    const summary =
+      `Concluído: ${activeState!.processado} apenados processados, ` +
+      `${activeState!.erros} erros`
+
+    activeState = { ...activeState!, status: 'COMPLETED', fase: 'Concluído', ultimoLog: summary }
+    await dbProgress(jobId, {
       status: 'COMPLETED',
       finalizadoEm: new Date(),
-      log: `Concluído: ${processado} processados, ${erros} erros`,
+      log: summary,
+      fase: 'Concluído',
     })
-  } catch (err) {
-    await updateJobProgress(jobId, {
-      status: 'FAILED',
-      finalizadoEm: new Date(),
-      log: `Erro fatal: ${err}`,
-    })
-    throw err
   } finally {
     await context.close()
   }
 }
 
-async function coletarIdsApenados(page: Page, unidadeId: string, jobId: string): Promise<number[]> {
-  const ids: number[] = []
+function log(jobId: string, msg: string) {
+  if (activeState) activeState.ultimoLog = msg
+  // Fire-and-forget DB log (no await to keep scraping fast)
+  dbProgress(jobId, { log: msg }).catch(() => {})
+}
 
-  // Pega todas as carceragens disponíveis
-  await page.goto(`${SIPE_URL}/listagem/${unidadeId}/carceragem`, { waitUntil: 'networkidle' })
+// ── ID collection ─────────────────────────────────────────────
 
-  // Seleciona "All" para mostrar todos
-  await page.selectOption('select[name*="DataTables_Table"]', '-1').catch(() => {})
+async function coletarIdsApenados(
+  page: Page,
+  unidadeId: string,
+  jobId: string
+): Promise<number[]> {
+  const ids = new Set<number>()
+
+  await page.goto(`${SIPE_URL}/listagem/${unidadeId}/carceragem`, {
+    waitUntil: 'networkidle',
+  })
+
+  // Show all rows
+  await page
+    .selectOption('select[name*="DataTables_Table"]', '-1')
+    .catch(() => {})
   await page.waitForTimeout(1000)
 
-  const rows = await page.$$('table tbody tr')
-  for (const row of rows) {
-    const firstCell = await row.$('th, td:first-child')
-    if (!firstCell) continue
-    const text = await firstCell.innerText()
-    const id = parseInt(text.trim())
-    if (!isNaN(id)) ids.push(id)
-  }
-
-  await updateJobProgress(jobId, { log: `IDs coletados da listagem principal: ${ids.length}` })
-
-  // Também percorre carceragens/pavilhões específicos
-  const carcLinks = await page.$$('a[href*="/fichaCela"]')
-  const carcUrls = await Promise.all(carcLinks.map(l => l.getAttribute('href')))
-
-  for (const url of carcUrls) {
-    if (!url) continue
-    try {
-      await page.goto(`${SIPE_URL}${url}`, { waitUntil: 'networkidle' })
-      await page.selectOption('select[name*="DataTables_Table"]', '-1').catch(() => {})
-      await page.waitForTimeout(500)
-
-      const cellRows = await page.$$('table tbody tr')
-      for (const row of cellRows) {
-        const cell = await row.$('th, td:first-child')
-        if (!cell) continue
-        const text = await cell.innerText()
-        const id = parseInt(text.trim())
-        if (!isNaN(id) && !ids.includes(id)) ids.push(id)
-      }
-    } catch {
-      // ignora erros de carceragens individuais
+  const extractIds = async () => {
+    const rows = await page.$$('table tbody tr')
+    for (const row of rows) {
+      const cell = await row.$('th, td:first-child')
+      if (!cell) continue
+      const id = parseInt((await cell.innerText()).trim())
+      if (!isNaN(id)) ids.add(id)
     }
   }
 
-  return [...new Set(ids)]
+  await extractIds()
+  log(jobId, `IDs principais: ${ids.size}`)
+
+  // Also iterate per-cell links
+  const carcLinks = await page.$$eval(
+    'a[href*="/fichaCela"]',
+    (els) => els.map((el) => (el as HTMLAnchorElement).getAttribute('href'))
+  )
+
+  for (const url of carcLinks) {
+    if (!url) continue
+    try {
+      await page.goto(`${SIPE_URL}${url}`, { waitUntil: 'networkidle' })
+      await page
+        .selectOption('select[name*="DataTables_Table"]', '-1')
+        .catch(() => {})
+      await page.waitForTimeout(400)
+      await extractIds()
+    } catch {
+      // ignore individual cell errors
+    }
+  }
+
+  log(jobId, `Total IDs coletados: ${ids.size}`)
+  return [...ids]
 }
 
-async function scrapeApenadoFicha(page: Page, sipeId: number, _jobId: string) {
-  await page.goto(`${SIPE_URL}/apenados/${sipeId}/editar`, { waitUntil: 'networkidle' })
+// ── Ficha scraping ────────────────────────────────────────────
+
+async function scrapeApenadoFicha(page: Page, sipeId: number): Promise<void> {
+  await page.goto(`${SIPE_URL}/apenados/${sipeId}/editar`, {
+    waitUntil: 'networkidle',
+  })
 
   const dados = await page.evaluate(() => {
     const val = (name: string) =>
-      (document.querySelector(`[name="${name}"]`) as HTMLInputElement | null)?.value?.trim() || null
+      (
+        document.querySelector(`[name="${name}"]`) as HTMLInputElement | null
+      )?.value?.trim() || null
+
     const selVal = (name: string) => {
-      const el = document.querySelector(`[name="${name}"]`) as HTMLSelectElement | null
+      const el = document.querySelector(
+        `[name="${name}"]`
+      ) as HTMLSelectElement | null
       return el?.options[el.selectedIndex]?.text?.trim() || null
     }
 
@@ -225,196 +432,164 @@ async function scrapeApenadoFicha(page: Page, sipeId: number, _jobId: string) {
       presoOriundo: selVal('presooriundo'),
       monitorado: val('monitorado') === 'SIM',
       intramuro: val('intramuro') === 'SIM',
-      faccaoSipeId: parseInt((document.querySelector('[name="faccao_id"]') as HTMLInputElement)?.value || '0') || null,
+      faccaoSipeId:
+        parseInt(
+          (document.querySelector('[name="faccao_id"]') as HTMLInputElement)
+            ?.value || '0'
+        ) || null,
     }
   })
 
-  // Cela e unidade vêm do breadcrumb/header
-  const unidadeEl = await page.$('.navbar-brand, nav a[href="#"]')
-  const unidade = unidadeEl ? await unidadeEl.innerText() : null
-
-  // Busca facção local se houver
+  // Resolve faccao local id
   let faccaoId: string | null = null
   if (dados.faccaoSipeId && dados.faccaoSipeId > 0) {
-    const faccao = await prisma.sipeFaccao.findUnique({ where: { sipeId: dados.faccaoSipeId } })
-    faccaoId = faccao?.id || null
+    const faccao = await prisma.sipeFaccao.findUnique({
+      where: { sipeId: dados.faccaoSipeId },
+    })
+    faccaoId = faccao?.id ?? null
   }
 
-  // Upsert apenado importado
+  const upsertData = {
+    nome: dados.nome || 'SEM NOME',
+    nomeOutro: dados.nomeOutro,
+    cpf: dados.cpf,
+    rg: dados.rg,
+    rgOrgao: dados.rgOrgao,
+    dataNascimento: dados.dataNascimento,
+    naturalidade: dados.naturalidade,
+    sexo: dados.sexo,
+    etnia: dados.etnia,
+    orientacaoSexual: dados.orientacaoSexual,
+    tipoSanguineo: dados.tipoSanguineo,
+    grauInstrucao: dados.grauInstrucao,
+    religiao: dados.religiao,
+    estadoCivil: dados.estadoCivil,
+    nomeConjuge: dados.nomeConjuge,
+    qtdFilhos: dados.qtdFilhos,
+    nomeMae: dados.nomeMae,
+    nomePai: dados.nomePai,
+    telefone: dados.telefone,
+    rji: dados.rji,
+    regime: dados.regime,
+    situacao: dados.situacao,
+    dataEntrada: dados.dataEntrada,
+    dataPrisao: dados.dataPrisao,
+    tempoPena: dados.tempoPena,
+    monitorado: dados.monitorado,
+    intramuro: dados.intramuro,
+    presoOriundo: dados.presoOriundo,
+    oficioEntrada: dados.oficioEntrada,
+    faccaoId,
+    ultimaSyncAt: new Date(),
+  }
+
   const apenado = await prisma.sipeApenadoImportado.upsert({
     where: { sipeId },
-    create: {
-      sipeId,
-      nome: dados.nome || 'SEM NOME',
-      nomeOutro: dados.nomeOutro,
-      cpf: dados.cpf,
-      rg: dados.rg,
-      rgOrgao: dados.rgOrgao,
-      dataNascimento: dados.dataNascimento,
-      naturalidade: dados.naturalidade,
-      sexo: dados.sexo,
-      etnia: dados.etnia,
-      orientacaoSexual: dados.orientacaoSexual,
-      tipoSanguineo: dados.tipoSanguineo,
-      grauInstrucao: dados.grauInstrucao,
-      religiao: dados.religiao,
-      estadoCivil: dados.estadoCivil,
-      nomeConjuge: dados.nomeConjuge,
-      qtdFilhos: dados.qtdFilhos,
-      nomeMae: dados.nomeMae,
-      nomePai: dados.nomePai,
-      telefone: dados.telefone,
-      rji: dados.rji,
-      unidade,
-      regime: dados.regime,
-      situacao: dados.situacao,
-      dataEntrada: dados.dataEntrada,
-      dataPrisao: dados.dataPrisao,
-      tempoPena: dados.tempoPena,
-      monitorado: dados.monitorado,
-      intramuro: dados.intramuro,
-      presoOriundo: dados.presoOriundo,
-      oficioEntrada: dados.oficioEntrada,
-      faccaoId,
-      ultimaSyncAt: new Date(),
-    },
-    update: {
-      nome: dados.nome || 'SEM NOME',
-      nomeOutro: dados.nomeOutro,
-      cpf: dados.cpf,
-      rg: dados.rg,
-      rgOrgao: dados.rgOrgao,
-      dataNascimento: dados.dataNascimento,
-      naturalidade: dados.naturalidade,
-      sexo: dados.sexo,
-      etnia: dados.etnia,
-      orientacaoSexual: dados.orientacaoSexual,
-      tipoSanguineo: dados.tipoSanguineo,
-      grauInstrucao: dados.grauInstrucao,
-      religiao: dados.religiao,
-      estadoCivil: dados.estadoCivil,
-      nomeConjuge: dados.nomeConjuge,
-      qtdFilhos: dados.qtdFilhos,
-      nomeMae: dados.nomeMae,
-      nomePai: dados.nomePai,
-      telefone: dados.telefone,
-      rji: dados.rji,
-      unidade,
-      regime: dados.regime,
-      situacao: dados.situacao,
-      dataEntrada: dados.dataEntrada,
-      dataPrisao: dados.dataPrisao,
-      tempoPena: dados.tempoPena,
-      monitorado: dados.monitorado,
-      intramuro: dados.intramuro,
-      presoOriundo: dados.presoOriundo,
-      oficioEntrada: dados.oficioEntrada,
-      faccaoId,
-      ultimaSyncAt: new Date(),
-    },
+    create: { sipeId, ...upsertData },
+    update: upsertData,
   })
 
-  // Scrape processos
-  await scrapeProcessos(page, sipeId, apenado.id)
-
-  // Scrape alcunhas
-  await scrapeAlcunhas(page, sipeId, apenado.id)
+  await Promise.all([
+    scrapeProcessos(page, sipeId, apenado.id),
+    scrapeAlcunhas(page, sipeId, apenado.id),
+  ])
 }
 
-async function scrapeProcessos(page: Page, sipeId: number, apenadoId: string) {
+async function scrapeProcessos(
+  page: Page,
+  sipeId: number,
+  apenadoId: string
+): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/incluirProcessos`, { waitUntil: 'networkidle' })
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/incluirProcessos`, {
+      waitUntil: 'networkidle',
+    })
     const text = await page.innerText('body')
-
-    // Extrai processos do texto da página
     const processoRegex = /(\d+) - NÚMERO PROCESSO: ([^\n/]*)/g
-    let match
-    while ((match = processoRegex.exec(text)) !== null) {
-      const sipeProcessoId = parseInt(match[1])
-      const numero = match[2].trim()
-
+    let m
+    while ((m = processoRegex.exec(text)) !== null) {
+      const sipeProcessoId = parseInt(m[1])
+      const numero = m[2].trim()
       const artigos: string[] = []
       const artigoRegex = /Art\s*\d+[^\n]*/g
-      let artMatch
-      while ((artMatch = artigoRegex.exec(text)) !== null) {
-        artigos.push(artMatch[0].trim())
+      let am
+      while ((am = artigoRegex.exec(text)) !== null) {
+        artigos.push(am[0].trim())
       }
-
       await prisma.sipeProcesso.upsert({
-        where: {
-          id: `${apenadoId}_${sipeProcessoId}`,
-        },
-        create: {
-          id: `${apenadoId}_${sipeProcessoId}`,
-          apenadoId,
-          sipeProcessoId,
-          numero,
-          artigos,
-        },
+        where: { id: `${apenadoId}_${sipeProcessoId}` },
+        create: { id: `${apenadoId}_${sipeProcessoId}`, apenadoId, sipeProcessoId, numero, artigos },
         update: { numero, artigos },
       })
     }
-  } catch {
-    // ignora erros de processos
-  }
+  } catch { /* ignore */ }
 }
 
-async function scrapeAlcunhas(page: Page, sipeId: number, apenadoId: string) {
+async function scrapeAlcunhas(
+  page: Page,
+  sipeId: number,
+  apenadoId: string
+): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/alcunhas`, { waitUntil: 'networkidle' })
-
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/alcunhas`, {
+      waitUntil: 'networkidle',
+    })
     const rows = await page.$$('table tbody tr')
     for (const row of rows) {
       const cells = await row.$$('td')
       if (cells.length < 2) continue
-      const alcunha = await cells[1].innerText()
-      if (!alcunha.trim()) continue
-
+      const alcunha = (await cells[1].innerText()).trim()
+      if (!alcunha) continue
       const exists = await prisma.sipeAlcunha.findFirst({
-        where: { apenadoId, alcunha: alcunha.trim() },
+        where: { apenadoId, alcunha },
       })
       if (!exists) {
-        await prisma.sipeAlcunha.create({
-          data: { apenadoId, alcunha: alcunha.trim() },
-        })
+        await prisma.sipeAlcunha.create({ data: { apenadoId, alcunha } })
       }
     }
-  } catch {
-    // ignora erros de alcunhas
-  }
+  } catch { /* ignore */ }
 }
 
-async function scrapeAdvogados(page: Page, jobId: string) {
-  await page.goto(`${SIPE_URL}/advogados/listaradvogados`, { waitUntil: 'networkidle' })
+// ── Advogados ─────────────────────────────────────────────────
+
+async function scrapeAdvogados(page: Page, jobId: string): Promise<void> {
+  await page.goto(`${SIPE_URL}/advogados/listaradvogados`, {
+    waitUntil: 'networkidle',
+  })
   await page.selectOption('select[name*="DataTables_Table"]', '-1').catch(() => {})
   await page.waitForTimeout(1000)
 
   const links = await page.$$eval(
     'tbody a[href*="/detalhaclientes"]',
-    els => els.map(el => {
-      const anchor = el as HTMLAnchorElement
-      return { href: anchor.getAttribute('href'), id: anchor.href.match(/\/advogados\/(\d+)\//)?.[1] }
-    })
+    (els) =>
+      (els as HTMLAnchorElement[]).map((el) => ({
+        href: el.getAttribute('href'),
+        id: el.href.match(/\/advogados\/(\d+)\//)?.[1],
+      }))
   )
 
-  await updateJobProgress(jobId, { log: `Advogados encontrados: ${links.length}` })
+  log(jobId, `Advogados encontrados: ${links.length}`)
+  if (activeState) {
+    activeState.fase = `Scraping advogados (${links.length})`
+  }
 
   for (const link of links) {
-    if (!link.href || !link.id) continue
+    if (!link.href || !link.id || stopFlag) continue
     try {
-      await scrapeAdvogadoDetalhe(page, parseInt(link.id), jobId)
+      await scrapeAdvogadoDetalhe(page, parseInt(link.id))
       await page.waitForTimeout(200 + Math.random() * 300)
     } catch (err) {
-      await updateJobProgress(jobId, { log: `Erro advogado ${link.id}: ${err}` })
+      log(jobId, `Erro advogado #${link.id}: ${err}`)
     }
   }
 }
 
-async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, _jobId: string) {
-  await page.goto(`${SIPE_URL}/advogados/${sipeId}/detalhaclientes`, { waitUntil: 'networkidle' })
+async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> {
+  await page.goto(`${SIPE_URL}/advogados/${sipeId}/detalhaclientes`, {
+    waitUntil: 'networkidle',
+  })
   const text = await page.innerText('body')
 
-  // Extrai dados do advogado
   const nome = text.match(/Nome do Advogado\s+([^\n]+)/)?.[1]?.trim()
   const oab = text.match(/OAB\s+([^\n]+)/)?.[1]?.trim()
   const cpf = text.match(/CPF\s+([0-9./-]+)/)?.[1]?.trim()
@@ -423,72 +598,76 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, _jobId: string)
 
   if (!nome) return
 
-  const advogado = await prisma.sipeAdvogado.upsert({
+  const adv = await prisma.sipeAdvogado.upsert({
     where: { sipeId },
     create: { sipeId, nome, oab, cpf, telefone, dataCadastro },
     update: { nome, oab, cpf, telefone, dataCadastro },
   })
 
-  // Extrai apenados atendidos - "Nome Apenado\nXXX\nCpf\nYYY"
   const blocos = text.split('Informações do Apenado').slice(1)
   for (const bloco of blocos) {
     const nomeApenado = bloco.match(/Nome Apenado\s+([^\n]+)/)?.[1]?.trim()
     const cpfApenado = bloco.match(/Cpf\s+([^\n]+)/)?.[1]?.trim()
-
     if (!nomeApenado) continue
 
-    // Tenta encontrar o apenado importado pelo CPF ou nome
-    let importado = cpfApenado
-      ? await prisma.sipeApenadoImportado.findFirst({ where: { cpf: cpfApenado } })
-      : null
-    if (!importado) {
-      importado = await prisma.sipeApenadoImportado.findFirst({ where: { nome: nomeApenado } })
-    }
+    const importado =
+      (cpfApenado
+        ? await prisma.sipeApenadoImportado.findFirst({ where: { cpf: cpfApenado } })
+        : null) ??
+      (await prisma.sipeApenadoImportado.findFirst({
+        where: { nome: nomeApenado },
+      }))
 
     if (importado) {
       await prisma.sipeVinculoAdvogado.upsert({
-        where: { apenadoId_advogadoId: { apenadoId: importado.id, advogadoId: advogado.id } },
-        create: { apenadoId: importado.id, advogadoId: advogado.id },
+        where: {
+          apenadoId_advogadoId: {
+            apenadoId: importado.id,
+            advogadoId: adv.id,
+          },
+        },
+        create: { apenadoId: importado.id, advogadoId: adv.id },
         update: { ativo: true },
       })
     }
   }
 }
 
-export async function scrapeFaccoes() {
+// ── Facções ───────────────────────────────────────────────────
+
+export async function scrapeFaccoes(): Promise<void> {
   const context = await createSession()
   const page = await context.newPage()
-
   try {
-    await login(page)
+    await login(page, SIPE_UNIDADE)
 
-    // Tenta extrair facções do formulário de edição de qualquer apenado
     await page.goto(`${SIPE_URL}/apenados/index`, { waitUntil: 'networkidle' })
-
-    // Pega o primeiro apenado disponível
     const firstLink = await page.$('tbody a[href*="/selecionarOpcao"]')
     if (!firstLink) return
 
     const href = await firstLink.getAttribute('href')
     if (!href) return
-    const match = href.match(/\/apenados\/(\d+)\//)
-    if (!match) return
-    const sipeId = parseInt(match[1])
+    const m = href.match(/\/apenados\/(\d+)\//)
+    if (!m) return
 
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/faccao`, { waitUntil: 'networkidle' })
+    await page.goto(`${SIPE_URL}/apenados/${parseInt(m[1])}/faccao`, {
+      waitUntil: 'networkidle',
+    })
 
-    const options = await page.$$eval('select option', opts =>
-      (opts as HTMLOptionElement[])
-        .filter(o => o.value && o.value !== '0' && o.value !== '')
-        .map(o => ({ value: o.value, text: o.textContent?.trim() || '' }))
+    const options = await page.$$eval(
+      'select option',
+      (opts) =>
+        (opts as HTMLOptionElement[])
+          .filter((o) => o.value && o.value !== '0' && o.value !== '')
+          .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
     )
 
     for (const opt of options) {
-      const sipeId = parseInt(opt.value)
-      if (isNaN(sipeId)) continue
+      const id = parseInt(opt.value)
+      if (isNaN(id)) continue
       await prisma.sipeFaccao.upsert({
-        where: { sipeId },
-        create: { sipeId, nome: opt.text },
+        where: { sipeId: id },
+        create: { sipeId: id, nome: opt.text },
         update: { nome: opt.text },
       })
     }
@@ -497,7 +676,7 @@ export async function scrapeFaccoes() {
   }
 }
 
-export async function closeBrowser() {
+export async function closeBrowser(): Promise<void> {
   if (browserInstance) {
     await browserInstance.close()
     browserInstance = null

@@ -683,19 +683,28 @@ model SipeVinculoVisitante {
 }
 
 model SipeSyncJob {
-  id           String    @id @default(cuid())
-  status       String    @default("PENDING")
-  tipo         String
-  unidade      String?
-  unidadeNome  String?
-  total        Int?
-  processado   Int       @default(0)
-  erros        Int       @default(0)
-  log          String?   @db.Text
-  iniciadoEm   DateTime?
-  finalizadoEm DateTime?
-  criadoPor    String?
-  createdAt    DateTime  @default(now())
+  id                  String    @id @default(cuid())
+  // PENDING | RUNNING | COMPLETED | FAILED | INTERRUPTED
+  status              String    @default("PENDING")
+  tipo                String
+  unidade             String?
+  unidadeNome         String?
+  total               Int?
+  processado          Int       @default(0)
+  erros               Int       @default(0)
+  log                 String?   @db.Text
+  // Checkpoint: lista serializada de IDs coletados (JSON array)
+  idsColetados        String?   @db.Text
+  // Cursor: último SIPE ID processado com sucesso (para retomar)
+  ultimoIdProcessado  Int?
+  // Fase atual para display no frontend
+  fase                String?
+  // Timestamps
+  iniciadoEm          DateTime?
+  finalizadoEm        DateTime?
+  ultimaAtividade     DateTime?
+  criadoPor           String?
+  createdAt           DateTime  @default(now())
 
   @@index([status])
   @@map("sipe_sync_jobs")

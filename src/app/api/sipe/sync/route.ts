@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { scrapeApenadosPorUnidade, scrapeFaccoes } from '@/lib/sipe-scraper'
+import {
+  startSipeSync,
+  scrapeFaccoes,
+  detectAndMarkCrashedJobs,
+} from '@/lib/sipe-scraper'
 
-const UNIDADES = {
+export const UNIDADES: Record<string, string> = {
   '3': 'CENTRO DE DETENÇÃO PROVISÓRIO DE PORTO VELHO - CDPPVH',
   '1': 'PENITENCIÁRIA ESTADUAL EDVAN MARIANO ROSENDO - PANDA',
   '5': 'PENITENCIÁRIA ESTADUAL SUELY MARIA MENDONÇA',
@@ -11,28 +15,95 @@ const UNIDADES = {
   '9': 'COLÔNIA AGRÍCOLA PENAL ÊNIO PINHEIRO DOS SANTOS',
   '16': 'PENITENCIÁRIA ESTADUAL ARUANA - PEA',
   '17': 'PENITENCIÁRIA ESTADUAL MILTON SOARES DE CARVALHO',
+  '91': 'PENITENCIÁRIA ESTADUAL JORGE THIAGO AGUIAR AFONSO',
+  '12': 'CENTRO DE RESSOCIALIZAÇÃO VALE DO GUAPORÉ - CRVG',
+  '25': 'CENTRO DE RESSOCIALIZAÇÃO JONAS FERRETI',
 }
 
 export async function POST(req: NextRequest) {
   const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
+
+  // Auto-detect crashed jobs before starting new one
+  await detectAndMarkCrashedJobs()
 
   const body = await req.json()
-  const { unidadeId = '3', tipo = 'APENADOS' } = body
+  const { unidadeId = '3', tipo = 'APENADOS', resumeJobId } = body
 
-  const unidadeNome = UNIDADES[unidadeId as keyof typeof UNIDADES] || `Unidade ${unidadeId}`
+  // ── Resume an interrupted job ──
+  if (resumeJobId) {
+    const existing = await prisma.sipeSyncJob.findUnique({
+      where: { id: resumeJobId },
+    })
+    if (!existing || existing.status !== 'INTERRUPTED') {
+      return NextResponse.json(
+        { error: 'Job não encontrado ou não está interrompido' },
+        { status: 400 }
+      )
+    }
 
-  // Verifica se já tem job rodando
+    await prisma.sipeSyncJob.update({
+      where: { id: resumeJobId },
+      data: { status: 'RUNNING', ultimaAtividade: new Date() },
+    })
+
+    startSipeSync(resumeJobId, existing.unidade ?? unidadeId)
+    return NextResponse.json({ jobId: resumeJobId, status: 'RUNNING', resumed: true })
+  }
+
+  // ── Prevent duplicate active jobs ──
   const jobAtivo = await prisma.sipeSyncJob.findFirst({
     where: { status: 'RUNNING' },
   })
   if (jobAtivo) {
-    return NextResponse.json({ error: 'Já existe uma sincronização em andamento', jobId: jobAtivo.id }, { status: 409 })
+    return NextResponse.json(
+      { error: 'Já existe uma sincronização em andamento', jobId: jobAtivo.id },
+      { status: 409 }
+    )
   }
 
+  const unidadeNome = UNIDADES[unidadeId] ?? `Unidade ${unidadeId}`
+
+  // ── Factions-only sync ──
+  if (tipo === 'FACCOES') {
+    const job = await prisma.sipeSyncJob.create({
+      data: {
+        tipo: 'FACCOES',
+        unidade: unidadeId,
+        unidadeNome,
+        status: 'RUNNING',
+        iniciadoEm: new Date(),
+        criadoPor: session.user.id,
+      },
+    })
+
+    scrapeFaccoes()
+      .then(() =>
+        prisma.sipeSyncJob.update({
+          where: { id: job.id },
+          data: { status: 'COMPLETED', finalizadoEm: new Date() },
+        })
+      )
+      .catch((err) =>
+        prisma.sipeSyncJob.update({
+          where: { id: job.id },
+          data: {
+            status: 'FAILED',
+            finalizadoEm: new Date(),
+            log: String(err),
+          },
+        })
+      )
+
+    return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
+  }
+
+  // ── Full apenados + advogados sync ──
   const job = await prisma.sipeSyncJob.create({
     data: {
-      tipo,
+      tipo: 'APENADOS',
       unidade: unidadeId,
       unidadeNome,
       status: 'PENDING',
@@ -40,23 +111,41 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  // Executa em background
-  if (tipo === 'FACCOES') {
-    scrapeFaccoes().catch(console.error)
-  } else {
-    scrapeApenadosPorUnidade(job.id, unidadeId, unidadeNome).catch(console.error)
-  }
-
+  startSipeSync(job.id, unidadeId)
   return NextResponse.json({ jobId: job.id, status: 'PENDING' })
 }
 
 export async function GET() {
   const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
+
+  // Auto-detect crashed jobs on every list refresh
+  await detectAndMarkCrashedJobs()
 
   const jobs = await prisma.sipeSyncJob.findMany({
     orderBy: { createdAt: 'desc' },
     take: 20,
+    // Don't send the full idsColetados (can be large)
+    select: {
+      id: true,
+      status: true,
+      tipo: true,
+      unidade: true,
+      unidadeNome: true,
+      total: true,
+      processado: true,
+      erros: true,
+      log: true,
+      fase: true,
+      ultimoIdProcessado: true,
+      iniciadoEm: true,
+      finalizadoEm: true,
+      ultimaAtividade: true,
+      createdAt: true,
+      criadoPor: true,
+    },
   })
 
   return NextResponse.json(jobs)
