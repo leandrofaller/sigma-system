@@ -8,5 +8,8 @@ export default async function FaccoesPage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
+  const user = session.user as any
+  if (user.role !== 'SUPER_ADMIN') redirect('/dashboard')
+
   return <FaccoesClient />
 }

@@ -33,7 +33,7 @@ const navItems: NavItem[] = [
   { label: 'Chat Interno', href: '/chat', icon: MessageSquare },
   { label: 'Consulta IA', href: '/ia', icon: Sparkles },
   { label: 'Identificação de Apenados', href: '/apenados', icon: UserCheck },
-  { label: 'Apenados & Facções', href: '/faccoes', icon: Shield },
+  { label: 'Apenados & Facções', href: '/faccoes', icon: Shield, roles: ['SUPER_ADMIN'] },
 ];
 
 const baseAdminItems: NavItem[] = [

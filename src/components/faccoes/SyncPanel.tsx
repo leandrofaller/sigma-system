@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
   RefreshCw, Play, CheckCircle, XCircle, Clock,
-  AlertCircle, RotateCcw, Pause, Wifi, WifiOff,
+  AlertCircle, RotateCcw, Pause, Wifi, WifiOff, Trash2,
 } from 'lucide-react'
 
 const UNIDADES = [
@@ -174,6 +174,8 @@ export function SyncPanel() {
   const [loading, setLoading] = useState(false)
   const [selectedUnidade, setSelectedUnidade] = useState('3')
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
+  const [confirmClear, setConfirmClear] = useState(false)
+  const [clearing, setClearing] = useState(false)
 
   const fetchJobs = useCallback(async () => {
     const res = await fetch('/api/sipe/sync')
@@ -239,6 +241,25 @@ export function SyncPanel() {
     }
   }
 
+  const clearHistory = async () => {
+    setClearing(true)
+    try {
+      const res = await fetch('/api/sipe/sync/history', { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Erro ao limpar histórico')
+        return
+      }
+      toast.success(`${data.deletados} registro${data.deletados !== 1 ? 's' : ''} removido${data.deletados !== 1 ? 's' : ''}`)
+      setConfirmClear(false)
+      fetchJobs()
+    } catch {
+      toast.error('Erro de conexão')
+    } finally {
+      setClearing(false)
+    }
+  }
+
   const isActive = !!activeJobId && jobs.some(
     (j) => j.id === activeJobId && (j.status === 'RUNNING' || j.status === 'PENDING')
   )
@@ -301,14 +322,51 @@ export function SyncPanel() {
 
       {/* Job History */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">Histórico de Sincronizações</h2>
-          <button
-            onClick={fetchJobs}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4 text-gray-500" />
-          </button>
+
+          <div className="flex items-center gap-2">
+            {/* Confirmação inline de limpeza */}
+            {confirmClear ? (
+              <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-1.5">
+                <span className="text-xs text-red-700 dark:text-red-300 font-medium">Remover todo o histórico?</span>
+                <button
+                  onClick={clearHistory}
+                  disabled={clearing}
+                  className="px-2 py-0.5 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded text-xs font-medium transition-colors"
+                >
+                  {clearing ? 'Limpando...' : 'Confirmar'}
+                </button>
+                <button
+                  onClick={() => setConfirmClear(false)}
+                  disabled={clearing}
+                  className="px-2 py-0.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-xs transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              jobs.some((j) => ['COMPLETED', 'FAILED', 'INTERRUPTED'].includes(j.status)) && (
+                <button
+                  onClick={() => setConfirmClear(true)}
+                  disabled={isActive}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-40"
+                  title="Remover todos os registros finalizados do histórico"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Limpar histórico
+                </button>
+              )
+            )}
+
+            <button
+              onClick={fetchJobs}
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              title="Atualizar lista"
+            >
+              <RefreshCw className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
         </div>
 
         <div className="divide-y divide-gray-100 dark:divide-gray-700">

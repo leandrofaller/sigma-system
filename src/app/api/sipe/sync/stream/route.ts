@@ -15,6 +15,9 @@ export async function GET(req: NextRequest) {
   if (!session?.user) {
     return new Response('Não autorizado', { status: 401 })
   }
+  if ((session.user as any).role !== 'SUPER_ADMIN') {
+    return new Response('Acesso restrito ao Superadmin', { status: 403 })
+  }
 
   const { searchParams } = new URL(req.url)
   const jobId = searchParams.get('jobId')

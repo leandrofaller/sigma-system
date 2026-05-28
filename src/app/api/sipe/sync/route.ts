@@ -25,6 +25,9 @@ export async function POST(req: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
+  if ((session.user as any).role !== 'SUPER_ADMIN') {
+    return NextResponse.json({ error: 'Acesso restrito ao Superadmin' }, { status: 403 })
+  }
 
   // Auto-detect crashed jobs before starting new one
   await detectAndMarkCrashedJobs()
@@ -120,6 +123,9 @@ export async function GET() {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
+  if ((session.user as any).role !== 'SUPER_ADMIN') {
+    return NextResponse.json({ error: 'Acesso restrito ao Superadmin' }, { status: 403 })
   }
 
   // Auto-detect crashed jobs on every list refresh
