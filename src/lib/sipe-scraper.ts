@@ -265,10 +265,14 @@ async function login(page: Page, unidadeId: string): Promise<boolean> {
 
   // Aguarda /home (30s)
   try {
-    await page.waitForURL('**/home**', { timeout: 30_000 })
+    if (!page.url().includes('/home')) {
+      await page.waitForURL('**/home**', { timeout: 30_000 })
+    }
   } catch {
     const url = page.url()
-    throw new Error(`Seleção de perfil não redirecionou para /home. URL atual: ${url}`)
+    if (!url.includes('/home')) {
+      throw new Error(`Seleção de perfil não redirecionou para /home. URL atual: ${url}`)
+    }
   }
 
   return true
