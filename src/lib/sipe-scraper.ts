@@ -1198,17 +1198,30 @@ async function scrapeApenadoFicha(
     });
   }
 
+  let nomeFinalApenado = nomeApenadoUpper;
+
   // Fallback: busca por nome se não encontrou por matricula (compatibilidade)
   if (!localApenado) {
-    localApenado = await prisma.apenado.findFirst({
+    const apenadoExistenteMesmoNome = await prisma.apenado.findFirst({
       where: { name: nomeApenadoUpper }
     });
+
+    if (apenadoExistenteMesmoNome) {
+      // Já existe um apenado com esse nome. Para evitar sobrepor a foto e misturar registros,
+      // usaremos o sufixo " SIPE" no nome do novo registro de apenado que receberá a foto.
+      nomeFinalApenado = `${nomeApenadoUpper} SIPE`;
+      
+      // Agora, tentamos ver se já criamos esse apenado com sufixo " SIPE" em uma sincronização anterior
+      localApenado = await prisma.apenado.findFirst({
+        where: { name: nomeFinalApenado }
+      });
+    }
   }
 
   if (!localApenado) {
     localApenado = await prisma.apenado.create({
       data: {
-        name: nomeApenadoUpper,
+        name: nomeFinalApenado,
         matricula: dados.rji || dados.cpf || null,
         unidade: unidade || null,
         faccao: faccaoNome || null,
