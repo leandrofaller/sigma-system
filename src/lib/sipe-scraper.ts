@@ -1685,6 +1685,7 @@ export async function scrapeFaccoes(): Promise<void> {
             'select[name="faccao_id"]',
             'select[name*="faccao"]',
             'select[id*="faccao"]',
+            'select:nth-of-type(2)',  // Segundo select (primeiro é gênero)
             'select'  // último recurso: qualquer select
           ]
 
@@ -1738,6 +1739,7 @@ export async function scrapeFaccoes(): Promise<void> {
               'select[name="faccao_id"]',
               'select[name*="faccao"]',
               'select[id*="faccao"]',
+              'select:nth-of-type(2)',  // Segundo select na página de edição
               'select'  // último recurso
             ]
 
