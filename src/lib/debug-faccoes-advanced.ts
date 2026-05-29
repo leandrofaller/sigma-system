@@ -199,17 +199,54 @@ async function debugFaccoesAdvanced() {
     if (selectRolePage) {
       console.log('📍 Página de seleção de role detectada')
 
-      // Clicar em ENTRAR (Master já está selecionado por padrão)
-      const entrarBtn = page.locator('button:has-text("ENTRAR")')
-      if (await entrarBtn.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
-        console.log('🖱️ Clicando em ENTRAR (Master selecionado)...')
-        await entrarBtn.first().click()
-        await page.waitForTimeout(2000)
-        console.log('✅ Autenticação completa')
+      // Salvar a página /selectRole para inspecionar
+      const selectRoleHtml = await page.content()
+      const selectRolePath = path.join(DEBUG_DIR, 'selectRole-page.html')
+      fs.writeFileSync(selectRolePath, selectRoleHtml)
+      console.log(`📄 Página /selectRole salva em: ${selectRolePath}`)
 
-        // Verificar URL após entrar
-        const urlAposMaster = page.url()
-        console.log(`📍 URL após Master: ${urlAposMaster}`)
+      // Tentar várias formas de clicar em ENTRAR
+      const buttonSelectors = [
+        'button:has-text("ENTRAR")',
+        'button[type="submit"]',
+        'form button',
+        'input[type="submit"]'
+      ]
+
+      let clickSuccess = false
+
+      for (const selector of buttonSelectors) {
+        try {
+          const elem = page.locator(selector).first()
+          if (await elem.isVisible({ timeout: 2_000 }).catch(() => false)) {
+            console.log(`🖱️ Tentando clicar com seletor: ${selector}`)
+
+            // Tentar fazer scroll até o elemento
+            await elem.scrollIntoViewIfNeeded()
+            await page.waitForTimeout(500)
+
+            // Tentar clicar
+            await elem.click()
+            await page.waitForTimeout(3000)
+
+            const urlAposClique = page.url()
+            console.log(`📍 URL após clique: ${urlAposClique}`)
+
+            if (!urlAposClique.includes('/selectRole')) {
+              console.log('✅ Clique funcionou!')
+              clickSuccess = true
+              break
+            }
+          }
+        } catch (err) {
+          console.log(`⚠️  Selector ${selector} falhou`)
+        }
+      }
+
+      if (!clickSuccess) {
+        console.log('❌ Nenhum método de clique funcionou')
+        console.log('⚠️  O SIPE pode ter proteção contra automação')
+        console.log('Abra o arquivo selectRole-page.html para inspecionar manualmente')
       }
     }
 
