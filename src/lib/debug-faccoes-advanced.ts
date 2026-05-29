@@ -364,9 +364,38 @@ async function debugFaccoesAdvanced() {
 
     if (links.length === 0) throw new Error('Nenhum apenado encontrado em nenhuma unidade')
 
-    const firstLink = links[0]
-    const href = await firstLink.getAttribute('href')
-    console.log(`📍 HREF encontrado: ${href}`)
+    // Mostrar TODOS os hrefs encontrados
+    console.log(`\n📋 HREFs encontrados:`)
+    const allHrefs = []
+    for (let i = 0; i < links.length; i++) {
+      const h = await links[i].getAttribute('href')
+      console.log(`  [${i}] ${h}`)
+      allHrefs.push(h)
+    }
+
+    // Filtrar links válidos (não /index, não /static, etc)
+    const validHrefs = allHrefs.filter(h =>
+      h &&
+      !h.includes('/index') &&
+      !h.includes('/static') &&
+      !h.includes('/js/') &&
+      !h.includes('/css/') &&
+      (h.includes('/apenados/') || h.includes('?id='))
+    )
+
+    console.log(`\n📋 HREFs válidos: ${validHrefs.length}`)
+    for (let i = 0; i < validHrefs.length; i++) {
+      console.log(`  [${i}] ${validHrefs[i]}`)
+    }
+
+    if (validHrefs.length === 0) {
+      console.log(`❌ Nenhum href válido encontrado`)
+      // Usar o primeiro de qualquer forma
+      validHrefs.push(allHrefs[0])
+    }
+
+    const href = validHrefs[0]
+    console.log(`\n📍 Usando HREF: ${href}`)
 
     // Tentar diferentes padrões de extração de ID
     let apenadoId = null
