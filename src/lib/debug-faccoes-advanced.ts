@@ -152,14 +152,41 @@ async function debugFaccoesAdvanced() {
     if (perfilPage) {
       console.log('📍 Página de seleção de perfil detectada')
 
+      // Verificar quais unidades estão disponíveis
+      const unidades = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('select option'))
+          .filter(opt => opt.value && opt.textContent?.trim())
+          .map(opt => ({
+            value: opt.value,
+            text: opt.textContent?.trim()
+          }))
+      })
+
+      console.log('📋 Unidades disponíveis:')
+      for (const u of unidades) {
+        console.log(`   - ${u.value}: ${u.text}`)
+      }
+
       // Tentar clicar no botão ENTRAR
       const entrarBtn = page.locator('button:has-text("ENTRAR")')
       if (await entrarBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
         console.log('🖱️ Clicando em ENTRAR...')
         await entrarBtn.click()
         await page.waitForTimeout(3000)
-        console.log('✅ Perfil/Unidade selecionado')
+        console.log('✅ Clique realizado')
+
+        // Verificar URL após clique
+        const urlAposClique = page.url()
+        console.log(`📍 URL após ENTRAR: ${urlAposClique}`)
+
+        // Salvar página para inspecionar
+        const afterEntrarHtml = await page.content()
+        const afterEntrarPath = path.join(DEBUG_DIR, 'after-entrar.html')
+        fs.writeFileSync(afterEntrarPath, afterEntrarHtml)
+        console.log(`📄 Página após ENTRAR salva em: ${afterEntrarPath}`)
       }
+    } else {
+      console.log('✅ Já passou da página de seleção de perfil')
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -168,13 +195,30 @@ async function debugFaccoesAdvanced() {
 
     console.log('\n📍 FASE 2: Procurando apenado...')
 
-    // Tentar acessar listagem de carceragem
-    console.log('📄 Acessando listagem de apenados...')
-    await page.goto(`${SIPE_URL}/listagem/3/carceragem`, {
-      waitUntil: 'networkidle',
-      timeout: 20_000
-    })
-    console.log('✅ Página de listagem carregada')
+    // Tentar descobrir qual unidade usar
+    const currentUrl = page.url()
+    let listageUrl = `${SIPE_URL}/listagem/3/carceragem`
+
+    // Se estamos em uma listagem diferente, usar a URL atual
+    if (currentUrl.includes('/listagem/')) {
+      listageUrl = currentUrl.split('?')[0] // Remove query params
+      console.log(`📄 Usando URL atual: ${listageUrl}`)
+    }
+
+    // Tentar acessar listagem
+    console.log(`📄 Acessando listagem de apenados...`)
+    try {
+      await page.goto(listageUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 15_000
+      })
+      console.log('✅ Página de listagem carregada')
+    } catch (err) {
+      console.log(`⚠️  Erro ao acessar ${listageUrl}`)
+      console.log('Tentando home como fallback...')
+      await page.goto(`${SIPE_URL}/home`, { waitUntil: 'domcontentloaded', timeout: 10_000 })
+      console.log('Redirecionando para home...')
+    }
 
     const links = await page.$$('tbody a[href*="/selecionarOpcao"]')
     console.log(`✅ Encontrados ${links.length} apenados na listagem`)
