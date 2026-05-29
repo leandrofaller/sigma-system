@@ -1594,6 +1594,7 @@ async function scrapeApenadoFicha(
     scrapeEndereço(page, sipeId, apenado.id),
     scrapeHistorico(page, sipeId, apenado.id),
     scrapeDocumentos(page, sipeId, apenado.id),
+    scrapeVisitantes(page, sipeId, apenado.id).catch(() => {}),
     scrapeAdvogadosDoApenado(page, sipeId, apenado.id).catch(() => {}),
   ])
 }
@@ -1762,6 +1763,218 @@ async function scrapeProcessos(
   } catch (err) {
     console.error(`Erro ao sincronizar processos do apenado ${sipeId}:`, err)
   }
+}
+
+async function scrapeVisitantes(
+  page: Page,
+  sipeId: number,
+  apenadoId: string
+): Promise<void> {
+  const urls = [
+    `${SIPE_URL}/apenados/${sipeId}/visitantes`,
+    `${SIPE_URL}/apenados/${sipeId}/visitas`,
+    `${SIPE_URL}/apenados/${sipeId}/credenciados`,
+    `${SIPE_URL}/apenados/${sipeId}/credenciamento`
+  ]
+
+  for (const url of urls) {
+    try {
+      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 })
+      const status = response?.status()
+      if (status && (status === 404 || status === 403 || status === 500)) {
+        continue
+      }
+
+      const bodyText = await page.innerText('body').catch(() => '')
+      if (bodyText.includes('404') || bodyText.includes('não encontrado') || bodyText.includes('Não autorizado')) {
+        continue
+      }
+
+      const hasTable = await page.evaluate(() => document.querySelector('table') !== null)
+      if (!hasTable) continue
+
+      const visitantes = await page.evaluate(() => {
+        const tabelas = Array.from(document.querySelectorAll('table'))
+        const list: Array<{
+          nome: string
+          cpf: string | null
+          parentesco: string | null
+          photoSrc: string | null
+          ativo: boolean
+        }> = []
+
+        for (const table of tabelas) {
+          const rows = Array.from(table.querySelectorAll('tbody tr'))
+          if (rows.length === 0) continue
+
+          const headers = Array.from(table.querySelectorAll('thead th, thead td')).map(h => (h.textContent ?? '').toUpperCase().trim())
+          const nomeIdx = headers.findIndex(h => h.includes('NOME') || h.includes('VISITANTE') || h.includes('CREDENCIADO'))
+          const cpfIdx = headers.findIndex(h => h.includes('CPF'))
+          const parenIdx = headers.findIndex(h => h.includes('PARENTESCO') || h.includes('VÍNCULO') || h.includes('VINCULO') || h.includes('GRAU'))
+          const statusIdx = headers.findIndex(h => h.includes('STATUS') || h.includes('SITUAÇÃO') || h.includes('SITUACAO') || h.includes('ATIVO'))
+
+          for (const row of rows) {
+            const cells = Array.from(row.querySelectorAll('td'))
+            if (cells.length < 2) continue
+
+            const img = row.querySelector('img')
+            const photoSrc = img ? img.src : null
+
+            let nome = ''
+            if (nomeIdx >= 0 && cells[nomeIdx]) {
+              nome = (cells[nomeIdx].textContent ?? '').trim()
+            } else {
+              const firstColHasImg = cells[0].querySelector('img') !== null
+              nome = (cells[firstColHasImg ? 1 : 0].textContent ?? '').trim()
+            }
+
+            if (!nome || nome.toUpperCase().includes('NENHUM') || nome.toUpperCase().includes('REGISTRO')) {
+              continue
+            }
+
+            let cpf: string | null = null
+            if (cpfIdx >= 0 && cells[cpfIdx]) {
+              cpf = (cells[cpfIdx].textContent ?? '').replace(/\D/g, '')
+            } else {
+              const rowText = row.innerText || ''
+              const cpfMatch = rowText.match(/\d{3}\.\d{3}\.\d{3}-\d{2}/)
+              if (cpfMatch) {
+                cpf = cpfMatch[0].replace(/\D/g, '')
+              }
+            }
+
+            let parentesco: string | null = null
+            if (parenIdx >= 0 && cells[parenIdx]) {
+              parentesco = (cells[parenIdx].textContent ?? '').trim()
+            }
+
+            let statusText = 'ATIVO'
+            if (statusIdx >= 0 && cells[statusIdx]) {
+              statusText = (cells[statusIdx].textContent ?? '').toUpperCase().trim()
+            }
+            const ativo = !statusText.includes('INATIVO') && !statusText.includes('BLOQUEADO') && !statusText.includes('CANCELADO')
+
+            list.push({
+              nome,
+              cpf: cpf && cpf.length === 11 ? cpf : null,
+              parentesco,
+              photoSrc,
+              ativo
+            })
+          }
+        }
+        return list
+      })
+
+      if (visitantes.length === 0) {
+        continue
+      }
+
+      for (const v of visitantes) {
+        let photoPath: string | null = null
+        
+        if (v.photoSrc) {
+          try {
+            const absoluteUrl = new URL(v.photoSrc, page.url()).href
+            const base64Data = await page.evaluate(async (url) => {
+              try {
+                const res = await fetch(url)
+                if (!res.ok) return null
+                const blob = await res.blob()
+                return new Promise<string>((resolve) => {
+                  const reader = new FileReader()
+                  reader.onloadend = () => resolve(reader.result as string)
+                  reader.readAsDataURL(blob)
+                })
+              } catch {
+                return null
+              }
+            }, absoluteUrl)
+
+            if (base64Data && base64Data.includes(',')) {
+              const base64Content = base64Data.split(',')[1]
+              const imageBuffer = Buffer.from(base64Content, 'base64')
+
+              const webpBuffer = await sharp(imageBuffer)
+                .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
+                .webp({ quality: 85 })
+                .toBuffer()
+
+              const { mkdir, writeFile } = await import('fs/promises')
+              const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
+              const visitDir = join(baseDir, 'visitantes')
+              await mkdir(visitDir, { recursive: true })
+
+              const fileKey = v.cpf || Math.abs(hashCodeLocal(v.nome))
+              const filename = `visitante-${fileKey}.webp`
+              const localPath = join(visitDir, filename)
+
+              await writeFile(localPath, webpBuffer)
+              photoPath = `uploads/visitantes/${filename}`
+            }
+          } catch (imgErr) {
+            console.error(`Falha ao baixar foto do visitante ${v.nome}:`, imgErr)
+          }
+        }
+
+        let vis = null
+        if (v.cpf) {
+          vis = await prisma.sipeVisitante.findFirst({ where: { cpf: v.cpf } })
+        }
+        if (!vis) {
+          vis = await prisma.sipeVisitante.findFirst({ where: { nome: v.nome } })
+        }
+
+        const upsertData = {
+          nome: v.nome,
+          cpf: v.cpf,
+          parentesco: v.parentesco,
+          ...(photoPath ? { photoPath } : {})
+        }
+
+        if (vis) {
+          vis = await prisma.sipeVisitante.update({
+            where: { id: vis.id },
+            data: upsertData
+          })
+        } else {
+          vis = await prisma.sipeVisitante.create({
+            data: upsertData
+          })
+        }
+
+        await prisma.sipeVinculoVisitante.upsert({
+          where: {
+            apenadoId_visitanteId: {
+              apenadoId,
+              visitanteId: vis.id
+            }
+          },
+          create: {
+            apenadoId,
+            visitanteId: vis.id,
+            ativo: v.ativo
+          },
+          update: {
+            ativo: v.ativo
+          }
+        })
+      }
+
+      break
+    } catch (err) {
+      console.error(`Erro ao sincronizar visitantes na URL ${url}:`, err)
+    }
+  }
+}
+
+function hashCodeLocal(str: string) {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0
+  }
+  return hash
 }
 
 async function scrapeAlcunhas(

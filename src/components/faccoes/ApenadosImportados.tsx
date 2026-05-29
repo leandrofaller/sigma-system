@@ -1,12 +1,23 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock, Users } from 'lucide-react'
 
 interface Alcunha { alcunha: string }
 interface Faccao { id: string; nome: string; sigla: string | null; cor: string }
 interface Advogado { id: string; nome: string; oab: string | null }
 interface VinculoAdvogado { advogado: Advogado }
+interface Visitante {
+  id: string
+  nome: string
+  cpf: string | null
+  parentesco: string | null
+  photoPath: string | null
+}
+interface VinculoVisitante {
+  visitante: Visitante
+  ativo: boolean
+}
 interface Processo {
   id: string
   sipeProcessoId: number | null
@@ -48,6 +59,7 @@ export interface ApenadoImportado {
   alcunhas: Alcunha[]
   processos: Processo[]
   vinculosAdvogado: VinculoAdvogado[]
+  vinculosVisitante: VinculoVisitante[]
   historicos: Historico[]
   ultimaSyncAt: string
 
@@ -148,6 +160,12 @@ function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; onClick:
             <span className="flex items-center gap-1">
               <Briefcase className="w-3 h-3" />
               {apenado.vinculosAdvogado.length} advogado{apenado.vinculosAdvogado.length > 1 ? 's' : ''}
+            </span>
+          )}
+          {apenado.vinculosVisitante && apenado.vinculosVisitante.length > 0 && (
+            <span className="flex items-center gap-1">
+              <Users className="w-3 h-3" />
+              {apenado.vinculosVisitante.length} visitante{apenado.vinculosVisitante.length > 1 ? 's' : ''}
             </span>
           )}
         </div>
@@ -368,6 +386,57 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
                   <div key={v.advogado.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm">
                     <span className="font-medium text-gray-900 dark:text-white">{v.advogado.nome}</span>
                     {v.advogado.oab && <span className="text-xs text-gray-500">OAB {v.advogado.oab}</span>}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Visitantes */}
+          {apenado.vinculosVisitante && apenado.vinculosVisitante.length > 0 && (
+            <section>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <Users className="w-4 h-4" /> Visitantes Cadastrados
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {apenado.vinculosVisitante.map(v => (
+                  <div key={v.visitante.id} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm relative">
+                    {/* Active/Inactive Badge */}
+                    <span className={`absolute top-2 right-2 px-1.5 py-0.5 text-[9px] font-bold rounded-md ${
+                      v.ativo 
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
+                        : 'bg-gray-200 dark:bg-gray-800 text-gray-500'
+                    }`}>
+                      {v.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                    
+                    {/* Visitor Photo */}
+                    <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400">
+                      {v.visitante.photoPath ? (
+                        <img
+                          src={`/api/sipe/visitantes/${v.visitante.id}/foto`}
+                          alt={v.visitante.nome}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <User className="w-5 h-5" />
+                      )}
+                    </div>
+                    
+                    {/* Visitor Info */}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-gray-900 dark:text-white truncate pr-12">
+                        {v.visitante.nome}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {v.visitante.parentesco && <span className="font-medium text-red-600 dark:text-red-400">{v.visitante.parentesco}</span>}
+                        {v.visitante.parentesco && v.visitante.cpf && <span> · </span>}
+                        {v.visitante.cpf && <span>CPF: {v.visitante.cpf}</span>}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
