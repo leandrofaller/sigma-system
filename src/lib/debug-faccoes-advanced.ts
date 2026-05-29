@@ -143,29 +143,38 @@ async function debugFaccoesAdvanced() {
     await page.waitForTimeout(2000)
 
     // ═══════════════════════════════════════════════════════════════════
+    // FASE 1.5: SELECIONAR PERFIL/UNIDADE (se necessário)
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Verificar se está na página de seleção de perfil
+    const perfilPage = await page.locator('text="Selecione o Perfil Desejado"').isVisible({ timeout: 3_000 }).catch(() => false)
+
+    if (perfilPage) {
+      console.log('📍 Página de seleção de perfil detectada')
+
+      // Tentar clicar no botão ENTRAR
+      const entrarBtn = page.locator('button:has-text("ENTRAR")')
+      if (await entrarBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        console.log('🖱️ Clicando em ENTRAR...')
+        await entrarBtn.click()
+        await page.waitForTimeout(3000)
+        console.log('✅ Perfil/Unidade selecionado')
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // FASE 2: OBTER APENADO
     // ═══════════════════════════════════════════════════════════════════
 
     console.log('\n📍 FASE 2: Procurando apenado...')
 
-    try {
-      await page.goto(`${SIPE_URL}/listagem/3/carceragem`, {
-        waitUntil: 'domcontentloaded',
-        timeout: 20_000
-      })
-    } catch (err) {
-      console.log(`⚠️  Erro ao acessar listagem: ${err}`)
-      console.log('Tentando abordagem alternativa...')
-
-      // Tenta navegar para home primeiro
-      try {
-        await page.goto(`${SIPE_URL}/home`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
-        await page.waitForTimeout(1000)
-        await page.goto(`${SIPE_URL}/listagem/3/carceragem`, { waitUntil: 'domcontentloaded', timeout: 20_000 })
-      } catch (err2) {
-        throw new Error(`Não conseguiu acessar listagem de apenados: ${err2}`)
-      }
-    }
+    // Tentar acessar listagem de carceragem
+    console.log('📄 Acessando listagem de apenados...')
+    await page.goto(`${SIPE_URL}/listagem/3/carceragem`, {
+      waitUntil: 'networkidle',
+      timeout: 20_000
+    })
+    console.log('✅ Página de listagem carregada')
 
     const links = await page.$$('tbody a[href*="/selecionarOpcao"]')
     console.log(`✅ Encontrados ${links.length} apenados na listagem`)
