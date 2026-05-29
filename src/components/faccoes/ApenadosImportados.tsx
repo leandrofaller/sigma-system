@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock } from 'lucide-react'
 
 interface Alcunha { alcunha: string }
 interface Faccao { id: string; nome: string; sigla: string | null; cor: string }
@@ -15,6 +15,15 @@ interface Processo {
   artigos: string[]
   tempoPena: string | null
   principal: boolean
+}
+
+interface Historico {
+  id: string
+  tipo: string
+  descricao: string
+  datahora: string | null
+  cela: string | null
+  unidade: string | null
 }
 
 export interface ApenadoImportado {
@@ -39,6 +48,7 @@ export interface ApenadoImportado {
   alcunhas: Alcunha[]
   processos: Processo[]
   vinculosAdvogado: VinculoAdvogado[]
+  historicos: Historico[]
   ultimaSyncAt: string
 
   // Novos campos do SIPE
@@ -304,6 +314,42 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
                     {p.tempoPena && <p className="text-gray-700 dark:text-gray-300 text-xs mt-0.5"><span className="font-semibold">Pena:</span> {p.tempoPena}</p>}
                     {p.artigos.length > 0 && (
                       <p className="text-xs text-red-600 dark:text-red-400 mt-1.5 font-medium">{p.artigos.join(' · ')}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Histórico de Movimentações */}
+          {apenado.historicos && apenado.historicos.length > 0 && (
+            <section>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <Clock className="w-4 h-4" /> Histórico de Movimentações
+              </h3>
+              <div className="relative border-l-2 border-gray-200 dark:border-gray-700 ml-2.5 pl-4 space-y-4">
+                {apenado.historicos.map(h => (
+                  <div key={h.id} className="relative text-sm">
+                    <span className="absolute -left-[21px] top-1.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-red-600 ring-4 ring-white dark:ring-gray-800" />
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                      <span className="font-bold text-[10px] bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                        {h.tipo}
+                      </span>
+                      {h.datahora && (
+                        <span className="text-xs text-gray-400 font-mono">
+                          {new Date(h.datahora).toLocaleDateString('pt-BR')}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-700 dark:text-gray-300 font-medium">
+                      {h.descricao}
+                    </p>
+                    {(h.unidade || h.cela) && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {h.unidade && <span>{h.unidade}</span>}
+                        {h.unidade && h.cela && <span> · </span>}
+                        {h.cela && <span>Cela: {h.cela}</span>}
+                      </p>
                     )}
                   </div>
                 ))}

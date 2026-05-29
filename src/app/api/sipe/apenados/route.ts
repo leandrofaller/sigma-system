@@ -37,6 +37,9 @@ export async function GET(req: NextRequest) {
         faccao: true,
         alcunhas: true,
         processos: true,
+        historicos: {
+          orderBy: { datahora: 'desc' }
+        },
         vinculosAdvogado: { include: { advogado: true } },
         vinculosVisitante: { include: { visitante: true } },
       },

@@ -15,6 +15,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       faccao: true,
       alcunhas: true,
       processos: true,
+      historicos: {
+        orderBy: { datahora: 'desc' }
+      },
       vinculosAdvogado: { include: { advogado: true } },
       vinculosVisitante: { include: { visitante: true } },
     },
