@@ -199,54 +199,65 @@ async function debugFaccoesAdvanced() {
     if (selectRolePage) {
       console.log('📍 Página de seleção de role detectada')
 
-      // Salvar a página /selectRole para inspecionar
-      const selectRoleHtml = await page.content()
-      const selectRolePath = path.join(DEBUG_DIR, 'selectRole-page.html')
-      fs.writeFileSync(selectRolePath, selectRoleHtml)
-      console.log(`📄 Página /selectRole salva em: ${selectRolePath}`)
+      // Primeiro: Preencher o dropdown com "Master"
+      console.log('📝 Procurando dropdown de perfil...')
 
-      // Tentar várias formas de clicar em ENTRAR
-      const buttonSelectors = [
-        'button:has-text("ENTRAR")',
-        'button[type="submit"]',
-        'form button',
-        'input[type="submit"]'
-      ]
+      const selectDropdown = page.locator('select').first()
 
-      let clickSuccess = false
+      if (await selectDropdown.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        console.log('✅ Dropdown encontrado')
 
-      for (const selector of buttonSelectors) {
+        // Listar opções disponíveis
+        const options = await selectDropdown.evaluate((select: HTMLSelectElement) => {
+          return Array.from(select.options).map(opt => ({
+            value: opt.value,
+            text: opt.textContent?.trim()
+          }))
+        })
+
+        console.log('📋 Opções disponíveis:')
+        for (const opt of options) {
+          console.log(`   - "${opt.text}" (value: "${opt.value}")`)
+        }
+
+        // Tentar selecionar "Master"
         try {
-          const elem = page.locator(selector).first()
-          if (await elem.isVisible({ timeout: 2_000 }).catch(() => false)) {
-            console.log(`🖱️ Tentando clicar com seletor: ${selector}`)
+          await selectDropdown.selectOption({ label: 'Master' })
+          console.log('✅ Master selecionado no dropdown')
+        } catch (err) {
+          console.log(`⚠️  Erro ao selecionar Master por label: ${err}`)
 
-            // Tentar fazer scroll até o elemento
-            await elem.scrollIntoViewIfNeeded()
-            await page.waitForTimeout(500)
-
-            // Tentar clicar
-            await elem.click()
-            await page.waitForTimeout(3000)
-
-            const urlAposClique = page.url()
-            console.log(`📍 URL após clique: ${urlAposClique}`)
-
-            if (!urlAposClique.includes('/selectRole')) {
-              console.log('✅ Clique funcionou!')
-              clickSuccess = true
-              break
+          // Tentar pelo valor
+          const masterOpt = options.find(o => o.text?.includes('Master'))
+          if (masterOpt) {
+            await selectDropdown.selectOption(masterOpt.value)
+            console.log(`✅ Master selecionado pelo valor: ${masterOpt.value}`)
+          } else {
+            // Se não tiver Master, selecionar primeira opção
+            if (options.length > 1) {
+              await selectDropdown.selectOption(options[1].value)
+              console.log(`✅ Primeira opção selecionada: ${options[1].text}`)
             }
           }
-        } catch (err) {
-          console.log(`⚠️  Selector ${selector} falhou`)
         }
-      }
 
-      if (!clickSuccess) {
-        console.log('❌ Nenhum método de clique funcionou')
-        console.log('⚠️  O SIPE pode ter proteção contra automação')
-        console.log('Abra o arquivo selectRole-page.html para inspecionar manualmente')
+        // Agora clicar em ENTRAR
+        await page.waitForTimeout(1000)
+        console.log('🖱️ Clicando em ENTRAR...')
+        const entrarBtn = page.locator('button:has-text("ENTRAR")')
+        await entrarBtn.click()
+        await page.waitForTimeout(3000)
+
+        const urlAposEntrar = page.url()
+        console.log(`📍 URL após ENTRAR: ${urlAposEntrar}`)
+
+        if (!urlAposEntrar.includes('/selectRole')) {
+          console.log('✅ Perfil selecionado com sucesso!')
+        } else {
+          console.log('⚠️  Ainda em /selectRole')
+        }
+      } else {
+        console.log('❌ Dropdown não encontrado')
       }
     }
 
