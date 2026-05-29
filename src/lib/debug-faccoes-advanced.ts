@@ -411,11 +411,32 @@ async function debugFaccoesAdvanced() {
 
     console.log(`✅ Apenado ID: ${apenadoId}`)
 
-    // Clicar para registrar
+    // FASE 3: Registrar apenado na sessão
     console.log('\n📍 FASE 3: Registrando apenado na sessão...')
-    await firstLink.click()
-    await page.waitForTimeout(1500)
-    console.log('✅ Apenado registrado')
+
+    // Tentar navegar para a página do apenado para registrar na sessão
+    try {
+      console.log(`🔗 Navegando para /apenados/${apenadoId}...`)
+      await page.goto(`${SIPE_URL}/apenados/${apenadoId}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 15_000
+      })
+      console.log('✅ Apenado registrado na sessão')
+    } catch (err) {
+      console.log(`⚠️  Erro ao navegar para apenado: ${err}`)
+      console.log('Tentando clicar no link...')
+
+      // Fallback: tentar clicar
+      try {
+        await firstLink.scrollIntoViewIfNeeded()
+        await page.waitForTimeout(500)
+        await firstLink.click()
+        await page.waitForTimeout(1500)
+        console.log('✅ Apenado registrado (clique funcionou)')
+      } catch (clickErr) {
+        console.log(`⚠️  Clique também falhou: ${clickErr}`)
+      }
+    }
 
     // ═══════════════════════════════════════════════════════════════════
     // FASE 4: INSPECIONAR PÁGINA /faccao
