@@ -32,16 +32,26 @@ async function debugFaccoesAdvanced() {
     // ═══════════════════════════════════════════════════════════════════
 
     console.log('\n📍 FASE 1: Fazendo login no SIPE...')
-    await page.goto(`${SIPE_URL}/`, { waitUntil: 'load', timeout: 30_000 })
+    await page.goto(`${SIPE_URL}/`, { waitUntil: 'networkidle', timeout: 30_000 })
 
     const user = process.env.SIPE_USER || 'usuario'
     const pwd = process.env.SIPE_PASSWORD || 'senha'
 
+    console.log('📍 Aguardando campo de usuário...')
+    await page.waitForSelector('input[name="usuario"]', { timeout: 15_000 })
+    console.log('✅ Campo encontrado')
+
     await page.fill('input[name="usuario"]', user)
     await page.fill('input[name="senha"]', pwd)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/home**', { timeout: 30_000 })
-    console.log('✅ Login bem-sucedido')
+
+    console.log('📍 Aguardando redirecionamento para home...')
+    try {
+      await page.waitForURL('**/home**', { timeout: 30_000 })
+    } catch {
+      console.log('⚠️  Timeout ao aguardar home, continuando mesmo assim...')
+    }
+    console.log('✅ Login aparentemente bem-sucedido')
 
     // ═══════════════════════════════════════════════════════════════════
     // FASE 2: OBTER APENADO
