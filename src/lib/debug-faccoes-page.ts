@@ -1,276 +1,157 @@
 /**
- * Script de debug para inspecionar a página de facções do SIPE
- * Mostra todos os selects disponíveis, seus atributos e opções
+ * Script de debug: Inspecionar a página /apenados/{id}/faccao
  */
 
 import { chromium } from 'playwright'
+import * as fs from 'fs'
+import * as path from 'path'
 
 const SIPE_URL = 'https://sipe.sejus.ro.gov.br'
+const DEBUG_DIR = path.join(process.cwd(), '.debug-sipe')
+const TEST_APENADO_ID = '64475'
 
-async function debugFaccoesPage() {
-  const browser = await chromium.launch()
-  const context = await browser.createBrowserContext()
+async function debugFaccaoPage() {
+  const browser = await chromium.launch({ headless: true })
+  const context = await browser.newContext()
   const page = await context.newPage()
 
   try {
-    // Login
-    console.log('📍 Fazendo login no SIPE...')
-    await page.goto(`${SIPE_URL}/`, { waitUntil: 'load', timeout: 30_000 })
+    if (!fs.existsSync(DEBUG_DIR)) {
+      fs.mkdirSync(DEBUG_DIR, { recursive: true })
+    }
 
-    // Preencher credenciais
+    console.log('\n📍 Fazendo login...')
+    await page.goto(`${SIPE_URL}/`, { waitUntil: 'networkidle', timeout: 30_000 })
+
     const user = process.env.SIPE_USER || 'usuario'
     const pwd = process.env.SIPE_PASSWORD || 'senha'
 
-    await page.fill('input[name="usuario"]', user)
-    await page.fill('input[name="senha"]', pwd)
+    await page.waitForSelector('input[name="cpf"]', { timeout: 15_000 })
+    await page.fill('input[name="cpf"]', user)
+    await page.waitForSelector('input[type="password"]', { timeout: 5_000 })
+    await page.fill('input[type="password"]', pwd)
     await page.click('button[type="submit"]')
-    await page.waitForURL('**/home**', { timeout: 30_000 })
-    console.log('✅ Login bem-sucedido')
+    await page.waitForTimeout(2000)
 
-    // Ir para listagem de apenados
-    console.log('📍 Acessando listagem de apenados...')
-    await page.goto(`${SIPE_URL}/listagem/3/carceragem`, { waitUntil: 'load' })
+    // Perfil
+    const perfilPage = await page.locator('text="Selecione o Perfil Desejado"').isVisible({ timeout: 3_000 }).catch(() => false)
+    if (perfilPage) {
+      const selectDropdown = page.locator('select').first()
+      if (await selectDropdown.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        try {
+          await selectDropdown.selectOption({ label: 'Master' })
+        } catch {
+          const options = await selectDropdown.evaluate((select: HTMLSelectElement) => 
+            Array.from(select.options).map(opt => ({ value: opt.value, text: opt.textContent?.trim() }))
+          )
+          const masterOpt = options.find(o => o.text?.includes('Master'))
+          if (masterOpt) await selectDropdown.selectOption(masterOpt.value)
+        }
+      }
+      const entrarBtn = page.locator('button:has-text("ENTRAR")')
+      await entrarBtn.click()
+      await page.waitForTimeout(2000)
+    }
 
-    // Pegar primeiro apenado
-    const firstLink = await page.$('tbody a[href*="/selecionarOpcao"]')
-    if (!firstLink) throw new Error('Nenhum apenado encontrado')
+    // Role
+    if (page.url().includes('/selectRole')) {
+      const selectRole = page.locator('select').first()
+      if (await selectRole.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        try {
+          await selectRole.selectOption({ label: 'Master' })
+        } catch {
+          const options = await selectRole.evaluate((select: HTMLSelectElement) => 
+            Array.from(select.options).map(opt => ({ value: opt.value, text: opt.textContent?.trim() }))
+          )
+          const masterOpt = options.find(o => o.text?.includes('Master'))
+          if (masterOpt) await selectRole.selectOption(masterOpt.value)
+        }
+      }
+      const entrarBtn = page.locator('button:has-text("ENTRAR")')
+      await entrarBtn.click()
+      await page.waitForTimeout(2000)
+    }
 
-    const href = await firstLink.getAttribute('href')
-    const match = href?.match(/\/apenados\/(\d+)/)
-    if (!match) throw new Error('Não conseguiu extrair ID do apenado')
+    console.log('✅ Login completo\n')
 
-    const apenadoId = match[1]
-    console.log(`📍 Apenado ID: ${apenadoId}`)
-
-    // Clicar para registrar na sessão
-    console.log(`🖱️ Clicando no apenado...`)
-    await firstLink.click()
-    await page.waitForTimeout(1500)
-
-    // 🔍 INSPECIONAR PÁGINA DE FACÇÃO
-    console.log(`\n🔍 ACESSANDO /apenados/${apenadoId}/faccao...`)
-    await page.goto(`${SIPE_URL}/apenados/${apenadoId}/faccao`, {
-      waitUntil: 'load',
-      timeout: 20_000,
+    console.log(`📍 Acessando /apenados/${TEST_APENADO_ID}/faccao...`)
+    await page.goto(`${SIPE_URL}/apenados/${TEST_APENADO_ID}/faccao`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15_000
     })
+    console.log('✅ Página carregada\n')
 
-    // Aguardar um pouco para elementos renderizarem
-    await page.waitForTimeout(1000)
+    // Salvar HTML
+    const html = await page.content()
+    const htmlPath = path.join(DEBUG_DIR, 'apenado-faccao.html')
+    fs.writeFileSync(htmlPath, html)
+    console.log(`📄 HTML salvo\n`)
 
-    // ═══════════════════════════════════════════════════════════════════
-    // ANÁLISE COMPLETA DA PÁGINA
-    // ═══════════════════════════════════════════════════════════════════
-
-    const pageInfo = await page.evaluate(() => {
+    // Análise
+    const analysis = await page.evaluate(() => {
       const selects = Array.from(document.querySelectorAll('select'))
+      const inputs = Array.from(document.querySelectorAll('input'))
+      
+      const selectsInfo = selects.map((select, idx) => {
+        const options = Array.from(select.options).map(opt => ({
+          value: opt.value,
+          text: opt.textContent?.trim()
+        }))
+        return {
+          index: idx,
+          name: select.name || '(sem)',
+          id: select.id || '(sem)',
+          optionsCount: options.length,
+          selected: select.options[select.selectedIndex]?.textContent?.trim(),
+          options: options.slice(0, 15)
+        }
+      })
+
+      const inputsInfo = inputs.map((inp, idx) => ({
+        index: idx,
+        type: inp.type,
+        name: inp.name,
+        id: inp.id,
+        value: inp.value.substring(0, 100)
+      }))
 
       return {
-        url: window.location.href,
+        selectsCount: selects.length,
+        selects: selectsInfo,
+        inputsCount: inputs.length,
+        inputs: inputsInfo,
         title: document.title,
-        totalSelects: selects.length,
-        selects: selects.map((select, idx) => {
-          const parent = select.parentElement
-          const label = document.querySelector(
-            `label[for="${select.id}"]`
-          )?.textContent?.trim()
-
-          return {
-            index: idx,
-            name: select.name || 'SEM NOME',
-            id: select.id || 'SEM ID',
-            className: select.className || 'SEM CLASS',
-            ariaLabel: select.getAttribute('aria-label') || 'N/A',
-            label: label || 'SEM LABEL',
-            parentTag: parent?.tagName,
-            parentClass: parent?.className || 'N/A',
-            dataAttributes: {
-              ...Array.from(select.attributes)
-                .filter(attr => attr.name.startsWith('data-'))
-                .reduce(
-                  (acc, attr) => ({ ...acc, [attr.name]: attr.value }),
-                  {}
-                ),
-            },
-            optionsCount: select.options.length,
-            options: Array.from(select.options)
-              .slice(0, 10) // Primeiras 10 opções
-              .map(o => ({
-                value: o.value,
-                text: o.textContent?.trim(),
-                selected: o.selected,
-              })),
-            isVisible: select.offsetParent !== null,
-          }
-        }),
-
-        // Procurar por labels também
-        labels: Array.from(document.querySelectorAll('label')).map(label => ({
-          text: label.textContent?.trim(),
-          for: label.getAttribute('for'),
-          associated: label.nextElementSibling?.tagName,
-        })),
-
-        // Procurar por divs que possam conter info de facção
-        textContent: document.body.innerText
-          .split('\n')
-          .filter(
-            line =>
-              line.toLowerCase().includes('fac') ||
-              line.toLowerCase().includes('sexo') ||
-              line.toLowerCase().includes('gênero') ||
-              line.toLowerCase().includes('masculino') ||
-              line.toLowerCase().includes('feminino')
-          )
-          .slice(0, 20),
+        url: window.location.href
       }
     })
 
-    console.log('\n═══════════════════════════════════════════════════════════════════')
-    console.log('📊 ANÁLISE DA PÁGINA DE FACÇÕES')
+    console.log('═══════════════════════════════════════════════════════════════════')
+    console.log('📊 ANÁLISE')
     console.log('═══════════════════════════════════════════════════════════════════\n')
 
-    console.log(`URL: ${pageInfo.url}`)
-    console.log(`Title: ${pageInfo.title}`)
-    console.log(`Total de SELECTs na página: ${pageInfo.totalSelects}\n`)
-
-    console.log('🔍 SELECTS ENCONTRADOS:')
-    console.log('───────────────────────────────────────────────────────────────────')
-
-    for (const select of pageInfo.selects) {
-      console.log(`\n[${select.index}] SELECT`)
-      console.log(`  name: "${select.name}"`)
-      console.log(`  id: "${select.id}"`)
-      console.log(`  class: "${select.className}"`)
-      console.log(`  aria-label: "${select.ariaLabel}"`)
-      console.log(`  label associada: "${select.label}"`)
-      console.log(`  parent: <${select.parentTag} class="${select.parentClass}">`)
-      console.log(`  visível: ${select.isVisible}`)
-      console.log(`  opções: ${select.optionsCount}`)
-      console.log(`  data-attributes:`, select.dataAttributes)
-
-      console.log(`  Primeiras opções:`)
-      for (const opt of select.options) {
-        console.log(
-          `    - value="${opt.value}" → "${opt.text}"${opt.selected ? ' (SELECIONADA)' : ''}`
-        )
-      }
+    console.log(`Selects: ${analysis.selectsCount}`)
+    for (const sel of analysis.selects) {
+      console.log(`  [${sel.index}] "${sel.name}" (${sel.optionsCount} opções)`)
+      console.log(`      Selecionado: "${sel.selected}"`)
+      console.log(`      Opções: ${sel.options.slice(0, 3).map(o => o.text).join(', ')}${sel.options.length > 3 ? '...' : ''}`)
     }
 
-    console.log('\n🏷️ LABELS NA PÁGINA:')
-    console.log('───────────────────────────────────────────────────────────────────')
-    for (const label of pageInfo.labels) {
-      if (
-        label.text?.toLowerCase().includes('fac') ||
-        label.text?.toLowerCase().includes('sexo') ||
-        label.text?.toLowerCase().includes('gênero')
-      ) {
-        console.log(
-          `  "${label.text}" (for="${label.for}") → <${label.associated}>`
-        )
-      }
+    console.log(`\nInputs: ${analysis.inputsCount}`)
+    for (const inp of analysis.inputs.slice(0, 10)) {
+      console.log(`  [${inp.index}] <input type="${inp.type}" name="${inp.name}" value="${inp.value}">`)
     }
 
-    console.log('\n📝 TRECHOS DE TEXTO COM "fac", "sexo", "gênero":')
-    console.log('───────────────────────────────────────────────────────────────────')
-    for (const text of pageInfo.textContent) {
-      console.log(`  ${text}`)
-    }
+    // Salvar análise
+    const analysisPath = path.join(DEBUG_DIR, 'apenado-faccao-analysis.json')
+    fs.writeFileSync(analysisPath, JSON.stringify(analysis, null, 2))
 
-    // ═══════════════════════════════════════════════════════════════════
-    // TESTE DE SELETORES
-    // ═══════════════════════════════════════════════════════════════════
+    console.log(`\n💾 Análise salva`)
 
-    console.log('\n\n🧪 TESTE DE SELETORES:')
-    console.log('═══════════════════════════════════════════════════════════════════')
-
-    const selectorTests = [
-      'select[name="faccao_id"]',
-      'select[name*="faccao"]',
-      'select[id*="faccao"]',
-      'select[name="sexo"]',
-      'select[name*="sexo"]',
-      'select:nth-of-type(1)',
-      'select:nth-of-type(2)',
-      'select:nth-of-type(3)',
-      'select',
-    ]
-
-    for (const selector of selectorTests) {
-      try {
-        const elements = await page.$$(selector)
-        if (elements.length > 0) {
-          const elem = elements[0]
-          const info = await page.evaluate(el => {
-            const opts = Array.from(el.querySelectorAll('option'))
-              .slice(0, 5)
-              .map(o => o.textContent?.trim())
-
-            return {
-              name: (el as HTMLSelectElement).name,
-              options: opts,
-            }
-          }, elem)
-
-          console.log(`\n✓ ${selector}`)
-          console.log(`  → Encontrou ${elements.length} elemento(s)`)
-          console.log(`  → Select name="${info.name}"`)
-          console.log(`  → Opções: ${info.options.join(', ')}`)
-        }
-      } catch (err) {
-        console.log(`\n✗ ${selector} → Erro`)
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // TESTE NA PÁGINA /editar
-    // ═══════════════════════════════════════════════════════════════════
-
-    console.log('\n\n🔍 TESTANDO PÁGINA /editar:')
-    console.log('═══════════════════════════════════════════════════════════════════')
-
-    await page.goto(`${SIPE_URL}/apenados/${apenadoId}/editar`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 15_000,
-    })
-
-    await page.waitForTimeout(1000)
-
-    const editPageInfo = await page.evaluate(() => {
-      const selects = Array.from(document.querySelectorAll('select'))
-
-      return {
-        url: window.location.href,
-        totalSelects: selects.length,
-        selects: selects.map((select, idx) => {
-          const label = document.querySelector(
-            `label[for="${select.id}"]`
-          )?.textContent?.trim()
-
-          return {
-            index: idx,
-            name: select.name || 'SEM NOME',
-            id: select.id || 'SEM ID',
-            label: label || 'N/A',
-            optionsCount: select.options.length,
-            firstOptions: Array.from(select.options)
-              .slice(0, 5)
-              .map(o => o.textContent?.trim()),
-          }
-        }),
-      }
-    })
-
-    console.log(`\nURL: ${editPageInfo.url}`)
-    console.log(`Total de SELECTs: ${editPageInfo.totalSelects}\n`)
-
-    for (const select of editPageInfo.selects) {
-      console.log(`[${select.index}] name="${select.name}" | label="${select.label}"`)
-      console.log(`    Opções: ${select.firstOptions.join(', ')}`)
-    }
-
+  } catch (err) {
+    console.error('\n❌ ERRO:', err)
   } finally {
     await browser.close()
   }
 }
 
-debugFaccoesPage().catch(console.error)
+debugFaccaoPage().catch(console.error)

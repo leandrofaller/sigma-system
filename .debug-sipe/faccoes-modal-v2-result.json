@@ -1,0 +1,14 @@
+{
+  "checkboxMarcado": true,
+  "faccaoEncontrada": false,
+  "total": 50,
+  "headers": [
+    "#",
+    "NOME DO APENADO",
+    "CPF",
+    "UNIDADE PRISIONAL ATUAL",
+    "CELA",
+    "SITUAÇÃO",
+    ""
+  ]
+}

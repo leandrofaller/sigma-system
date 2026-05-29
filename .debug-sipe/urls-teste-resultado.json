@@ -1,0 +1,145 @@
+[
+  {
+    "urlTestado": "/apenados/64475",
+    "urlRedirecionou": null,
+    "statusCode": 200,
+    "titulo": "Page Not Found",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  },
+  {
+    "urlTestado": "/apenados/64475/",
+    "urlRedirecionou": "https://sipe.sejus.ro.gov.br/apenados/64475",
+    "statusCode": 200,
+    "titulo": "Page Not Found",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  },
+  {
+    "urlTestado": "/apenados/64475/faccao",
+    "urlRedirecionou": null,
+    "statusCode": 200,
+    "titulo": "",
+    "temFaccaoNoHTML": true,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": true
+  },
+  {
+    "urlTestado": "/apenados/64475/faccoes",
+    "urlRedirecionou": null,
+    "statusCode": 200,
+    "titulo": "Page Not Found",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  },
+  {
+    "urlTestado": "/apenados/64475/facção",
+    "urlRedirecionou": "https://sipe.sejus.ro.gov.br/apenados/64475/fac%C3%A7%C3%A3o",
+    "statusCode": 200,
+    "titulo": "Page Not Found",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  },
+  {
+    "urlTestado": "/apenados/64475/info",
+    "urlRedirecionou": null,
+    "statusCode": 200,
+    "titulo": "Page Not Found",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  },
+  {
+    "urlTestado": "/apenados/64475/ficha",
+    "urlRedirecionou": null,
+    "statusCode": 200,
+    "titulo": "Page Not Found",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  },
+  {
+    "urlTestado": "/apenados/64475/detalhes",
+    "urlRedirecionou": null,
+    "statusCode": 200,
+    "titulo": "Page Not Found",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  },
+  {
+    "urlTestado": "/apenados/64475/dados",
+    "urlRedirecionou": null,
+    "statusCode": 200,
+    "titulo": "Page Not Found",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  },
+  {
+    "urlTestado": "/fichaCela/64475",
+    "urlRedirecionou": null,
+    "statusCode": 200,
+    "titulo": "Page Not Found",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  },
+  {
+    "urlTestado": "/relatorios/fichaGeral?apenado=64475",
+    "urlRedirecionou": null,
+    "statusCode": 200,
+    "titulo": "",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  },
+  {
+    "urlTestado": "/relatorios/fichaGeral?id=64475",
+    "urlRedirecionou": null,
+    "statusCode": 200,
+    "titulo": "",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  },
+  {
+    "urlTestado": "/relatorios/fichaGeral?sipeId=64475",
+    "urlRedirecionou": null,
+    "statusCode": 200,
+    "titulo": "",
+    "temFaccaoNoHTML": false,
+    "selectsTotais": 0,
+    "selectsComFaccao": [],
+    "ocorrenciasFaccaoText": 0,
+    "conteudoUtil": false
+  }
+]

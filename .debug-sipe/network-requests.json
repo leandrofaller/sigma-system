@@ -1,0 +1,308 @@
+{
+  "total": 52,
+  "faccaoRequests": 0,
+  "apiRequests": 0,
+  "xhrRequests": 2,
+  "allRequests": [
+    {
+      "url": "https://sipe.sejus.ro.gov.br/apenados/64475/editar",
+      "method": "GET",
+      "resourceType": "document",
+      "timestamp": "2026-05-29T05:45:46.183Z"
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-001PBEK69F&gtm=45je65r2v9184885750za200zd9184885750&_p=1780033544496&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=909041260.1780033538&frm=0&pscdl=noapi&rcb=7&sr=1280x720&uaa=x86&uab=64&uafvl=Chromium%3B148.0.7778.96%7CHeadlessChrome%3B148.0.7778.96%7CNot%252FA)Brand%3B99.0.0.0&uam=&uamb=0&uap=Windows&uapv=19.0.0&uaw=0&ul=pt-br&tag_exp=0~115616985~115938465~115938469~118128923~119027222~119034493&sid=1780033538&sct=1&seg=1&dl=https%3A%2F%2Fsipe.sejus.ro.gov.br%2Fhome&dr=https%3A%2F%2Fsipe.sejus.ro.gov.br%2FselectRole&dt=SIPE&_s=1&tfd=4640",
+      "method": "POST",
+      "resourceType": "fetch",
+      "timestamp": "2026-05-29T05:45:46.265Z"
+    },
+    {
+      "url": "https://www.google.com/g/collect?v=2&tid=G-001PBEK69F&gtm=45je65r2v9184885750za200zd9184885750&_p=1780033544496&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=909041260.1780033538&frm=0&pscdl=noapi&rcb=7&sr=1280x720&uaa=x86&uab=64&uafvl=Chromium%3B148.0.7778.96%7CHeadlessChrome%3B148.0.7778.96%7CNot%252FA%29Brand%3B99.0.0.0&uam=&uamb=0&uap=Windows&uapv=19.0.0&uaw=0&ul=pt-br&tag_exp=0%7E115616985%7E115938465%7E115938469%7E118128923%7E119027222%7E119034493&sid=1780033538&sct=1&seg=1&dl=https%3A%2F%2Fsipe.sejus.ro.gov.br%2Fhome&dr=https%3A%2F%2Fsipe.sejus.ro.gov.br%2FselectRole&dt=SIPE&_s=1&tfd=4640&gaf=1",
+      "method": "POST",
+      "resourceType": "fetch",
+      "timestamp": "2026-05-29T05:45:46.265Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/css/bootstrap.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.268Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/css/font-awesome/4.5.0/css/font-awesome.min.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.269Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/css/ace.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.269Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/css/colorbox.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/css/jquery-ui.custom.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/chosen/chosen.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/css/datepicker.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/css/bootstrap-timepicker.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/css/daterangepicker.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/css/sweetalert.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/mask/jquery.maskedinput.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/librarys/jodit/js/jodit.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/librarys/jodit/css/jodit.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/librarys/apexcharts/dist/apexcharts.js",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/apexcharts",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/css/jquery-ui.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/css/select2.min.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.3.6/cropper.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.271Z"
+    },
+    {
+      "url": "https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.3.6/cropper.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.3.6/cropper.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.3.6/cropper.min.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://html2canvas.hertzen.com/dist/html2canvas.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/public/img/loading.gif",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/public/fotosPresos/3c3479cc4a206eca2cd7dd2151b50682e30f63b2_fotoUsuario.jpg",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/bootstrap.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/fuelux/fuelux.wizard.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/jquery.validate.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/jquery-ui.custom.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/jquery.ui.touch-punch.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/ace/ace.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/ace/ace.sidebar.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/ace/elements.wizard.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/sweetalert.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/sweetalert-dev.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.273Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/chosen/chosen.jquery.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.274Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/chosen/chosen.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.274Z"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/js/select2.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.274Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/css/font-awesome/4.5.0/fonts/fontawesome-webfont.woff2?v=4.5.0",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": "2026-05-29T05:45:46.309Z"
+    },
+    {
+      "url": "https://www.googletagmanager.com/gtag/js?id=G-001PBEK69F",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.419Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/moment.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.420Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/selectGeral.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.420Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/datepickerJS/bootstrap-datepicker.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.420Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/datepickerJS/bootstrap-datepicker.pt-BR.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.420Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/mask/maskedinput.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.420Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/validacao/formatainput.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.420Z"
+    },
+    {
+      "url": "https://sipe.sejus.ro.gov.br/resources/assets/js/validacao/validacao.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": "2026-05-29T05:45:46.420Z"
+    }
+  ]
+}
