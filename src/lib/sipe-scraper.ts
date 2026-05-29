@@ -1315,6 +1315,7 @@ async function scrapeApenadoFicha(
     scrapeEndereço(page, sipeId, apenado.id),
     scrapeHistorico(page, sipeId, apenado.id),
     scrapeDocumentos(page, sipeId, apenado.id),
+    scrapeAdvogadosDoApenado(page, sipeId, apenado.id).catch(() => {}),
   ])
 }
 
@@ -2100,6 +2101,94 @@ async function scrapeDocumentos(
     }
   } catch (err) {
     // Silently ignore if page doesn't exist
+  }
+}
+
+async function scrapeAdvogadosDoApenado(
+  page: Page,
+  sipeId: number,
+  apenadoId: string
+): Promise<void> {
+  const rotasCandidatas = [
+    `${SIPE_URL}/apenados/${sipeId}/advogados`,
+    `${SIPE_URL}/apenados/${sipeId}/credenciamento`,
+    `${SIPE_URL}/apenados/${sipeId}/atendimentos`,
+    `${SIPE_URL}/apenados/${sipeId}/credenciados`,
+  ]
+
+  for (const url of rotasCandidatas) {
+    try {
+      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 })
+      const status = response?.status()
+      if (status && (status === 404 || status === 403 || status === 500)) {
+        continue
+      }
+
+      const bodyText = await page.innerText('body').catch(() => '')
+      if (bodyText.includes('404') || bodyText.includes('não encontrado') || bodyText.includes('Não autorizado')) {
+        continue
+      }
+
+      const linksAdvogados = await page.evaluate(() => {
+        const anchors = Array.from(document.querySelectorAll('a'))
+        return anchors
+          .map((a) => {
+            const href = a.getAttribute('href') || ''
+            const text = (a.textContent ?? '').trim()
+            return { href, text }
+          })
+          .filter((item) => {
+            const hasAdvLink = item.href.includes('/advogados/') || item.href.includes('/detalhaclientes') || item.href.includes('/advogado/')
+            return hasAdvLink && item.text.length > 3
+          })
+      })
+
+      if (linksAdvogados.length === 0) {
+        continue
+      }
+
+      for (const item of linksAdvogados) {
+        const match = item.href.match(/\/advogados\/(\d+)/) || item.href.match(/\/advogado\/(\d+)/)
+        if (!match) continue
+
+        const advSipeId = parseInt(match[1])
+        if (isNaN(advSipeId) || advSipeId <= 0) continue
+
+        const nomeAdv = item.text.replace(/^(Dr\.|Dra\.|Dr|Dra|Advogado|Advogada)\s+/i, '').trim().toUpperCase()
+
+        const adv = await prisma.sipeAdvogado.upsert({
+          where: { sipeId: advSipeId },
+          create: {
+            sipeId: advSipeId,
+            nome: nomeAdv || 'ADVOGADO IMPORTADO',
+          },
+          update: {
+            nome: nomeAdv || undefined,
+          },
+        })
+
+        await prisma.sipeVinculoAdvogado.upsert({
+          where: {
+            apenadoId_advogadoId: {
+              apenadoId,
+              advogadoId: adv.id,
+            },
+          },
+          create: {
+            apenadoId,
+            advogadoId: adv.id,
+            ativo: true,
+          },
+          update: {
+            ativo: true,
+          },
+        })
+      }
+
+      break
+    } catch {
+      // continua tentando as próximas rotas candidatas
+    }
   }
 }
 
