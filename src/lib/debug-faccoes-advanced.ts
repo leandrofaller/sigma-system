@@ -108,19 +108,64 @@ async function debugFaccoesAdvanced() {
     }
 
     console.log('📍 Aguardando redirecionamento para home...')
+
+    let loginSuccess = false
     try {
-      await page.waitForURL('**/home**', { timeout: 30_000 })
+      await page.waitForURL('**/home**', { timeout: 10_000 })
+      loginSuccess = true
     } catch {
-      console.log('⚠️  Timeout ao aguardar home, continuando mesmo assim...')
+      console.log('⚠️  Não conseguiu detectar home com timeout')
     }
-    console.log('✅ Login aparentemente bem-sucedido')
+
+    // Verificar qual é a URL atual
+    const currentUrl = page.url()
+    console.log(`📍 URL atual: ${currentUrl}`)
+
+    // Salvar página para inspecionar
+    const loginHtml = await page.content()
+    const loginHtmlPath = path.join(DEBUG_DIR, 'after-login.html')
+    fs.writeFileSync(loginHtmlPath, loginHtml)
+    console.log(`📄 HTML após login salvo em: ${loginHtmlPath}`)
+
+    // Verificar se está na home ou em erro de login
+    if (currentUrl.includes('home') || currentUrl.includes('dashboard')) {
+      console.log('✅ Login bem-sucedido!')
+      loginSuccess = true
+    } else if (loginHtml.toLowerCase().includes('erro') || loginHtml.toLowerCase().includes('falha')) {
+      console.log('❌ Página contém mensagem de erro')
+    } else if (currentUrl.includes('login')) {
+      console.log('❌ Ainda na página de login - credenciais podem estar erradas')
+      throw new Error('Login falhou - ainda está na página de login')
+    } else {
+      console.log('⚠️  Login status incerto, mas vou tentar continuar...')
+    }
+
+    await page.waitForTimeout(2000)
 
     // ═══════════════════════════════════════════════════════════════════
     // FASE 2: OBTER APENADO
     // ═══════════════════════════════════════════════════════════════════
 
     console.log('\n📍 FASE 2: Procurando apenado...')
-    await page.goto(`${SIPE_URL}/listagem/3/carceragem`, { waitUntil: 'load' })
+
+    try {
+      await page.goto(`${SIPE_URL}/listagem/3/carceragem`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 20_000
+      })
+    } catch (err) {
+      console.log(`⚠️  Erro ao acessar listagem: ${err}`)
+      console.log('Tentando abordagem alternativa...')
+
+      // Tenta navegar para home primeiro
+      try {
+        await page.goto(`${SIPE_URL}/home`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+        await page.waitForTimeout(1000)
+        await page.goto(`${SIPE_URL}/listagem/3/carceragem`, { waitUntil: 'domcontentloaded', timeout: 20_000 })
+      } catch (err2) {
+        throw new Error(`Não conseguiu acessar listagem de apenados: ${err2}`)
+      }
+    }
 
     const links = await page.$$('tbody a[href*="/selecionarOpcao"]')
     console.log(`✅ Encontrados ${links.length} apenados na listagem`)
