@@ -381,33 +381,49 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
     log(jobId, 'Login realizado com sucesso')
 
     // ── Phase 1: collect IDs (or load from checkpoint) ────────
-    if (job.tipo === 'ADVOGADOS') {
-      log(jobId, 'Modo específico: Scraping apenas de Advogados + Atendimentos')
-    } else {
-      let ids: number[]
+    let ids: number[] = []
 
-      if (job.idsColetados) {
-        // Resume: reuse previously collected list
-        ids = JSON.parse(job.idsColetados) as number[]
-        // Determine which IDs remain (after cursor)
-        const cursor = job.ultimoIdProcessado ?? null
-        if (cursor !== null) {
-          const cursorIndex = ids.indexOf(cursor)
-          ids = cursorIndex >= 0 ? ids.slice(cursorIndex + 1) : ids
-        }
-        const alreadyDone = (job.processado ?? 0)
-        refreshMemory(jobId, {
-          fase: 'Retomando scraping de apenados...',
-          total: (JSON.parse(job.idsColetados) as number[]).length,
-          processado: alreadyDone,
-          ultimoLog: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
-        })
+    if (job.idsColetados) {
+      // Resume: reuse previously collected list
+      ids = JSON.parse(job.idsColetados) as number[]
+      // Determine which IDs remain (after cursor)
+      const cursor = job.ultimoIdProcessado ?? null
+      if (cursor !== null) {
+        const cursorIndex = ids.indexOf(cursor)
+        ids = cursorIndex >= 0 ? ids.slice(cursorIndex + 1) : ids
+      }
+      const alreadyDone = (job.processado ?? 0)
+      refreshMemory(jobId, {
+        fase: job.tipo === 'ADVOGADOS' ? 'Retomando scraping de advogados...' : 'Retomando scraping de apenados...',
+        total: (JSON.parse(job.idsColetados) as number[]).length,
+        processado: alreadyDone,
+        ultimoLog: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
+      })
+      await dbProgress(jobId, {
+        log: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
+        fase: 'Retomando',
+      })
+    } else {
+      // Fresh start: collect all IDs
+      if (job.tipo === 'ADVOGADOS') {
+        refreshMemory(jobId, { fase: 'Coletando lista de advogados...' })
+        await dbProgress(jobId, { fase: 'Coletando IDs', log: 'Coletando lista de advogados...' })
+
+        ids = await coletarIdsAdvogados(page, jobId)
+
+        // Persist checkpoint
         await dbProgress(jobId, {
-          log: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
-          fase: 'Retomando',
+          idsColetados: JSON.stringify(ids),
+          total: ids.length,
+          log: `${ids.length} advogados encontrados — iniciando scraping`,
+          fase: 'Scraping advogados',
+        })
+        refreshMemory(jobId, {
+          total: ids.length,
+          fase: 'Scraping advogados',
+          ultimoLog: `${ids.length} advogados encontrados`,
         })
       } else {
-        // Fresh start: collect all IDs
         refreshMemory(jobId, { fase: 'Coletando lista de apenados...' })
         await dbProgress(jobId, { fase: 'Coletando IDs', log: 'Coletando lista de apenados...' })
 
@@ -426,71 +442,74 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
           ultimoLog: `${ids.length} apenados encontrados`,
         })
       }
+    }
 
-      // ── Phase 2: scrape each profile ──────────────────────────
-      let lastProcessedId: number | undefined
-      for (const sipeId of ids) {
-        if (globalThis.__sipeStopFlag) {
-          await dbProgress(jobId, {
-            status: 'INTERRUPTED',
-            finalizadoEm: new Date(),
-            log: 'Sincronização interrompida pelo usuário',
-          })
-          refreshMemory(jobId, { status: 'INTERRUPTED' })
-          return
-        }
-
-        try {
-          await withRetry(async () => {
-            try {
-              await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
-            } catch (err: any) {
-              if (err?.message === 'SESSAO_EXPIRADA') {
-                log(jobId, 'Sessão expirada detectada. Re-autenticando no SIPE...')
-                await login(page, unidadeId)
-                // Retry loading the profile after logging back in
-                await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
-              } else {
-                throw err
-              }
-            }
-          })
-          lastProcessedId = sipeId
-          globalThis.__sipeState!.processado++
-          globalThis.__sipeState!.pct = globalThis.__sipeState!.total
-            ? Math.round(
-                (globalThis.__sipeState!.processado / globalThis.__sipeState!.total) * 100
-              )
-            : 0
-
-          // Persiste cursor a cada registro para recovery sem perda em crash/restart
-          await dbProgress(jobId, {
-            processado: globalThis.__sipeState!.processado,
-            ultimoIdProcessado: sipeId,
-          })
-          // Polite delay
-          await page.waitForTimeout(300 + Math.random() * 500)
-        } catch (err) {
-          globalThis.__sipeState!.erros++
-          const msg = `Erro apenado #${sipeId} (após 3 tentativas): ${err}`
-          globalThis.__sipeState!.ultimoLog = msg
-          await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
-        }
+    // ── Phase 2: scrape each profile ──────────────────────────
+    let lastProcessedId: number | undefined
+    for (const sipeId of ids) {
+      if (globalThis.__sipeStopFlag) {
+        await dbProgress(jobId, {
+          status: 'INTERRUPTED',
+          finalizadoEm: new Date(),
+          log: 'Sincronização interrompida pelo usuário',
+        })
+        refreshMemory(jobId, { status: 'INTERRUPTED' })
+        return
       }
 
-      // Final cursor flush — use the actual last processed ID, not ids[last]
-      await dbProgress(jobId, {
-        processado: globalThis.__sipeState!.processado,
-        ...(lastProcessedId !== undefined ? { ultimoIdProcessado: lastProcessedId } : {}),
-      })
+      try {
+        await withRetry(async () => {
+          try {
+            if (job.tipo === 'ADVOGADOS') {
+              await scrapeAdvogadoDetalhe(page, sipeId)
+            } else {
+              await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
+            }
+          } catch (err: any) {
+            if (err?.message === 'SESSAO_EXPIRADA') {
+              log(jobId, 'Sessão expirada detectada. Re-autenticando no SIPE...')
+              await login(page, unidadeId)
+              
+              if (job.tipo === 'ADVOGADOS') {
+                await scrapeAdvogadoDetalhe(page, sipeId)
+              } else {
+                await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
+              }
+            } else {
+              throw err
+            }
+          }
+        })
+        lastProcessedId = sipeId
+        globalThis.__sipeState!.processado++
+        globalThis.__sipeState!.pct = globalThis.__sipeState!.total
+          ? Math.round(
+              (globalThis.__sipeState!.processado / globalThis.__sipeState!.total) * 100
+            )
+          : 0
+
+        // Persiste cursor a cada registro para recovery sem perda em crash/restart
+        await dbProgress(jobId, {
+          processado: globalThis.__sipeState!.processado,
+          ultimoIdProcessado: sipeId,
+        })
+        // Polite delay
+        await page.waitForTimeout(300 + Math.random() * 500)
+      } catch (err) {
+        globalThis.__sipeState!.erros++
+        const msg = job.tipo === 'ADVOGADOS'
+          ? `Erro advogado #${sipeId} (após 3 tentativas): ${err}`
+          : `Erro apenado #${sipeId} (após 3 tentativas): ${err}`
+        globalThis.__sipeState!.ultimoLog = msg
+        await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
+      }
     }
 
-    // ── Phase 3: advogados ────────────────────────────────────
-    if (job.tipo === 'ADVOGADOS') {
-      refreshMemory(jobId, { fase: 'Scraping advogados...' })
-      await dbProgress(jobId, { fase: 'Advogados', log: 'Iniciando scraping de advogados...' })
-      await scrapeAdvogados(page, jobId)
-    }
+    // Final cursor flush — use the actual last processed ID, not ids[last]
+    await dbProgress(jobId, {
+      processado: globalThis.__sipeState!.processado,
+      ...(lastProcessedId !== undefined ? { ultimoIdProcessado: lastProcessedId } : {}),
+    })
 
     // ── Done ──────────────────────────────────────────────────
     const summary =
@@ -1341,28 +1360,28 @@ async function scrapeAlcunhas(
 
 // ── Advogados ─────────────────────────────────────────────────
 
-async function scrapeAdvogados(page: Page, jobId: string): Promise<void> {
+async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]> {
   await page.goto(`${SIPE_URL}/advogados/listaradvogados`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('table', { timeout: 15_000 }).catch(() => {})
   await page.selectOption('select[name*="DataTables_Table"]', '-1').catch(() => {})
   await page.waitForTimeout(1000)
 
-  const linksSet = new Set<string>()
-  const linksDetails: { href: string; id: string }[] = []
+  const linksSet = new Set<number>()
+  const linksIds: number[] = []
 
   const extractLinks = async () => {
     const currentLinks = await page.$$eval(
       'tbody a[href*="/detalhaclientes"]',
       (els: Element[]) =>
-        (els as HTMLAnchorElement[]).map((el) => ({
-          href: el.getAttribute('href') ?? '',
-          id: el.href.match(/\/advogados\/(\d+)\//)?.[1] ?? '',
-        }))
+        (els as HTMLAnchorElement[]).map((el) => {
+          const m = el.href.match(/\/advogados\/(\d+)\//)
+          return m ? parseInt(m[1]) : 0
+        })
     )
-    for (const link of currentLinks) {
-      if (link.href && link.id && !linksSet.has(link.id)) {
-        linksSet.add(link.id)
-        linksDetails.push(link)
+    for (const id of currentLinks) {
+      if (id > 0 && !linksSet.has(id)) {
+        linksSet.add(id)
+        linksIds.push(id)
       }
     }
   }
@@ -1390,9 +1409,9 @@ async function scrapeAdvogados(page: Page, jobId: string): Promise<void> {
       pageNum++
       await botaoLocator.click()
       await page.waitForTimeout(1000)
-      const before = linksDetails.length
+      const before = linksIds.length
       await extractLinks()
-      const novos = linksDetails.length - before
+      const novos = linksIds.length - before
       if (novos === 0) {
         continuar = false
       }
@@ -1401,46 +1420,7 @@ async function scrapeAdvogados(page: Page, jobId: string): Promise<void> {
     }
   }
 
-  log(jobId, `Advogados encontrados para detalhamento: ${linksDetails.length}`)
-  if (globalThis.__sipeState) {
-    globalThis.__sipeState.fase = 'Sincronizando advogados...'
-    globalThis.__sipeState.total = linksDetails.length
-    globalThis.__sipeState.processado = 0
-    globalThis.__sipeState.pct = 0
-  }
-  await dbProgress(jobId, {
-    total: linksDetails.length,
-    processado: 0,
-  })
-
-  let idx = 0
-  for (const link of linksDetails) {
-    if (!link.href || !link.id || globalThis.__sipeStopFlag) continue
-    try {
-      await scrapeAdvogadoDetalhe(page, parseInt(link.id))
-      idx++
-      if (globalThis.__sipeState) {
-        globalThis.__sipeState.processado = idx
-        globalThis.__sipeState.pct = Math.round((idx / linksDetails.length) * 100)
-      }
-      await dbProgress(jobId, {
-        processado: idx,
-      })
-      await page.waitForTimeout(200 + Math.random() * 300)
-    } catch (err) {
-      if (globalThis.__sipeState) {
-        globalThis.__sipeState.erros++
-      }
-      const msg = `Erro advogado #${link.id}: ${err}`
-      if (globalThis.__sipeState) {
-        globalThis.__sipeState.ultimoLog = msg
-      }
-      await dbProgress(jobId, {
-        erros: globalThis.__sipeState?.erros ?? undefined,
-        log: msg
-      })
-    }
-  }
+  return linksIds
 }
 
 async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> {
