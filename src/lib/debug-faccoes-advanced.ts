@@ -37,11 +37,34 @@ async function debugFaccoesAdvanced() {
     const user = process.env.SIPE_USER || 'usuario'
     const pwd = process.env.SIPE_PASSWORD || 'senha'
 
-    console.log('📍 Aguardando campo de usuário...')
-    await page.waitForSelector('input[name="usuario"]', { timeout: 15_000 })
-    console.log('✅ Campo encontrado')
+    console.log('📍 Aguardando campos de login...')
 
-    await page.fill('input[name="usuario"]', user)
+    // Tentar diferentes seletores para CPF/Usuário
+    const cpfSelectors = [
+      'input[name="cpf"]',
+      'input[placeholder*="CPF"]',
+      'input[type="text"]:first-of-type',
+      'input[name="usuario"]'
+    ]
+
+    let cpfField = null
+    for (const selector of cpfSelectors) {
+      try {
+        cpfField = page.locator(selector).first()
+        if (await cpfField.isVisible({ timeout: 5_000 })) {
+          console.log(`✅ Campo CPF encontrado com seletor: ${selector}`)
+          break
+        }
+      } catch {
+        // Continuar
+      }
+    }
+
+    if (!cpfField) {
+      throw new Error('Não conseguiu encontrar campo de CPF/Usuário')
+    }
+
+    await cpfField.fill(user)
     await page.fill('input[name="senha"]', pwd)
     await page.click('button[type="submit"]')
 
