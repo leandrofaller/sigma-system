@@ -1361,9 +1361,13 @@ async function scrapeAlcunhas(
 // ── Advogados ─────────────────────────────────────────────────
 
 async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]> {
+  log(jobId, 'Iniciando coleta de advogados na listagem do SIPE...')
+  
   await page.goto(`${SIPE_URL}/advogados/listaradvogados`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('table', { timeout: 15_000 }).catch(() => {})
-  await page.selectOption('select[name*="DataTables_Table"]', '-1').catch(() => {})
+  
+  // Tenta expandir o select do DataTable para -1 (exibir tudo se possível)
+  await page.selectOption('select[name*="DataTables_Table"]', '-1', { timeout: 3000 }).catch(() => {})
   await page.waitForTimeout(1000)
 
   const linksSet = new Set<number>()
@@ -1386,7 +1390,22 @@ async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]>
     }
   }
 
+  const getFirstLinkId = async () => {
+    return await page.evaluate(() => {
+      const el = document.querySelector('tbody a[href*="/detalhaclientes"]') as HTMLAnchorElement | null
+      return el ? el.href : ''
+    }).catch(() => '')
+  }
+
+  const getInfoText = async () => {
+    return await page.evaluate(() => {
+      const el = document.querySelector('.dataTables_info, [id*="_info"]')
+      return el ? el.textContent || '' : ''
+    }).catch(() => '')
+  }
+
   await extractLinks()
+  log(jobId, `Página 1: Coletados ${linksIds.length} advogados iniciais`)
 
   // Loop de paginação caso a seleção de '-1' seja ignorada pelo servidor (server-side pagination)
   let pageNum = 1
@@ -1407,19 +1426,44 @@ async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]>
 
     try {
       pageNum++
+      log(jobId, `Acessando página ${pageNum} de advogados... (${linksIds.length} coletados até agora)`)
+
+      const primeiroAntes = await getFirstLinkId()
+      const infoAntes = await getInfoText()
+
       await botaoLocator.click()
-      await page.waitForTimeout(1000)
+
+      // Espera inteligente a página mudar (até 5 segundos)
+      let mudou = false
+      for (let i = 0; i < 25; i++) { // 25 * 200ms = 5000ms
+        await page.waitForTimeout(200)
+        const primeiroDepois = await getFirstLinkId()
+        const infoDepois = await getInfoText()
+        if (primeiroDepois !== primeiroAntes || (infoAntes && infoDepois !== infoAntes)) {
+          mudou = true
+          break
+        }
+      }
+
+      if (!mudou) {
+        log(jobId, `⚠️ Página ${pageNum} não confirmou alteração visual em 5s. Parando paginação preventiva.`)
+        break
+      }
+
       const before = linksIds.length
       await extractLinks()
       const novos = linksIds.length - before
       if (novos === 0) {
+        log(jobId, `Nenhum novo registro encontrado na página ${pageNum}. Coleta de IDs concluída.`)
         continuar = false
       }
-    } catch {
+    } catch (err) {
+      log(jobId, `⚠️ Falha ao navegar para página ${pageNum} de advogados: ${err}`)
       continuar = false
     }
   }
 
+  log(jobId, `Coleta de lista concluída com sucesso! Total de advogados encontrados: ${linksIds.length}`)
   return linksIds
 }
 
