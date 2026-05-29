@@ -364,70 +364,49 @@ async function debugFaccoesAdvanced() {
 
     if (links.length === 0) throw new Error('Nenhum apenado encontrado em nenhuma unidade')
 
-    // Mostrar TODOS os hrefs encontrados
+    // Mostrar TODOS os hrefs encontrados e encontrar apenados válidos
     console.log(`\n📋 HREFs encontrados:`)
-    const allHrefs = []
+
+    let firstLink = null
+    let apenadoId = null
+
     for (let i = 0; i < links.length; i++) {
       const h = await links[i].getAttribute('href')
       console.log(`  [${i}] ${h}`)
-      allHrefs.push(h)
-    }
 
-    // Filtrar links válidos (não /index, não /static, etc)
-    const validHrefs = allHrefs.filter(h =>
-      h &&
-      !h.includes('/index') &&
-      !h.includes('/static') &&
-      !h.includes('/js/') &&
-      !h.includes('/css/') &&
-      (h.includes('/apenados/') || h.includes('?id='))
-    )
+      // Procurar por um link que parece ser de um apenado real
+      if (firstLink === null && h) {
+        // Tentar padrão 1: /apenados/{id}/... com ID numérico
+        let match = h.match(/\/apenados\/(\d+)/)
+        if (match) {
+          firstLink = links[i]
+          apenadoId = match[1]
+          console.log(`\n✅ Link válido encontrado (numérico): /apenados/${apenadoId}`)
+          break
+        }
 
-    console.log(`\n📋 HREFs válidos: ${validHrefs.length}`)
-    for (let i = 0; i < validHrefs.length; i++) {
-      console.log(`  [${i}] ${validHrefs[i]}`)
-    }
-
-    if (validHrefs.length === 0) {
-      console.log(`❌ Nenhum href válido encontrado`)
-      // Usar o primeiro de qualquer forma
-      validHrefs.push(allHrefs[0])
-    }
-
-    const href = validHrefs[0]
-    console.log(`\n📍 Usando HREF: ${href}`)
-
-    // Tentar diferentes padrões de extração de ID
-    let apenadoId = null
-
-    // Padrão 1: /apenados/123 ou /apenados/123/...
-    let match = href?.match(/\/apenados\/(\d+)/)
-    if (match) {
-      apenadoId = match[1]
-      console.log(`✅ ID extraído (padrão 1): ${apenadoId}`)
-    }
-
-    // Padrão 2: /apenados/abc123 ou /apenados/ABC123
-    if (!apenadoId) {
-      match = href?.match(/\/apenados\/([a-zA-Z0-9]+)/)
-      if (match) {
-        apenadoId = match[1]
-        console.log(`✅ ID extraído (padrão 2): ${apenadoId}`)
+        // Tentar padrão 2: /apenados/{id} mas não /localizacao, /processos, etc
+        if (!h.includes('/localizacao') &&
+            !h.includes('/processos') &&
+            !h.includes('/documentos') &&
+            !h.includes('/edit') &&
+            !h.includes('/index') &&
+            !h.includes('/static') &&
+            h.includes('/apenados/')) {
+          // Extrair o que vem depois de /apenados/
+          const parts = h.split('/apenados/')[1]?.split('/')[0]
+          if (parts && parts !== '') {
+            firstLink = links[i]
+            apenadoId = parts
+            console.log(`\n✅ Link válido encontrado: /apenados/${apenadoId}`)
+            break
+          }
+        }
       }
     }
 
-    // Padrão 3: ?id=123 ou &id=123
-    if (!apenadoId) {
-      match = href?.match(/[?&]id=([a-zA-Z0-9]+)/)
-      if (match) {
-        apenadoId = match[1]
-        console.log(`✅ ID extraído (padrão 3): ${apenadoId}`)
-      }
-    }
-
-    if (!apenadoId) {
-      console.log(`❌ Não conseguiu extrair ID do href: ${href}`)
-      throw new Error('Não conseguiu extrair ID com nenhum padrão')
+    if (!firstLink || !apenadoId) {
+      throw new Error('Nenhum link válido de apenado encontrado')
     }
 
     console.log(`✅ Apenado ID: ${apenadoId}`)
