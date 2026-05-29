@@ -3,9 +3,10 @@ import OpenAI from 'openai';
 import { prisma } from './db';
 
 const DEPRECATED_MODELS: Record<string, string> = {
-  'gemini-pro': 'gemini-1.5-flash',
-  'gemini-1.0-pro': 'gemini-1.5-flash',
-  'text-bison-001': 'gemini-1.5-flash',
+  'gemini-pro': 'gemini-2.5-flash',
+  'gemini-1.0-pro': 'gemini-2.5-flash',
+  'text-bison-001': 'gemini-2.5-flash',
+  'gemini-1.5-flash': 'gemini-2.5-flash',
 };
 
 async function getAIConfig() {
@@ -59,8 +60,8 @@ export async function queryAI(userId: string, query: string, context?: string): 
     tokens = msg.usage.input_tokens + msg.usage.output_tokens;
 
   } else if (config.provider === 'gemini' && apiKey) {
-    const modelName = config.model || 'gemini-1.5-flash';
-    const supportsSystemInstruction = modelName.includes('1.5') || modelName.includes('2.');
+    const modelName = config.model || 'gemini-2.5-flash';
+    const supportsSystemInstruction = modelName.includes('1.5') || modelName.includes('2.') || modelName.includes('3.');
     const requestBody = supportsSystemInstruction
       ? {
           system_instruction: { parts: [{ text: fullSystemPrompt }] },

@@ -133,8 +133,10 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
                 <option value="claude-opus-4-7">Claude Opus 4.7 (mais capaz)</option>
               </optgroup>
               <optgroup label="Google — Gemini">
+                <option value="gemini-3.5-flash">Gemini 3.5 Flash (recomendado)</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                 <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
               </optgroup>
               <optgroup label="OpenAI — GPT">
                 <option value="gpt-4o">GPT-4o</option>
