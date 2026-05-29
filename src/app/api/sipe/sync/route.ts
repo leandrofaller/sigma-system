@@ -106,22 +106,25 @@ export async function POST(req: NextRequest) {
     })
 
     scrapeFaccoes()
-      .then(() =>
-        prisma.sipeSyncJob.update({
+      .then(() => {
+        console.log(`[SYNC] ✅ scrapeFaccoes completado com sucesso`)
+        return prisma.sipeSyncJob.update({
           where: { id: job.id },
           data: { status: 'COMPLETED', finalizadoEm: new Date() },
         })
-      )
-      .catch((err) =>
-        prisma.sipeSyncJob.update({
+      })
+      .catch((err) => {
+        const errMsg = String(err)
+        console.log(`[SYNC] ❌ scrapeFaccoes falhou: ${errMsg}`)
+        return prisma.sipeSyncJob.update({
           where: { id: job.id },
           data: {
             status: 'FAILED',
             finalizadoEm: new Date(),
-            log: String(err),
+            log: errMsg,
           },
         })
-      )
+      })
 
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }

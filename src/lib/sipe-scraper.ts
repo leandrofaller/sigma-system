@@ -1626,69 +1626,152 @@ export async function scrapeFaccoes(): Promise<void> {
     let extraido = false
     let erroOriginal: any = null
 
+    console.log('[FACCOES] 🔍 Iniciando scrape de facções...')
+
     // Tentamos com os primeiros 5 apenados da listagem para evitar casos em que o perfil
     // de um apenado específico não exiba ou não possua acesso ao dropdown de facção.
     for (let i = 0; i < 5; i++) {
       try {
+        console.log(`[FACCOES] 📄 Tentativa ${i + 1}/5 - Acessando /apenados/index...`)
         await page.goto(`${SIPE_URL}/apenados/index`, { waitUntil: 'domcontentloaded' })
         await page.waitForSelector('tbody', { timeout: 15_000 }).catch(() => {})
         
         const links = await page.$$('tbody a[href*="/selecionarOpcao"]')
+        console.log(`[FACCOES] 🔗 Encontrados ${links.length} links de apenados`)
+
         if (links.length <= i) {
+          console.log(`[FACCOES] ⚠️ Não há link suficiente (precisa de ${i + 1}, tem ${links.length})`)
           break;
         }
 
         const link = links[i];
         const href = await link.getAttribute('href');
-        if (!href) continue;
+        if (!href) {
+          console.log(`[FACCOES] ❌ Link ${i} não tem href`)
+          continue;
+        }
+
         const m = href.match(/\/apenados\/(\d+)\//);
-        if (!m) continue;
+        if (!m) {
+          console.log(`[FACCOES] ❌ Não conseguiu extrair ID do href: ${href}`)
+          continue;
+        }
+
         const apenadoId = parseInt(m[1]);
+        console.log(`[FACCOES] ✓ Apenado ID extraído: ${apenadoId}`);
 
         // Clica no link de seleção para registrar o apenado ativo na sessão do servidor do SIPE
         try {
+          console.log(`[FACCOES] 🖱️ Clicando no link do apenado ${apenadoId}...`)
           await link.click();
+          console.log(`[FACCOES] ⏳ Aguardando redirecionamento...`)
           await page.waitForTimeout(1500); // Aguarda o redirecionamento/seleção
+          console.log(`[FACCOES] ✓ Clique realizado, continuando...`)
         } catch (err) {
+          console.log(`[FACCOES] ⚠️ Erro ao clicar no link, continuando mesmo assim`)
           // Fallback silencioso: prossegue mesmo se o clique falhar
         }
 
         // Tentativa 1: Página dedicada de facção
         try {
-          await page.goto(`${SIPE_URL}/apenados/${apenadoId}/faccao`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
-          const selectLocator = page.locator('select[name="faccao_id"], select').first()
-          await selectLocator.waitFor({ state: 'attached', timeout: 3_000 })
-          
+          console.log(`[FACCOES] 🔄 Tentativa 1: Acessando /apenados/${apenadoId}/faccao...`)
+          await page.goto(`${SIPE_URL}/apenados/${apenadoId}/faccao`, { waitUntil: 'load', timeout: 20_000 })
+
+          // Tenta múltiplos seletores para o select de facção
+          let selectLocator
+          const selectors = [
+            'select[name="faccao_id"]',
+            'select[name*="faccao"]',
+            'select[id*="faccao"]',
+            'select'  // último recurso: qualquer select
+          ]
+
+          for (const sel of selectors) {
+            try {
+              const elem = page.locator(sel).first()
+              await elem.waitFor({ state: 'attached', timeout: 8_000 })
+              selectLocator = elem
+              console.log(`[FACCOES] ✓ Select encontrado com seletor: ${sel}`)
+              break
+            } catch {
+              // tenta próximo seletor
+            }
+          }
+
+          if (!selectLocator) {
+            throw new Error('Nenhum select de facção encontrado com os seletores tentados')
+          }
+
+          await selectLocator.waitFor({ state: 'attached', timeout: 8_000 })
+
+          console.log(`[FACCOES] ✓ Select encontrado`)
+
           options = await selectLocator.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
             opts
               .filter((o) => o.value && o.value !== '0' && o.value !== '')
               .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
           )
+
+          console.log(`[FACCOES] 📊 Facções encontradas: ${options.length}`)
+
           if (options.length > 0) {
+            console.log(`[FACCOES] ✅ Sucesso na tentativa 1!`)
             extraido = true;
             break; // Sucesso: sai do loop de apenados
           }
         } catch (err) {
+          console.log(`[FACCOES] ❌ Erro na tentativa 1: ${(err as any)?.message?.substring(0, 100)}`)
           erroOriginal = err;
         }
 
         // Tentativa 2: Página de edição cadastral (Fallback)
         if (!extraido) {
           try {
+            console.log(`[FACCOES] 🔄 Tentativa 2: Acessando /apenados/${apenadoId}/editar...`)
             await page.goto(`${SIPE_URL}/apenados/${apenadoId}/editar`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
-            const selectLocator = page.locator('select[name="faccao_id"], select[name*="faccao"]').first()
-            await selectLocator.waitFor({ state: 'attached', timeout: 4_000 })
-            
+
+            // Tenta múltiplos seletores para o select de facção
+            let selectLocator
+            const selectors = [
+              'select[name="faccao_id"]',
+              'select[name*="faccao"]',
+              'select[id*="faccao"]',
+              'select'  // último recurso
+            ]
+
+            for (const sel of selectors) {
+              try {
+                const elem = page.locator(sel).first()
+                await elem.waitFor({ state: 'attached', timeout: 8_000 })
+                selectLocator = elem
+                console.log(`[FACCOES] ✓ Select encontrado na página de edição com seletor: ${sel}`)
+                break
+              } catch {
+                // tenta próximo seletor
+              }
+            }
+
+            if (!selectLocator) {
+              throw new Error('Nenhum select de facção encontrado na página de edição')
+            }
+
+            await selectLocator.waitFor({ state: 'attached', timeout: 8_000 })
+
             options = await selectLocator.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
               opts
                 .filter((o) => o.value && o.value !== '0' && o.value !== '')
                 .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
             )
+
+            console.log(`[FACCOES] 📊 Facções encontradas: ${options.length}`)
+
             if (options.length > 0) {
+              console.log(`[FACCOES] ✅ Sucesso na tentativa 2!`)
               extraido = true;
               break; // Sucesso: sai do loop de apenados
             }
           } catch (err) {
+            console.log(`[FACCOES] ⚠️ Erro na tentativa 2, continuando...`)
             // Ignora erro e tenta o próximo apenado
           }
         }
@@ -1698,12 +1781,15 @@ export async function scrapeFaccoes(): Promise<void> {
     }
 
     if (!extraido) {
-      throw new Error(
-        `Não foi possível carregar a lista de facções em nenhum dos primeiros 5 apenados da lista. ` +
+      const errMsg = `Não foi possível carregar a lista de facções em nenhum dos primeiros 5 apenados da lista. ` +
         `Erro original na página /faccao do último apenado testado: ${(erroOriginal as any)?.message || erroOriginal}`
-      )
+      console.log(`[FACCOES] ❌ ${errMsg}`)
+      throw new Error(errMsg)
     }
 
+    console.log(`[FACCOES] 💾 Salvando ${options.length} facções no banco...`)
+
+    let count = 0
     for (const opt of options) {
       const id = parseInt(opt.value)
       if (isNaN(id)) continue
@@ -1712,7 +1798,10 @@ export async function scrapeFaccoes(): Promise<void> {
         create: { sipeId: id, nome: opt.text },
         update: { nome: opt.text },
       })
+      count++
     }
+
+    console.log(`[FACCOES] ✅ ${count} facções salvas com sucesso`)
   } finally {
     await context.close()
   }
