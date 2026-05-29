@@ -366,10 +366,41 @@ async function debugFaccoesAdvanced() {
 
     const firstLink = links[0]
     const href = await firstLink.getAttribute('href')
-    const match = href?.match(/\/apenados\/(\d+)/)
-    if (!match) throw new Error('Não conseguiu extrair ID')
+    console.log(`📍 HREF encontrado: ${href}`)
 
-    const apenadoId = match[1]
+    // Tentar diferentes padrões de extração de ID
+    let apenadoId = null
+
+    // Padrão 1: /apenados/123 ou /apenados/123/...
+    let match = href?.match(/\/apenados\/(\d+)/)
+    if (match) {
+      apenadoId = match[1]
+      console.log(`✅ ID extraído (padrão 1): ${apenadoId}`)
+    }
+
+    // Padrão 2: /apenados/abc123 ou /apenados/ABC123
+    if (!apenadoId) {
+      match = href?.match(/\/apenados\/([a-zA-Z0-9]+)/)
+      if (match) {
+        apenadoId = match[1]
+        console.log(`✅ ID extraído (padrão 2): ${apenadoId}`)
+      }
+    }
+
+    // Padrão 3: ?id=123 ou &id=123
+    if (!apenadoId) {
+      match = href?.match(/[?&]id=([a-zA-Z0-9]+)/)
+      if (match) {
+        apenadoId = match[1]
+        console.log(`✅ ID extraído (padrão 3): ${apenadoId}`)
+      }
+    }
+
+    if (!apenadoId) {
+      console.log(`❌ Não conseguiu extrair ID do href: ${href}`)
+      throw new Error('Não conseguiu extrair ID com nenhum padrão')
+    }
+
     console.log(`✅ Apenado ID: ${apenadoId}`)
 
     // Clicar para registrar
