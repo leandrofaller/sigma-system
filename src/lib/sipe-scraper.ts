@@ -1697,12 +1697,12 @@ export async function scrapeFaccoes(): Promise<void> {
           await page.goto(`${SIPE_URL}/apenados/${apenadoId}/faccao`, { waitUntil: 'load', timeout: 20_000 })
 
           // Tenta múltiplos seletores para o select de facção
+          // ⚠️ IMPORTANTE: Evitar select:nth-of-type(2) pois pode ser gênero!
           let selectLocator
           const selectors = [
             'select[name="faccao_id"]',
             'select[name*="faccao"]',
             'select[id*="faccao"]',
-            'select:nth-of-type(2)',  // Segundo select (primeiro é gênero)
             'select'  // último recurso: qualquer select
           ]
 
@@ -1710,21 +1710,45 @@ export async function scrapeFaccoes(): Promise<void> {
             try {
               const elem = page.locator(sel).first()
               await elem.waitFor({ state: 'attached', timeout: 8_000 })
+
+              // 🔍 Verificar se é realmente de facção (não gênero/sexo)
+              const testOptions = await elem.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
+                opts
+                  .filter((o) => o.value && o.value !== '0' && o.value !== '')
+                  .map((o) => o.textContent?.trim() ?? '')
+              )
+
+              console.log(`[FACCOES] 🔎 Seletor "${sel}" encontrado com opções: ${testOptions.slice(0, 3).join(', ')}`)
+
+              // ⚠️ Descartar select de gênero
+              const hasGender = testOptions.some(opt =>
+                opt.toLowerCase().includes('masculino') ||
+                opt.toLowerCase().includes('feminino') ||
+                opt.toLowerCase().includes('não informado')
+              )
+
+              if (hasGender) {
+                console.log(`[FACCOES] ⚠️ "${sel}" é select de gênero (tem Masculino/Feminino), descartando...`)
+                continue // Pula este seletor
+              }
+
+              // ✅ Este é o select certo de facção
               selectLocator = elem
-              console.log(`[FACCOES] ✓ Select encontrado com seletor: ${sel}`)
+              console.log(`[FACCOES] ✅ Select de FACÇÃO encontrado com seletor: ${sel}`)
               break
-            } catch {
+            } catch (err) {
+              console.log(`[FACCOES] ⚠️ Seletor "${sel}" falhou: ${(err as any)?.message?.substring(0, 50)}`)
               // tenta próximo seletor
             }
           }
 
           if (!selectLocator) {
-            throw new Error('Nenhum select de facção encontrado com os seletores tentados')
+            throw new Error('Nenhum select de facção encontrado (todos rejeitados ou não encontrados)')
           }
 
           await selectLocator.waitFor({ state: 'attached', timeout: 8_000 })
 
-          console.log(`[FACCOES] ✓ Select encontrado`)
+          console.log(`[FACCOES] ✓ Select de facção confirmado`)
 
           options = await selectLocator.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
             opts
@@ -1733,6 +1757,19 @@ export async function scrapeFaccoes(): Promise<void> {
           )
 
           console.log(`[FACCOES] 📊 Facções encontradas: ${options.length}`)
+          if (options.length > 0) {
+            console.log(`[FACCOES] 📋 Primeiras: ${options.slice(0, 3).map(o => o.text).join(', ')}`)
+          }
+
+          // ✅ Validação final: não deve ter gênero
+          const hasGenderInFinal = options.some(opt =>
+            opt.text.toLowerCase().includes('masculino') ||
+            opt.text.toLowerCase().includes('feminino')
+          )
+
+          if (hasGenderInFinal) {
+            throw new Error('Select contém gênero (Masculino/Feminino), não é facção!')
+          }
 
           if (options.length > 0) {
             console.log(`[FACCOES] ✅ Sucesso na tentativa 1!`)
@@ -1751,12 +1788,12 @@ export async function scrapeFaccoes(): Promise<void> {
             await page.goto(`${SIPE_URL}/apenados/${apenadoId}/editar`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
 
             // Tenta múltiplos seletores para o select de facção
+            // ⚠️ IMPORTANTE: Evitar select:nth-of-type pois pode ser gênero!
             let selectLocator
             const selectors = [
               'select[name="faccao_id"]',
               'select[name*="faccao"]',
               'select[id*="faccao"]',
-              'select:nth-of-type(2)',  // Segundo select na página de edição
               'select'  // último recurso
             ]
 
@@ -1764,10 +1801,34 @@ export async function scrapeFaccoes(): Promise<void> {
               try {
                 const elem = page.locator(sel).first()
                 await elem.waitFor({ state: 'attached', timeout: 8_000 })
+
+                // 🔍 Verificar se é realmente de facção (não gênero/sexo)
+                const testOptions = await elem.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
+                  opts
+                    .filter((o) => o.value && o.value !== '0' && o.value !== '')
+                    .map((o) => o.textContent?.trim() ?? '')
+                )
+
+                console.log(`[FACCOES] 🔎 Seletor "${sel}" encontrado com opções: ${testOptions.slice(0, 3).join(', ')}`)
+
+                // ⚠️ Descartar select de gênero
+                const hasGender = testOptions.some(opt =>
+                  opt.toLowerCase().includes('masculino') ||
+                  opt.toLowerCase().includes('feminino') ||
+                  opt.toLowerCase().includes('não informado')
+                )
+
+                if (hasGender) {
+                  console.log(`[FACCOES] ⚠️ "${sel}" é select de gênero, descartando...`)
+                  continue // Pula este seletor
+                }
+
+                // ✅ Este é o select certo de facção
                 selectLocator = elem
-                console.log(`[FACCOES] ✓ Select encontrado na página de edição com seletor: ${sel}`)
+                console.log(`[FACCOES] ✅ Select de FACÇÃO encontrado na página de edição com seletor: ${sel}`)
                 break
-              } catch {
+              } catch (err) {
+                console.log(`[FACCOES] ⚠️ Seletor "${sel}" falhou na página de edição`)
                 // tenta próximo seletor
               }
             }
@@ -1785,6 +1846,19 @@ export async function scrapeFaccoes(): Promise<void> {
             )
 
             console.log(`[FACCOES] 📊 Facções encontradas: ${options.length}`)
+            if (options.length > 0) {
+              console.log(`[FACCOES] 📋 Primeiras: ${options.slice(0, 3).map(o => o.text).join(', ')}`)
+            }
+
+            // ✅ Validação final: não deve ter gênero
+            const hasGenderInFinal = options.some(opt =>
+              opt.text.toLowerCase().includes('masculino') ||
+              opt.text.toLowerCase().includes('feminino')
+            )
+
+            if (hasGenderInFinal) {
+              throw new Error('Select contém gênero, não é facção!')
+            }
 
             if (options.length > 0) {
               console.log(`[FACCOES] ✅ Sucesso na tentativa 2!`)
