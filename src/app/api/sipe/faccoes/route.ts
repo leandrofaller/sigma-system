@@ -30,13 +30,21 @@ export async function POST(req: NextRequest) {
 
   if (!nome) return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 })
 
+  // Busca o menor sipeId negativo cadastrado para gerar o próximo incremental
+  const menorIdFaccao = await prisma.sipeFaccao.findFirst({
+    where: { sipeId: { lt: 0 } },
+    orderBy: { sipeId: 'asc' },
+    select: { sipeId: true }
+  })
+  const sipeId = menorIdFaccao ? menorIdFaccao.sipeId - 1 : -1
+
   const faccao = await prisma.sipeFaccao.create({
     data: {
-      sipeId: Date.now(),
+      sipeId,
       nome,
-      sigla,
+      sigla: sigla || null,
       cor: cor || '#ef4444',
-      descricao,
+      descricao: descricao || null,
     },
   })
 

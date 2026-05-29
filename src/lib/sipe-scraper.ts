@@ -2237,10 +2237,55 @@ export async function scrapeFaccoes(): Promise<void> {
     for (const opt of options) {
       const id = parseInt(opt.value)
       if (isNaN(id)) continue
+
+      let nome = opt.text
+      let sigla: string | null = null
+      let cor = '#ef4444' // Cor padrão
+
+      const nomeUpper = opt.text.toUpperCase()
+      if (nomeUpper.includes('COMPANHEIRO DE FACÇÃO CV') || nomeUpper === 'CV' || nomeUpper === 'COMANDO VERMELHO') {
+        nome = 'Comando Vermelho'
+        sigla = 'CV'
+        cor = '#dc2626' // Vermelho escuro
+      } else if (nomeUpper.includes('COMPANHEIRO DE FACÇÃO PCC') || nomeUpper === 'PRIMEIRO COMANDO DA CAPITAL' || nomeUpper === 'PCC') {
+        nome = 'Primeiro Comando da Capital'
+        sigla = 'PCC'
+        cor = '#1d4ed8' // Azul escuro
+      } else if (nomeUpper.includes('FAMÍLIA DO NORTE') || nomeUpper === 'FDN') {
+        nome = 'Família do Norte'
+        sigla = 'FDN'
+        cor = '#15803d' // Verde
+      } else if (nomeUpper.includes('PRIMEIRO COMANDO DO PANDA') || nomeUpper === 'PCP') {
+        nome = 'Primeiro Comando do Panda'
+        sigla = 'PCP'
+        cor = '#b45309' // Âmbar escuro
+      } else if (nomeUpper.includes('BONDE DOS 13') || nomeUpper === 'B13') {
+        nome = 'Bonde dos 13'
+        sigla = 'B13'
+        cor = '#4338ca' // Índigo
+      } else if (nomeUpper.includes('COMANDO CLASSE A') || nomeUpper === 'CCA') {
+        nome = 'Comando Classe A'
+        sigla = 'CCA'
+        cor = '#6d28d9' // Violeta
+      } else if (nomeUpper.includes('COMPANHEIRO DE FACÇÃO') || nomeUpper === 'CF') {
+        nome = 'Companheiro de Facção'
+        sigla = 'CF'
+        cor = '#4b5563' // Cinza
+      }
+
       await prisma.sipeFaccao.upsert({
         where: { sipeId: id },
-        create: { sipeId: id, nome: opt.text },
-        update: { nome: opt.text },
+        create: {
+          sipeId: id,
+          nome,
+          sigla,
+          cor,
+        },
+        update: {
+          nome,
+          sigla,
+          cor,
+        },
       })
       count++
     }
