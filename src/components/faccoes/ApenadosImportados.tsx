@@ -1,13 +1,21 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin } from 'lucide-react'
 
 interface Alcunha { alcunha: string }
 interface Faccao { id: string; nome: string; sigla: string | null; cor: string }
 interface Advogado { id: string; nome: string; oab: string | null }
 interface VinculoAdvogado { advogado: Advogado }
-interface Processo { id: string; numero: string | null; vara: string | null; artigos: string[] }
+interface Processo {
+  id: string
+  sipeProcessoId: number | null
+  numero: string | null
+  vara: string | null
+  artigos: string[]
+  tempoPena: string | null
+  principal: boolean
+}
 
 export interface ApenadoImportado {
   id: string
@@ -32,6 +40,26 @@ export interface ApenadoImportado {
   processos: Processo[]
   vinculosAdvogado: VinculoAdvogado[]
   ultimaSyncAt: string
+
+  // Novos campos do SIPE
+  naturalidade: string | null
+  tipoSanguineo: string | null
+  estadoCivil: string | null
+  telefone: string | null
+  nomeMae: string | null
+  nomePai: string | null
+  nomeConjuge: string | null
+  qtdFilhos: number | null
+  rji: string | null
+  presoOriundo: string | null
+  intramuro: boolean | null
+  logradouro: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  cidade: string | null
+  uf: string | null
+  cep: string | null
 }
 
 function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; onClick: () => void }) {
@@ -177,10 +205,18 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
               {[
                 ['SIPE ID', `#${apenado.sipeId}`],
                 ['CPF', apenado.cpf],
-                ['RG', apenado.rg ? `${apenado.rg} ${apenado.rg}` : null],
+                ['RG', apenado.rg],
                 ['Data Nasc.', apenado.dataNascimento],
                 ['Sexo', apenado.sexo],
                 ['Etnia', apenado.etnia],
+                ['Naturalidade', apenado.naturalidade],
+                ['Tipo Sanguíneo', apenado.tipoSanguineo],
+                ['Estado Civil', apenado.estadoCivil],
+                ['Telefone', apenado.telefone],
+                ['Nome da Mãe', apenado.nomeMae],
+                ['Nome do Pai', apenado.nomePai],
+                ['Nome do Cônjuge', apenado.nomeConjuge],
+                ['Filhos', apenado.qtdFilhos != null ? `${apenado.qtdFilhos}` : null],
               ].map(([label, value]) => value ? (
                 <div key={String(label)}>
                   <p className="text-xs text-gray-500">{label}</p>
@@ -204,6 +240,9 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
                 ['Entrada', apenado.dataEntrada],
                 ['Pena', apenado.tempoPena],
                 ['Monitorado', apenado.monitorado === true ? 'Sim' : apenado.monitorado === false ? 'Não' : null],
+                ['RJI', apenado.rji],
+                ['Preso Oriundo', apenado.presoOriundo],
+                ['Intramuro', apenado.intramuro === true ? 'Sim' : apenado.intramuro === false ? 'Não' : null],
               ].map(([label, value]) => value != null ? (
                 <div key={String(label)}>
                   <p className="text-xs text-gray-500">{label}</p>
@@ -213,6 +252,39 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
             </div>
           </section>
 
+          {/* Endereço Residencial */}
+          {(apenado.logradouro || apenado.cidade || apenado.cep) && (
+            <section>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <MapPin className="w-4 h-4" /> Endereço Residencial
+              </h3>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm space-y-1">
+                {apenado.logradouro && (
+                  <p className="text-gray-900 dark:text-white">
+                    <span className="font-semibold">Logradouro:</span> {apenado.logradouro}
+                    {apenado.numero && `, Nº ${apenado.numero}`}
+                    {apenado.complemento && ` (${apenado.complemento})`}
+                  </p>
+                )}
+                {apenado.bairro && (
+                  <p className="text-gray-900 dark:text-white">
+                    <span className="font-semibold">Bairro:</span> {apenado.bairro}
+                  </p>
+                )}
+                {(apenado.cidade || apenado.uf) && (
+                  <p className="text-gray-900 dark:text-white">
+                    <span className="font-semibold">Cidade/UF:</span> {apenado.cidade || ''}{apenado.uf ? `/${apenado.uf}` : ''}
+                  </p>
+                )}
+                {apenado.cep && (
+                  <p className="text-gray-900 dark:text-white">
+                    <span className="font-semibold">CEP:</span> {apenado.cep}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
           {/* Processos */}
           {apenado.processos.length > 0 && (
             <section>
@@ -221,11 +293,17 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
               </h3>
               <div className="space-y-2">
                 {apenado.processos.map(p => (
-                  <div key={p.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm">
+                  <div key={p.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm relative">
+                    {p.principal && (
+                      <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-[10px] font-bold rounded-md">
+                        Principal
+                      </span>
+                    )}
                     <p className="font-mono text-xs text-gray-500">{p.numero || 'Nº não informado'}</p>
-                    {p.vara && <p className="text-gray-700 dark:text-gray-300">{p.vara}</p>}
+                    {p.vara && <p className="text-gray-700 dark:text-gray-300 mt-1"><span className="font-semibold">Vara:</span> {p.vara}</p>}
+                    {p.tempoPena && <p className="text-gray-700 dark:text-gray-300 text-xs mt-0.5"><span className="font-semibold">Pena:</span> {p.tempoPena}</p>}
                     {p.artigos.length > 0 && (
-                      <p className="text-xs text-red-600 dark:text-red-400 mt-1">{p.artigos.join(' · ')}</p>
+                      <p className="text-xs text-red-600 dark:text-red-400 mt-1.5 font-medium">{p.artigos.join(' · ')}</p>
                     )}
                   </div>
                 ))}

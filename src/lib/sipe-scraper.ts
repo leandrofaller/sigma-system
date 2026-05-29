@@ -1606,6 +1606,141 @@ async function scrapeProcessos(
   try {
     await page.goto(`${SIPE_URL}/apenados/${sipeId}/incluirProcessos`, { waitUntil: 'domcontentloaded' })
     await page.waitForSelector('body', { timeout: 10_000 })
+
+    // Tenta extrair de forma estruturada via DOM (Tabelas)
+    const processosEstruturados = await page.evaluate(() => {
+      const tabelas = Array.from(document.querySelectorAll('table'))
+      const resultados: Array<{
+        sipeProcessoId: number | null
+        numero: string | null
+        vara: string | null
+        artigos: string[]
+        tempoPena: string | null
+        principal: boolean
+      }> = []
+
+      for (const tabela of tabelas) {
+        const rows = Array.from(tabela.querySelectorAll('tbody tr'))
+        if (rows.length === 0) continue
+
+        // Identifica os índices das colunas pelos cabeçalhos
+        const headers = Array.from(tabela.querySelectorAll('thead th, thead td')).map(h => (h.textContent ?? '').toUpperCase().trim())
+        
+        const numIdx = headers.findIndex(h => h.includes('NÚMERO') || h.includes('PROCESSO') || h.includes('NUMERO'))
+        const varaIdx = headers.findIndex(h => h.includes('VARA') || h.includes('JUÍZO') || h.includes('JUIZO'))
+        const artIdx = headers.findIndex(h => h.includes('ARTIGO') || h.includes('INFRAÇÃO') || h.includes('INFRACAO') || h.includes('CAPITULAÇÃO') || h.includes('CAPITULACAO'))
+        const penaIdx = headers.findIndex(h => h.includes('PENA') || h.includes('TEMPO'))
+        const princIdx = headers.findIndex(h => h.includes('PRINCIPAL'))
+
+        for (const row of rows) {
+          const cells = Array.from(row.querySelectorAll('td'))
+          if (cells.length < 2) continue
+
+          // Extrai o ID do processo do SIPE, geralmente presente em links ou botões na linha
+          let sipeProcessoId: number | null = null
+          const links = Array.from(row.querySelectorAll('a, button'))
+          for (const link of links) {
+            const href = link.getAttribute('href') || ''
+            const onClickText = link.getAttribute('onclick') || ''
+            const actionText = href + ' ' + onClickText
+            const match = actionText.match(/\/processos\/(\d+)/) || actionText.match(/processo_id[^\d]*(\d+)/) || actionText.match(/\/excluirProcesso\/(\d+)/) || actionText.match(/\/excluir\/(\d+)/)
+            if (match) {
+              sipeProcessoId = parseInt(match[1])
+              break
+            }
+          }
+
+          let numero: string | null = null
+          if (numIdx >= 0 && cells[numIdx]) {
+            numero = cells[numIdx].textContent?.trim() || null
+          } else {
+            numero = cells[0].textContent?.trim() || null
+          }
+
+          if (numero) {
+            numero = numero.replace(/\s+/g, ' ').trim()
+          }
+
+          let vara: string | null = null
+          if (varaIdx >= 0 && cells[varaIdx]) {
+            vara = cells[varaIdx].textContent?.trim() || null
+          }
+
+          let artigos: string[] = []
+          if (artIdx >= 0 && cells[artIdx]) {
+            const rawArt = cells[artIdx].textContent?.trim() || ''
+            artigos = rawArt.split(/[,;\n]/).map(a => a.trim()).filter(Boolean)
+          }
+
+          let tempoPena: string | null = null
+          if (penaIdx >= 0 && cells[penaIdx]) {
+            tempoPena = cells[penaIdx].textContent?.trim() || null
+          }
+
+          let principal = false
+          if (princIdx >= 0 && cells[princIdx]) {
+            const checkbox = cells[princIdx].querySelector('input[type="checkbox"], input[type="radio"]') as HTMLInputElement | null
+            if (checkbox) {
+              principal = checkbox.checked
+            } else {
+              const text = (cells[princIdx].textContent ?? '').toUpperCase()
+              principal = text.includes('SIM') || text.includes('PRINCIPAL') || text.includes('ATIVO')
+            }
+          }
+
+          resultados.push({
+            sipeProcessoId,
+            numero,
+            vara,
+            artigos,
+            tempoPena,
+            principal
+          })
+        }
+      }
+      return resultados
+    })
+
+    if (processosEstruturados && processosEstruturados.length > 0) {
+      for (const p of processosEstruturados) {
+        // Se não conseguiu extrair o sipeProcessoId, gera um id determinístico baseado no número
+        const procId = p.sipeProcessoId ?? Math.abs(hashCode(p.numero || ''))
+        
+        await prisma.sipeProcesso.upsert({
+          where: { id: `${apenadoId}_${procId}` },
+          create: {
+            id: `${apenadoId}_${procId}`,
+            apenadoId,
+            sipeProcessoId: p.sipeProcessoId,
+            numero: p.numero,
+            vara: p.vara,
+            artigos: p.artigos,
+            tempoPena: p.tempoPena,
+            principal: p.principal
+          },
+          update: {
+            numero: p.numero,
+            vara: p.vara,
+            artigos: p.artigos,
+            tempoPena: p.tempoPena,
+            principal: p.principal
+          }
+        })
+      }
+      return
+    }
+
+    // Helper hashCode
+    function hashCode(str: string) {
+      let hash = 0
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i)
+        hash |= 0 // Convert to 32bit integer
+      }
+      return hash
+    }
+
+    // Fallback: regex se falhar a tabela
     const text = await page.innerText('body')
     const processoRegex = /(\d+) - NÚMERO PROCESSO: ([^\n/]*)/g
     let m
@@ -1624,7 +1759,9 @@ async function scrapeProcessos(
         update: { numero, artigos },
       })
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    console.error(`Erro ao sincronizar processos do apenado ${sipeId}:`, err)
+  }
 }
 
 async function scrapeAlcunhas(
