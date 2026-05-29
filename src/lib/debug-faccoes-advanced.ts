@@ -65,8 +65,47 @@ async function debugFaccoesAdvanced() {
     }
 
     await cpfField.fill(user)
-    await page.fill('input[name="senha"]', pwd)
-    await page.click('button[type="submit"]')
+    console.log('✅ CPF preenchido')
+
+    // Aguardar um pouco após preencher CPF (pode ter JavaScript)
+    await page.waitForTimeout(1000)
+
+    console.log('📍 Aguardando campo de senha...')
+
+    // Tentar diferentes seletores para senha
+    const senhaSelectors = [
+      'input[name="senha"]',
+      'input[type="password"]',
+      'input[placeholder*="Senha"]',
+      'input[placeholder*="senha"]'
+    ]
+
+    let senhaField = null
+    for (const selector of senhaSelectors) {
+      try {
+        senhaField = page.locator(selector).first()
+        if (await senhaField.isVisible({ timeout: 3_000 })) {
+          console.log(`✅ Campo de senha encontrado com seletor: ${selector}`)
+          break
+        }
+      } catch {
+        // Continuar
+      }
+    }
+
+    if (!senhaField) {
+      throw new Error('Não conseguiu encontrar campo de senha')
+    }
+
+    await senhaField.fill(pwd)
+    console.log('✅ Senha preenchida')
+    console.log('📍 Clicando em login...')
+    const submitBtn = page.locator('button[type="submit"]').first()
+    if (await submitBtn.isVisible({ timeout: 3_000 })) {
+      await submitBtn.click()
+    } else {
+      throw new Error('Botão de submit não encontrado')
+    }
 
     console.log('📍 Aguardando redirecionamento para home...')
     try {
