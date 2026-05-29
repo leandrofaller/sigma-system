@@ -97,7 +97,8 @@
       "Bash(timeout 30 npm start)",
       "Bash(pkill -f \"next start\")",
       "Bash(pkill -f \"node\")",
-      "Bash(SIPE_USER=77032055249 SIPE_PASSWORD='jxa7HWK@axw*mtw3avg' npx tsx src/lib/debug-faccoes-single.ts)"
+      "Bash(SIPE_USER=77032055249 SIPE_PASSWORD='jxa7HWK@axw*mtw3avg' npx tsx src/lib/debug-faccoes-single.ts)",
+      "Bash(SIPE_USER=77032055249 SIPE_PASSWORD='jxa7HWK@axw*mtw3avg' npx tsx src/lib/debug-faccoes-urls.ts)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
