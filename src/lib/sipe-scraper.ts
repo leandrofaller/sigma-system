@@ -1168,9 +1168,23 @@ async function scrapeApenadoFicha(
     faccaoNome = faccaoObj?.nome ?? null;
   }
 
-  let localApenado = await prisma.apenado.findFirst({
-    where: { name: nomeApenadoUpper }
-  });
+  // 🔐 Estratégia de busca: matricula (CPF/RJI) é ÚNICO e seguro
+  // Primeiro tenta por matricula, depois por nome (compatibilidade com dados antigos)
+  const matriculaIdentifier = dados.rji || dados.cpf || null;
+  let localApenado = null;
+
+  if (matriculaIdentifier) {
+    localApenado = await prisma.apenado.findFirst({
+      where: { matricula: matriculaIdentifier }
+    });
+  }
+
+  // Fallback: busca por nome se não encontrou por matricula (compatibilidade)
+  if (!localApenado) {
+    localApenado = await prisma.apenado.findFirst({
+      where: { name: nomeApenadoUpper }
+    });
+  }
 
   if (!localApenado) {
     localApenado = await prisma.apenado.create({
@@ -1199,9 +1213,12 @@ async function scrapeApenadoFicha(
       }
     }
     
-    if (!localApenado.matricula && (dados.rji || dados.cpf)) {
+    // 🔐 Garante que matricula está sempre definida (importante para deduplicação)
+    // Só atualiza se ainda não tem matricula ou se a nova é diferente
+    if ((dados.rji || dados.cpf) && !localApenado.matricula) {
       updateData.matricula = dados.rji || dados.cpf;
     }
+
     if (!localApenado.unidade && unidade) {
       updateData.unidade = unidade;
     }
