@@ -310,10 +310,59 @@ async function debugFaccoesAdvanced() {
       }
     }
 
-    const links = await page.$$('tbody a[href*="/selecionarOpcao"]')
+    // Procurar por links de apenados em diferentes formatos
+    const linkSelectors = [
+      'tbody a[href*="/selecionarOpcao"]',
+      'table a[href*="/apenados"]',
+      'a[href*="/apenados/"]',
+      'tbody a'
+    ]
+
+    let links = []
+    for (const selector of linkSelectors) {
+      const found = await page.$$(selector)
+      if (found.length > 0) {
+        console.log(`✅ Encontrados ${found.length} elementos com seletor: ${selector}`)
+        links = found
+        break
+      }
+    }
+
     console.log(`✅ Encontrados ${links.length} apenados na listagem`)
 
-    if (links.length === 0) throw new Error('Nenhum apenado encontrado')
+    // Salvar página da listagem para inspecionar
+    if (links.length === 0) {
+      const listageHtml = await page.content()
+      const listagePath = path.join(DEBUG_DIR, 'listagem-page.html')
+      fs.writeFileSync(listagePath, listageHtml)
+      console.log(`📄 Página da listagem salva em: ${listagePath}`)
+
+      // Tentar outras unidades
+      console.log('\n⚠️  Unidade 1 não tem apenados, tentando outras unidades...')
+
+      for (const unitId of ['2', '3', '4', '5']) {
+        console.log(`\n📍 Tentando unidade ${unitId}...`)
+        try {
+          await page.goto(`${SIPE_URL}/listagem/${unitId}/carceragem`, {
+            waitUntil: 'domcontentloaded',
+            timeout: 10_000
+          })
+
+          const linksUnit = await page.$$('tbody a[href*="/selecionarOpcao"]')
+          console.log(`  → Encontrados ${linksUnit.length} apenados`)
+
+          if (linksUnit.length > 0) {
+            links = linksUnit
+            console.log(`✅ Unidade ${unitId} tem apenados!`)
+            break
+          }
+        } catch (err) {
+          console.log(`  → Erro ao acessar unidade ${unitId}`)
+        }
+      }
+    }
+
+    if (links.length === 0) throw new Error('Nenhum apenado encontrado em nenhuma unidade')
 
     const firstLink = links[0]
     const href = await firstLink.getAttribute('href')
