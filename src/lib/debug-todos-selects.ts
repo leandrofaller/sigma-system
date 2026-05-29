@@ -75,7 +75,7 @@ async function debugTodosSelects() {
           id: select.id,
           optionsCount: options.length,
           temFaccao: hasFaccao,
-          opcoesCom Faccao: options
+          opcoesComFaccao: options
             .filter(o => {
               const text = o.textContent?.toLowerCase() || ''
               return text.includes('tcp') || 
@@ -99,7 +99,7 @@ async function debugTodosSelects() {
       if (select.temFaccao) {
         console.log(`    ✅ TEM FACÇÃO!`)
         console.log(`    Opções com facção:`)
-        for (const opt of select['opcoesCom Faccao']) {
+        for (const opt of select['opcoesComFaccao']) {
           console.log(`      - "${opt.text}" (value="${opt.value}")`)
         }
       } else {

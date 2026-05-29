@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
             }
 
             // Enviar novo log se mudou
-            if (updated.log !== ultimoLog) {
+            if ((updated.log ?? '') !== ultimoLog) {
               controller.enqueue(
                 encoder.encode(
                   `data: ${JSON.stringify({
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
                   })}\n\n`
                 )
               )
-              ultimoLog = updated.log
+              ultimoLog = updated.log ?? ''
             }
 
             // Enviar atualização de status

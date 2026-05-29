@@ -1363,11 +1363,134 @@ async function scrapeAlcunhas(
 async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]> {
   log(jobId, 'Iniciando coleta de advogados na listagem do SIPE...')
   
-  await page.goto(`${SIPE_URL}/advogados/listaradvogados`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${SIPE_URL}/advogados/listaradvogados`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 20_000,
+  })
   await page.waitForSelector('table', { timeout: 15_000 }).catch(() => {})
-  
-  // Tenta expandir o select do DataTable para -1 (exibir tudo se possível)
-  await page.selectOption('select[name*="DataTables_Table"]', '-1', { timeout: 3000 }).catch(() => {})
+
+  // ── Estratégia A: DataTables JS API ──────────────────────────
+  const advogadosViaApi = await page.evaluate(() => {
+    try {
+      const w = window as any
+      const tables: Element[] =
+        w.$.fn?.dataTable?.fnTables?.(true) ??
+        w.DataTable?.tables?.({ visible: true, hidden: false }) ??
+        []
+      if (!tables.length) return []
+      const dt = w.$(tables[0]).DataTable()
+      
+      const info = dt.page.info()
+      if (info.pages > 1) {
+        return [] // Se for server-side paginado, aborta para usar Estratégia B
+      }
+
+      const data: any[] = dt.rows().data().toArray()
+      const ids: number[] = []
+      
+      for (const row of data) {
+        const rowStr = JSON.stringify(row)
+        const m = rowStr.match(/\/advogados\/(\d+)\//) || rowStr.match(/\/advogados\/(\d+)/)
+        if (m) {
+          const parsed = parseInt(m[1])
+          if (!isNaN(parsed) && parsed > 0) {
+            ids.push(parsed)
+          }
+        }
+      }
+      return ids
+    } catch { return [] }
+  }).catch(() => [])
+
+  if (advogadosViaApi.length > 0) {
+    log(jobId, `⚡ Estratégia A (DataTables JS API): ${advogadosViaApi.length} IDs coletados`)
+    return [...new Set(advogadosViaApi)]
+  }
+
+  log(jobId, '⚠️ Estratégia A sem resultado — tentando estratégia B (fetch direto paginado)')
+
+  // ── Estratégia B: fetch direto com cookies de sessão ─────────
+  const advogadosViaFetch = await page.evaluate(async (baseUrl: string) => {
+    try {
+      const w = window as any
+      const tables: Element[] = w.$.fn?.dataTable?.fnTables?.(true) ?? []
+      if (!tables.length) return []
+      const dt = w.$(tables[0]).DataTable()
+      const settings = dt.settings()[0]
+      const rawUrl: string = settings?.ajax?.url ?? settings?.ajax ?? settings?.sAjaxSource ?? ''
+      if (!rawUrl) return []
+      const ajaxUrl = rawUrl.startsWith('http') ? rawUrl : baseUrl + rawUrl
+
+      let allRows: any[] = []
+      let start = 0
+      const length = 500
+      let draw = 1
+      let hasMore = true
+
+      while (hasMore) {
+        const params = new URLSearchParams({
+          draw: String(draw++),
+          start: String(start),
+          length: String(length),
+          'columns[0][data]': '0',
+          'order[0][column]': '0',
+          'order[0][dir]': 'asc',
+        })
+
+        const res = await fetch(ajaxUrl, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        })
+
+        if (!res.ok) break
+
+        const json = await res.json()
+        const rows: any[] = json?.data ?? json?.aaData ?? []
+        if (rows.length === 0) break
+
+        allRows = allRows.concat(rows)
+
+        const totalRecords = json.recordsFiltered ?? json.recordsTotal ?? rows.length
+        start += length
+
+        if (allRows.length >= totalRecords || rows.length < length) {
+          hasMore = false
+        }
+      }
+
+      const ids: number[] = []
+      for (const row of allRows) {
+        const rowStr = JSON.stringify(row)
+        const m = rowStr.match(/\/advogados\/(\d+)\//) || rowStr.match(/\/advogados\/(\d+)/)
+        if (m) {
+          const parsed = parseInt(m[1])
+          if (!isNaN(parsed) && parsed > 0) {
+            ids.push(parsed)
+          }
+        }
+      }
+      return ids
+    } catch { return [] }
+  }, SIPE_URL).catch(() => [])
+
+  if (advogadosViaFetch.length > 0) {
+    log(jobId, `⚡ Estratégia B (fetch direto paginado): ${advogadosViaFetch.length} IDs coletados`)
+    return [...new Set(advogadosViaFetch)]
+  }
+
+  log(jobId, '⚠️ Estratégia B sem resultado — usando estratégia C (DOM + paginação inteligente)')
+
+  // ── Estratégia C: DOM + paginação com saída inteligente ──────
+  // Força DataTables a exibir todas as linhas via API JS se possível
+  await page.evaluate(() => {
+    try {
+      const w = window as any
+      const tables: Element[] = w.$.fn?.dataTable?.fnTables?.(true) ?? []
+      if (tables.length) w.$(tables[0]).DataTable().page.len(-1).draw()
+    } catch {}
+  }).catch(() => {})
   await page.waitForTimeout(1000)
 
   const linksSet = new Set<number>()
@@ -1378,7 +1501,7 @@ async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]>
       'tbody a[href*="/detalhaclientes"]',
       (els: Element[]) =>
         (els as HTMLAnchorElement[]).map((el) => {
-          const m = el.href.match(/\/advogados\/(\d+)\//)
+          const m = el.href.match(/\/advogados\/(\d+)\//) || el.href.match(/\/advogados\/(\d+)/)
           return m ? parseInt(m[1]) : 0
         })
     )
@@ -1407,7 +1530,6 @@ async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]>
   await extractLinks()
   log(jobId, `Página 1: Coletados ${linksIds.length} advogados iniciais`)
 
-  // Loop de paginação caso a seleção de '-1' seja ignorada pelo servidor (server-side pagination)
   let pageNum = 1
   let continuar = true
   while (continuar) {

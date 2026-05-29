@@ -244,7 +244,9 @@ function ActiveJobCard({
           {sseOk ? (
             <Wifi className="w-3.5 h-3.5 text-green-500" aria-label="Stream ativo" />
           ) : (
-            <WifiOff className="w-3.5 h-3.5 text-orange-400 animate-pulse" aria-label="Modo polling ativo" title="Conexão em tempo real indisponível. Usando atualização periódica." />
+            <span title="Conexão em tempo real indisponível. Usando atualização periódica.">
+              <WifiOff className="w-3.5 h-3.5 text-orange-400 animate-pulse" aria-label="Modo polling ativo" />
+            </span>
           )}
           <button
             onClick={handleStop}
