@@ -2,12 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { queryAI, getAIProviderInfo } from '@/lib/ai';
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit';
+import { prisma } from '@/lib/db';
 
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   const info = await getAIProviderInfo();
-  return NextResponse.json(info);
+
+  // Verifica a configuração global de geolocalização
+  const geoConfig = await prisma.systemConfig.findUnique({ where: { key: 'geolocation_enabled' } });
+  const geolocationEnabled = (geoConfig?.value as any)?.enabled !== false;
+
+  // Verifica se o usuário atual é Superadmin
+  const isSuperAdmin = (session.user as any)?.role === 'SUPER_ADMIN';
+
+  return NextResponse.json({
+    ...info,
+    geolocationEnabled,
+    isSuperAdmin,
+  });
 }
 
 export async function POST(req: NextRequest) {

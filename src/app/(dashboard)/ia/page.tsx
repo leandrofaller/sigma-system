@@ -210,30 +210,50 @@ export default function IAPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Geolocation permission gate
-  useEffect(() => {
-    if (!navigator.geolocation) { setGeoStatus('denied'); return; }
+  const checkGeolocation = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setGeoStatus('denied');
+      return;
+    }
     const request = () =>
       navigator.geolocation.getCurrentPosition(
         () => setGeoStatus('granted'),
         () => setGeoStatus('denied'),
         { timeout: 10000 },
       );
-    if (!navigator.permissions) { request(); return; }
+    if (!navigator.permissions) {
+      request();
+      return;
+    }
     navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((result) => {
-      if (result.state === 'granted') { setGeoStatus('granted'); return; }
-      if (result.state === 'denied') { setGeoStatus('denied'); return; }
+      if (result.state === 'granted') {
+        setGeoStatus('granted');
+        return;
+      }
+      if (result.state === 'denied') {
+        setGeoStatus('denied');
+        return;
+      }
       request();
       result.addEventListener('change', () =>
         setGeoStatus(result.state === 'granted' ? 'granted' : 'denied'));
     }).catch(request);
-  }, []);
+  };
 
   useEffect(() => {
     fetch('/api/ai')
       .then((r) => r.json())
-      .then((d) => { if (d.provider) setModelInfo(d); })
-      .catch(() => {});
+      .then((d) => {
+        if (d.provider) setModelInfo(d);
+        if (d.isSuperAdmin || d.geolocationEnabled === false) {
+          setGeoStatus('granted');
+        } else {
+          checkGeolocation();
+        }
+      })
+      .catch(() => {
+        checkGeolocation();
+      });
   }, []);
 
   useEffect(() => {
@@ -340,11 +360,7 @@ export default function IAPage() {
           <button
             onClick={() => {
               setGeoStatus('checking');
-              navigator.geolocation.getCurrentPosition(
-                () => setGeoStatus('granted'),
-                () => setGeoStatus('denied'),
-                { timeout: 10000 },
-              );
+              checkGeolocation();
             }}
             className="flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
           >
