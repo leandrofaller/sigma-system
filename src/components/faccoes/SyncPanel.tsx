@@ -78,34 +78,140 @@ function ActiveJobCard({
 }) {
   const [live, setLive] = useState<LiveProgress | null>(null)
   const [sseOk, setSseOk] = useState(true)
+  const [usingPolling, setUsingPolling] = useState(false)
   const esRef = useRef<EventSource | null>(null)
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    const es = new EventSource(`/api/sipe/sync/stream?jobId=${jobId}`)
-    esRef.current = es
-    setSseOk(true)
+    let active = true
+    let es: EventSource | null = null
 
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data) as LiveProgress
-        setLive(data)
-        if (data.status !== 'RUNNING' && data.status !== 'PENDING') {
-          es.close()
-          onFinished()
-          if (data.status === 'COMPLETED') toast.success('Sincronização concluída!')
-          if (data.status === 'INTERRUPTED') toast.warning('Sincronização interrompida — pode ser retomada.')
-          if (data.status === 'FAILED') toast.error('Sincronização falhou. Verifique o log.')
-        }
-      } catch { /* ignore parse errors */ }
-    }
-
-    es.onerror = () => {
+    const startPollingFallback = () => {
+      if (!active || pollIntervalRef.current) return
+      setUsingPolling(true)
       setSseOk(false)
-      // SSE errors are often transient; EventSource auto-reconnects
+      
+      if (esRef.current) {
+        esRef.current.close()
+      }
+
+      const poll = async () => {
+        try {
+          const res = await fetch('/api/sipe/sync')
+          if (!res.ok || !active) return
+          const jobsList = await res.json()
+          const currentJob = jobsList.find((j: any) => j.id === jobId)
+          
+          if (currentJob && active) {
+            setLive({
+              jobId: currentJob.id,
+              status: currentJob.status,
+              fase: currentJob.fase || 'Processando...',
+              total: currentJob.total || 0,
+              processado: currentJob.processado || 0,
+              erros: currentJob.erros || 0,
+              ultimoLog: currentJob.log ? currentJob.log.split('\n').filter(Boolean).pop() || '' : '',
+              pct: currentJob.total ? Math.round((currentJob.processado / currentJob.total) * 100) : 0
+            })
+
+            if (currentJob.status !== 'RUNNING' && currentJob.status !== 'PENDING') {
+              if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+              onFinished()
+              if (currentJob.status === 'COMPLETED') toast.success('Sincronização concluída!')
+              if (currentJob.status === 'INTERRUPTED') toast.warning('Sincronização interrompida.')
+              if (currentJob.status === 'FAILED') toast.error('Sincronização falhou. Verifique o log.')
+            }
+          }
+        } catch (err) {
+          console.error('Erro no fallback de polling:', err)
+        }
+      }
+
+      poll()
+      pollIntervalRef.current = setInterval(poll, 3000)
     }
 
-    return () => { es.close() }
-  }, [jobId, onFinished])
+    try {
+      es = new EventSource(`/api/sipe/sync/stream?jobId=${jobId}`)
+      esRef.current = es
+      setSseOk(true)
+
+      es.onmessage = (e) => {
+        if (!active) return
+        try {
+          const raw = JSON.parse(e.data)
+          
+          setLive((prev) => {
+            if (raw.type === 'job-status') {
+              return {
+                jobId: raw.jobId,
+                status: raw.status,
+                fase: raw.fase || '',
+                total: raw.total || 0,
+                processado: raw.processado || 0,
+                erros: raw.erros || 0,
+                ultimoLog: raw.log ? raw.log.split('\n').filter(Boolean).pop() || '' : '',
+                pct: raw.total ? Math.round((raw.processado / raw.total) * 100) : 0
+              }
+            }
+            if (raw.type === 'progress') {
+              const status = raw.status
+              const processado = raw.processado || 0
+              const erros = raw.erros || 0
+              const total = prev?.total || 0
+              
+              if (status !== 'RUNNING' && status !== 'PENDING') {
+                setTimeout(() => {
+                  if (esRef.current) esRef.current.close()
+                  onFinished()
+                  if (status === 'COMPLETED') toast.success('Sincronização concluída!')
+                  if (status === 'INTERRUPTED') toast.warning('Sincronização interrompida.')
+                  if (status === 'FAILED') toast.error('Sincronização falhou. Verifique o log.')
+                }, 100)
+              }
+
+              return {
+                ...prev,
+                status,
+                processado,
+                erros,
+                pct: total ? Math.round((processado / total) * 100) : 0
+              } as LiveProgress
+            }
+            if (raw.type === 'log') {
+              const logLines = raw.message || ''
+              return {
+                ...prev,
+                ultimoLog: logLines.split('\n').filter(Boolean).pop() || ''
+              } as LiveProgress
+            }
+            return prev
+          })
+        } catch { /* ignore parse errors */ }
+      }
+
+      es.onerror = () => {
+        if (!active) return
+        startPollingFallback()
+      }
+    } catch (err) {
+      console.error('Erro ao instanciar EventSource:', err)
+      startPollingFallback()
+    }
+
+    const fallbackTimeout = setTimeout(() => {
+      if (active && !live && !usingPolling) {
+        startPollingFallback()
+      }
+    }, 4000)
+
+    return () => {
+      active = false
+      if (es) es.close()
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+      clearTimeout(fallbackTimeout)
+    }
+  }, [jobId, onFinished, live, usingPolling])
 
   const handleStop = async () => {
     await fetch('/api/sipe/sync/stop', { method: 'POST' }).catch(() => {})
@@ -116,7 +222,9 @@ function ActiveJobCard({
     return (
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-center gap-3">
         <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-        <span className="text-sm text-blue-700 dark:text-blue-300">Conectando ao stream de progresso...</span>
+        <span className="text-sm text-blue-700 dark:text-blue-300">
+          {usingPolling ? 'Conectando ao servidor (polling)...' : 'Conectando ao stream de progresso...'}
+        </span>
       </div>
     )
   }
@@ -133,10 +241,11 @@ function ActiveJobCard({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {sseOk
-            ? <Wifi className="w-3.5 h-3.5 text-green-500" aria-label="Stream ativo" />
-            : <WifiOff className="w-3.5 h-3.5 text-red-400 animate-pulse" aria-label="Reconectando..." />
-          }
+          {sseOk ? (
+            <Wifi className="w-3.5 h-3.5 text-green-500" aria-label="Stream ativo" />
+          ) : (
+            <WifiOff className="w-3.5 h-3.5 text-orange-400 animate-pulse" aria-label="Modo polling ativo" title="Conexão em tempo real indisponível. Usando atualização periódica." />
+          )}
           <button
             onClick={handleStop}
             className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
