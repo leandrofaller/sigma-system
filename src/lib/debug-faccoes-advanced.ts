@@ -196,12 +196,12 @@ async function debugFaccoesAdvanced() {
     console.log('\n📍 FASE 2: Procurando apenado...')
 
     // Tentar descobrir qual unidade usar
-    const currentUrl = page.url()
+    const urlAtual = page.url()
     let listageUrl = `${SIPE_URL}/listagem/3/carceragem`
 
     // Se estamos em uma listagem diferente, usar a URL atual
-    if (currentUrl.includes('/listagem/')) {
-      listageUrl = currentUrl.split('?')[0] // Remove query params
+    if (urlAtual.includes('/listagem/')) {
+      listageUrl = urlAtual.split('?')[0] // Remove query params
       console.log(`📄 Usando URL atual: ${listageUrl}`)
     }
 
