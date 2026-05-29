@@ -91,7 +91,10 @@ async function main() {
         })
 
         if (faccaoIdVal && faccaoIdVal !== '0' && faccaoIdVal !== '') {
-          const sipeFacId = parseInt(faccaoIdVal)
+          let sipeFacId = parseInt(faccaoIdVal)
+          if (sipeFacId === 8) {
+            sipeFacId = 2 // Mescla SIPE ID 8 (PCC) no SIPE ID 2 (Primeiro Comando da Capital)
+          }
           const localFaccaoId = faccoesMap.get(sipeFacId)
 
           if (localFaccaoId) {
