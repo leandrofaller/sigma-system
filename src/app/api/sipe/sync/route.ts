@@ -143,27 +143,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    scrapeUnidadesPrisionais(job.id)
-      .then(async () => {
-        console.log(`[SYNC] ✅ scrapeUnidadesPrisionais completado com sucesso`)
-        await prisma.sipeSyncJob.update({
-          where: { id: job.id },
-          data: { status: 'COMPLETED', finalizadoEm: new Date() },
-        })
-      })
-      .catch(async (err) => {
-        const errMsg = err?.message ?? String(err)
-        console.log(`[SYNC] ❌ scrapeUnidadesPrisionais falhou: ${errMsg}`)
-        await prisma.sipeSyncJob.update({
-          where: { id: job.id },
-          data: {
-            status: 'FAILED',
-            finalizadoEm: new Date(),
-            log: errMsg,
-          },
-        })
-      })
-
+    startSipeSync(job.id, 'ALL')
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
