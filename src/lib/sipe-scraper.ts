@@ -1647,80 +1647,94 @@ export async function scrapeFaccoes(): Promise<void> {
 
     console.log('[FACCOES] 🔍 Iniciando scrape de facções...')
 
-    // Tentamos com os primeiros 5 apenados da listagem para evitar casos em que o perfil
-    // de um apenado específico não exiba ou não possua acesso ao dropdown de facção.
-    for (let i = 0; i < 5; i++) {
+    // 1. Acessa /apenados/index para extrair IDs dos apenados listados na unidade
+    console.log('[FACCOES] 📄 Acessando /apenados/index...')
+    await page.goto(`${SIPE_URL}/apenados/index`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('tbody', { timeout: 15_000 }).catch(() => {})
+
+    const links = await page.$$('tbody a[href*="/selecionarOpcao"]')
+    const apenadoIds: number[] = []
+
+    for (const link of links) {
+      const href = await link.getAttribute('href')
+      if (!href) continue
+      const m = href.match(/\/apenados\/(\d+)/)
+      if (m) {
+        const parsedId = parseInt(m[1])
+        if (!isNaN(parsedId) && parsedId > 0) {
+          apenadoIds.push(parsedId)
+        }
+      }
+    }
+
+    console.log(`[FACCOES] 🔗 Encontrados ${apenadoIds.length} apenados na listagem ativa do SIPE`)
+
+    // 2. Fallback: Ler também apenados da base de dados local se a listagem na página estiver muito pequena
+    if (apenadoIds.length < 10) {
+      console.log(`[FACCOES] ⚠️ Listagem na página pequena (${apenadoIds.length} apenados). Carregando fallback do banco local...`)
+      const apenadosBanco = await prisma.sipeApenadoImportado.findMany({
+        where: { sipeId: { gt: 0 } },
+        select: { sipeId: true },
+        orderBy: { sipeId: 'desc' },
+        take: 50
+      })
+      for (const ab of apenadosBanco) {
+        if (!apenadoIds.includes(ab.sipeId)) {
+          apenadoIds.push(ab.sipeId)
+        }
+      }
+      console.log(`[FACCOES] 📊 Lista final de apenados para varredura: ${apenadoIds.length}`)
+    }
+
+    // 3. Varredura: Procuramos por um apenado com facção (faccao_id > 0 na rota /editar)
+    for (let i = 0; i < apenadoIds.length; i++) {
+      const apenadoId = apenadoIds[i]
+      const progress = `[${i + 1}/${apenadoIds.length}]`
+      
       try {
-        console.log(`[FACCOES] 📄 Tentativa ${i + 1}/5 - Acessando /apenados/index...`)
-        await page.goto(`${SIPE_URL}/apenados/index`, { waitUntil: 'domcontentloaded' })
-        await page.waitForSelector('tbody', { timeout: 15_000 }).catch(() => {})
-        
-        const links = await page.$$('tbody a[href*="/selecionarOpcao"]')
-        console.log(`[FACCOES] 🔗 Encontrados ${links.length} links de apenados`)
+        console.log(`[FACCOES] ${progress} Verificando perfil /editar do apenado SIPE ID #${apenadoId}...`)
+        await page.goto(`${SIPE_URL}/apenados/${apenadoId}/editar`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
 
-        if (links.length <= i) {
-          console.log(`[FACCOES] ⚠️ Não há link suficiente (precisa de ${i + 1}, tem ${links.length})`)
-          break;
-        }
+        const faccaoIdVal = await page.evaluate(() => {
+          const el = document.querySelector('[name="faccao_id"]') as HTMLInputElement | null
+          return el ? el.value : null
+        })
 
-        const link = links[i];
-        const href = await link.getAttribute('href');
-        if (!href) {
-          console.log(`[FACCOES] ❌ Link ${i} não tem href`)
-          continue;
-        }
+        console.log(`[FACCOES]   -> faccao_id: "${faccaoIdVal}"`)
 
-        const m = href.match(/\/apenados\/(\d+)\//);
-        if (!m) {
-          console.log(`[FACCOES] ❌ Não conseguiu extrair ID do href: ${href}`)
-          continue;
-        }
-
-        const apenadoId = parseInt(m[1]);
-        console.log(`[FACCOES] ✓ Apenado ID extraído: ${apenadoId}`);
-
-        // Clica no link de seleção para registrar o apenado ativo na sessão do servidor do SIPE
-        try {
-          console.log(`[FACCOES] 🖱️ Clicando no link do apenado ${apenadoId}...`)
-          await link.click();
-          console.log(`[FACCOES] ⏳ Aguardando redirecionamento...`)
-          await page.waitForTimeout(1500); // Aguarda o redirecionamento/seleção
-          console.log(`[FACCOES] ✓ Clique realizado, continuando...`)
-        } catch (err) {
-          console.log(`[FACCOES] ⚠️ Erro ao clicar no link, continuando mesmo assim`)
-          // Fallback silencioso: prossegue mesmo se o clique falhar
-        }
-
-        // Tentativa 1: Página dedicada de facção
-        try {
-          console.log(`[FACCOES] 🔄 Tentativa 1: Acessando /apenados/${apenadoId}/faccao...`)
+        if (faccaoIdVal && faccaoIdVal !== '0' && faccaoIdVal !== '') {
+          console.log(`[FACCOES] 🌟 Apenado SIPE ID #${apenadoId} possui facção vinculada! Acessando página /faccao...`)
+          
           await page.goto(`${SIPE_URL}/apenados/${apenadoId}/faccao`, { waitUntil: 'load', timeout: 20_000 })
+          
+          const htmlContent = await page.content()
+          if (htmlContent.includes("Trying to get property")) {
+            console.log(`[FACCOES] ❌ Página /faccao deu erro PHP para o apenado #${apenadoId}, pulando...`)
+            continue
+          }
 
           // Tenta múltiplos seletores para o select de facção
-          // ⚠️ IMPORTANTE: Evitar select:nth-of-type(2) pois pode ser gênero!
           let selectLocator
           const selectors = [
             'select[name="faccao_id"]',
             'select[name*="faccao"]',
             'select[id*="faccao"]',
-            'select'  // último recurso: qualquer select
+            'select'
           ]
 
           for (const sel of selectors) {
             try {
               const elem = page.locator(sel).first()
-              await elem.waitFor({ state: 'attached', timeout: 8_000 })
+              await elem.waitFor({ state: 'attached', timeout: 6_000 })
 
-              // 🔍 Verificar se é realmente de facção (não gênero/sexo)
+              // Verificar se é realmente de facção (não gênero)
               const testOptions = await elem.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
                 opts
                   .filter((o) => o.value && o.value !== '0' && o.value !== '')
                   .map((o) => o.textContent?.trim() ?? '')
               )
 
-              console.log(`[FACCOES] 🔎 Seletor "${sel}" encontrado com opções: ${testOptions.slice(0, 3).join(', ')}`)
-
-              // ⚠️ Descartar select de gênero
+              // Descartar select de gênero
               const hasGender = testOptions.some(opt =>
                 opt.toLowerCase().includes('masculino') ||
                 opt.toLowerCase().includes('feminino') ||
@@ -1728,27 +1742,20 @@ export async function scrapeFaccoes(): Promise<void> {
               )
 
               if (hasGender) {
-                console.log(`[FACCOES] ⚠️ "${sel}" é select de gênero (tem Masculino/Feminino), descartando...`)
                 continue // Pula este seletor
               }
 
-              // ✅ Este é o select certo de facção
               selectLocator = elem
-              console.log(`[FACCOES] ✅ Select de FACÇÃO encontrado com seletor: ${sel}`)
               break
-            } catch (err) {
-              console.log(`[FACCOES] ⚠️ Seletor "${sel}" falhou: ${(err as any)?.message?.substring(0, 50)}`)
-              // tenta próximo seletor
+            } catch {
+              // tenta próximo
             }
           }
 
           if (!selectLocator) {
-            throw new Error('Nenhum select de facção encontrado (todos rejeitados ou não encontrados)')
+            console.log(`[FACCOES] ⚠️ Nenhum select de facção válido localizado na página /faccao de #${apenadoId}`)
+            continue
           }
-
-          await selectLocator.waitFor({ state: 'attached', timeout: 8_000 })
-
-          console.log(`[FACCOES] ✓ Select de facção confirmado`)
 
           options = await selectLocator.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
             opts
@@ -1756,128 +1763,35 @@ export async function scrapeFaccoes(): Promise<void> {
               .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
           )
 
-          console.log(`[FACCOES] 📊 Facções encontradas: ${options.length}`)
-          if (options.length > 0) {
-            console.log(`[FACCOES] 📋 Primeiras: ${options.slice(0, 3).map(o => o.text).join(', ')}`)
-          }
-
-          // ✅ Validação final: não deve ter gênero
+          // Validação final de gênero
           const hasGenderInFinal = options.some(opt =>
             opt.text.toLowerCase().includes('masculino') ||
             opt.text.toLowerCase().includes('feminino')
           )
 
           if (hasGenderInFinal) {
-            throw new Error('Select contém gênero (Masculino/Feminino), não é facção!')
+            console.log(`[FACCOES] ❌ Select extraído de #${apenadoId} continha gênero, descartado.`)
+            continue
           }
 
           if (options.length > 0) {
-            console.log(`[FACCOES] ✅ Sucesso na tentativa 1!`)
-            extraido = true;
-            break; // Sucesso: sai do loop de apenados
-          }
-        } catch (err) {
-          console.log(`[FACCOES] ❌ Erro na tentativa 1: ${(err as any)?.message?.substring(0, 100)}`)
-          erroOriginal = err;
-        }
-
-        // Tentativa 2: Página de edição cadastral (Fallback)
-        if (!extraido) {
-          try {
-            console.log(`[FACCOES] 🔄 Tentativa 2: Acessando /apenados/${apenadoId}/editar...`)
-            await page.goto(`${SIPE_URL}/apenados/${apenadoId}/editar`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
-
-            // Tenta múltiplos seletores para o select de facção
-            // ⚠️ IMPORTANTE: Evitar select:nth-of-type pois pode ser gênero!
-            let selectLocator
-            const selectors = [
-              'select[name="faccao_id"]',
-              'select[name*="faccao"]',
-              'select[id*="faccao"]',
-              'select'  // último recurso
-            ]
-
-            for (const sel of selectors) {
-              try {
-                const elem = page.locator(sel).first()
-                await elem.waitFor({ state: 'attached', timeout: 8_000 })
-
-                // 🔍 Verificar se é realmente de facção (não gênero/sexo)
-                const testOptions = await elem.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
-                  opts
-                    .filter((o) => o.value && o.value !== '0' && o.value !== '')
-                    .map((o) => o.textContent?.trim() ?? '')
-                )
-
-                console.log(`[FACCOES] 🔎 Seletor "${sel}" encontrado com opções: ${testOptions.slice(0, 3).join(', ')}`)
-
-                // ⚠️ Descartar select de gênero
-                const hasGender = testOptions.some(opt =>
-                  opt.toLowerCase().includes('masculino') ||
-                  opt.toLowerCase().includes('feminino') ||
-                  opt.toLowerCase().includes('não informado')
-                )
-
-                if (hasGender) {
-                  console.log(`[FACCOES] ⚠️ "${sel}" é select de gênero, descartando...`)
-                  continue // Pula este seletor
-                }
-
-                // ✅ Este é o select certo de facção
-                selectLocator = elem
-                console.log(`[FACCOES] ✅ Select de FACÇÃO encontrado na página de edição com seletor: ${sel}`)
-                break
-              } catch (err) {
-                console.log(`[FACCOES] ⚠️ Seletor "${sel}" falhou na página de edição`)
-                // tenta próximo seletor
-              }
-            }
-
-            if (!selectLocator) {
-              throw new Error('Nenhum select de facção encontrado na página de edição')
-            }
-
-            await selectLocator.waitFor({ state: 'attached', timeout: 8_000 })
-
-            options = await selectLocator.locator('option').evaluateAll((opts: HTMLOptionElement[]) =>
-              opts
-                .filter((o) => o.value && o.value !== '0' && o.value !== '')
-                .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
-            )
-
             console.log(`[FACCOES] 📊 Facções encontradas: ${options.length}`)
-            if (options.length > 0) {
-              console.log(`[FACCOES] 📋 Primeiras: ${options.slice(0, 3).map(o => o.text).join(', ')}`)
-            }
-
-            // ✅ Validação final: não deve ter gênero
-            const hasGenderInFinal = options.some(opt =>
-              opt.text.toLowerCase().includes('masculino') ||
-              opt.text.toLowerCase().includes('feminino')
-            )
-
-            if (hasGenderInFinal) {
-              throw new Error('Select contém gênero, não é facção!')
-            }
-
-            if (options.length > 0) {
-              console.log(`[FACCOES] ✅ Sucesso na tentativa 2!`)
-              extraido = true;
-              break; // Sucesso: sai do loop de apenados
-            }
-          } catch (err) {
-            console.log(`[FACCOES] ⚠️ Erro na tentativa 2, continuando...`)
-            // Ignora erro e tenta o próximo apenado
+            console.log(`[FACCOES] 📋 Lista: ${options.map(o => o.text).join(', ')}`)
+            extraido = true
+            break // Sucesso total! Sai do loop de varredura.
           }
         }
       } catch (err) {
-        // Se houver algum erro grave no loop de indexação, tenta o próximo
+        console.log(`[FACCOES] ⚠️ Erro ao varrer apenado #${apenadoId}: ${(err as any)?.message || err}`)
+        erroOriginal = err
       }
+
+      await page.waitForTimeout(300)
     }
 
     if (!extraido) {
-      const errMsg = `Não foi possível carregar a lista de facções em nenhum dos primeiros 5 apenados da lista. ` +
-        `Erro original na página /faccao do último apenado testado: ${(erroOriginal as any)?.message || erroOriginal}`
+      const errMsg = `Não foi possível carregar a lista de facções em nenhum dos apenados testados. ` +
+        `Erro original: ${(erroOriginal as any)?.message || erroOriginal}`
       console.log(`[FACCOES] ❌ ${errMsg}`)
       throw new Error(errMsg)
     }

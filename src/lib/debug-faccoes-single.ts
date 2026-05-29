@@ -104,9 +104,9 @@ async function debugFaccoesSingle() {
     // ACESSAR PÁGINA DE EDIÇÃO DO APENADO
     // ═══════════════════════════════════════════════════════════════════
 
-    console.log(`📍 Acessando /apenados/${TEST_APENADO_ID}/editar...`)
-    await page.goto(`${SIPE_URL}/apenados/${TEST_APENADO_ID}/editar`, {
-      waitUntil: 'domcontentloaded',
+    console.log(`📍 Acessando /apenados/${TEST_APENADO_ID}/faccao...`)
+    await page.goto(`${SIPE_URL}/apenados/${TEST_APENADO_ID}/faccao`, {
+      waitUntil: 'load',
       timeout: 15_000
     })
     console.log('✅ Página carregada\n')
