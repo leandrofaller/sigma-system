@@ -199,37 +199,17 @@ async function debugFaccoesAdvanced() {
     if (selectRolePage) {
       console.log('📍 Página de seleção de role detectada')
 
-      // Procurar por opções de role
-      const roles = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll('button, [role="option"], .role-option, [data-role]'))
-          .filter(el => el.textContent?.trim())
-          .map(el => ({
-            text: el.textContent?.trim(),
-            element: el.tagName
-          }))
-      })
-
-      console.log('📋 Roles disponíveis:')
-      for (const role of roles) {
-        console.log(`   - ${role.text} (${role.element})`)
-      }
-
-      // Tentar clicar em "Master"
-      const masterBtn = page.locator('button:has-text("Master"), [role="option"]:has-text("Master"), .role-option:has-text("Master")')
-      if (await masterBtn.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
-        console.log('🖱️ Clicando em Master...')
-        await masterBtn.first().click()
+      // Clicar em ENTRAR (Master já está selecionado por padrão)
+      const entrarBtn = page.locator('button:has-text("ENTRAR")')
+      if (await entrarBtn.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
+        console.log('🖱️ Clicando em ENTRAR (Master selecionado)...')
+        await entrarBtn.first().click()
         await page.waitForTimeout(2000)
-        console.log('✅ Master selecionado')
+        console.log('✅ Autenticação completa')
 
-        // Verificar se há um botão de confirmação
-        const confirmarBtn = page.locator('button:has-text("ENTRAR"), button:has-text("Confirmar"), button:has-text("OK")')
-        if (await confirmarBtn.first().isVisible({ timeout: 3_000 }).catch(() => false)) {
-          console.log('🖱️ Clicando em botão de confirmação...')
-          await confirmarBtn.first().click()
-          await page.waitForTimeout(2000)
-          console.log('✅ Confirmado')
-        }
+        // Verificar URL após entrar
+        const urlAposMaster = page.url()
+        console.log(`📍 URL após Master: ${urlAposMaster}`)
       }
     }
 
@@ -249,19 +229,37 @@ async function debugFaccoesAdvanced() {
       console.log(`📄 Usando URL atual: ${listageUrl}`)
     }
 
-    // Tentar acessar listagem
-    console.log(`📄 Acessando listagem de apenados...`)
-    try {
-      await page.goto(listageUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 15_000
-      })
-      console.log('✅ Página de listagem carregada')
-    } catch (err) {
-      console.log(`⚠️  Erro ao acessar ${listageUrl}`)
-      console.log('Tentando home como fallback...')
+    // Aguardar navegação automática ou tentar home
+    console.log(`📄 Aguardando redirecionamento automático...`)
+    await page.waitForTimeout(2000)
+
+    const urlAtualFinal = page.url()
+    console.log(`📍 URL atual: ${urlAtualFinal}`)
+
+    // Se ainda estamos em /selectRole, algo deu errado
+    if (urlAtualFinal.includes('/selectRole')) {
+      console.log('⚠️  Ainda em /selectRole, tentando navegar...')
       await page.goto(`${SIPE_URL}/home`, { waitUntil: 'domcontentloaded', timeout: 10_000 })
-      console.log('Redirecionando para home...')
+    }
+
+    // Tentar acessar a listagem
+    if (!urlAtualFinal.includes('/listagem/')) {
+      console.log(`📄 Acessando listagem de apenados...`)
+      try {
+        await page.goto(`${SIPE_URL}/listagem/1/carceragem`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 15_000
+        })
+        console.log('✅ Página de listagem carregada')
+      } catch (err) {
+        console.log(`⚠️  Erro ao acessar listagem`)
+        console.log('Salvando página de debug...')
+        const debugHtml = await page.content()
+        const debugPath = path.join(DEBUG_DIR, 'debug-after-master.html')
+        fs.writeFileSync(debugPath, debugHtml)
+        console.log(`📄 Página salva em: ${debugPath}`)
+        throw err
+      }
     }
 
     const links = await page.$$('tbody a[href*="/selecionarOpcao"]')
