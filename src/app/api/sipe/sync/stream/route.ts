@@ -1,97 +1,131 @@
-/**
- * SSE endpoint for real-time SIPE sync progress.
- * Streams in-memory state every 600ms; falls back to DB if no active job in memory.
- * Client closes the connection when status is COMPLETED/FAILED/INTERRUPTED.
- */
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { getSipeState } from '@/lib/sipe-scraper'
 
-export const dynamic = 'force-dynamic'
-
+/**
+ * GET /api/sipe/sync/stream?jobId=...
+ *
+ * Endpoint SSE (Server-Sent Events) para streaming de logs de sincronização
+ * Mostra o status em tempo real
+ */
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
-    return new Response('Não autorizado', { status: 401 })
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
   if ((session.user as any).role !== 'SUPER_ADMIN') {
-    return new Response('Acesso restrito ao Superadmin', { status: 403 })
+    return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
   }
 
-  const { searchParams } = new URL(req.url)
-  const jobId = searchParams.get('jobId')
+  const jobId = req.nextUrl.searchParams.get('jobId')
+  if (!jobId) {
+    return NextResponse.json({ error: 'jobId é obrigatório' }, { status: 400 })
+  }
+
+  // Verificar se o job existe
+  const job = await prisma.sipeSyncJob.findUnique({
+    where: { id: jobId },
+  })
+
+  if (!job) {
+    return NextResponse.json({ error: 'Job não encontrado' }, { status: 404 })
+  }
 
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
     async start(controller) {
-      let closed = false
-
-      const send = (payload: object) => {
-        if (closed) return
-        try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)
+      try {
+        // Enviar job inicial
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              type: 'job-status',
+              jobId: job.id,
+              status: job.status,
+              tipo: job.tipo,
+              unidade: job.unidadeNome,
+              total: job.total,
+              processado: job.processado,
+              erros: job.erros,
+              fase: job.fase,
+              log: job.log,
+            })}\n\n`
           )
-        } catch {
-          closed = true
-        }
-      }
+        )
 
-      // Keep-alive comment every 25s to prevent proxy timeouts
-      const keepAlive = setInterval(() => {
-        if (closed) { clearInterval(keepAlive); return }
-        try { controller.enqueue(encoder.encode(': keep-alive\n\n')) } catch { closed = true }
-      }, 25_000)
+        let ultimoLog = job.log || ''
+        let ultimoStatus = job.status
 
-      const poll = async () => {
-        if (closed) return
+        const pollInterval = setInterval(async () => {
+          try {
+            const updated = await prisma.sipeSyncJob.findUnique({
+              where: { id: jobId },
+            })
 
-        // Prefer in-memory state (zero DB overhead)
-        const mem = getSipeState()
-        if (mem && (!jobId || mem.jobId === jobId)) {
-          send(mem)
-          if (mem.status !== 'RUNNING') {
-            clearInterval(keepAlive)
-            try { controller.close() } catch { /* already closed */ }
-            closed = true
-            return
-          }
-        } else if (jobId) {
-          // Fall back to DB for historical / non-active jobs
-          const job = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
-          if (job) {
-            send(job)
-            if (job.status !== 'RUNNING' && job.status !== 'PENDING') {
-              clearInterval(keepAlive)
-              try { controller.close() } catch { /* already closed */ }
-              closed = true
+            if (!updated) {
+              clearInterval(pollInterval)
+              controller.close()
               return
             }
+
+            // Enviar novo log se mudou
+            if (updated.log !== ultimoLog) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: 'log',
+                    message: updated.log,
+                  })}\n\n`
+                )
+              )
+              ultimoLog = updated.log
+            }
+
+            // Enviar atualização de status
+            if (updated.status !== ultimoStatus) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: 'progress',
+                    status: updated.status,
+                    processado: updated.processado,
+                    erros: updated.erros,
+                  })}\n\n`
+                )
+              )
+              ultimoStatus = updated.status
+            }
+
+            // Se completo, fechar stream
+            if (
+              updated.status === 'COMPLETED' ||
+              updated.status === 'FAILED' ||
+              updated.status === 'INTERRUPTED'
+            ) {
+              controller.close()
+            }
+          } catch (err) {
+            clearInterval(pollInterval)
+            controller.close()
           }
-        }
+        }, 500)
 
-        if (!closed) setTimeout(poll, 600)
+        setTimeout(() => {
+          clearInterval(pollInterval)
+          controller.close()
+        }, 30 * 60 * 1000)
+      } catch (err) {
+        controller.close()
       }
-
-      await poll()
-
-      // Handle client disconnect
-      req.signal.addEventListener('abort', () => {
-        closed = true
-        clearInterval(keepAlive)
-        try { controller.close() } catch { /* already closed */ }
-      })
     },
   })
 
-  return new Response(stream, {
+  return new NextResponse(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no', // disable Nginx buffering
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
     },
   })
 }
