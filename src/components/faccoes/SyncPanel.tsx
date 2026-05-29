@@ -499,6 +499,15 @@ export function SyncPanel() {
             <Play className="w-4 h-4" />
             Importar Facções do SIPE
           </button>
+
+          <button
+            onClick={() => startSync('UNIDADES')}
+            disabled={isActive || loading}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Play className="w-4 h-4" />
+            Sincronizar Unidades Prisionais
+          </button>
         </div>
       </div>
 

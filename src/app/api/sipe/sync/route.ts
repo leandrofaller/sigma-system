@@ -5,6 +5,7 @@ import {
   startSipeSync,
   scrapeFaccoes,
   detectAndMarkCrashedJobs,
+  scrapeUnidadesPrisionais,
 } from '@/lib/sipe-scraper'
 
 const UNIDADES: Record<string, string> = {
@@ -117,6 +118,43 @@ export async function POST(req: NextRequest) {
         const errMsg = String(err)
         console.log(`[SYNC] ❌ scrapeFaccoes falhou: ${errMsg}`)
         return prisma.sipeSyncJob.update({
+          where: { id: job.id },
+          data: {
+            status: 'FAILED',
+            finalizadoEm: new Date(),
+            log: errMsg,
+          },
+        })
+      })
+
+    return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
+  }
+
+  // ── Unidades-only sync ──
+  if (tipo === 'UNIDADES') {
+    const job = await prisma.sipeSyncJob.create({
+      data: {
+        tipo: 'UNIDADES',
+        unidade: 'ALL',
+        unidadeNome: 'TODAS AS UNIDADES',
+        status: 'RUNNING',
+        iniciadoEm: new Date(),
+        criadoPor: session.user.id,
+      },
+    })
+
+    scrapeUnidadesPrisionais(job.id)
+      .then(async () => {
+        console.log(`[SYNC] ✅ scrapeUnidadesPrisionais completado com sucesso`)
+        await prisma.sipeSyncJob.update({
+          where: { id: job.id },
+          data: { status: 'COMPLETED', finalizadoEm: new Date() },
+        })
+      })
+      .catch(async (err) => {
+        const errMsg = err?.message ?? String(err)
+        console.log(`[SYNC] ❌ scrapeUnidadesPrisionais falhou: ${errMsg}`)
+        await prisma.sipeSyncJob.update({
           where: { id: job.id },
           data: {
             status: 'FAILED',

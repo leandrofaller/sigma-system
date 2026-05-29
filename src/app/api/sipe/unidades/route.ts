@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { chromium } from 'playwright'
-import { existsSync } from 'fs'
 import { prisma } from '@/lib/db'
+import { scrapeUnidadesPrisionais } from '@/lib/sipe-scraper'
 
 // ── Cache (globalThis sobrevive ao isolamento de módulos do Next.js) ──────────
 declare global {
@@ -27,20 +26,6 @@ const UNIDADES_FALLBACK: Array<{ id: string; nome: string }> = [
   { id: '12', nome: 'CRVG - Centro de Ressocialização Vale do Guaporé' },
   { id: '25', nome: 'Centro de Ressocialização Jonas Ferreti' },
 ]
-
-function findSystemChromium(): string | undefined {
-  if (process.env.PLAYWRIGHT_EXECUTABLE_PATH) return process.env.PLAYWRIGHT_EXECUTABLE_PATH
-
-  const candidates = [
-    '/usr/bin/chromium-browser',
-    '/usr/bin/chromium',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/google-chrome',
-    '/snap/bin/chromium',
-    '/usr/local/bin/chromium',
-  ]
-  return candidates.find(existsSync)
-}
 
 async function getCachedUnitsFromDb(): Promise<Array<{ id: string; nome: string }> | null> {
   try {
@@ -78,78 +63,8 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json({ unidades: UNIDADES_FALLBACK, fromSipe: false, fromCache: false })
   }
 
-  let browser = null
   try {
-    const executablePath = findSystemChromium()
-    browser = await chromium.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-extensions',
-      ],
-      ...(executablePath ? { executablePath } : {}),
-    })
-
-    const page = await browser.newPage()
-
-    // Login
-    await page.goto(`${SIPE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-    await page.waitForSelector('input[type="password"]', { timeout: 30_000 })
-
-    const cpfInput =
-      (await page.$('input[placeholder*="CPF"]')) ??
-      (await page.$('input[name*="cpf"], input[name*="login"], input[type="text"]'))
-    if (!cpfInput) throw new Error('Campo CPF não encontrado na página de login')
-
-    await cpfInput.fill(cpf)
-    await page.fill('input[type="password"]', senha)
-
-    const submitBtn =
-      (await page.$('button[type="submit"]')) ??
-      (await page.$('input[type="submit"]')) ??
-      (await page.$('button'))
-    if (!submitBtn) throw new Error('Botão de submit não encontrado')
-    await submitBtn.click()
-
-    // Aguarda página de seleção de perfil/unidade
-    await page.waitForURL('**/selectRole**', { timeout: 30_000 })
-    
-    // Espera o select estar anexado (Chosen plugin o oculta na tela, então 'visible' causaria timeout)
-    await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 15_000 })
-
-    // Lê todas as opções do segundo select (dropdown de unidade)
-    const unidades = await page.evaluate(() => {
-      const selects = document.querySelectorAll('select')
-      if (selects.length < 2) return [] as Array<{ id: string; nome: string }>
-      const unitSelect = selects[1] as HTMLSelectElement
-      return Array.from(unitSelect.options)
-        .filter((o) => o.value && o.value !== '' && o.value !== '0')
-        .map((o) => ({ id: o.value, nome: (o.textContent ?? '').trim() }))
-    })
-
-    if (unidades.length === 0) {
-      throw new Error('Nenhuma unidade encontrada — estrutura da página pode ter mudado')
-    }
-
-    // Persiste no cache em memória
-    globalThis.__sipeUnidadesCache = { data: unidades, fetchedAt: Date.now() }
-
-    // Salva no banco de dados para resiliência entre restarts
-    await prisma.systemConfig.upsert({
-      where: { key: 'sipe_unidades' },
-      create: {
-        key: 'sipe_unidades',
-        value: unidades,
-        description: 'Cache persistente das unidades prisionais do SIPE',
-      },
-      update: {
-        value: unidades,
-      },
-    }).catch(() => {})
-
+    const unidades = await scrapeUnidadesPrisionais()
     return NextResponse.json({ unidades, fromSipe: true, fromCache: false })
   } catch {
     // Falhou no scrape (ex: SIPE fora do ar) → tenta carregar do cache do banco, senão fallback estático
@@ -158,7 +73,5 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ unidades: dbUnits, fromSipe: true, fromCache: true })
     }
     return NextResponse.json({ unidades: UNIDADES_FALLBACK, fromSipe: false, fromCache: false })
-  } finally {
-    if (browser) await browser.close().catch(() => {})
   }
 }

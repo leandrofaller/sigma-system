@@ -2109,3 +2109,165 @@ export async function closeBrowser(): Promise<void> {
     browserInstance = null
   }
 }
+
+// ── Scraping de Unidades Prisionais ──────────────────────────
+
+export async function scrapeUnidadesPrisionais(jobId?: string): Promise<Array<{ id: string; nome: string }>> {
+  if (jobId) {
+    await dbProgress(jobId, { fase: 'Login', log: 'Iniciando sessão no SIPE para unidades...' })
+  }
+
+  const context = await createSession()
+  const page = await context.newPage()
+
+  try {
+    if (jobId) {
+      await dbProgress(jobId, { log: 'Realizando login no SIPE...' })
+    }
+    // Faz login usando perfil 'Master' e unidade '3' (fallback)
+    await login(page, SIPE_UNIDADE)
+
+    if (jobId) {
+      await dbProgress(jobId, { fase: 'Coletando unidades', log: 'Acessando tela de seleção de papéis...' })
+    }
+
+    // Navega para /selectRole para garantir que está na tela de seleção
+    await page.goto(`${SIPE_URL}/selectRole`, { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(async () => {
+      await page.goto(`${SIPE_URL}/selectRole/1`, { waitUntil: 'domcontentloaded' })
+    })
+
+    await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 15_000 })
+
+    const unidades = await page.evaluate(() => {
+      const selects = document.querySelectorAll('select')
+      if (selects.length < 2) return [] as Array<{ id: string; nome: string }>
+      const unitSelect = selects[1] as HTMLSelectElement
+      return Array.from(unitSelect.options)
+        .filter((o) => o.value && o.value !== '' && o.value !== '0')
+        .map((o) => ({ id: o.value, nome: (o.textContent ?? '').trim() }))
+    })
+
+    if (unidades.length === 0) {
+      throw new Error('Nenhuma unidade prisional encontrada no select do SIPE')
+    }
+
+    if (jobId) {
+      await dbProgress(jobId, { log: `Encontradas ${unidades.length} unidades. Atualizando cache...` })
+    }
+
+    // Persiste no cache global em memória
+    globalThis.__sipeUnidadesCache = { data: unidades, fetchedAt: Date.now() }
+
+    // Salva no banco de dados para persistência
+    await prisma.systemConfig.upsert({
+      where: { key: 'sipe_unidades' },
+      create: {
+        key: 'sipe_unidades',
+        value: unidades,
+        description: 'Cache persistente das unidades prisionais do SIPE',
+      },
+      update: {
+        value: unidades,
+      },
+    }).catch(() => {})
+
+    return unidades
+  } finally {
+    await context.close()
+  }
+}
+
+// ── Agendador automático em background (Scheduler) ──────────
+
+let autoSyncTimeout: NodeJS.Timeout | null = null
+
+function setupAutoSyncScheduler() {
+  if (autoSyncTimeout) return // Evita múltiplos agendadores iniciados em hot-reloads
+
+  // Executa verificação periódica a cada 15 minutos (900.000 ms)
+  const INTERVAL_CHECK = 15 * 60 * 1000
+
+  const checkAndRunAutoSync = async () => {
+    try {
+      // 1. Lê a configuração de automação do banco
+      const autoSyncConfig = await prisma.systemConfig.findUnique({
+        where: { key: 'sipe_auto_sync_unidades' }
+      })
+      const isEnabled = (autoSyncConfig?.value as any)?.enabled === true
+
+      if (!isEnabled) return
+
+      const intervalHoursConfig = await prisma.systemConfig.findUnique({
+        where: { key: 'sipe_sync_unidades_interval_hours' }
+      })
+      const intervalHours = parseInt((intervalHoursConfig?.value as any)?.hours ?? '24') || 24
+
+      // 2. Busca o último job do tipo 'UNIDADES' que foi concluído com sucesso
+      const ultimoJobCompleto = await prisma.sipeSyncJob.findFirst({
+        where: { tipo: 'UNIDADES', status: 'COMPLETED' },
+        orderBy: { finalizadoEm: 'desc' }
+      })
+
+      const precisaRodar = !ultimoJobCompleto || 
+        (ultimoJobCompleto.finalizadoEm && 
+         Date.now() - new Date(ultimoJobCompleto.finalizadoEm).getTime() > intervalHours * 60 * 60 * 1000)
+
+      if (precisaRodar) {
+        // Verifica se já existe algum job ativamente rodando
+        const jobAtivo = await prisma.sipeSyncJob.findFirst({
+          where: { status: 'RUNNING' }
+        })
+        if (jobAtivo) {
+          console.log('[AUTO-SYNC] Ignorando sincronização automática: já existe outro job em execução')
+          return
+        }
+
+        console.log('[AUTO-SYNC] Iniciando sincronização automática de unidades prisionais...')
+        
+        // Cria o job de sincronização automática
+        const job = await prisma.sipeSyncJob.create({
+          data: {
+            tipo: 'UNIDADES',
+            unidade: 'SYSTEM',
+            unidadeNome: 'AUTOMÁTICO (SISTEMA)',
+            status: 'RUNNING',
+            iniciadoEm: new Date(),
+            criadoPor: 'SYSTEM'
+          }
+        })
+
+        scrapeUnidadesPrisionais(job.id)
+          .then(async () => {
+            console.log('[AUTO-SYNC] ✅ Sincronização automática concluída com sucesso')
+            await prisma.sipeSyncJob.update({
+              where: { id: job.id },
+              data: { status: 'COMPLETED', finalizadoEm: new Date() }
+            })
+          })
+          .catch(async (err) => {
+            const errMsg = err?.message ?? String(err)
+            console.error('[AUTO-SYNC] ❌ Sincronização automática falhou:', errMsg)
+            await prisma.sipeSyncJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'FAILED',
+                finalizadoEm: new Date(),
+                log: errMsg
+              }
+            })
+          })
+      }
+    } catch (err) {
+      console.error('[AUTO-SYNC] Erro no scheduler:', err)
+    }
+  }
+
+  // Agenda primeira execução curta e depois o loop
+  setTimeout(checkAndRunAutoSync, 10_000)
+  autoSyncTimeout = setInterval(checkAndRunAutoSync, INTERVAL_CHECK)
+}
+
+// Inicia o scheduler em segundo plano
+if (typeof window === 'undefined') {
+  setupAutoSyncScheduler()
+}

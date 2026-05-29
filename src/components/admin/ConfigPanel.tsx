@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, Loader2, Palette, Brain, MapPin, HardDrive, FileText, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Save, Loader2, Palette, Brain, MapPin, HardDrive, FileText, Eye, EyeOff, CheckCircle, RefreshCw } from 'lucide-react';
 
 interface Props {
   configs: Record<string, any>;
@@ -368,6 +368,22 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
             <Input type="number" min="1" max="500"
               value={configs.max_upload_size?.mb || 50}
               onChange={(e: any) => update('max_upload_size', { mb: parseInt(e.target.value) })} />
+          </Field>
+        </SectionCard>
+
+        <SectionCard icon={RefreshCw} title="Sincronização Automática com SIPE">
+          <Toggle checked={(configs.sipe_auto_sync_unidades as any)?.enabled === true}
+            label="Sincronização automática de unidades prisionais"
+            onChange={(v: boolean) => update('sipe_auto_sync_unidades', { enabled: v })} />
+          <Field label="Intervalo de Sincronização de Unidades">
+            <Select value={(configs.sipe_sync_unidades_interval_hours as any)?.hours || '24'}
+              onChange={(e: any) => update('sipe_sync_unidades_interval_hours', { hours: e.target.value })}>
+              <option value="6">A cada 6 horas</option>
+              <option value="12">A cada 12 horas</option>
+              <option value="24">A cada 24 horas (diário — recomendado)</option>
+              <option value="48">A cada 48 horas</option>
+              <option value="168">A cada 7 dias (semanal)</option>
+            </Select>
           </Field>
         </SectionCard>
 
