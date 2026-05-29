@@ -190,6 +190,50 @@ async function debugFaccoesAdvanced() {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // FASE 1.6: SELECIONAR ROLE (Papel/Perfil)
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Verificar se está na página /selectRole
+    const selectRolePage = page.url().includes('/selectRole')
+
+    if (selectRolePage) {
+      console.log('📍 Página de seleção de role detectada')
+
+      // Procurar por opções de role
+      const roles = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('button, [role="option"], .role-option, [data-role]'))
+          .filter(el => el.textContent?.trim())
+          .map(el => ({
+            text: el.textContent?.trim(),
+            element: el.tagName
+          }))
+      })
+
+      console.log('📋 Roles disponíveis:')
+      for (const role of roles) {
+        console.log(`   - ${role.text} (${role.element})`)
+      }
+
+      // Tentar clicar em "Master"
+      const masterBtn = page.locator('button:has-text("Master"), [role="option"]:has-text("Master"), .role-option:has-text("Master")')
+      if (await masterBtn.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
+        console.log('🖱️ Clicando em Master...')
+        await masterBtn.first().click()
+        await page.waitForTimeout(2000)
+        console.log('✅ Master selecionado')
+
+        // Verificar se há um botão de confirmação
+        const confirmarBtn = page.locator('button:has-text("ENTRAR"), button:has-text("Confirmar"), button:has-text("OK")')
+        if (await confirmarBtn.first().isVisible({ timeout: 3_000 }).catch(() => false)) {
+          console.log('🖱️ Clicando em botão de confirmação...')
+          await confirmarBtn.first().click()
+          await page.waitForTimeout(2000)
+          console.log('✅ Confirmado')
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // FASE 2: OBTER APENADO
     // ═══════════════════════════════════════════════════════════════════
 
