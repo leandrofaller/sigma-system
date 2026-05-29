@@ -94,7 +94,9 @@
       "mcp__Claude_in_Chrome__browser_batch",
       "mcp__Claude_in_Chrome__get_page_text",
       "Bash(node_modules/.bin/prisma db *)",
-      "Bash(timeout 30 npm start)"
+      "Bash(timeout 30 npm start)",
+      "Bash(pkill -f \"next start\")",
+      "Bash(pkill -f \"node\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
