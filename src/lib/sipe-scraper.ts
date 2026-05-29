@@ -1,6 +1,8 @@
 /**
  * SIPE Scraper — Playwright-based crawler for sipe.sejus.ro.gov.br
  *
+ * LAST UPDATED: 2026-05-28 22:46 - Fixed: Timeout 8000ms + múltiplos seletores
+ *
  * Design (mirrors ArcFace indexing-job pattern):
  * - globalThis singleton state (survives Next.js module isolation across routes)
  * - DB-persisted checkpoint (survives VPS restarts / process crashes)
