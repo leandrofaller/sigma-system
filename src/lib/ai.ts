@@ -40,7 +40,18 @@ const systemPrompt = `Você é um assistente de inteligência especializado em a
 elaboração de relatórios e apoio operacional. Responda sempre em português brasileiro de forma
 profissional, objetiva e precisa.`;
 
-export async function queryAI(userId: string, query: string, context?: string): Promise<string> {
+export interface AIFile {
+  buffer: Buffer;
+  name: string;
+  type: string;
+}
+
+export async function queryAI(
+  userId: string,
+  query: string,
+  context?: string,
+  file?: AIFile
+): Promise<string> {
   const config = await getAIConfig();
   let response = '';
   let tokens = 0;
@@ -48,13 +59,45 @@ export async function queryAI(userId: string, query: string, context?: string): 
 
   const apiKey = await getAPIKey(config.provider);
 
+  const isImage = file?.type.startsWith('image/');
+  const isTextFile = file && (
+    file.type.startsWith('text/') ||
+    /\.(txt|csv|json|log|xml|yaml|yml|md|js|ts|tsx|jsx|html|css)$/i.test(file.name)
+  );
+
+  let finalQuery = query;
+  if (isTextFile) {
+    const textContent = file.buffer.toString('utf-8');
+    finalQuery = `${query}\n\n[Arquivo Anexo: ${file.name}]\n\`\`\`\n${textContent}\n\`\`\``;
+  }
+
   if (config.provider === 'anthropic' && apiKey) {
     const client = new Anthropic({ apiKey });
+    
+    let contentParam: any = finalQuery;
+    if (isImage) {
+      const base64Data = file.buffer.toString('base64');
+      contentParam = [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: file.type,
+            data: base64Data,
+          },
+        },
+        {
+          type: 'text',
+          text: query,
+        },
+      ];
+    }
+
     const msg = await client.messages.create({
       model: config.model || 'claude-haiku-4-5-20251001',
       max_tokens: 2000,
       system: fullSystemPrompt,
-      messages: [{ role: 'user', content: query }],
+      messages: [{ role: 'user', content: contentParam }],
     });
     response = msg.content[0].type === 'text' ? msg.content[0].text : 'Sem resposta';
     tokens = msg.usage.input_tokens + msg.usage.output_tokens;
@@ -62,14 +105,29 @@ export async function queryAI(userId: string, query: string, context?: string): 
   } else if (config.provider === 'gemini' && apiKey) {
     const modelName = config.model || 'gemini-2.5-flash';
     const supportsSystemInstruction = modelName.includes('1.5') || modelName.includes('2.') || modelName.includes('3.');
+    
+    const parts: any[] = [];
+    if (isImage) {
+      const base64Data = file.buffer.toString('base64');
+      parts.push({ text: supportsSystemInstruction ? query : `${fullSystemPrompt}\n\nPergunta: ${query}` });
+      parts.push({
+        inlineData: {
+          mimeType: file.type,
+          data: base64Data,
+        },
+      });
+    } else {
+      parts.push({ text: supportsSystemInstruction ? finalQuery : `${fullSystemPrompt}\n\nPergunta: ${finalQuery}` });
+    }
+
     const requestBody = supportsSystemInstruction
       ? {
           system_instruction: { parts: [{ text: fullSystemPrompt }] },
-          contents: [{ role: 'user', parts: [{ text: query }] }],
+          contents: [{ role: 'user', parts }],
           generationConfig: { maxOutputTokens: 2000 },
         }
       : {
-          contents: [{ role: 'user', parts: [{ text: `${fullSystemPrompt}\n\nPergunta: ${query}` }] }],
+          contents: [{ role: 'user', parts }],
           generationConfig: { maxOutputTokens: 2000 },
         };
     const geminiRes = await fetch(
@@ -85,11 +143,26 @@ export async function queryAI(userId: string, query: string, context?: string): 
 
   } else if (config.provider === 'openai' && apiKey) {
     const openai = new OpenAI({ apiKey });
+    
+    let contentParam: any = finalQuery;
+    if (isImage) {
+      const base64Data = file.buffer.toString('base64');
+      contentParam = [
+        { type: 'text', text: query },
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:${file.type};base64,${base64Data}`,
+          },
+        },
+      ];
+    }
+
     const completion = await openai.chat.completions.create({
       model: config.model || 'gpt-4o',
       messages: [
         { role: 'system', content: fullSystemPrompt },
-        { role: 'user', content: query },
+        { role: 'user', content: contentParam },
       ],
       max_tokens: 2000,
     });
@@ -97,13 +170,18 @@ export async function queryAI(userId: string, query: string, context?: string): 
     tokens = completion.usage?.total_tokens ?? 0;
 
   } else if (config.provider === 'groq' && apiKey) {
+    if (isImage) {
+      throw new Error(
+        'O provedor Groq não suporta análise de imagens (multimodalidade). Por favor, selecione outro provedor (OpenAI, Anthropic ou Gemini) nas configurações.'
+      );
+    }
     // Groq is OpenAI-compatible — same SDK, different base URL
     const groq = new OpenAI({ apiKey, baseURL: 'https://api.groq.com/openai/v1' });
     const completion = await groq.chat.completions.create({
       model: config.model || 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: fullSystemPrompt },
-        { role: 'user', content: query },
+        { role: 'user', content: finalQuery },
       ],
       max_tokens: 2000,
     });
@@ -117,10 +195,15 @@ export async function queryAI(userId: string, query: string, context?: string): 
     );
   }
 
+  let dbQuery = finalQuery;
+  if (isImage) {
+    dbQuery = `${query}\n\n[Imagem Anexa: ${file.name}]`;
+  }
+
   await prisma.aIQuery.create({
     data: {
       userId,
-      query,
+      query: dbQuery,
       response,
       provider: config.provider,
       model: config.model,

@@ -28,15 +28,42 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const user = session.user as any;
-  const body = await req.json();
+  
+  let query = '';
+  let context = '';
+  let file: { buffer: Buffer; name: string; type: string } | undefined = undefined;
 
-  if (!body.query?.trim()) {
+  try {
+    const contentType = req.headers.get('content-type') || '';
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      query = (formData.get('query') as string) || '';
+      context = (formData.get('context') as string) || '';
+      const fileObj = formData.get('file') as File | null;
+      if (fileObj && fileObj.size > 0) {
+        const arrayBuffer = await fileObj.arrayBuffer();
+        file = {
+          buffer: Buffer.from(arrayBuffer),
+          name: fileObj.name,
+          type: fileObj.type || 'application/octet-stream',
+        };
+      }
+    } else {
+      const body = await req.json();
+      query = body.query || '';
+      context = body.context || '';
+    }
+  } catch (err: any) {
+    return NextResponse.json({ error: 'Erro ao processar dados da requisição' }, { status: 400 });
+  }
+
+  if (!query.trim()) {
     return NextResponse.json({ error: 'Consulta vazia' }, { status: 400 });
   }
 
   let response: string;
   try {
-    response = await queryAI(user.id, body.query, body.context);
+    response = await queryAI(user.id, query, context, file);
   } catch (err: any) {
     const msg = err?.message || String(err);
     // Surface API errors directly so the user knows what went wrong
@@ -49,7 +76,12 @@ export async function POST(req: NextRequest) {
   await createAuditLog({
     userId: user.id,
     action: AUDIT_ACTIONS.AI_QUERY,
-    details: { queryLength: body.query.length },
+    details: { 
+      queryLength: query.length,
+      hasFile: !!file,
+      fileName: file?.name,
+      fileType: file?.type,
+    },
     request: req,
   });
 

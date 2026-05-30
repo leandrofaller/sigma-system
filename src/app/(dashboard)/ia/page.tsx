@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Bot, User, Loader2, Sparkles, Trash2, Copy,
   CheckCheck, ChevronDown, ChevronRight, Zap, MapPin, Lock,
+  Paperclip, X
 } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 
@@ -206,8 +207,10 @@ export default function IAPage() {
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [modelInfo, setModelInfo] = useState<{ provider: string; model: string } | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch('/api/ai')
@@ -233,10 +236,15 @@ export default function IAPage() {
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const content = input.trim();
+    const selectedFile = file;
+    
+    // Limpa o arquivo selecionado no estado local ao enviar
+    setFile(null);
+
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content,
+      content: selectedFile ? `${content}\n\n[Arquivo: ${selectedFile.name}]` : content,
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, userMsg]);
@@ -245,11 +253,23 @@ export default function IAPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: content }),
-      });
+      let res;
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('query', content);
+        formData.append('file', selectedFile);
+        res = await fetch('/api/ai', {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
+        res = await fetch('/api/ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: content }),
+        });
+      }
+      
       const data = await res.json();
       setMessages((prev) => [
         ...prev,
@@ -260,13 +280,13 @@ export default function IAPage() {
           timestamp: new Date(),
         },
       ]);
-    } catch {
+    } catch (err: any) {
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: 'Erro ao conectar com a IA. Verifique as configurações.',
+          content: `Erro ao conectar com a IA: ${err?.message || 'Verifique as configurações.'}`,
           timestamp: new Date(),
         },
       ]);
@@ -438,7 +458,52 @@ export default function IAPage() {
 
         {/* Input area */}
         <div className="px-4 pb-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+          {/* File Preview */}
+          {file && (
+            <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 rounded-xl px-3.5 py-2 mb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Paperclip className="w-3.5 h-3.5 text-sigma-500 flex-shrink-0" />
+                <div className="min-w-0 text-xs">
+                  <p className="font-medium text-title truncate">{file.name}</p>
+                  <p className="text-[10px] text-subtle">
+                    {(file.size / 1024).toFixed(1)} KB · {file.type || 'Tipo desconhecido'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setFile(null)}
+                className="text-subtle hover:text-red-500 dark:hover:text-red-400 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title="Remover arquivo"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           <div className="flex gap-2 items-end">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-3 rounded-xl border border-gray-200 dark:border-gray-700 text-subtle hover:text-body hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
+              title="Anexar arquivo"
+            >
+              <Paperclip className="w-4.5 h-4.5" />
+            </button>
+            
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={(e) => {
+                const selected = e.target.files?.[0];
+                if (selected) {
+                  setFile(selected);
+                }
+                e.target.value = '';
+              }}
+              className="hidden"
+              accept="image/*,text/*,.csv,.json,.log,.md,.xml,.yaml,.yml"
+            />
+
             <div className="flex-1 relative">
               <textarea
                 ref={textareaRef}
