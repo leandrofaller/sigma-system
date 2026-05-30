@@ -2933,32 +2933,65 @@ async function scrapeEndereço(
   apenadoId: string,
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/enderecos`, { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('[name="rua_endereco"], tr[id^="view_"], body', { timeout: 10_000 })
+    const targetUrl = `${SIPE_URL}/apenados/${sipeId}/enderecos`
+    const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+    
+    // Proteção contra redirecionamentos (ex: login expirado, falta de permissão ou apenado não existente)
+    const currentUrl = page.url()
+    if (
+      currentUrl.includes('/login') ||
+      currentUrl === `${SIPE_URL}/` ||
+      currentUrl === `${SIPE_URL}` ||
+      currentUrl.includes('/selectRole') ||
+      currentUrl.includes('/home') ||
+      (response && (response.status() === 404 || response.status() === 403 || response.status() === 500))
+    ) {
+      console.warn(`[scrapeEndereço] Acesso recusado ou redirecionado para ${currentUrl} ao tentar acessar o apenado ${sipeId}`)
+      return
+    }
+
+    // Espera especificamente pelo formulário de inclusão ou pela tabela de cadastrados.
+    // Removemos o ", body" para evitar que o Playwright prossiga antes da página carregar de fato.
+    await page.waitForSelector('[name="rua_endereco"], tr[id^="view_"]', { timeout: 10_000 }).catch(() => {})
+
+    // Revalida a URL após a espera para garantir que não fomos redirecionados por JS assíncrono
+    if (
+      page.url().includes('/login') ||
+      page.url().includes('/selectRole') ||
+      page.url().includes('/home')
+    ) {
+      console.warn(`[scrapeEndereço] Redirecionado após espera para ${page.url()} no apenado ${sipeId}`)
+      return
+    }
 
     const endereco = await page.evaluate(() => {
       const viewRow = document.querySelector('tr[id^="view_"]')
       if (!viewRow) {
-        const val = (name: string) =>
-          (
-            document.querySelector(`[name="${name}"]`) as HTMLInputElement | null
-          )?.value?.trim() || null
+        // Se não tem linha de visualização, mas a página está correta, tenta ler do formulário de inclusão (caso esteja preenchido)
+        const logradouro = (document.querySelector('[name="rua_endereco"]') as HTMLInputElement | null)?.value?.trim() || null
+        const numero = (document.querySelector('[name="numero_endereco"]') as HTMLInputElement | null)?.value?.trim() || null
+        const complemento = (document.querySelector('[name="complemento_endereco"]') as HTMLInputElement | null)?.value?.trim() || null
+        const bairro = (document.querySelector('[name="bairro_endereco"]') as HTMLInputElement | null)?.value?.trim() || null
 
-        const selVal = (name: string) => {
-          const el = document.querySelector(
-            `[name="${name}"]`
-          ) as HTMLSelectElement | null
-          return el?.options[el.selectedIndex]?.text?.trim() || null
-        }
+        const estEl = document.querySelector('[name="estado_id"]') as HTMLSelectElement | null
+        const uf = estEl?.options[estEl.selectedIndex]?.text?.trim() || null
 
+        const cidEl = document.querySelector('[name="cidade_id"]') as HTMLSelectElement | null
+        const cidade = cidEl?.options[cidEl.selectedIndex]?.text?.trim() || null
+
+        const cep = (document.querySelector('[name="cep_endereco"]') as HTMLInputElement | null)?.value?.trim() ||
+                    (document.querySelector('[name="cep"]') as HTMLInputElement | null)?.value?.trim() || null
+
+        // Se todos os campos estiverem nulos, pode ser que o apenado de fato não possua nenhum endereço cadastrado
         return {
-          logradouro: val('rua_endereco'),
-          numero: val('numero_endereco'),
-          complemento: val('complemento_endereco'),
-          bairro: val('bairro_endereco'),
-          cidade: selVal('cidade_id'),
-          uf: selVal('estado_id'),
-          cep: val('cep_endereco') || val('cep') || null,
+          logradouro,
+          numero,
+          complemento,
+          bairro,
+          cidade,
+          uf,
+          cep,
+          existe: !!(logradouro || bairro || cidade)
         }
       }
 
@@ -2993,8 +3026,18 @@ async function scrapeEndereço(
         cidade,
         uf,
         cep,
+        existe: true
       }
     })
+
+    // Só atualiza os dados se a extração encontrou dados consistentes ou se foi confirmado que a página carregou e o apenado realmente não tem endereço cadastrado.
+    // Se a página retornou um formulário vazio (ou seja, existe = false), salvamos os campos como null (indicando ausência de endereço).
+    // Mas se por acaso a página estiver quebrada e nem sequer renderizar os seletores, evitamos apagar dados existentes.
+    const hasForm = await page.evaluate(() => document.querySelector('form#formulario') !== null || document.querySelector('table') !== null)
+    if (!endereco.existe && !hasForm) {
+      console.warn(`[scrapeEndereço] Página de endereços do apenado ${sipeId} não parece ter carregado os formulários ou tabelas corretamente. Ignorando atualização para evitar perda de dados.`)
+      return
+    }
 
     const ufLimpa = endereco.uf && !endereco.uf.includes('Selecione') && !endereco.uf.includes('Escolha') ? endereco.uf : null
     const cidadeLimpa = endereco.cidade && !endereco.cidade.includes('Selecione') && !endereco.cidade.includes('Escolha') ? endereco.cidade : null

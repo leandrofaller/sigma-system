@@ -133,26 +133,28 @@ async function testEndereco() {
     const endereco = await page.evaluate(() => {
       const viewRow = document.querySelector('tr[id^="view_"]')
       if (!viewRow) {
-        const val = (name: string) =>
-          (
-            document.querySelector(`[name="${name}"]`) as HTMLInputElement | null
-          )?.value?.trim() || null
+        const logradouro = (document.querySelector('[name="rua_endereco"]') as HTMLInputElement | null)?.value?.trim() || null
+        const numero = (document.querySelector('[name="numero_endereco"]') as HTMLInputElement | null)?.value?.trim() || null
+        const complemento = (document.querySelector('[name="complemento_endereco"]') as HTMLInputElement | null)?.value?.trim() || null
+        const bairro = (document.querySelector('[name="bairro_endereco"]') as HTMLInputElement | null)?.value?.trim() || null
 
-        const selVal = (name: string) => {
-          const el = document.querySelector(
-            `[name="${name}"]`
-          ) as HTMLSelectElement | null
-          return el?.options[el.selectedIndex]?.text?.trim() || null
-        }
+        const estEl = document.querySelector('[name="estado_id"]') as HTMLSelectElement | null
+        const uf = estEl?.options[estEl.selectedIndex]?.text?.trim() || null
+
+        const cidEl = document.querySelector('[name="cidade_id"]') as HTMLSelectElement | null
+        const cidade = cidEl?.options[cidEl.selectedIndex]?.text?.trim() || null
+
+        const cep = (document.querySelector('[name="cep_endereco"]') as HTMLInputElement | null)?.value?.trim() ||
+                    (document.querySelector('[name="cep"]') as HTMLInputElement | null)?.value?.trim() || null
 
         return {
-          logradouro: val('rua_endereco'),
-          numero: val('numero_endereco'),
-          complemento: val('complemento_endereco'),
-          bairro: val('bairro_endereco'),
-          cidade: selVal('cidade_id'),
-          uf: selVal('estado_id'),
-          cep: val('cep_endereco') || val('cep') || null,
+          logradouro,
+          numero,
+          complemento,
+          bairro,
+          cidade,
+          uf,
+          cep,
           metodo: 'fallback'
         }
       }
