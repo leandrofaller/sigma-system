@@ -38,9 +38,11 @@ export async function POST(req: NextRequest) {
       const executablePath = process.env.PLAYWRIGHT_EXECUTABLE_PATH;
       browserInstance = await chromium.launch({
         headless: true,
+        ignoreDefaultArgs: ['--enable-automation'],
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
+          '--disable-blink-features=AutomationControlled',
           '--disable-dev-shm-usage',
           '--disable-gpu',
           '--disable-extensions',

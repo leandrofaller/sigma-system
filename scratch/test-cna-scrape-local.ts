@@ -51,25 +51,23 @@ async function main() {
 
     const page = await context.newPage();
 
-    console.log('Chamando scrapeCnaOabDetails...');
+    console.log('Primeira chamada (esperado: erro de CAPTCHA)...');
+    try {
+      await scrapeCnaOabDetails(page, adv.id, adv.oab as string);
+    } catch (cnaErr) {
+      console.log('Primeira chamada falhou como esperado por CAPTCHA:', (cnaErr as any).message);
+    }
+
+    console.log('\nSegunda chamada imediata (esperado: retorno instantâneo devido ao cooldown)...');
+    const t0 = Date.now();
     await scrapeCnaOabDetails(page, adv.id, adv.oab as string);
-    
-    console.log('Verificando se o banco foi atualizado...');
-    const updatedAdv = await prisma.sipeAdvogado.findUnique({
-      where: { id: adv.id }
-    });
+    const duration = Date.now() - t0;
+    console.log(`Segunda chamada concluída em ${duration}ms!`);
 
-    if (updatedAdv) {
-      console.log('Dados após sincronização:');
-      console.log(' - Telefone:', updatedAdv.telefone);
-      console.log(' - Endereço:', updatedAdv.endereco);
-      console.log(' - PhotoPath:', updatedAdv.photoPath);
-
-      if (updatedAdv.photoPath) {
-        console.log('✅ Sucesso! A foto foi salva e o caminho foi persistido no banco de dados.');
-      } else {
-        console.log('⚠️ A sincronização executou, mas nenhuma foto foi persistida (pode ter sido bloqueada por captcha na VPS ou o advogado não tem foto).');
-      }
+    if (duration < 500) {
+      console.log('✅ Cooldown testado com sucesso! A segunda chamada foi pulada instantaneamente.');
+    } else {
+      console.log('❌ Falha: A segunda chamada demorou demais, o cooldown não parece estar ativo.');
     }
 
     await browser.close();

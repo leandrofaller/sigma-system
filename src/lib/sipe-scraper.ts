@@ -134,10 +134,12 @@ async function getBrowser(): Promise<Browser> {
     const executablePath = findSystemChromium()
     browserInstance = await chromium.launch({
       headless: true,
+      ignoreDefaultArgs: ['--enable-automation'],
       // Flags obrigatórias para Docker (sem seccomp/AppArmor por padrão)
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
+        '--disable-blink-features=AutomationControlled',
         '--disable-dev-shm-usage',   // evita crash por /dev/shm lotado em container
         '--disable-gpu',
         '--disable-extensions',
@@ -2703,6 +2705,10 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
   }
 }
 
+let lastCnaCaptchaDetectedAt = 0
+let lastJobIdNotifiedCnaSuspended: string | null = null
+const CNA_COOLDOWN_MS = 10 * 60 * 1000 // 10 minutos
+
 export async function scrapeCnaOabDetails(
   page: Page,
   advogadoId: string,
@@ -2710,6 +2716,20 @@ export async function scrapeCnaOabDetails(
   jobId?: string
 ): Promise<void> {
   const logPrefix = `[CNA OAB]`
+
+  // Se detectamos captcha recentemente, suspende temporariamente para evitar spam e lentidão
+  const timeSinceCaptcha = Date.now() - lastCnaCaptchaDetectedAt
+  if (timeSinceCaptcha < CNA_COOLDOWN_MS) {
+    const minutesLeft = Math.ceil((CNA_COOLDOWN_MS - timeSinceCaptcha) / 60000)
+    const skipMsg = `${logPrefix} Busca no CNA temporariamente suspensa devido a bloqueio de CAPTCHA recente (tentar novamente em ${minutesLeft} min)`
+    if (jobId && lastJobIdNotifiedCnaSuspended !== jobId) {
+      log(jobId, skipMsg)
+      lastJobIdNotifiedCnaSuspended = jobId
+    }
+    console.log(skipMsg)
+    return
+  }
+
   if (jobId) log(jobId, `${logPrefix} Iniciando consulta da OAB "${oabString}" no CNA...`)
 
   // 1. Parsear OAB (ex: "3092/RO", "12586", "28576/O", "3092A/RO")
@@ -2748,6 +2768,24 @@ export async function scrapeCnaOabDetails(
   // 2. Criar uma nova página no contexto do browser para não interferir na sessão do SIPE
   const cnaPage = await page.context().newPage()
   
+  // Monitorar respostas HTTP para detecção precisa e instantânea de CAPTCHA
+  let apiCaptchaDetected = false
+  cnaPage.context().on('response', async (response) => {
+    const url = response.url()
+    if (url.includes('/api/advogado/search')) {
+      if (response.status() === 428) {
+        apiCaptchaDetected = true
+      } else {
+        try {
+          const text = await response.text()
+          if (text.includes('recaptcha_fallback_required') || text.includes('Recaptcha score below threshold')) {
+            apiCaptchaDetected = true
+          }
+        } catch {}
+      }
+    }
+  })
+  
   try {
     cnaPage.setDefaultTimeout(20000)
 
@@ -2757,24 +2795,63 @@ export async function scrapeCnaOabDetails(
     })
 
     // Ir para a página do CNA
-    await cnaPage.goto('https://cna.oab.org.br/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await cnaPage.goto('https://cna.oab.org.br/', { waitUntil: 'networkidle', timeout: 30000 })
+    await cnaPage.waitForTimeout(2000)
     await cnaPage.waitForTimeout(1000 + Math.random() * 1000)
 
-    // Preencher campos
-    await cnaPage.fill('input[name="registration"]', inscricao)
-    await cnaPage.selectOption('select[name="sectional"]', uf)
-    await cnaPage.selectOption('select[name="registrationType"]', '1') // 1 = Advogado
+    // Preencher campos forçando eventos reativos do Angular
+    await cnaPage.evaluate(({ inscricao, uf }) => {
+      const regInput = document.querySelector('input[name="registration"]') as HTMLInputElement
+      if (regInput) {
+        regInput.value = inscricao
+        regInput.dispatchEvent(new Event('input', { bubbles: true }))
+        regInput.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+
+      const sectSelect = document.querySelector('select[name="sectional"]') as HTMLSelectElement
+      if (sectSelect) {
+        sectSelect.value = uf
+        sectSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+
+      const typeSelect = document.querySelector('select[name="registrationType"]') as HTMLSelectElement
+      if (typeSelect) {
+        typeSelect.value = '1' // 1 = Advogado
+        typeSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+    }, { inscricao, uf })
     await cnaPage.waitForTimeout(500)
 
     // Pesquisar
     await cnaPage.click('button:has-text("Pesquisar")')
-    await cnaPage.waitForTimeout(5000)
 
-    const bodyText = await cnaPage.innerText('body')
-    const hasCaptcha = bodyText.includes('não é um robô') || bodyText.includes('desafio abaixo')
+    // Esperar de forma inteligente por sucesso ou falha/captcha (máximo de 4 segundos)
+    for (let i = 0; i < 8; i++) {
+      await cnaPage.waitForTimeout(500)
+      if (apiCaptchaDetected) {
+        break
+      }
+      
+      // Se a lista de resultados ou "Nenhum resultado" apareceu, para de esperar
+      const resultsFound = await cnaPage.evaluate(() => {
+        // Verifica se a seção de sem resultados está visível (não tem a classe opacity-0)
+        const noResultSec = document.querySelector('app-cna section.bg-blue-100')
+        const hasNoResult = noResultSec ? !noResultSec.className.includes('opacity-0') : false
+        
+        // Verifica se a lista de resultados está visível
+        const resultSec = document.querySelector('app-cna section.pt-16 ~ section')
+        const hasResults = resultSec ? (!resultSec.className.includes('opacity-0') && document.querySelectorAll('app-cna li button').length > 0) : false
+
+        return hasNoResult || hasResults
+      })
+      if (resultsFound) {
+        break
+      }
+    }
     
-    if (hasCaptcha) {
-      const captchaMsg = `${logPrefix} Bloqueado por CAPTCHA ao consultar OAB "${oabString}"`
+    if (apiCaptchaDetected) {
+      lastCnaCaptchaDetectedAt = Date.now() // Ativa o cooldown
+      const captchaMsg = `${logPrefix} Bloqueado por CAPTCHA ao consultar OAB "${oabString}". As consultas subsequentes ao CNA OAB estão suspensas por 10 minutos.`
       if (jobId) log(jobId, captchaMsg)
       console.warn(captchaMsg)
       throw new Error('CNA_CAPTCHA_DETECTED')
