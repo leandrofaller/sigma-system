@@ -2924,11 +2924,12 @@ async function scrapeEndereço(
   }
 }
 
-async function scrapeHistorico(
+export async function scrapeHistorico(
   page: Page,
   sipeId: number,
   apenadoId: string,
 ): Promise<void> {
+  // 1. Coleta e salva as mudanças de cela existentes
   try {
     await page.goto(`${SIPE_URL}/apenados/${sipeId}/mudarcela`, { waitUntil: 'domcontentloaded' })
     await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
@@ -2990,6 +2991,145 @@ async function scrapeHistorico(
     }
   } catch (err) {
     console.error(`Erro ao sincronizar histórico/mudança de cela do apenado ${sipeId}:`, err)
+  }
+
+  // 2. Coleta e salva o histórico de movimentações gerais da Ficha Geral
+  try {
+    const token = await page.evaluate(() => {
+      return (window as any).CSRF_TOKEN || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+    })
+
+    if (!token) {
+      console.error(`Não foi possível obter CSRF Token para a Ficha Geral do apenado ${sipeId}`)
+      return
+    }
+
+    const postResult = await page.evaluate(async ({ url, sipeId, token }) => {
+      try {
+        const bodyParams = new URLSearchParams()
+        bodyParams.append('_token', token)
+        bodyParams.append('apenado_id', String(sipeId))
+        bodyParams.append('listar[]', 'DP') // Dados Pessoais (requerido)
+        bodyParams.append('listar[]', 'M')  // Movimentações
+
+        const res = await fetch(`${url}/relatorios/fichaGeral`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: bodyParams.toString()
+        })
+
+        if (!res.ok) {
+          return { status: res.status, error: `HTTP ${res.status}` }
+        }
+        const text = await res.text()
+        return { status: res.status, html: text }
+      } catch (err: any) {
+        return { status: 0, error: err.message }
+      }
+    }, { url: SIPE_URL, sipeId, token })
+
+    if (postResult.error || postResult.status !== 200 || !postResult.html) {
+      console.error(`Erro ao obter Ficha Geral via POST para o apenado ${sipeId}:`, postResult.error || `Status ${postResult.status}`)
+      return
+    }
+
+    if (postResult.html.includes('PÁGINA PRINCIPAL') || postResult.html.includes('Oops!!')) {
+      console.warn(`SIPE recusou filtros da Ficha Geral para o apenado ${sipeId} (redirecionou para a home)`)
+      return
+    }
+
+    // Faz o parser do HTML retornado usando DOMParser na própria página do Playwright
+    const movimentacoes = await page.evaluate((htmlString) => {
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(htmlString, 'text/html')
+      const table = doc.querySelector('table')
+      if (!table) return []
+
+      const trs = Array.from(table.querySelectorAll('tbody tr, tr'))
+      const list: any[] = []
+
+      for (const tr of trs) {
+        if (tr.querySelector('th')?.textContent?.trim() === 'Codigo') continue
+        if (tr.textContent?.includes('Data Entrada') && tr.textContent?.includes('Data Saída')) continue
+
+        const cells = Array.from(tr.children)
+        if (cells.length < 9) continue
+
+        const codigo = cells[0].textContent?.trim() || ''
+        const regime = cells[1].textContent?.trim() || ''
+        const intramuro = cells[2].textContent?.trim() || ''
+        const monitorado = cells[3].textContent?.trim() || ''
+        const dataEntrada = cells[4].textContent?.trim() || ''
+        const origem = cells[5].textContent?.trim() || ''
+        const dataSaida = cells[6].textContent?.trim() || ''
+        const destino = cells[7].textContent?.trim() || ''
+        const motivo = cells[8].textContent?.trim() || ''
+
+        if (!codigo || codigo === 'Codigo') continue
+
+        list.push({
+          codigo,
+          regime,
+          intramuro,
+          monitorado,
+          dataEntrada,
+          origem,
+          dataSaida,
+          destino,
+          motivo
+        })
+      }
+      return list
+    }, postResult.html)
+
+    for (const m of movimentacoes) {
+      const dataStr = m.dataEntrada !== '-----' ? m.dataEntrada : (m.dataSaida !== '-----' ? m.dataSaida : null)
+      let datahora: Date | null = null
+
+      if (dataStr) {
+        try {
+          const dateParts = dataStr.split('/')
+          if (dateParts.length === 3) {
+            datahora = new Date(
+              parseInt(dateParts[2]),
+              parseInt(dateParts[1]) - 1,
+              parseInt(dateParts[0]),
+              12, // Meio-dia padrão para normalização
+              0
+            )
+          }
+        } catch {
+          datahora = new Date(dataStr)
+        }
+      }
+
+      const tipo = 'MOVIMENTACAO'
+      const descricao = `Movimentação Geral - Código: ${m.codigo} | Motivo: ${m.motivo} | Origem: ${m.origem} | Destino: ${m.destino} | Entrada: ${m.dataEntrada} | Saída: ${m.dataSaida} | Regime: ${m.regime} | Intramuro: ${m.intramuro} | Monitorado: ${m.monitorado}`
+
+      const idString = `sipe-mov-${apenadoId}-${m.codigo}`
+      const hashId = createHash('md5').update(idString).digest('hex')
+
+      await prisma.sipeHistorico.upsert({
+        where: { id: hashId },
+        create: {
+          id: hashId,
+          apenadoId,
+          tipo,
+          descricao,
+          datahora,
+          unidade: m.destino !== '-----' ? m.destino : (m.origem !== '-----' ? m.origem : null),
+        },
+        update: {
+          descricao,
+          datahora,
+          unidade: m.destino !== '-----' ? m.destino : (m.origem !== '-----' ? m.origem : null),
+        },
+      })
+    }
+  } catch (err) {
+    console.error(`Erro ao sincronizar movimentações da Ficha Geral do apenado ${sipeId}:`, err)
   }
 }
 
