@@ -293,8 +293,8 @@ export function SyncPanel() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const [clearing, setClearing] = useState(false)
-  const [confirmClearAll, setConfirmClearAll] = useState(false)
-  const [clearingAll, setClearingAll] = useState(false)
+  const [confirmType, setConfirmType] = useState<'apenados' | 'advogados' | 'faccoes' | 'todos' | null>(null)
+  const [clearingType, setClearingType] = useState<string | null>(null)
   const [unidades, setUnidades] = useState<Unidade[]>(UNIDADES_FALLBACK)
   const [loadingUnidades, setLoadingUnidades] = useState(true)
 
@@ -401,25 +401,33 @@ export function SyncPanel() {
     }
   }
 
-  const clearAllData = async () => {
-    setClearingAll(true)
+  const clearData = async (type: 'apenados' | 'advogados' | 'faccoes' | 'todos') => {
+    setClearingType(type)
     try {
-      const res = await fetch('/api/sipe/clear-all', { method: 'DELETE' })
+      const res = await fetch(`/api/sipe/clear-all?type=${type}`, { method: 'DELETE' })
       const data = await res.json()
       if (!res.ok) {
         toast.error(data.error || 'Erro ao limpar dados')
         return
       }
       const { deletados } = data
-      toast.success(
-        `Dados removidos: ${deletados.apenados} apenados, ${deletados.advogados} advogados, ${deletados.faccoes} facções`
-      )
-      setConfirmClearAll(false)
+      if (type === 'apenados') {
+        toast.success(`Apenados e dependências removidos com sucesso (${deletados.apenados} apenados deletados)`)
+      } else if (type === 'advogados') {
+        toast.success(`Advogados e vínculos removidos com sucesso (${deletados.advogados} advogados deletados)`)
+      } else if (type === 'faccoes') {
+        toast.success(`Facções removidas com sucesso (${deletados.faccoes} facções deletadas)`)
+      } else {
+        toast.success(
+          `Dados removidos: ${deletados.apenados || 0} apenados, ${deletados.advogados || 0} advogados, ${deletados.faccoes || 0} facções`
+        )
+      }
+      setConfirmType(null)
       fetchJobs()
     } catch {
       toast.error('Erro de conexão')
     } finally {
-      setClearingAll(false)
+      setClearingType(null)
     }
   }
 
@@ -680,55 +688,90 @@ export function SyncPanel() {
       </div>
 
       {/* Zona de Risco — apenas Superadmin */}
-      <div className="bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-200 dark:border-red-900/40 p-5">
-        <div className="flex items-start gap-3 mb-4">
+      <div className="bg-red-50/50 dark:bg-red-950/10 rounded-2xl border border-red-200 dark:border-red-900/40 p-6 space-y-6">
+        <div className="flex items-start gap-3">
           <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
           <div>
             <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">Zona de Risco</h3>
-            <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
-              Esta ação apaga permanentemente <strong>todos</strong> os dados sincronizados do SIPE — apenados, facções, advogados, processos, históricos e o histórico de sincronizações. Use somente para resetar a base antes de uma nova sincronização completa.
+            <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5">
+              Ações para exclusão de dados sincronizados do SIPE. Você pode apagar os dados de forma individual (independente) por categoria ou limpar toda a base.
             </p>
           </div>
         </div>
 
-        {confirmClearAll ? (
-          <div className="bg-white dark:bg-gray-900 border border-red-300 dark:border-red-800 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-medium text-red-700 dark:text-red-300">
-              Tem certeza? Esta ação <strong>não pode ser desfeita</strong>.
+        {confirmType ? (
+          <div className="bg-white dark:bg-gray-900 border border-red-200 dark:border-red-900/50 rounded-xl p-4 space-y-3 shadow-md">
+            <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+              {confirmType === 'apenados' && 'Confirmar exclusão de Apenados?'}
+              {confirmType === 'advogados' && 'Confirmar exclusão de Advogados?'}
+              {confirmType === 'faccoes' && 'Confirmar exclusão de Facções?'}
+              {confirmType === 'todos' && 'Confirmar exclusão Completa?'}
             </p>
-            <p className="text-xs text-red-600 dark:text-red-400">
-              Todos os dados do SIPE serão removidos permanentemente do banco de dados.
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {confirmType === 'apenados' && 'Esta ação apagará permanentemente todos os apenados importados, bem como seus respectivos processos, alcunhas, históricos, documentos e vínculos. Os advogados e facções serão mantidos.'}
+              {confirmType === 'advogados' && 'Esta ação apagará permanentemente todos os advogados importados e seus vínculos de atendimento. Os apenados e facções serão mantidos.'}
+              {confirmType === 'faccoes' && 'Esta ação apagará permanentemente as facções do banco. As referências de facções nos perfis dos apenados serão definidas como nulas/vazias.'}
+              {confirmType === 'todos' && 'Esta ação apagará permanentemente toda a base de dados sincronizada (apenados, processos, advogados, facções, visitantes e logs de sync).'}
             </p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-1">
               <button
-                onClick={clearAllData}
-                disabled={clearingAll || isActive}
-                className="flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-800 disabled:bg-gray-400 text-white rounded-lg text-sm font-bold transition-colors"
+                onClick={() => clearData(confirmType)}
+                disabled={clearingType !== null || isActive}
+                className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg text-xs font-bold transition-colors shadow-sm"
               >
-                {clearingAll ? (
-                  <><RefreshCw className="w-4 h-4 animate-spin" /> Limpando...</>
+                {clearingType === confirmType ? (
+                  <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Excluindo...</>
                 ) : (
-                  <><Trash2 className="w-4 h-4" /> Sim, apagar tudo</>
+                  <><Trash2 className="w-3.5 h-3.5" /> Confirmar Exclusão</>
                 )}
               </button>
               <button
-                onClick={() => setConfirmClearAll(false)}
-                disabled={clearingAll}
-                className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                onClick={() => setConfirmType(null)}
+                disabled={clearingType !== null}
+                className="px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors"
               >
                 Cancelar
               </button>
             </div>
           </div>
         ) : (
-          <button
-            onClick={() => setConfirmClearAll(true)}
-            disabled={isActive}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-            Limpar todos os dados do SIPE
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <button
+              onClick={() => setConfirmType('apenados')}
+              disabled={isActive || clearingType !== null}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/50 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Excluir Apenados
+            </button>
+            
+            <button
+              onClick={() => setConfirmType('advogados')}
+              disabled={isActive || clearingType !== null}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/50 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Excluir Advogados
+            </button>
+
+            <button
+              onClick={() => setConfirmType('faccoes')}
+              disabled={isActive || clearingType !== null}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/50 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Excluir Facções
+            </button>
+
+            <button
+              onClick={() => setConfirmType('todos')}
+              disabled={isActive || clearingType !== null}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 shadow-sm"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Limpar Tudo
+            </button>
+          </div>
         )}
       </div>
     </div>
