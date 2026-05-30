@@ -1,245 +1,265 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Shield, Building2, Users, ChevronRight as ChevronRightIcon } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Search, ChevronLeft, ChevronRight, Shield, Building2, Users, Loader2, X } from 'lucide-react'
 import { ApenadoCard, ApenadoModal } from './ApenadosImportados'
 import type { ApenadoImportado } from './ApenadosImportados'
+import { toast } from 'sonner'
 
 interface Unidade {
   id: string
   nome: string
+  _count?: { apenados: number }
 }
 
-export function UnidadesPanel() {
-  const [unidades, setUnidades] = useState<Unidade[]>([])
-  const [searchUnidade, setSearchUnidade] = useState('')
-  const [selectedUnidade, setSelectedUnidade] = useState<Unidade | null>(null)
-  
+// ── Card de Unidade ──────────────────────────────
+
+function UnidadeCard({ unidade, onSelect }: { unidade: Unidade; onSelect: (u: Unidade) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(unidade)}
+      className="w-full text-left bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all"
+    >
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold text-lg shrink-0">
+          <Building2 className="w-6 h-6" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900 dark:text-white">{unidade.nome}</h3>
+          {unidade._count != null && (
+            <div className="mt-2 flex items-center gap-1 text-sm text-gray-500">
+              <Users className="w-3.5 h-3.5" />
+              <span>{unidade._count.apenados} apenado{unidade._count.apenados !== 1 ? 's' : ''}</span>
+            </div>
+          )}
+        </div>
+        <div className="shrink-0 text-right">
+          {unidade._count != null && unidade._count.apenados > 0 && (
+            <span className="text-xs text-gray-400">Ver lista →</span>
+          )}
+        </div>
+      </div>
+    </button>
+  )
+}
+
+// ── Modal de Apenados por Unidade ──────────────────────────────
+
+function ApenadosUnidadeModal({ unidade, onClose }: { unidade: Unidade; onClose: () => void }) {
   const [apenados, setApenados] = useState<ApenadoImportado[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [searchApenado, setSearchApenado] = useState('')
-  const [loadingUnidades, setLoadingUnidades] = useState(false)
-  const [loadingApenados, setLoadingApenados] = useState(false)
+  const [page, setPage] = useState(1)
+  const [q, setQ] = useState('')
+  const [loading, setLoading] = useState(false)
   const [selectedApenado, setSelectedApenado] = useState<ApenadoImportado | null>(null)
+  const LIMIT = 15
 
-  // Carrega as unidades prisionais
-  const fetchUnidades = async () => {
-    setLoadingUnidades(true)
-    try {
-      const res = await fetch('/api/sipe/unidades')
-      if (res.ok) {
-        const data = await res.json()
-        setUnidades(data.unidades || [])
-      }
-    } catch (err) {
-      console.error('Erro ao buscar unidades:', err)
-    } finally {
-      setLoadingUnidades(false)
-    }
-  }
-
-  // Carrega apenados filtrados por unidade
-  const fetchApenados = useCallback(async () => {
-    if (!selectedUnidade) {
-      setApenados([])
-      setTotal(0)
-      return
-    }
-
-    setLoadingApenados(true)
+  const fetchApenados = useCallback(async (p: number, query: string) => {
+    setLoading(true)
     try {
       const params = new URLSearchParams({
-        page: String(page),
-        limit: '12',
-        unidade: selectedUnidade.nome
+        unidade: unidade.nome,
+        page: String(p),
+        limit: String(LIMIT)
       })
-      if (searchApenado) {
-        params.set('q', searchApenado)
-      }
-
+      if (query) params.set('q', query)
       const res = await fetch(`/api/sipe/apenados?${params}`)
       if (res.ok) {
         const data = await res.json()
-        setApenados(data.apenados || [])
-        setTotal(data.total || 0)
-        setTotalPages(data.totalPages || 1)
+        setApenados(data.apenados)
+        setTotal(data.total)
+        setTotalPages(data.totalPages)
       }
-    } catch (err) {
-      console.error('Erro ao buscar apenados:', err)
     } finally {
-      setLoadingApenados(false)
+      setLoading(false)
     }
-  }, [selectedUnidade, page, searchApenado])
+  }, [unidade.nome])
 
   useEffect(() => {
-    fetchUnidades()
-  }, [])
+    fetchApenados(1, '')
+  }, [fetchApenados])
 
-  useEffect(() => {
+  const handleSearch = (value: string) => {
+    setQ(value)
     setPage(1)
-    fetchApenados()
-  }, [selectedUnidade, searchApenado])
+    fetchApenados(1, value)
+  }
 
-  useEffect(() => {
-    fetchApenados()
-  }, [page])
-
-  // Filtra unidades pelo input de busca
-  const filteredUnidades = unidades.filter(u =>
-    u.nome.toLowerCase().includes(searchUnidade.toLowerCase())
-  )
+  const handlePage = (p: number) => {
+    setPage(p)
+    fetchApenados(p, q)
+  }
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-210px)] min-h-[450px] gap-6 overflow-hidden">
-      {/* Sidebar de Unidades */}
-      <div className="w-full lg:w-80 flex flex-col bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shrink-0">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-red-600 dark:text-red-400" />
-            Unidades Prisionais
-          </h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-3 p-5 border-b border-gray-200 dark:border-gray-700 shrink-0">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shrink-0">
+            <Building2 className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white truncate">{unidade.nome}</h2>
+            <p className="text-xs text-gray-500">{total} apenado{total !== 1 ? 's' : ''}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500 shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar unidade..."
-              value={searchUnidade}
-              onChange={e => setSearchUnidade(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder="Buscar por nome, CPF ou matrícula..."
+              value={q}
+              onChange={e => handleSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {loadingUnidades ? (
-            <div className="flex items-center justify-center py-8 text-gray-400 text-xs">
-              Carregando unidades...
+        {/* Lista */}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center h-40 text-gray-400">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando...
             </div>
-          ) : filteredUnidades.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-xs">
-              Nenhuma unidade encontrada
+          ) : apenados.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
+              Nenhum apenado encontrado
             </div>
           ) : (
-            filteredUnidades.map(u => {
-              const isSelected = selectedUnidade?.id === u.id
-              return (
-                <button
-                  key={u.id}
-                  onClick={() => setSelectedUnidade(u)}
-                  className={`w-full text-left p-3 rounded-xl flex items-center justify-between transition-all group ${
-                    isSelected
-                      ? 'bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30 shadow-sm'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300 border border-transparent'
-                  }`}
-                >
-                  <div className="min-w-0 flex-1 pr-2">
-                    <p className="text-xs font-semibold truncate leading-tight">
-                      {u.nome}
-                    </p>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 font-mono">
-                      ID SIPE: #{u.id}
-                    </p>
-                  </div>
-                  <ChevronRightIcon className={`w-4 h-4 shrink-0 transition-transform ${
-                    isSelected ? 'translate-x-0.5 text-red-500' : 'text-gray-400 group-hover:translate-x-0.5'
-                  }`} />
-                </button>
-              )
-            })
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                <tr>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nome</th>
+                  <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">CPF</th>
+                  <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">Regime</th>
+                  <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Situação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {apenados.map(a => (
+                  <tr
+                    key={a.id}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
+                    onClick={() => setSelectedApenado(a)}
+                  >
+                    <td className="px-5 py-3">
+                      <p className="font-medium text-gray-900 dark:text-white">{a.nome}</p>
+                      {a.dataNascimento && (
+                        <p className="text-xs text-gray-400">Nasc: {a.dataNascimento}</p>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-gray-500 font-mono text-xs hidden sm:table-cell">{a.cpf || '—'}</td>
+                    <td className="px-3 py-3 text-gray-500 text-xs hidden md:table-cell">{a.regime || '—'}</td>
+                    <td className="px-3 py-3">
+                      {a.situacao ? (
+                        <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-full">
+                          {a.situacao}
+                        </span>
+                      ) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
-      </div>
 
-      {/* Grid de Apenados */}
-      <div className="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        {selectedUnidade ? (
-          <>
-            {/* Header da Unidade Selecionada */}
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex flex-wrap gap-4 items-center justify-between">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-sm font-bold text-gray-900 dark:text-white truncate">
-                  {selectedUnidade.nome}
-                </h2>
-                <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5" />
-                  {total} apenado{total !== 1 ? 's' : ''} nesta unidade
-                </p>
-              </div>
-
-              {/* Filtro de Busca de Apenados */}
-              <div className="w-full sm:w-64 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar apenado na unidade..."
-                  value={searchApenado}
-                  onChange={e => setSearchApenado(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Listagem */}
-            <div className="flex-1 overflow-y-auto p-4">
-              {loadingApenados ? (
-                <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
-                  Carregando apenados...
-                </div>
-              ) : apenados.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
-                  <Shield className="w-8 h-8 opacity-30" />
-                  <p className="text-sm">Nenhum apenado encontrado</p>
-                  <p className="text-xs">
-                    {searchApenado ? 'Tente ajustar os termos da busca' : 'Nenhum apenado importado para esta unidade'}
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {apenados.map(a => (
-                    <ApenadoCard key={a.id} apenado={a} onClick={() => setSelectedApenado(a)} />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Paginação */}
-            {totalPages > 1 && (
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2 shrink-0 bg-gray-50/30 dark:bg-gray-800/30">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                </button>
-                <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
-                  Página {page} de {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors"
-                >
-                  <ChevronRight className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                </button>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-3 p-8">
-            <Building2 className="w-12 h-12 text-gray-300 dark:text-gray-700 animate-pulse" />
-            <p className="text-sm font-medium">Selecione uma unidade prisional</p>
-            <p className="text-xs text-gray-500 max-w-xs text-center">
-              Escolha uma das unidades na barra lateral para listar os respectivos apenados importados.
+        {/* Paginação */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800 shrink-0">
+            <p className="text-xs text-gray-500">
+              Página {page} de {totalPages} · {total} registros
             </p>
+            <div className="flex gap-1">
+              <button
+                onClick={() => handlePage(page - 1)}
+                disabled={page <= 1}
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 text-gray-600 dark:text-gray-400"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handlePage(page + 1)}
+                disabled={page >= totalPages}
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 text-gray-600 dark:text-gray-400"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>
 
       {selectedApenado && (
         <ApenadoModal apenado={selectedApenado} onClose={() => setSelectedApenado(null)} />
+      )}
+    </div>
+  )
+}
+
+// ── Main Panel ──────────────────────────────
+
+export function UnidadesPanel() {
+  const [unidades, setUnidades] = useState<Unidade[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedUnidade, setSelectedUnidade] = useState<Unidade | null>(null)
+
+  const fetchUnidades = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/sipe/unidades?withCount=true')
+      if (res.ok) {
+        const data = await res.json()
+        setUnidades(data.unidades || [])
+      }
+    } catch (err) {
+      console.error('Erro ao buscar unidades:', err)
+      toast.error('Erro ao carregar unidades')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchUnidades() }, [])
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">{unidades.length} unidade{unidades.length !== 1 ? 's' : ''} prisional{unidades.length !== 1 ? 'is' : ''}</p>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-40 text-gray-400">Carregando...</div>
+      ) : unidades.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
+          <Building2 className="w-8 h-8 opacity-30" />
+          <p className="text-sm">Nenhuma unidade importada do SIPE</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {unidades.map(u => (
+            <UnidadeCard
+              key={u.id}
+              unidade={u}
+              onSelect={(u) => u._count && u._count.apenados > 0 ? setSelectedUnidade(u) : toast.info('Nenhum apenado vinculado a esta unidade')}
+            />
+          ))}
+        </div>
+      )}
+
+      {selectedUnidade && (
+        <ApenadosUnidadeModal unidade={selectedUnidade} onClose={() => setSelectedUnidade(null)} />
       )}
     </div>
   )

@@ -117,7 +117,9 @@
       "mcp__Claude_in_Chrome__tabs_create_mcp",
       "Bash(ps aux | grep \"next dev\" | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null *)",
       "Bash(npx tsx *)",
-      "Bash(npx ts-node -e ' *)"
+      "Bash(npx ts-node -e ' *)",
+      "Bash(xargs grep -l \"Apenados\\\\|Facções\\\\|Unidades\")",
+      "Bash(xargs grep -l \"Unidades\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
