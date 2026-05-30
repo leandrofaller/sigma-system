@@ -92,7 +92,7 @@ export interface ApenadoImportado {
   cep: string | null
 }
 
-function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; onClick: () => void }) {
+export function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; onClick: () => void }) {
   return (
     <div
       onClick={onClick}

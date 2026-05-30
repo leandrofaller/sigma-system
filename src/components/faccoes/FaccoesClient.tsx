@@ -7,7 +7,8 @@ import { ApenadosImportados } from './ApenadosImportados'
 import { AdvogadosImportados } from './AdvogadosImportados'
 import { FaccoesPanel } from './FaccoesPanel'
 import { DashboardPanel } from './DashboardPanel'
-import { Shield, Users, Briefcase, RefreshCw, BarChart2 } from 'lucide-react'
+import { UnidadesPanel } from './UnidadesPanel'
+import { Shield, Users, Briefcase, RefreshCw, BarChart2, Building2 } from 'lucide-react'
 
 export function FaccoesClient() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -49,6 +50,10 @@ export function FaccoesClient() {
               <Briefcase className="w-4 h-4" />
               Advogados
             </TabsTrigger>
+            <TabsTrigger value="unidades" className="gap-2">
+              <Building2 className="w-4 h-4" />
+              Unidades
+            </TabsTrigger>
             <TabsTrigger value="sync" className="gap-2">
               <RefreshCw className="w-4 h-4" />
               Sincronização
@@ -69,6 +74,10 @@ export function FaccoesClient() {
 
           <TabsContent value="advogados" className="flex-1 min-h-0 mt-0">
             <AdvogadosImportados />
+          </TabsContent>
+
+          <TabsContent value="unidades" className="flex-1 min-h-0 mt-0">
+            <UnidadesPanel />
           </TabsContent>
 
           <TabsContent value="sync" className="flex-1 min-h-0 mt-0 overflow-y-auto">

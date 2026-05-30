@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const q = searchParams.get('q') || ''
   const faccaoId = searchParams.get('faccaoId')
+  const unidade = searchParams.get('unidade')
   const page = parseInt(searchParams.get('page') || '1')
   const limit = parseInt(searchParams.get('limit') || '20')
   const skip = (page - 1) * limit
@@ -28,6 +29,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (faccaoId) where.faccaoId = faccaoId
+  if (unidade) where.unidade = { contains: unidade, mode: 'insensitive' }
 
   const [total, apenados] = await Promise.all([
     prisma.sipeApenadoImportado.count({ where }),
