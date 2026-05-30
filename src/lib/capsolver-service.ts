@@ -51,11 +51,11 @@ class CapsolverService {
       // Estratégia 1: Procura em data-sitekey no DOM
       for (let attempt = 0; attempt < 3; attempt++) {
         const sitekey = await page.evaluate(() => {
-          // Procura em todos os elementos com data-sitekey
+          // Procura em todos os elementos com data-sitekey (Capsolver exige EXATAMENTE 40 chars)
           const elem = document.querySelector('[data-sitekey]')
           if (elem) {
             const key = elem.getAttribute('data-sitekey')
-            if (key && key.length >= 35) return key
+            if (key && key.length === 40) return key
           }
 
           // Procura em QUALQUER iframe que tenha k= na URL
@@ -63,8 +63,8 @@ class CapsolverService {
           for (const iframe of iframes) {
             const src = iframe.getAttribute('src') || ''
             if (src && src.includes('k=')) {
-              const match = src.match(/[?&]k=([a-zA-Z0-9_-]+)/)
-              if (match && match[1] && match[1].length >= 35) {
+              const match = src.match(/[?&]k=([a-zA-Z0-9_-]{40})/)
+              if (match && match[1]) {
                 return match[1]
               }
             }
@@ -74,11 +74,12 @@ class CapsolverService {
         })
 
         if (sitekey) {
-          console.log(`[Capsolver] ✓ Chave detectada: ${sitekey}`)
+          console.log(`[Capsolver] ✓ Chave detectada (${sitekey.length} chars): ${sitekey.substring(0, 15)}...${sitekey.substring(-5)}`)
           return sitekey
         }
 
         if (attempt < 2) {
+          console.log(`[Capsolver] Tentativa ${attempt + 1}/3 - aguardando...`)
           await new Promise(r => setTimeout(r, 1000))
         }
       }
@@ -86,32 +87,51 @@ class CapsolverService {
       // Estratégia 2: Extrai do HTML bruto
       try {
         const content = await page.content()
+        let foundKeys: Array<{match: string, length: number, strategy: string}> = []
 
         // Procura por iframe src com k=
-        const match1 = content.match(/iframe[^>]*src="[^"]*k=([a-zA-Z0-9_-]{35,})[^"]*"/)
-        if (match1 && match1[1]) {
-          console.log(`[Capsolver] ✓ Chave detectada no HTML (iframe src): ${match1[1]}`)
-          return match1[1]
+        const regex1 = /iframe[^>]*src="[^"]*k=([a-zA-Z0-9_-]+)[^"]*"/g
+        let match
+        while ((match = regex1.exec(content)) !== null) {
+          if (match[1].length === 40) {
+            console.log(`[Capsolver] ✓ Chave detectada no HTML (iframe src, 40 chars)`)
+            return match[1]
+          }
+          foundKeys.push({match: match[1], length: match[1].length, strategy: 'iframe src'})
         }
 
         // Procura por data-sitekey=
-        const match2 = content.match(/data-sitekey=["']([a-zA-Z0-9_-]{30,})["']/i)
-        if (match2 && match2[1] && match2[1].length >= 35) {
-          console.log(`[Capsolver] ✓ Chave detectada no HTML (data-sitekey): ${match2[1]}`)
+        const match2 = content.match(/data-sitekey=["']([a-zA-Z0-9_-]+)["']/i)
+        if (match2 && match2[1] && match2[1].length === 40) {
+          console.log(`[Capsolver] ✓ Chave detectada no HTML (data-sitekey, 40 chars)`)
           return match2[1]
+        }
+        if (match2 && match2[1]) {
+          foundKeys.push({match: match2[1], length: match2[1].length, strategy: 'data-sitekey'})
         }
 
         // Procura por "sitekey": "..."
-        const match3 = content.match(/["']sitekey["']\s*:\s*["']([a-zA-Z0-9_-]{30,})["']/i)
-        if (match3 && match3[1] && match3[1].length >= 35) {
-          console.log(`[Capsolver] ✓ Chave detectada no HTML (sitekey JSON): ${match3[1]}`)
+        const match3 = content.match(/["']sitekey["']\s*:\s*["']([a-zA-Z0-9_-]+)["']/i)
+        if (match3 && match3[1] && match3[1].length === 40) {
+          console.log(`[Capsolver] ✓ Chave detectada no HTML (sitekey JSON, 40 chars)`)
           return match3[1]
+        }
+        if (match3 && match3[1]) {
+          foundKeys.push({match: match3[1], length: match3[1].length, strategy: 'sitekey JSON'})
+        }
+
+        // Log sobre chaves encontradas mas com tamanho inválido
+        if (foundKeys.length > 0) {
+          console.warn(`[Capsolver] ⚠️ Chaves encontradas mas com tamanho inválido:`)
+          foundKeys.forEach(k => {
+            console.warn(`  - ${k.strategy}: ${k.length} chars (esperado 40)`)
+          })
         }
       } catch (err) {
         console.warn(`[Capsolver] Erro ao extrair do HTML:`, err)
       }
 
-      console.warn('[Capsolver] ⚠️ Não foi possível detectar a chave reCAPTCHA')
+      console.warn('[Capsolver] ⚠️ Não foi possível detectar chave reCAPTCHA com 40 caracteres')
       return null
     } catch (error) {
       console.error('[Capsolver] Erro ao detectar reCAPTCHA:', error)
@@ -137,6 +157,13 @@ class CapsolverService {
       console.log(`  URL: ${pageUrl}`)
       console.log(`  Chave: ${sitekey.substring(0, 10)}...`)
 
+      // 1. Validar sitekey
+      if (!sitekey || sitekey.length !== 40) {
+        console.error(`[Capsolver] ❌ Sitekey inválido: ${sitekey ? sitekey.length + ' chars' : 'não fornecido'}`)
+        console.error(`[Capsolver] Capsolver exige chaves com EXATAMENTE 40 caracteres`)
+        return null
+      }
+
       // 1. Criar task
       const createTaskResponse = await this.client.post<CapsolverResponse>('/createTask', {
         clientKey: this.apiKey,
@@ -151,8 +178,15 @@ class CapsolverService {
       })
 
       if (createTaskResponse.data.errorId !== 0) {
+        const errorDetails = {
+          errorId: createTaskResponse.data.errorId,
+          errorCode: createTaskResponse.data.errorCode,
+          errorDescription: createTaskResponse.data.errorDescription,
+          websiteKeyLength: sitekey.length,
+        }
         console.error(
-          `[Capsolver] ❌ Erro ao criar task: ${createTaskResponse.data.errorCode}`
+          `[Capsolver] ❌ Erro ao criar task:`,
+          JSON.stringify(errorDetails, null, 2)
         )
         return null
       }
@@ -179,7 +213,12 @@ class CapsolverService {
         const data = getResultResponse.data
 
         if (data.errorId !== 0) {
-          console.error(`[Capsolver] ❌ Erro no polling: ${data.errorCode}`)
+          console.error(`[Capsolver] ❌ Erro no polling:`, {
+            errorCode: data.errorCode,
+            errorDescription: data.errorDescription,
+            taskId,
+            attempt: attempts,
+          })
           return null
         }
 
