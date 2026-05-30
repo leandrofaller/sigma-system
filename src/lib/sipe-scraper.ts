@@ -1354,9 +1354,13 @@ async function scrapeApenadoFicha(
   // --- Extração de Imagem ---
   let photoPath: string | null = null;
   let fotoAtualizada = false;
+  let complementaryPhotoSrcs: string[] = [];
   try {
-    const photoSrc = await page.evaluate(() => {
+    const imagesInfo = await page.evaluate(() => {
       const imgs = Array.from(document.querySelectorAll('img'));
+      let mainSrc: string | null = null;
+      const allSrcs: string[] = [];
+
       for (const img of imgs) {
         const src = img.src || '';
         const alt = (img.alt || '').toLowerCase();
@@ -1364,27 +1368,42 @@ async function scrapeApenadoFicha(
         const className = (img.className || '').toLowerCase();
         
         if (
-          id.includes('foto') || id.includes('profile') || id.includes('avatar') || id.includes('apenado') ||
-          className.includes('foto') || className.includes('profile') || className.includes('avatar') || className.includes('apenado') ||
-          alt.includes('foto') || alt.includes('profile') || alt.includes('avatar') || alt.includes('apenado') ||
-          src.includes('/foto') || src.includes('/photo') || src.includes('/imagem') || src.includes('/getFoto') || src.includes('/arquivo')
+          !mainSrc && (
+            id.includes('foto') || id.includes('profile') || id.includes('avatar') || id.includes('apenado') ||
+            className.includes('foto') || className.includes('profile') || className.includes('avatar') || className.includes('apenado') ||
+            alt.includes('foto') || alt.includes('profile') || alt.includes('avatar') || alt.includes('apenado') ||
+            src.includes('/foto') || src.includes('/photo') || src.includes('/imagem') || src.includes('/getFoto') || src.includes('/arquivo')
+          )
         ) {
-          return src;
+          mainSrc = src;
+        } else {
+          allSrcs.push(src);
         }
       }
       
       const containerImg = document.querySelector('.foto, .foto-apenado, .profile-image, #foto img') as HTMLImageElement;
-      if (containerImg) return containerImg.src;
+      if (containerImg) mainSrc = containerImg.src;
 
-      const candidates = imgs.filter(img => {
-        const src = (img.src || '').toLowerCase();
-        return !src.includes('logo') && !src.includes('sejus') && !src.includes('governo') && !src.includes('brasao') && !src.includes('bandeira') && !src.includes('icon');
-      });
-      if (candidates.length > 0) {
-        return candidates[0].src;
+      if (!mainSrc && imgs.length > 0) {
+        const candidates = imgs.filter(img => {
+          const src = (img.src || '').toLowerCase();
+          return !src.includes('logo') && !src.includes('sejus') && !src.includes('governo') && !src.includes('brasao') && !src.includes('bandeira') && !src.includes('icon');
+        });
+        if (candidates.length > 0) {
+          mainSrc = candidates[0].src;
+        }
       }
       
-      return null;
+      return { mainSrc, allSrcs };
+    });
+
+    const photoSrc = imagesInfo.mainSrc;
+    complementaryPhotoSrcs = imagesInfo.allSrcs.filter(src => {
+      const s = src.toLowerCase();
+      return src && s !== photoSrc &&
+        !s.includes('logo') && !s.includes('sejus') && !s.includes('governo') &&
+        !s.includes('brasao') && !s.includes('bandeira') && !s.includes('icon') &&
+        !s.includes('chosen') && !s.includes('select');
     });
 
     if (photoSrc) {
@@ -1588,15 +1607,150 @@ async function scrapeApenadoFicha(
     update: upsertData,
   })
 
+  // Salva as fotos complementares encontradas na ficha de edição
+  for (const src of complementaryPhotoSrcs) {
+    await saveAndLinkComplementaryPhoto(page, src, apenado.id, localApenado.id, 'Foto de Identificação');
+  }
+
   await Promise.all([
     scrapeProcessos(page, sipeId, apenado.id),
     scrapeAlcunhas(page, sipeId, apenado.id),
     scrapeEndereço(page, sipeId, apenado.id),
     scrapeHistorico(page, sipeId, apenado.id),
     scrapeDocumentos(page, sipeId, apenado.id),
+    scrapeFotosComplementares(page, sipeId, apenado.id, localApenado.id).catch(() => {}),
     scrapeVisitantes(page, sipeId, apenado.id).catch(() => {}),
     scrapeAdvogadosDoApenado(page, sipeId, apenado.id).catch(() => {}),
   ])
+}
+
+async function saveAndLinkComplementaryPhoto(
+  page: Page,
+  src: string,
+  apenadoId: string,
+  apenadoLocalId: string | null,
+  descricao: string
+): Promise<void> {
+  try {
+    const cleanSrc = src.replace('_fotoUsuario', '');
+    const absoluteUrl = new URL(cleanSrc, page.url()).href;
+    
+    const { createHash } = await import('crypto');
+    const urlHash = createHash('md5').update(absoluteUrl).digest('hex');
+    const filename = `sipe-comp-${urlHash}.webp`;
+    
+    const dir = getApenadosDir();
+    const { mkdir, writeFile } = await import('fs/promises');
+    await mkdir(dir, { recursive: true });
+    const localPath = join(dir, filename);
+    const photoPath = `uploads/apenados/${filename}`;
+
+    const existing = await prisma.sipeFotoComplementar.findUnique({
+      where: { photoPath }
+    });
+    if (existing) {
+      if (apenadoLocalId && !existing.apenadoLocalId) {
+        await prisma.sipeFotoComplementar.update({
+          where: { id: existing.id },
+          data: { apenadoLocalId }
+        });
+      }
+      return;
+    }
+
+    const base64Data = await page.evaluate(async (url) => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        return new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        return null;
+      }
+    }, absoluteUrl);
+
+    if (base64Data && base64Data.includes(',')) {
+      const base64Content = base64Data.split(',')[1];
+      const imageBuffer = Buffer.from(base64Content, 'base64');
+
+      const webpBuffer = await sharp(imageBuffer)
+        .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 90 })
+        .toBuffer();
+
+      await writeFile(localPath, webpBuffer);
+
+      await prisma.sipeFotoComplementar.create({
+        data: {
+          apenadoImportadoId: apenadoId,
+          apenadoLocalId,
+          photoPath,
+          descricao
+        }
+      });
+    }
+  } catch (err) {
+    // Falha silenciosa para não travar o fluxo principal
+  }
+}
+
+async function scrapeFotosComplementares(
+  page: Page,
+  sipeId: number,
+  apenadoId: string,
+  apenadoLocalId: string | null
+): Promise<void> {
+  const rotas = [
+    `${SIPE_URL}/apenados/${sipeId}/fotos`,
+    `${SIPE_URL}/apenados/${sipeId}/galeria`,
+    `${SIPE_URL}/apenados/${sipeId}/foto`,
+  ];
+  for (const url of rotas) {
+    try {
+      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 8000 });
+      const status = response?.status();
+      if (status && (status === 404 || status === 403 || status === 500)) {
+        continue;
+      }
+      
+      const currentUrl = page.url();
+      if (
+        currentUrl.includes('/login') ||
+        currentUrl === `${SIPE_URL}/` ||
+        currentUrl === `${SIPE_URL}` ||
+        currentUrl.includes('/selectRole')
+      ) {
+        continue;
+      }
+
+      const bodyText = await page.innerText('body').catch(() => '');
+      if (bodyText.includes('404') || bodyText.includes('não encontrado') || bodyText.includes('Não autorizado')) {
+        continue;
+      }
+
+      const imgUrls = await page.evaluate(() => {
+        const imgs = Array.from(document.querySelectorAll('img'));
+        return imgs
+          .map(img => img.src || '')
+          .filter(src => {
+            const s = src.toLowerCase();
+            return src &&
+              !s.includes('logo') && !s.includes('sejus') && !s.includes('governo') &&
+              !s.includes('brasao') && !s.includes('bandeira') && !s.includes('icon');
+          });
+      });
+
+      for (const imgUrl of imgUrls) {
+        await saveAndLinkComplementaryPhoto(page, imgUrl, apenadoId, apenadoLocalId, 'Foto da Galeria');
+      }
+    } catch {
+      // ignora erro e passa para a próxima URL
+    }
+  }
 }
 
 async function scrapeProcessos(
@@ -2761,6 +2915,11 @@ async function scrapeDocumentos(
 
       if (!nome) continue
 
+      const urlDownload = await row.evaluate((el) => {
+        const anchor = el.querySelector('a[href*="download"], a[href*="documento"], a[href*="arquivo"]') as HTMLAnchorElement | null;
+        return anchor ? anchor.getAttribute('href') : null;
+      });
+
       await prisma.sipeDocumento.upsert({
         where: {
           // Usar combinação única
@@ -2771,12 +2930,27 @@ async function scrapeDocumentos(
           nome,
           tipo,
           dataAnexo: data ? new Date(data) : undefined,
+          urlDownload,
         },
         update: {
           tipo,
           dataAnexo: data ? new Date(data) : undefined,
+          urlDownload,
         },
       })
+
+      // Se for do tipo foto, baixa e vincula como foto complementar
+      if (urlDownload && (tipo.toUpperCase() === 'FOTO' || nome.toUpperCase().includes('FOTO') || tipo.toUpperCase().includes('IMAGEM'))) {
+        try {
+          const apenadoImp = await prisma.sipeApenadoImportado.findUnique({
+            where: { id: apenadoId },
+            select: { apenadoLocalId: true }
+          });
+          await saveAndLinkComplementaryPhoto(page, urlDownload, apenadoId, apenadoImp?.apenadoLocalId || null, `Documento: ${nome}`);
+        } catch (err) {
+          console.error(`Erro ao salvar foto de documento:`, err);
+        }
+      }
     }
   } catch (err) {
     // Silently ignore if page doesn't exist

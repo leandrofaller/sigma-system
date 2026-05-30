@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock, Users } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock, Users, Image } from 'lucide-react'
 
 interface Alcunha { alcunha: string }
 interface Faccao { id: string; nome: string; sigla: string | null; cor: string }
@@ -37,6 +37,13 @@ interface Historico {
   unidade: string | null
 }
 
+interface FotoComplementar {
+  id: string
+  photoPath: string
+  descricao: string | null
+  createdAt: string
+}
+
 export interface ApenadoImportado {
   id: string
   sipeId: number
@@ -61,6 +68,7 @@ export interface ApenadoImportado {
   vinculosAdvogado: VinculoAdvogado[]
   vinculosVisitante: VinculoVisitante[]
   historicos: Historico[]
+  fotosComplementares: FotoComplementar[]
   ultimaSyncAt: string
 
   // Novos campos do SIPE
@@ -175,7 +183,14 @@ function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; onClick:
 }
 
 export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; onClose: () => void }) {
-  const [isZoomed, setIsZoomed] = useState(false)
+  const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
+
+  const getPhotoUrl = (path: string) => {
+    if (path.startsWith('uploads/')) {
+      return `/api/${path}`;
+    }
+    return `/api/uploads/${path}`;
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -185,7 +200,7 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
             <div className="flex gap-4 items-center">
               {/* Foto grande */}
               <div
-                onClick={() => apenado.photoPath && setIsZoomed(true)}
+                onClick={() => apenado.photoPath && setZoomedPhotoUrl(`/api/sipe/apenados/${apenado.id}/foto`)}
                 className={`w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-red-400 to-red-600 shadow-md flex items-center justify-center text-white font-bold text-4xl select-none ${
                   apenado.photoPath ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all' : ''
                 }`}
@@ -442,18 +457,50 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
               </div>
             </section>
           )}
+
+          {/* Fotos Complementares */}
+          {apenado.fotosComplementares && apenado.fotosComplementares.length > 0 && (
+            <section>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <Image className="w-4 h-4 text-red-600 dark:text-red-400" /> Galeria de Fotos Complementares
+              </h3>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {apenado.fotosComplementares.map((foto) => {
+                  const url = getPhotoUrl(foto.photoPath);
+                  return (
+                    <div
+                      key={foto.id}
+                      onClick={() => setZoomedPhotoUrl(url)}
+                      className="group relative aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 cursor-zoom-in border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+                    >
+                      <img
+                        src={url}
+                        alt={foto.descricao || 'Foto Complementar'}
+                        className="w-full h-full object-cover group-hover:opacity-90"
+                      />
+                      {foto.descricao && (
+                        <div className="absolute inset-x-0 bottom-0 bg-black/60 backdrop-blur-sm p-1.5 text-[10px] text-white font-medium truncate opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                          {foto.descricao}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </div>
       </div>
 
       {/* Lightbox para zoom da imagem */}
-      {isZoomed && apenado.photoPath && (
+      {zoomedPhotoUrl && (
         <div
           className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md cursor-zoom-out p-4"
-          onClick={() => setIsZoomed(false)}
+          onClick={() => setZoomedPhotoUrl(null)}
         >
           <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
             <img
-              src={`/api/sipe/apenados/${apenado.id}/foto`}
+              src={zoomedPhotoUrl}
               alt={apenado.nome}
               className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl border border-gray-800"
             />
@@ -464,7 +511,7 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
               className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white p-2 rounded-full transition-colors backdrop-blur-sm"
               onClick={(e) => {
                 e.stopPropagation()
-                setIsZoomed(false)
+                setZoomedPhotoUrl(null)
               }}
             >
               ✕

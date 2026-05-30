@@ -443,6 +443,7 @@ model Apenado {
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   groups           ApenadoGroupMember[]
   sipeImportacoes  SipeApenadoImportado[]
+  fotosComplementares SipeFotoComplementar[]
 
   @@index([name])
   @@index([matricula])
@@ -600,6 +601,7 @@ model SipeApenadoImportado {
   vinculosVisitante SipeVinculoVisitante[]
   historicos       SipeHistorico[]
   documentos       SipeDocumento[]
+  fotosComplementares SipeFotoComplementar[]
 
   @@index([nome])
   @@index([cpf])
@@ -729,6 +731,21 @@ model SipeDocumento {
   @@index([apenadoId])
   @@index([tipo])
   @@map("sipe_documentos")
+}
+
+model SipeFotoComplementar {
+  id                  String               @id @default(cuid())
+  apenadoImportadoId  String
+  apenadoImportado    SipeApenadoImportado @relation(fields: [apenadoImportadoId], references: [id], onDelete: Cascade)
+  apenadoLocalId      String?
+  apenadoLocal        Apenado?             @relation(fields: [apenadoLocalId], references: [id], onDelete: SetNull)
+  photoPath           String               @unique
+  descricao           String?
+  createdAt           DateTime             @default(now())
+
+  @@index([apenadoImportadoId])
+  @@index([apenadoLocalId])
+  @@map("sipe_fotos_complementares")
 }
 
 model SipeSyncJob {

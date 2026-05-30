@@ -20,6 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       },
       vinculosAdvogado: { include: { advogado: true } },
       vinculosVisitante: { include: { visitante: true } },
+      fotosComplementares: true,
     },
   })
 
