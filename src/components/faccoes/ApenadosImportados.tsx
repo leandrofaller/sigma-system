@@ -184,6 +184,7 @@ export function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; o
 
 export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; onClose: () => void }) {
   const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
+  const [zoomedPhotoTitle, setZoomedPhotoTitle] = useState<string>('')
 
   const getPhotoUrl = (path: string) => {
     if (path.startsWith('uploads/')) {
@@ -200,7 +201,12 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
             <div className="flex gap-4 items-center">
               {/* Foto grande */}
               <div
-                onClick={() => apenado.photoPath && setZoomedPhotoUrl(`/api/sipe/apenados/${apenado.id}/foto`)}
+                onClick={() => {
+                  if (apenado.photoPath) {
+                    setZoomedPhotoUrl(`/api/sipe/apenados/${apenado.id}/foto`);
+                    setZoomedPhotoTitle(apenado.nome);
+                  }
+                }}
                 className={`w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-red-400 to-red-600 shadow-md flex items-center justify-center text-white font-bold text-4xl select-none ${
                   apenado.photoPath ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all' : ''
                 }`}
@@ -426,7 +432,17 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
                     </span>
                     
                     {/* Visitor Photo */}
-                    <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400">
+                    <div
+                      onClick={() => {
+                        if (v.visitante.photoPath) {
+                          setZoomedPhotoUrl(`/api/sipe/visitantes/${v.visitante.id}/foto`);
+                          setZoomedPhotoTitle(v.visitante.nome);
+                        }
+                      }}
+                      className={`w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 select-none ${
+                        v.visitante.photoPath ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all' : ''
+                      }`}
+                    >
                       {v.visitante.photoPath ? (
                         <img
                           src={`/api/sipe/visitantes/${v.visitante.id}/foto`}
@@ -470,7 +486,10 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
                   return (
                     <div
                       key={foto.id}
-                      onClick={() => setZoomedPhotoUrl(url)}
+                      onClick={() => {
+                        setZoomedPhotoUrl(url);
+                        setZoomedPhotoTitle(foto.descricao || 'Foto Complementar');
+                      }}
                       className="group relative aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 cursor-zoom-in border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
                     >
                       <img
@@ -501,11 +520,11 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
           <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
             <img
               src={zoomedPhotoUrl}
-              alt={apenado.nome}
+              alt={zoomedPhotoTitle || apenado.nome}
               className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl border border-gray-800"
             />
             <div className="bg-black/60 text-white px-4 py-2 rounded-full text-sm font-semibold backdrop-blur-sm">
-              {apenado.nome}
+              {zoomedPhotoTitle || apenado.nome}
             </div>
             <button
               className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white p-2 rounded-full transition-colors backdrop-blur-sm"

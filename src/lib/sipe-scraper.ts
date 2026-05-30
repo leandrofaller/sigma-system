@@ -2092,7 +2092,8 @@ async function scrapeVisitantes(
 
       if (photoSrc) {
         try {
-          const absoluteUrl = new URL(photoSrc, page.url()).href
+          const cleanPhotoSrc = photoSrc.replace('_fotoUsuario', '')
+          const absoluteUrl = new URL(cleanPhotoSrc, page.url()).href
           const base64Data = await page.evaluate(async (url) => {
             try {
               const res = await fetch(url)
