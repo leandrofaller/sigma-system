@@ -226,6 +226,36 @@ export function AdvogadosImportados() {
   useEffect(() => { fetchAdvogados() }, [fetchAdvogados])
 
   const [syncingCna, setSyncingCna] = useState(false)
+  const [activeCnaJob, setActiveCnaJob] = useState<any>(null)
+  const [isAnyJobActive, setIsAnyJobActive] = useState(false)
+
+  const checkSyncJobs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/sipe/sync')
+      if (res.ok) {
+        const jobsList = await res.json()
+        const anyRunning = jobsList.some((j: any) => j.status === 'RUNNING')
+        const runningCna = jobsList.find((j: any) => j.status === 'RUNNING' && j.tipo === 'ADVOGADOS_CNA')
+        
+        setIsAnyJobActive(anyRunning)
+        
+        // Se o job terminou (estava ativo e agora não está mais), recarrega a lista
+        if (activeCnaJob && !runningCna) {
+          fetchAdvogados()
+        }
+        
+        setActiveCnaJob(runningCna || null)
+      }
+    } catch (e) {
+      console.error('Erro ao verificar jobs ativos:', e)
+    }
+  }, [activeCnaJob, fetchAdvogados])
+
+  useEffect(() => {
+    checkSyncJobs()
+    const interval = setInterval(checkSyncJobs, 3000)
+    return () => clearInterval(interval)
+  }, [checkSyncJobs])
 
   const handleSyncCna = async () => {
     setSyncingCna(true)
@@ -234,6 +264,7 @@ export function AdvogadosImportados() {
       const data = await res.json()
       if (res.ok) {
         toast.success(data.message || 'Sincronização iniciada com sucesso!')
+        checkSyncJobs()
       } else {
         toast.error(data.error || 'Erro ao iniciar sincronização')
       }
@@ -261,18 +292,30 @@ export function AdvogadosImportados() {
           <span className="text-sm text-gray-500">{total} advogado{total !== 1 ? 's' : ''}</span>
         </div>
 
-        <button
-          onClick={handleSyncCna}
-          disabled={syncingCna}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
-        >
-          {syncingCna ? (
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-          ) : (
-            <Users className="w-4 h-4" />
+        <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={handleSyncCna}
+            disabled={syncingCna || (isAnyJobActive && !activeCnaJob)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+          >
+            {syncingCna || activeCnaJob ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <Users className="w-4 h-4" />
+            )}
+            {activeCnaJob
+              ? `Sincronizando CNA (${activeCnaJob.processado}/${activeCnaJob.total ?? '?'})`
+              : isAnyJobActive
+              ? 'Sincronizador Ocupado'
+              : 'Sincronizar Fotos/Dados (CNA)'}
+          </button>
+          
+          {activeCnaJob && (
+            <span className="text-[10px] text-gray-500 animate-pulse">
+              Acompanhe os logs na aba Sincronização
+            </span>
           )}
-          Sincronizar Fotos/Dados (CNA)
-        </button>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">

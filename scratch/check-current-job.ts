@@ -4,7 +4,7 @@ const prisma = new PrismaClient()
 
 async function main() {
   const job = await prisma.sipeSyncJob.findFirst({
-    where: { tipo: 'FACCOES' },
+    where: { tipo: 'ADVOGADOS_CNA' },
     orderBy: { createdAt: 'desc' }
   })
 

@@ -375,6 +375,148 @@ export function resumeSipeSync(jobId: string, unidadeId: string): void {
   startSipeSync(jobId, unidadeId) // startSipeSync detects existing IDs in DB
 }
 
+/**
+ * Inicia a sincronização CNA de todos os advogados em background com acompanhamento de job.
+ */
+export function startCnaAllSync(jobId: string): void {
+  if (globalThis.__sipeState?.status === 'RUNNING') return
+
+  globalThis.__sipeStopFlag = false
+  globalThis.__sipeState = {
+    jobId,
+    status: 'RUNNING',
+    fase: 'Iniciando...',
+    total: 0,
+    processado: 0,
+    erros: 0,
+    ultimoLog: '',
+    startTime: Date.now(),
+    pct: 0,
+  }
+
+  const runPromise = async () => {
+    const job = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
+    if (!job) throw new Error('Job não encontrado')
+
+    await dbProgress(jobId, {
+      log: 'Carregando lista de advogados do banco...',
+      fase: 'Iniciando',
+    })
+    refreshMemory(jobId, { fase: 'Iniciando', ultimoLog: 'Carregando lista de advogados do banco...' })
+
+    const advogados = await prisma.sipeAdvogado.findMany({
+      where: { oab: { not: null } },
+      select: { id: true, oab: true, nome: true },
+    })
+
+    if (advogados.length === 0) {
+      const msg = 'Nenhum advogado com OAB cadastrada no sistema.'
+      await dbProgress(jobId, {
+        status: 'COMPLETED',
+        finalizadoEm: new Date(),
+        log: msg,
+        fase: 'Concluído',
+      })
+      refreshMemory(jobId, { status: 'COMPLETED', fase: 'Concluído', ultimoLog: msg })
+      return
+    }
+
+    refreshMemory(jobId, { total: advogados.length, fase: 'Preparando browser...' })
+    await dbProgress(jobId, {
+      total: advogados.length,
+      log: `Encontrados ${advogados.length} advogados com OAB para sincronizar. Preparando sessão...`,
+    })
+
+    const browser = await getBrowser()
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    })
+    const page = await context.newPage()
+
+    try {
+      for (let i = 0; i < advogados.length; i++) {
+        if (globalThis.__sipeStopFlag) {
+          await dbProgress(jobId, {
+            status: 'INTERRUPTED',
+            finalizadoEm: new Date(),
+            log: 'Sincronização CNA interrompida pelo usuário',
+          })
+          refreshMemory(jobId, { status: 'INTERRUPTED' })
+          return
+        }
+
+        const adv = advogados[i]
+        const progressMsg = `Sincronizando advogado [${i + 1}/${advogados.length}]: ${adv.nome} (${adv.oab})`
+        console.log(`[CNA API OAB] ${progressMsg}`)
+        
+        refreshMemory(jobId, {
+          fase: `Processando ${i + 1}/${advogados.length}`,
+          ultimoLog: progressMsg,
+        })
+        await dbProgress(jobId, {
+          log: progressMsg,
+          fase: `Processando ${i + 1}/${advogados.length}`,
+        })
+
+        if (adv.oab) {
+          try {
+            await scrapeCnaOabDetails(page, adv.id, adv.oab, jobId)
+            
+            globalThis.__sipeState!.processado++
+            globalThis.__sipeState!.pct = Math.round(
+              (globalThis.__sipeState!.processado / advogados.length) * 100
+            )
+
+            await dbProgress(jobId, {
+              processado: globalThis.__sipeState!.processado,
+            })
+
+            // Delay entre consultas
+            await page.waitForTimeout(2000 + Math.random() * 2000)
+          } catch (err: any) {
+            globalThis.__sipeState!.erros++
+            const errMsg = `Erro ao sincronizar ${adv.nome} (${adv.oab}): ${err?.message || err}`
+            console.error(`[CNA API OAB] ${errMsg}`)
+            
+            refreshMemory(jobId, { ultimoLog: errMsg })
+            await dbProgress(jobId, {
+              erros: globalThis.__sipeState!.erros,
+              log: errMsg,
+            })
+          }
+        }
+      }
+
+      const summary = `Concluído: Sincronização CNA finalizada. ${globalThis.__sipeState!.processado} processados, ${globalThis.__sipeState!.erros} erros.`
+      globalThis.__sipeState = {
+        ...globalThis.__sipeState!,
+        status: 'COMPLETED',
+        fase: 'Concluído',
+        ultimoLog: summary,
+      }
+      await dbProgress(jobId, {
+        status: 'COMPLETED',
+        finalizadoEm: new Date(),
+        log: summary,
+        fase: 'Concluído',
+      })
+
+    } finally {
+      await context.close().catch(() => {})
+    }
+  }
+
+  runPromise().catch(async (err) => {
+    const msg = err?.message ?? String(err)
+    globalThis.__sipeState = { ...globalThis.__sipeState!, status: 'FAILED', ultimoLog: msg }
+    await dbProgress(jobId, {
+      status: 'FAILED',
+      finalizadoEm: new Date(),
+      log: `Erro fatal: ${msg}`,
+    })
+  })
+}
+
 // ── Core scrape loop ──────────────────────────────────────────
 
 async function runScrape(jobId: string, unidadeId: string): Promise<void> {
