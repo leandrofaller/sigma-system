@@ -3066,26 +3066,51 @@ export async function scrapeCnaOabDetails(
             apiCaptchaDetected = false
 
             // Tenta fechar qualquer modal/dialog que possa estar bloqueando
-            try {
-              const closed = await cnaPage.evaluate(() => {
-                const dialog = document.querySelector('[role="dialog"], .modal, .dialog')
-                if (dialog) {
-                  const closeBtn = dialog.querySelector('[aria-label*="close"], button.close, .btn-close')
-                  if (closeBtn) {
-                    (closeBtn as HTMLElement).click()
-                    return true
+            let modalClosed = false
+            for (let attempt = 0; attempt < 5; attempt++) {
+              try {
+                const closed = await cnaPage.evaluate(() => {
+                  const dialog = document.querySelector('[role="dialog"], .modal, .dialog, [aria-modal="true"]')
+                  if (dialog) {
+                    // Tenta encontrar botão de fechar
+                    const closeBtn = dialog.querySelector('[aria-label*="close"], [aria-label*="Close"], button.close, .btn-close, [aria-label="close"]')
+                    if (closeBtn) {
+                      (closeBtn as HTMLElement).click()
+                      return 'button'
+                    }
+                    // Tenta pressionar Escape via dialog
+                    const event = new KeyboardEvent('keydown', {
+                      key: 'Escape',
+                      code: 'Escape',
+                      keyCode: 27,
+                      bubbles: true
+                    })
+                    dialog.dispatchEvent(event)
+                    return 'escape'
                   }
-                  // Tenta pressionar Escape
-                  dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-                  return true
+                  return false
+                })
+
+                if (closed) {
+                  console.log(`[CNA] Modal fechado (${closed})`)
+                  await cnaPage.waitForTimeout(800) // Aguarda animação
+                  modalClosed = true
+                  break
                 }
-                return false
-              })
-              if (closed) {
-                await cnaPage.waitForTimeout(500)
+              } catch (e) {
+                // Ignora erro ao tentar fechar modal
               }
-            } catch (e) {
-              // Ignora erro ao tentar fechar modal
+
+              if (attempt < 4) {
+                await cnaPage.waitForTimeout(300)
+              }
+            }
+
+            // Aguarda que o modal desapareça ou o botão Pesquisar fique clicável
+            try {
+              await cnaPage.waitForSelector('button:has-text("Pesquisar"):not(:disabled)', { timeout: 3000 })
+            } catch {
+              // Se timeout, tenta mesmo assim
             }
 
             // Retorna para clicar novamente em pesquisar
@@ -3233,15 +3258,16 @@ export async function scrapeCnaOabDetails(
     const updatePayload: any = {}
     if (profileData.telefone) updatePayload.telefone = profileData.telefone
     if (profileData.endereco) updatePayload.endereco = profileData.endereco
-    if (photoPath) updatePayload.photoPath = photoPath
+    // Nota: photoPath não é suportado em sipeAdvogado (schema não tem esse campo)
+    // Se precisar salvar foto, usar sipeFoto ou outro modelo dedicado
 
     if (Object.keys(updatePayload).length > 0) {
       await prisma.sipeAdvogado.update({
         where: { id: advogadoId },
         data: updatePayload
       })
-      
-      const successMsg = `${logPrefix} Dados atualizados com sucesso para OAB "${oabString}" (Foto: ${photoPath ? 'Sim' : 'Não'})`
+
+      const successMsg = `${logPrefix} Dados atualizados com sucesso para OAB "${oabString}"`
       if (jobId) log(jobId, successMsg)
       console.log(successMsg)
     } else {

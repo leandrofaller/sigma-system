@@ -51,11 +51,11 @@ class CapsolverService {
       // Estratégia 1: Procura em data-sitekey no DOM
       for (let attempt = 0; attempt < 3; attempt++) {
         const sitekey = await page.evaluate(() => {
-          // Procura em todos os elementos com data-sitekey (Capsolver exige EXATAMENTE 40 chars)
+          // Procura em todos os elementos com data-sitekey
           const elem = document.querySelector('[data-sitekey]')
           if (elem) {
             const key = elem.getAttribute('data-sitekey')
-            if (key && key.length === 40) return key
+            if (key && key.length >= 30) return key  // Aceita chaves de vários tamanhos
           }
 
           // Procura em QUALQUER iframe que tenha k= na URL
@@ -63,8 +63,8 @@ class CapsolverService {
           for (const iframe of iframes) {
             const src = iframe.getAttribute('src') || ''
             if (src && src.includes('k=')) {
-              const match = src.match(/[?&]k=([a-zA-Z0-9_-]{40})/)
-              if (match && match[1]) {
+              const match = src.match(/[?&]k=([a-zA-Z0-9_-]+)/)
+              if (match && match[1] && match[1].length >= 30) {
                 return match[1]
               }
             }
@@ -93,8 +93,8 @@ class CapsolverService {
         const regex1 = /iframe[^>]*src="[^"]*k=([a-zA-Z0-9_-]+)[^"]*"/g
         let match
         while ((match = regex1.exec(content)) !== null) {
-          if (match[1].length === 40) {
-            console.log(`[Capsolver] ✓ Chave detectada no HTML (iframe src, 40 chars)`)
+          if (match[1].length >= 30) {
+            console.log(`[Capsolver] ✓ Chave detectada no HTML (iframe src, ${match[1].length} chars)`)
             return match[1]
           }
           foundKeys.push({match: match[1], length: match[1].length, strategy: 'iframe src'})
@@ -102,8 +102,8 @@ class CapsolverService {
 
         // Procura por data-sitekey=
         const match2 = content.match(/data-sitekey=["']([a-zA-Z0-9_-]+)["']/i)
-        if (match2 && match2[1] && match2[1].length === 40) {
-          console.log(`[Capsolver] ✓ Chave detectada no HTML (data-sitekey, 40 chars)`)
+        if (match2 && match2[1] && match2[1].length >= 30) {
+          console.log(`[Capsolver] ✓ Chave detectada no HTML (data-sitekey, ${match2[1].length} chars)`)
           return match2[1]
         }
         if (match2 && match2[1]) {
@@ -112,8 +112,8 @@ class CapsolverService {
 
         // Procura por "sitekey": "..."
         const match3 = content.match(/["']sitekey["']\s*:\s*["']([a-zA-Z0-9_-]+)["']/i)
-        if (match3 && match3[1] && match3[1].length === 40) {
-          console.log(`[Capsolver] ✓ Chave detectada no HTML (sitekey JSON, 40 chars)`)
+        if (match3 && match3[1] && match3[1].length >= 30) {
+          console.log(`[Capsolver] ✓ Chave detectada no HTML (sitekey JSON, ${match3[1].length} chars)`)
           return match3[1]
         }
         if (match3 && match3[1]) {
@@ -157,11 +157,16 @@ class CapsolverService {
       console.log(`  URL: ${pageUrl}`)
       console.log(`  Chave: ${sitekey.substring(0, 10)}...`)
 
-      // 1. Validar sitekey
-      if (!sitekey || sitekey.length !== 40) {
+      // 1. Validar sitekey (Capsolver aceita chaves de vários tamanhos)
+      if (!sitekey || sitekey.length < 30) {
         console.error(`[Capsolver] ❌ Sitekey inválido: ${sitekey ? sitekey.length + ' chars' : 'não fornecido'}`)
-        console.error(`[Capsolver] Capsolver exige chaves com EXATAMENTE 40 caracteres`)
+        console.error(`[Capsolver] Sitekey muito curto (mínimo 30 caracteres)`)
         return null
+      }
+
+      console.log(`[Capsolver] ✓ Sitekey validado: ${sitekey.length} caracteres`)
+      if (sitekey.length !== 40) {
+        console.warn(`[Capsolver] ⚠️  Sitekey não tem 40 chars (tem ${sitekey.length}), mas tentando mesmo assim...`)
       }
 
       // 1. Criar task
