@@ -47,26 +47,71 @@ class CapsolverService {
    */
   async detectRecaptchaKey(page: any): Promise<string | null> {
     try {
-      const sitekey = await page.evaluate(() => {
-        // Procura por reCAPTCHA v3 ou v2
-        const scripts = Array.from(document.querySelectorAll('script'))
+      // Estratégia 1: Tenta extrair do DOM com retry
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const sitekey = await page.evaluate(() => {
+          // Procura em data-sitekey
+          const elem = document.querySelector('[data-sitekey]')
+          if (elem) {
+            const key = elem.getAttribute('data-sitekey')
+            if (key && key.length >= 30) return key
+          }
 
-        // Tenta encontrar em atributos data-sitekey
-        const elem = document.querySelector('[data-sitekey]')
-        if (elem) {
-          return elem.getAttribute('data-sitekey')
+          // Procura em divs/iframes
+          const iframes = Array.from(document.querySelectorAll('div[data-sitekey], iframe[data-sitekey]'))
+          for (const iframe of iframes) {
+            const key = iframe.getAttribute('data-sitekey')
+            if (key && key.length >= 30) return key
+          }
+
+          return null
+        })
+
+        if (sitekey) {
+          console.log(`[Capsolver] ✓ Chave detectada no DOM na tentativa ${attempt + 1}`)
+          return sitekey
         }
 
-        // Tenta encontrar em variáveis window
-        const w = window as any
-        if (w.grecaptcha && w.grecaptcha.getResponse) {
-          return 'found_in_window'
+        if (attempt < 2) {
+          await new Promise(r => setTimeout(r, 1000))
+        }
+      }
+
+      // Estratégia 2: Tenta extrair do HTML bruto
+      try {
+        const content = await page.content()
+
+        // Procura por data-sitekey="..."
+        const match1 = content.match(/data-sitekey=["']([a-zA-Z0-9_-]{35,})["']/i)
+        if (match1 && match1[1]) {
+          console.log(`[Capsolver] ✓ Chave detectada no HTML (data-sitekey)`)
+          return match1[1]
         }
 
-        return null
-      })
+        // Procura por "sitekey":"..."
+        const match2 = content.match(/["']sitekey["']\s*:\s*["']([a-zA-Z0-9_-]{35,})["']/i)
+        if (match2 && match2[1]) {
+          console.log(`[Capsolver] ✓ Chave detectada no HTML (sitekey JSON)`)
+          return match2[1]
+        }
 
-      return sitekey
+        // Procura por strings grandes de 39-40 caracteres alfanuméricos
+        const match3 = content.match(/([a-zA-Z0-9_-]{39,40})/g)
+        if (match3) {
+          for (const key of match3) {
+            // Filtra por padrão típico de reCAPTCHA
+            if (key.match(/^[a-zA-Z0-9_]{39,40}$/)) {
+              console.log(`[Capsolver] ✓ Chave detectada no HTML (brute force)`)
+              return key
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[Capsolver] Erro ao extrair do HTML:`, err)
+      }
+
+      console.warn('[Capsolver] ⚠️ Não foi possível detectar a chave reCAPTCHA')
+      return null
     } catch (error) {
       console.error('[Capsolver] Erro ao detectar reCAPTCHA:', error)
       return null
