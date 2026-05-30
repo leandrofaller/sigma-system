@@ -24,6 +24,8 @@ interface Advogado {
   oab: string | null
   cpf: string | null
   telefone: string | null
+  endereco: string | null
+  photoPath: string | null
   dataCadastro: string | null
   vinculos: VinculoApenado[]
 }
@@ -41,9 +43,17 @@ function AdvogadoCard({ advogado, onClick }: { advogado: Advogado; onClick: () =
       className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md transition-all cursor-pointer"
     >
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center shrink-0">
-          <Briefcase className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-        </div>
+        {advogado.photoPath ? (
+          <img
+            src={`/api/uploads/${advogado.photoPath}`}
+            alt={advogado.nome}
+            className="w-10 h-10 rounded-xl object-cover shrink-0 border border-gray-100 dark:border-gray-700/50"
+          />
+        ) : (
+          <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center shrink-0">
+            <Briefcase className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">{advogado.nome}</p>
           <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
@@ -90,20 +100,38 @@ function AdvogadoModal({
         <div className="p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              </div>
+              {advogado.photoPath ? (
+                <img
+                  src={`/api/uploads/${advogado.photoPath}`}
+                  alt={advogado.nome}
+                  className="w-14 h-14 rounded-xl object-cover shrink-0 border border-gray-200 dark:border-gray-600 shadow-sm"
+                />
+              ) : (
+                <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center shrink-0">
+                  <Briefcase className="w-7 h-7 text-blue-600 dark:text-blue-400" />
+                </div>
+              )}
               <div>
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">{advogado.nome}</h2>
-                <div className="flex items-center gap-3 text-sm text-gray-500">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 mt-0.5">
                   {advogado.oab && <span>OAB {advogado.oab}</span>}
                   {advogado.cpf && <span>CPF {advogado.cpf}</span>}
+                  {advogado.telefone && <span>Tel: {advogado.telefone}</span>}
                 </div>
               </div>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500">✕</button>
           </div>
         </div>
+
+        {advogado.endereco && (
+          <div className="p-6 border-b border-gray-100 dark:border-gray-700/50">
+            <div className="space-y-1 text-sm">
+              <span className="font-semibold text-gray-700 dark:text-gray-300">Endereço Profissional:</span>
+              <p className="text-gray-600 dark:text-gray-400 leading-relaxed bg-gray-50 dark:bg-gray-700/20 p-3 rounded-lg border border-gray-200/50 dark:border-gray-700/30">{advogado.endereco}</p>
+            </div>
+          </div>
+        )}
 
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
@@ -197,20 +225,54 @@ export function AdvogadosImportados() {
 
   useEffect(() => { fetchAdvogados() }, [fetchAdvogados])
 
+  const [syncingCna, setSyncingCna] = useState(false)
+
+  const handleSyncCna = async () => {
+    setSyncingCna(true)
+    try {
+      const res = await fetch('/api/sipe/advogados/sync-cna-all', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || 'Sincronização iniciada com sucesso!')
+      } else {
+        toast.error(data.error || 'Erro ao iniciar sincronização')
+      }
+    } catch {
+      toast.error('Erro de conexão com o servidor')
+    } finally {
+      setSyncingCna(false)
+    }
+  }
+
   return (
     <div className="flex flex-col h-full min-h-0 gap-4">
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="flex-1 min-w-48 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar por nome, OAB ou CPF..."
-            value={q}
-            onChange={e => { setQ(e.target.value); setPage(1) }}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+      <div className="flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex flex-wrap gap-3 items-center flex-1 min-w-48">
+          <div className="flex-1 max-w-md relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar por nome, OAB ou CPF..."
+              value={q}
+              onChange={e => { setQ(e.target.value); setPage(1) }}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <span className="text-sm text-gray-500">{total} advogado{total !== 1 ? 's' : ''}</span>
         </div>
-        <span className="text-sm text-gray-500">{total} advogado{total !== 1 ? 's' : ''}</span>
+
+        <button
+          onClick={handleSyncCna}
+          disabled={syncingCna}
+          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+        >
+          {syncingCna ? (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <Users className="w-4 h-4" />
+          )}
+          Sincronizar Fotos/Dados (CNA)
+        </button>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">

@@ -477,7 +477,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
         await withRetry(async () => {
           try {
             if (job.tipo === 'ADVOGADOS') {
-              await scrapeAdvogadoDetalhe(page, sipeId)
+              await scrapeAdvogadoDetalhe(page, sipeId, jobId)
             } else {
               await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
             }
@@ -487,7 +487,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
               await login(page, unidadeId)
               
               if (job.tipo === 'ADVOGADOS') {
-                await scrapeAdvogadoDetalhe(page, sipeId)
+                await scrapeAdvogadoDetalhe(page, sipeId, jobId)
               } else {
                 await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
               }
@@ -2504,7 +2504,7 @@ async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]>
   return linksIds
 }
 
-async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> {
+async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string): Promise<void> {
   await page.goto(`${SIPE_URL}/advogados/${sipeId}/detalhaclientes`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('body', { timeout: 10_000 })
   const text = await page.innerText('body')
@@ -2522,6 +2522,15 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> 
     create: { sipeId, nome, oab, cpf, telefone, dataCadastro },
     update: { nome, oab, cpf, telefone, dataCadastro },
   })
+
+  // Scraping adicional da OAB Nacional via CNA
+  if (oab) {
+    try {
+      await scrapeCnaOabDetails(page, adv.id, oab, jobId)
+    } catch (cnaErr) {
+      console.error(`[CNA OAB] Falha ao obter dados CNA para o advogado ${nome} (OAB ${oab}):`, cnaErr)
+    }
+  }
 
   // Extração estruturada de apenados atendidos a partir do DOM (resolve o rótulo "Cpf" que na verdade é o SIPE ID ou CPF)
   const apenadosAtendidos = await page.evaluate(() => {
@@ -2691,6 +2700,178 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number): Promise<void> 
         ativo: true
       }
     })
+  }
+}
+
+export async function scrapeCnaOabDetails(
+  page: Page,
+  advogadoId: string,
+  oabString: string,
+  jobId?: string
+): Promise<void> {
+  const logPrefix = `[CNA OAB]`
+  if (jobId) log(jobId, `${logPrefix} Iniciando consulta da OAB "${oabString}" no CNA...`)
+
+  // 1. Parsear OAB (ex: "3092/RO" ou "OAB 3092/RO" ou "3092A/RO")
+  const match = oabString.match(/(\d+)(?:-?[A-Za-z])?\/([A-Za-z]{2})/i)
+  if (!match) {
+    const errorMsg = `${logPrefix} Formato de OAB inválido para busca: "${oabString}"`
+    if (jobId) log(jobId, errorMsg)
+    console.warn(errorMsg)
+    return
+  }
+
+  const inscricao = match[1]
+  const uf = match[2].toUpperCase()
+
+  // 2. Criar uma nova página no contexto do browser para não interferir na sessão do SIPE
+  const cnaPage = await page.context().newPage()
+  
+  try {
+    cnaPage.setDefaultTimeout(20000)
+
+    // Ocultar flags de automação nesta página específica também
+    await cnaPage.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
+    })
+
+    // Ir para a página do CNA
+    await cnaPage.goto('https://cna.oab.org.br/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await cnaPage.waitForTimeout(1000 + Math.random() * 1000)
+
+    // Preencher campos
+    await cnaPage.fill('input[name="registration"]', inscricao)
+    await cnaPage.selectOption('select[name="sectional"]', uf)
+    await cnaPage.selectOption('select[name="registrationType"]', '1') // 1 = Advogado
+    await cnaPage.waitForTimeout(500)
+
+    // Pesquisar
+    await cnaPage.click('button:has-text("Pesquisar")')
+    await cnaPage.waitForTimeout(5000)
+
+    const bodyText = await cnaPage.innerText('body')
+    const hasCaptcha = bodyText.includes('não é um robô') || bodyText.includes('desafio abaixo')
+    
+    if (hasCaptcha) {
+      const captchaMsg = `${logPrefix} Bloqueado por CAPTCHA ao consultar OAB "${oabString}"`
+      if (jobId) log(jobId, captchaMsg)
+      console.warn(captchaMsg)
+      throw new Error('CNA_CAPTCHA_DETECTED')
+    }
+
+    // Clicar no resultado correspondente ao advogado na lista do lado direito
+    const clicked = await cnaPage.evaluate((oabNum) => {
+      const items = Array.from(document.querySelectorAll('*')).filter(el => {
+        const text = el.textContent || '';
+        return text.includes(oabNum) && 
+               el.tagName !== 'BODY' && el.tagName !== 'HTML' && 
+               el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE';
+      });
+      if (items.length > 0) {
+        let leaf = items[0] as HTMLElement;
+        for (const item of items) {
+          if (leaf.contains(item) && item !== leaf) {
+            leaf = item as HTMLElement;
+          }
+        }
+        leaf.click();
+        return true;
+      }
+      return false;
+    }, inscricao)
+
+    if (!clicked) {
+      const notFoundMsg = `${logPrefix} Advogado com OAB "${oabString}" não encontrado no CNA`
+      if (jobId) log(jobId, notFoundMsg)
+      console.log(notFoundMsg)
+      return
+    }
+
+    // Aguardar detalhes
+    await cnaPage.waitForTimeout(3000)
+
+    // Extrair dados
+    const profileData = await cnaPage.evaluate(() => {
+      const text = document.body.innerText || '';
+      
+      const imgs = Array.from(document.querySelectorAll('img'));
+      const ignoreList = ['cna.svg', 'app_store.png', 'googleplay.png'];
+      const profileImg = imgs.find(img => {
+        const src = img.src || '';
+        return src && !ignoreList.some(ignore => src.includes(ignore));
+      });
+
+      const telMatch = text.match(/(?:Telefone|Telefone Profissional|Contatos?|Fones?)\s*:\s*([^\n]+)/i) || 
+                       text.match(/(?:Telefone|Telefone Profissional)\s+([^\n]+)/i);
+      
+      const endMatch = text.match(/(?:Endereço|Endereço Profissional|Endereço de correspondência)\s*:\s*([^\n]+(?:\n[^\n]+){0,2})/i) ||
+                       text.match(/(?:Endereço|Endereço Profissional)\s+([^\n]+(?:\n[^\n]+){0,2})/i);
+
+      return {
+        photoSrc: profileImg ? profileImg.src : null,
+        telefone: telMatch ? telMatch[1].trim() : null,
+        endereco: endMatch ? endMatch[1].trim() : null
+      };
+    });
+
+    let photoPath: string | null = null
+
+    if (profileData.photoSrc) {
+      try {
+        let imageBuffer: Buffer | null = null
+
+        if (profileData.photoSrc.startsWith('data:image/')) {
+          const base64Content = profileData.photoSrc.split(',')[1]
+          imageBuffer = Buffer.from(base64Content, 'base64')
+        } else {
+          const res = await fetch(profileData.photoSrc)
+          if (res.ok) {
+            imageBuffer = Buffer.from(await res.arrayBuffer())
+          }
+        }
+
+        if (imageBuffer) {
+          const webpBuffer = await sharp(imageBuffer)
+            .resize(300, 400, { fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 85 })
+            .toBuffer()
+
+          const { mkdir, writeFile } = await import('fs/promises')
+          const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
+          const advDir = join(baseDir, 'advogados')
+          await mkdir(advDir, { recursive: true })
+
+          const filename = `advogado-${advogadoId}.webp`
+          const localPath = join(advDir, filename)
+          await writeFile(localPath, webpBuffer)
+
+          photoPath = `uploads/advogados/${filename}`
+        }
+      } catch (imgErr) {
+        console.error(`${logPrefix} Erro ao processar imagem de OAB "${oabString}":`, imgErr)
+      }
+    }
+
+    const updatePayload: any = {}
+    if (profileData.telefone) updatePayload.telefone = profileData.telefone
+    if (profileData.endereco) updatePayload.endereco = profileData.endereco
+    if (photoPath) updatePayload.photoPath = photoPath
+
+    if (Object.keys(updatePayload).length > 0) {
+      await prisma.sipeAdvogado.update({
+        where: { id: advogadoId },
+        data: updatePayload
+      })
+      
+      const successMsg = `${logPrefix} Dados atualizados com sucesso para OAB "${oabString}" (Foto: ${photoPath ? 'Sim' : 'Não'})`
+      if (jobId) log(jobId, successMsg)
+      console.log(successMsg)
+    } else {
+      if (jobId) log(jobId, `${logPrefix} Nenhum dado novo encontrado no CNA para OAB "${oabString}"`)
+    }
+
+  } finally {
+    await cnaPage.close().catch(() => {})
   }
 }
 
