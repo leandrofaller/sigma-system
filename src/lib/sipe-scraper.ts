@@ -25,6 +25,7 @@ import { prisma } from './db'
 import sharp from 'sharp'
 import { join } from 'path'
 import { getApenadosDir } from './storage'
+import { createHash } from 'crypto'
 
 // ── Config ────────────────────────────────────────────────────
 const SIPE_URL = 'https://sipe.sejus.ro.gov.br'
@@ -1923,201 +1924,191 @@ async function scrapeVisitantes(
   sipeId: number,
   apenadoId: string
 ): Promise<void> {
-  const urls = [
-    `${SIPE_URL}/apenados/${sipeId}/visitantes`,
-    `${SIPE_URL}/apenados/${sipeId}/visitas`,
-    `${SIPE_URL}/apenados/${sipeId}/credenciados`,
-    `${SIPE_URL}/apenados/${sipeId}/credenciamento`
-  ]
+  const url = `${SIPE_URL}/autorizacoes/${sipeId}/mostrar`
 
-  for (const url of urls) {
-    try {
-      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 })
-      const status = response?.status()
-      if (status && (status === 404 || status === 403 || status === 500)) {
-        continue
-      }
+  try {
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+    const status = response?.status()
+    if (status && (status === 404 || status === 403 || status === 500 || status === 405)) {
+      return
+    }
 
-      const bodyText = await page.innerText('body').catch(() => '')
-      if (bodyText.includes('404') || bodyText.includes('não encontrado') || bodyText.includes('Não autorizado')) {
-        continue
-      }
+    const bodyText = await page.innerText('body').catch(() => '')
+    if (bodyText.includes('404') || bodyText.includes('não encontrado') || bodyText.includes('Não autorizado') || bodyText.includes('Method Not Allowed')) {
+      return
+    }
 
-      const hasTable = await page.evaluate(() => document.querySelector('table') !== null)
-      if (!hasTable) continue
+    const hasTable = await page.evaluate(() => document.querySelector('table') !== null)
+    if (!hasTable) return
 
-      const visitantes = await page.evaluate(() => {
-        const tabelas = Array.from(document.querySelectorAll('table'))
-        const list: Array<{
-          nome: string
-          cpf: string | null
-          parentesco: string | null
-          photoSrc: string | null
-          ativo: boolean
-        }> = []
+    const visitantes = await page.evaluate(() => {
+      const tabelas = Array.from(document.querySelectorAll('table'))
+      const list: Array<{
+        nome: string
+        cpf: string | null
+        parentesco: string | null
+        photoSrc: string | null
+        ativo: boolean
+      }> = []
 
-        for (const table of tabelas) {
-          const rows = Array.from(table.querySelectorAll('tbody tr'))
-          if (rows.length === 0) continue
+      tabelas.forEach((table, tableIdx) => {
+        const rows = Array.from(table.querySelectorAll('tbody tr'))
+        if (rows.length === 0) return
 
-          const headers = Array.from(table.querySelectorAll('thead th, thead td')).map(h => (h.textContent ?? '').toUpperCase().trim())
-          const nomeIdx = headers.findIndex(h => h.includes('NOME') || h.includes('VISITANTE') || h.includes('CREDENCIADO'))
-          const cpfIdx = headers.findIndex(h => h.includes('CPF'))
-          const parenIdx = headers.findIndex(h => h.includes('PARENTESCO') || h.includes('VÍNCULO') || h.includes('VINCULO') || h.includes('GRAU'))
-          const statusIdx = headers.findIndex(h => h.includes('STATUS') || h.includes('SITUAÇÃO') || h.includes('SITUACAO') || h.includes('ATIVO'))
-
-          for (const row of rows) {
-            const cells = Array.from(row.querySelectorAll('td'))
-            if (cells.length < 2) continue
-
-            const img = row.querySelector('img')
-            const photoSrc = img ? img.src : null
-
-            let nome = ''
-            if (nomeIdx >= 0 && cells[nomeIdx]) {
-              nome = (cells[nomeIdx].textContent ?? '').trim()
-            } else {
-              const firstColHasImg = cells[0].querySelector('img') !== null
-              nome = (cells[firstColHasImg ? 1 : 0].textContent ?? '').trim()
-            }
-
-            if (!nome || nome.toUpperCase().includes('NENHUM') || nome.toUpperCase().includes('REGISTRO')) {
-              continue
-            }
-
-            let cpf: string | null = null
-            if (cpfIdx >= 0 && cells[cpfIdx]) {
-              cpf = (cells[cpfIdx].textContent ?? '').replace(/\D/g, '')
-            } else {
-              const rowText = row.innerText || ''
-              const cpfMatch = rowText.match(/\d{3}\.\d{3}\.\d{3}-\d{2}/)
-              if (cpfMatch) {
-                cpf = cpfMatch[0].replace(/\D/g, '')
-              }
-            }
-
-            let parentesco: string | null = null
-            if (parenIdx >= 0 && cells[parenIdx]) {
-              parentesco = (cells[parenIdx].textContent ?? '').trim()
-            }
-
-            let statusText = 'ATIVO'
-            if (statusIdx >= 0 && cells[statusIdx]) {
-              statusText = (cells[statusIdx].textContent ?? '').toUpperCase().trim()
-            }
-            const ativo = !statusText.includes('INATIVO') && !statusText.includes('BLOQUEADO') && !statusText.includes('CANCELADO')
-
-            list.push({
-              nome,
-              cpf: cpf && cpf.length === 11 ? cpf : null,
-              parentesco,
-              photoSrc,
-              ativo
-            })
-          }
-        }
-        return list
-      })
-
-      if (visitantes.length === 0) {
-        continue
-      }
-
-      for (const v of visitantes) {
-        let photoPath: string | null = null
+        const headers = Array.from(table.querySelectorAll('thead th, thead td')).map(h => (h.textContent ?? '').toUpperCase().trim())
         
-        if (v.photoSrc) {
-          try {
-            const absoluteUrl = new URL(v.photoSrc, page.url()).href
-            const base64Data = await page.evaluate(async (url) => {
-              try {
-                const res = await fetch(url)
-                if (!res.ok) return null
-                const blob = await res.blob()
-                return new Promise<string>((resolve) => {
-                  const reader = new FileReader()
-                  reader.onloadend = () => resolve(reader.result as string)
-                  reader.readAsDataURL(blob)
-                })
-              } catch {
-                return null
-              }
-            }, absoluteUrl)
+        // Mapeia colunas baseado em headers
+        const nomeIdx = headers.findIndex(h => h.includes('NOME') || h.includes('VISITANTE') || h.includes('CREDENCIADO'))
+        const cpfIdx = headers.findIndex(h => h.includes('CPF'))
+        const parenIdx = headers.findIndex(h => h.includes('PARENTESCO') || h.includes('VÍNCULO') || h.includes('VINCULO') || h.includes('GRAU'))
+        
+        // A primeira tabela (índice 0) é de ativos, a segunda (índice 1) é de históricos/inativos
+        const isTableAtivo = tableIdx === 0
 
-            if (base64Data && base64Data.includes(',')) {
-              const base64Content = base64Data.split(',')[1]
-              const imageBuffer = Buffer.from(base64Content, 'base64')
+        for (const row of rows) {
+          const cells = Array.from(row.querySelectorAll('td'))
+          if (cells.length < 2) continue
 
-              const webpBuffer = await sharp(imageBuffer)
-                .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
-                .webp({ quality: 85 })
-                .toBuffer()
+          const img = row.querySelector('img')
+          const photoSrc = img ? img.src : null
 
-              const { mkdir, writeFile } = await import('fs/promises')
-              const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
-              const visitDir = join(baseDir, 'visitantes')
-              await mkdir(visitDir, { recursive: true })
-
-              const fileKey = v.cpf || Math.abs(hashCodeLocal(v.nome))
-              const filename = `visitante-${fileKey}.webp`
-              const localPath = join(visitDir, filename)
-
-              await writeFile(localPath, webpBuffer)
-              photoPath = `uploads/visitantes/${filename}`
-            }
-          } catch (imgErr) {
-            console.error(`Falha ao baixar foto do visitante ${v.nome}:`, imgErr)
+          let nome = ''
+          if (nomeIdx >= 0 && cells[nomeIdx]) {
+            nome = (cells[nomeIdx].textContent ?? '').trim()
+          } else {
+            // Fallback caso não ache header
+            const firstColHasImg = cells[0].querySelector('img') !== null
+            nome = (cells[firstColHasImg ? 1 : 0].textContent ?? '').trim()
           }
-        }
 
-        let vis = null
-        if (v.cpf) {
-          vis = await prisma.sipeVisitante.findFirst({ where: { cpf: v.cpf } })
-        }
-        if (!vis) {
-          vis = await prisma.sipeVisitante.findFirst({ where: { nome: v.nome } })
-        }
+          if (!nome || nome.toUpperCase().includes('NENHUM') || nome.toUpperCase().includes('REGISTRO') || nome.length < 3) {
+            continue
+          }
 
-        const upsertData = {
-          nome: v.nome,
-          cpf: v.cpf,
-          parentesco: v.parentesco,
-          ...(photoPath ? { photoPath } : {})
-        }
+          let cpf: string | null = null
+          if (cpfIdx >= 0 && cells[cpfIdx]) {
+            cpf = (cells[cpfIdx].textContent ?? '').replace(/\D/g, '')
+          } else {
+            const rowText = row.innerText || ''
+            const cpfMatch = rowText.match(/\d{3}\.\d{3}\.\d{3}-\d{2}/)
+            if (cpfMatch) {
+              cpf = cpfMatch[0].replace(/\D/g, '')
+            }
+          }
 
-        if (vis) {
-          vis = await prisma.sipeVisitante.update({
-            where: { id: vis.id },
-            data: upsertData
-          })
-        } else {
-          vis = await prisma.sipeVisitante.create({
-            data: upsertData
+          let parentesco: string | null = null
+          if (parenIdx >= 0 && cells[parenIdx]) {
+            parentesco = (cells[parenIdx].textContent ?? '').trim()
+          }
+
+          list.push({
+            nome,
+            cpf: cpf && cpf.length === 11 ? cpf : null,
+            parentesco,
+            photoSrc,
+            ativo: isTableAtivo
           })
         }
+      })
+      return list
+    })
 
-        await prisma.sipeVinculoVisitante.upsert({
-          where: {
-            apenadoId_visitanteId: {
-              apenadoId,
-              visitanteId: vis.id
+    if (visitantes.length === 0) {
+      return
+    }
+
+    for (const v of visitantes) {
+      let photoPath: string | null = null
+      
+      if (v.photoSrc) {
+        try {
+          const absoluteUrl = new URL(v.photoSrc, page.url()).href
+          const base64Data = await page.evaluate(async (url) => {
+            try {
+              const res = await fetch(url)
+              if (!res.ok) return null
+              const blob = await res.blob()
+              return new Promise<string>((resolve) => {
+                const reader = new FileReader()
+                reader.onloadend = () => resolve(reader.result as string)
+                reader.readAsDataURL(blob)
+              })
+            } catch {
+              return null
             }
-          },
-          create: {
-            apenadoId,
-            visitanteId: vis.id,
-            ativo: v.ativo
-          },
-          update: {
-            ativo: v.ativo
+          }, absoluteUrl)
+
+          if (base64Data && base64Data.includes(',')) {
+            const base64Content = base64Data.split(',')[1]
+            const imageBuffer = Buffer.from(base64Content, 'base64')
+
+            const webpBuffer = await sharp(imageBuffer)
+              .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
+              .webp({ quality: 85 })
+              .toBuffer()
+
+            const { mkdir, writeFile } = await import('fs/promises')
+            const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
+            const visitDir = join(baseDir, 'visitantes')
+            await mkdir(visitDir, { recursive: true })
+
+            const fileKey = v.cpf || Math.abs(hashCodeLocal(v.nome))
+            const filename = `visitante-${fileKey}.webp`
+            const localPath = join(visitDir, filename)
+
+            await writeFile(localPath, webpBuffer)
+            photoPath = `uploads/visitantes/${filename}`
           }
+        } catch (imgErr) {
+          console.error(`Falha ao baixar foto do visitante ${v.nome}:`, imgErr)
+        }
+      }
+
+      let vis = null
+      if (v.cpf) {
+        vis = await prisma.sipeVisitante.findFirst({ where: { cpf: v.cpf } })
+      }
+      if (!vis) {
+        vis = await prisma.sipeVisitante.findFirst({ where: { nome: v.nome } })
+      }
+
+      const upsertData = {
+        nome: v.nome,
+        cpf: v.cpf,
+        parentesco: v.parentesco,
+        ...(photoPath ? { photoPath } : {})
+      }
+
+      if (vis) {
+        vis = await prisma.sipeVisitante.update({
+          where: { id: vis.id },
+          data: upsertData
+        })
+      } else {
+        vis = await prisma.sipeVisitante.create({
+          data: upsertData
         })
       }
 
-      break
-    } catch (err) {
-      console.error(`Erro ao sincronizar visitantes na URL ${url}:`, err)
+      await prisma.sipeVinculoVisitante.upsert({
+        where: {
+          apenadoId_visitanteId: {
+            apenadoId,
+            visitanteId: vis.id
+          }
+        },
+        create: {
+          apenadoId,
+          visitanteId: vis.id,
+          ativo: v.ativo
+        },
+        update: {
+          ativo: v.ativo
+        }
+      })
     }
+  } catch (err) {
+    console.error(`Erro ao sincronizar visitantes na URL ${url}:`, err)
   }
 }
 
@@ -2858,39 +2849,66 @@ async function scrapeHistorico(
   apenadoId: string,
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/movimentacoes`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/mudarcela`, { waitUntil: 'domcontentloaded' })
     await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
 
     const rows = await page.$$('table tbody tr')
     for (const row of rows) {
       const cells = await row.$$('td')
-      if (cells.length < 2) continue
+      if (cells.length < 5) continue
 
-      const tipo = (await cells[0]?.innerText())?.trim() || 'MOVIMENTACAO'
-      const data = (await cells[1]?.innerText())?.trim()
-      const descricao = (await cells[2]?.innerText())?.trim() || ''
+      // Cabeçalho da tabela: ["#", "DATA DE MUDANÇA", "MOTIVO DA MUDANÇA", "CELA DE", "CELA PARA"]
+      const dataStr = (await cells[1]?.innerText())?.trim()
+      const motivo = (await cells[2]?.innerText())?.trim() || ''
+      const celaDe = (await cells[3]?.innerText())?.trim() || ''
+      const celaPara = (await cells[4]?.innerText())?.trim() || ''
 
-      if (!data) continue
+      if (!dataStr) continue
+
+      let datahora: Date | null = null
+      try {
+        const parts = dataStr.split(' ')
+        const dateParts = parts[0].split('/')
+        if (dateParts.length === 3) {
+          const timeParts = parts[1] ? parts[1].split(':') : ['00', '00']
+          datahora = new Date(
+            parseInt(dateParts[2]),
+            parseInt(dateParts[1]) - 1,
+            parseInt(dateParts[0]),
+            parseInt(timeParts[0] || '00'),
+            parseInt(timeParts[1] || '00')
+          )
+        }
+      } catch {
+        datahora = new Date(dataStr)
+      }
+
+      const tipo = 'TRANSFERENCIA'
+      const descricao = `Mudança de cela. De: ${celaDe} | Para: ${celaPara} | Motivo: ${motivo}`
+
+      // Evita colisão usando hash MD5 único
+      const idString = `${apenadoId}-${tipo}-${dataStr}-${descricao}`
+      const hashId = createHash('md5').update(idString).digest('hex')
 
       await prisma.sipeHistorico.upsert({
-        where: {
-          // Usar combinação unique já que não há ID único no SIPE
-          id: `${apenadoId}-${tipo}-${data}-${descricao}`.substring(0, 50),
-        },
+        where: { id: hashId },
         create: {
+          id: hashId,
           apenadoId,
           tipo,
           descricao,
-          datahora: new Date(data),
+          datahora,
+          cela: celaPara,
         },
         update: {
           descricao,
-          datahora: new Date(data),
+          datahora,
+          cela: celaPara,
         },
       })
     }
   } catch (err) {
-    // Silently ignore if page doesn't exist
+    console.error(`Erro ao sincronizar histórico/mudança de cela do apenado ${sipeId}:`, err)
   }
 }
 
@@ -2900,7 +2918,7 @@ async function scrapeDocumentos(
   apenadoId: string,
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/documentos`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`${SIPE_URL}/anexos/${sipeId}/index`, { waitUntil: 'domcontentloaded' })
     await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
 
     const rows = await page.$$('table tbody tr')
@@ -2919,12 +2937,14 @@ async function scrapeDocumentos(
         return anchor ? anchor.getAttribute('href') : null;
       });
 
+      // Evita colisão e duplicações indesejadas usando hash MD5 único
+      const idString = `${apenadoId}-${nome}-${data}`
+      const hashId = createHash('md5').update(idString).digest('hex')
+
       await prisma.sipeDocumento.upsert({
-        where: {
-          // Usar combinação única
-          id: `${apenadoId}-${nome}-${data}`.substring(0, 50),
-        },
+        where: { id: hashId },
         create: {
+          id: hashId,
           apenadoId,
           nome,
           tipo,
@@ -2952,7 +2972,7 @@ async function scrapeDocumentos(
       }
     }
   } catch (err) {
-    // Silently ignore if page doesn't exist
+    console.error(`Erro ao sincronizar documentos do apenado ${sipeId}:`, err)
   }
 }
 
