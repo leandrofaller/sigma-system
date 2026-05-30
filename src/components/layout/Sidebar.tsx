@@ -34,6 +34,7 @@ const navItems: NavItem[] = [
   { label: 'Consulta IA', href: '/ia', icon: Sparkles },
   { label: 'Identificação de Apenados', href: '/apenados', icon: UserCheck },
   { label: 'Apenados & Facções', href: '/faccoes', icon: Shield, roles: ['SUPER_ADMIN'] },
+  { label: 'SIAIP', href: '/siaip', icon: Database, roles: ['SUPER_ADMIN'] },
 ];
 
 const baseAdminItems: NavItem[] = [
