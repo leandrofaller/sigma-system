@@ -1409,7 +1409,7 @@ async function scrapeApenadoFicha(
 
     if (photoSrc) {
       // Remove o sufixo _fotoUsuario da URL para baixar a imagem original sem o filtro/marca d'água do SIPE
-      const cleanPhotoSrc = photoSrc.replace('_fotoUsuario', '');
+      const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '');
 
       let base64Data: string | null = null;
       if (cleanPhotoSrc.startsWith('data:image/')) {
@@ -1430,6 +1430,25 @@ async function scrapeApenadoFicha(
             return null;
           }
         }, absoluteUrl);
+
+        // Fallback: se falhou ao obter a foto original limpa (ex: 404), tenta obter a foto original (com proteção/marca d'água)
+        if (!base64Data && cleanPhotoSrc !== photoSrc) {
+          const absoluteUrlFallback = new URL(photoSrc, page.url()).href;
+          base64Data = await page.evaluate(async (url) => {
+            try {
+              const res = await fetch(url);
+              if (!res.ok) return null;
+              const blob = await res.blob();
+              return new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+            } catch {
+              return null;
+            }
+          }, absoluteUrlFallback);
+        }
       }
 
       if (base64Data && base64Data.includes(',')) {
@@ -1632,7 +1651,7 @@ async function saveAndLinkComplementaryPhoto(
   descricao: string
 ): Promise<void> {
   try {
-    const cleanSrc = src.replace('_fotoUsuario', '');
+    const cleanSrc = src.replace(/_fotoUsuario/i, '');
     const absoluteUrl = new URL(cleanSrc, page.url()).href;
     
     const { createHash } = await import('crypto');
@@ -1658,7 +1677,7 @@ async function saveAndLinkComplementaryPhoto(
       return;
     }
 
-    const base64Data = await page.evaluate(async (url) => {
+    let base64Data = await page.evaluate(async (url) => {
       try {
         const res = await fetch(url);
         if (!res.ok) return null;
@@ -1672,6 +1691,25 @@ async function saveAndLinkComplementaryPhoto(
         return null;
       }
     }, absoluteUrl);
+
+    // Fallback: se falhou ao obter a foto original limpa (ex: 404), tenta com a URL original (com proteção/marca d'água)
+    if (!base64Data && cleanSrc !== src) {
+      const absoluteUrlFallback = new URL(src, page.url()).href;
+      base64Data = await page.evaluate(async (url) => {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return null;
+          const blob = await res.blob();
+          return new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        } catch {
+          return null;
+        }
+      }, absoluteUrlFallback);
+    }
 
     if (base64Data && base64Data.includes(',')) {
       const base64Content = base64Data.split(',')[1];
@@ -2092,9 +2130,9 @@ async function scrapeVisitantes(
 
       if (photoSrc) {
         try {
-          const cleanPhotoSrc = photoSrc.replace('_fotoUsuario', '')
+          const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
           const absoluteUrl = new URL(cleanPhotoSrc, page.url()).href
-          const base64Data = await page.evaluate(async (url) => {
+          let base64Data = await page.evaluate(async (url) => {
             try {
               const res = await fetch(url)
               if (!res.ok) return null
@@ -2108,6 +2146,25 @@ async function scrapeVisitantes(
               return null
             }
           }, absoluteUrl)
+
+          // Fallback: se falhou ao obter a foto original limpa (ex: 404), tenta com a URL original (com proteção/marca d'água)
+          if (!base64Data && cleanPhotoSrc !== photoSrc) {
+            const absoluteUrlFallback = new URL(photoSrc, page.url()).href
+            base64Data = await page.evaluate(async (url) => {
+              try {
+                const res = await fetch(url)
+                if (!res.ok) return null
+                const blob = await res.blob()
+                return new Promise<string>((resolve) => {
+                  const reader = new FileReader()
+                  reader.onloadend = () => resolve(reader.result as string)
+                  reader.readAsDataURL(blob)
+                })
+              } catch {
+                return null
+              }
+            }, absoluteUrlFallback)
+          }
 
           if (base64Data && base64Data.includes(',')) {
             const base64Content = base64Data.split(',')[1]
