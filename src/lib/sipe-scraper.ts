@@ -2712,17 +2712,38 @@ export async function scrapeCnaOabDetails(
   const logPrefix = `[CNA OAB]`
   if (jobId) log(jobId, `${logPrefix} Iniciando consulta da OAB "${oabString}" no CNA...`)
 
-  // 1. Parsear OAB (ex: "3092/RO" ou "OAB 3092/RO" ou "3092A/RO")
-  const match = oabString.match(/(\d+)(?:-?[A-Za-z])?\/([A-Za-z]{2})/i)
-  if (!match) {
+  // 1. Parsear OAB (ex: "3092/RO", "12586", "28576/O", "3092A/RO")
+  let inscricao = ''
+  let uf = 'RO' // Padrão local
+
+  const hasSlash = oabString.includes('/')
+  if (hasSlash) {
+    const match = oabString.match(/(\d+)(?:-?[A-Za-z])?\/([A-Za-z]{1,2})/i)
+    if (match) {
+      inscricao = match[1]
+      const ufParsed = match[2].toUpperCase()
+      // Fallback para siglas incompletas/truncadas (ex: /O ou /R em vez de /RO)
+      if (ufParsed === 'O' || ufParsed === 'R') {
+        uf = 'RO'
+      } else {
+        uf = ufParsed
+      }
+    }
+  } else {
+    // Apenas dígitos numéricos (ex: "12586")
+    const match = oabString.match(/^(\d+)/)
+    if (match) {
+      inscricao = match[1]
+      uf = 'RO'
+    }
+  }
+
+  if (!inscricao) {
     const errorMsg = `${logPrefix} Formato de OAB inválido para busca: "${oabString}"`
     if (jobId) log(jobId, errorMsg)
     console.warn(errorMsg)
     return
   }
-
-  const inscricao = match[1]
-  const uf = match[2].toUpperCase()
 
   // 2. Criar uma nova página no contexto do browser para não interferir na sessão do SIPE
   const cnaPage = await page.context().newPage()
