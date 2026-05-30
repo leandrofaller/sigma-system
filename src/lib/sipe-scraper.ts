@@ -1944,6 +1944,7 @@ async function scrapeVisitantes(
     const visitantes = await page.evaluate(() => {
       const tabelas = Array.from(document.querySelectorAll('table'))
       const list: Array<{
+        visitaId: string | null
         nome: string
         cpf: string | null
         parentesco: string | null
@@ -1971,6 +1972,13 @@ async function scrapeVisitantes(
 
           const img = row.querySelector('img')
           const photoSrc = img ? img.src : null
+
+          // O id da visita/vínculo está no data-id do primeiro td ou no próprio texto dele
+          let visitaId: string | null = null
+          const firstCell = cells[0]
+          if (firstCell) {
+            visitaId = firstCell.getAttribute('data-id') || firstCell.textContent?.trim() || null
+          }
 
           let nome = ''
           if (nomeIdx >= 0 && cells[nomeIdx]) {
@@ -2002,6 +2010,7 @@ async function scrapeVisitantes(
           }
 
           list.push({
+            visitaId,
             nome,
             cpf: cpf && cpf.length === 11 ? cpf : null,
             parentesco,
@@ -2019,10 +2028,71 @@ async function scrapeVisitantes(
 
     for (const v of visitantes) {
       let photoPath: string | null = null
-      
-      if (v.photoSrc) {
+      let photoSrc = v.photoSrc
+
+      // Se não tem photoSrc (o que é o padrão na listagem de autorizações do preso), 
+      // tenta navegar para a página de mostra de entrada da visita para obter o CPF real e a foto
+      if (!photoSrc && v.visitaId) {
         try {
-          const absoluteUrl = new URL(v.photoSrc, page.url()).href
+          const subPage = await page.context().newPage()
+          const subUrl = `${SIPE_URL}/visitas/entrada/mostra/${v.visitaId}`
+          const subRes = await subPage.goto(subUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+          
+          if (subRes && subRes.status() === 200) {
+            const visitorDetails = await subPage.evaluate(() => {
+              const rows = Array.from(document.querySelectorAll('.profile-info-row'))
+              let cpf: string | null = null
+              
+              const cpfRow = rows.find(r => {
+                const nameText = r.querySelector('.profile-info-name')?.textContent?.trim() || ''
+                return nameText.toLowerCase().includes('cpf')
+              })
+              
+              if (cpfRow) {
+                cpf = cpfRow.querySelector('.profile-info-value')?.textContent?.trim()?.replace(/\D/g, '') || null
+              }
+              
+              const imgs = Array.from(document.querySelectorAll('img'))
+              
+              // 1. Tenta achar imagem na pasta public/fotosVisitas
+              let pSrc: string | null = null
+              const candidate = imgs.find(img => img.src && img.src.includes('/public/fotosVisitas/'))
+              if (candidate) {
+                pSrc = candidate.src
+              } else {
+                // 2. Tenta achar na pasta .profile-picture
+                const profileImg = document.querySelector('.profile-picture img') as HTMLImageElement
+                if (profileImg && profileImg.src && !profileImg.src.includes('loading.gif')) {
+                  pSrc = profileImg.src
+                } else {
+                  // 3. Fallback: primeira imagem que não seja loading ou brasão
+                  const fallbackImgs = imgs.filter(img => {
+                    const s = (img.src || '').toLowerCase()
+                    return !s.includes('loading.gif') && !s.includes('logo') && !s.includes('sejus') && !s.includes('governo') && !s.includes('brasao')
+                  })
+                  if (fallbackImgs.length > 0) pSrc = fallbackImgs[0].src
+                }
+              }
+              
+              return { cpf, photoSrc: pSrc }
+            })
+
+            if (visitorDetails.cpf) {
+              v.cpf = visitorDetails.cpf
+            }
+            if (visitorDetails.photoSrc) {
+              photoSrc = visitorDetails.photoSrc
+            }
+          }
+          await subPage.close().catch(() => {})
+        } catch (subErr) {
+          console.error(`Erro ao obter foto/CPF do visitante ${v.nome} na subpágina ${v.visitaId}:`, subErr)
+        }
+      }
+
+      if (photoSrc) {
+        try {
+          const absoluteUrl = new URL(photoSrc, page.url()).href
           const base64Data = await page.evaluate(async (url) => {
             try {
               const res = await fetch(url)
