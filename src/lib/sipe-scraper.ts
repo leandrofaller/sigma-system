@@ -1612,16 +1612,15 @@ async function scrapeApenadoFicha(
     await saveAndLinkComplementaryPhoto(page, src, apenado.id, localApenado.id, 'Foto de Identificação');
   }
 
-  await Promise.all([
-    scrapeProcessos(page, sipeId, apenado.id),
-    scrapeAlcunhas(page, sipeId, apenado.id),
-    scrapeEndereço(page, sipeId, apenado.id),
-    scrapeHistorico(page, sipeId, apenado.id),
-    scrapeDocumentos(page, sipeId, apenado.id),
-    scrapeFotosComplementares(page, sipeId, apenado.id, localApenado.id).catch(() => {}),
-    scrapeVisitantes(page, sipeId, apenado.id).catch(() => {}),
-    scrapeAdvogadosDoApenado(page, sipeId, apenado.id).catch(() => {}),
-  ])
+  // Executa o scraping de dados complementares de forma sequencial para evitar colisões de navegação na mesma aba (page) do Playwright
+  await scrapeProcessos(page, sipeId, apenado.id).catch(() => {});
+  await scrapeAlcunhas(page, sipeId, apenado.id).catch(() => {});
+  await scrapeEndereço(page, sipeId, apenado.id).catch(() => {});
+  await scrapeHistorico(page, sipeId, apenado.id).catch(() => {});
+  await scrapeDocumentos(page, sipeId, apenado.id).catch(() => {});
+  await scrapeFotosComplementares(page, sipeId, apenado.id, localApenado.id).catch(() => {});
+  await scrapeVisitantes(page, sipeId, apenado.id).catch(() => {});
+  await scrapeAdvogadosDoApenado(page, sipeId, apenado.id).catch(() => {});
 }
 
 async function saveAndLinkComplementaryPhoto(
