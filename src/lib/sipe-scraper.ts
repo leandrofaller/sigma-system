@@ -1997,7 +1997,7 @@ async function scrapeVisitantes(
           if (cpfIdx >= 0 && cells[cpfIdx]) {
             cpf = (cells[cpfIdx].textContent ?? '').replace(/\D/g, '')
           } else {
-            const rowText = row.innerText || ''
+            const rowText = (row as HTMLElement).innerText || row.textContent || ''
             const cpfMatch = rowText.match(/\d{3}\.\d{3}\.\d{3}-\d{2}/)
             if (cpfMatch) {
               cpf = cpfMatch[0].replace(/\D/g, '')
@@ -2877,29 +2877,65 @@ async function scrapeEndereço(
 ): Promise<void> {
   try {
     await page.goto(`${SIPE_URL}/apenados/${sipeId}/enderecos`, { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('[name="rua_endereco"], body', { timeout: 10_000 })
+    await page.waitForSelector('[name="rua_endereco"], tr[id^="view_"], body', { timeout: 10_000 })
 
     const endereco = await page.evaluate(() => {
-      const val = (name: string) =>
-        (
-          document.querySelector(`[name="${name}"]`) as HTMLInputElement | null
-        )?.value?.trim() || null
+      const viewRow = document.querySelector('tr[id^="view_"]')
+      if (!viewRow) {
+        const val = (name: string) =>
+          (
+            document.querySelector(`[name="${name}"]`) as HTMLInputElement | null
+          )?.value?.trim() || null
 
-      const selVal = (name: string) => {
-        const el = document.querySelector(
-          `[name="${name}"]`
-        ) as HTMLSelectElement | null
-        return el?.options[el.selectedIndex]?.text?.trim() || null
+        const selVal = (name: string) => {
+          const el = document.querySelector(
+            `[name="${name}"]`
+          ) as HTMLSelectElement | null
+          return el?.options[el.selectedIndex]?.text?.trim() || null
+        }
+
+        return {
+          logradouro: val('rua_endereco'),
+          numero: val('numero_endereco'),
+          complemento: val('complemento_endereco'),
+          bairro: val('bairro_endereco'),
+          cidade: selVal('cidade_id'),
+          uf: selVal('estado_id'),
+          cep: val('cep_endereco') || val('cep') || null,
+        }
       }
 
+      const cells = Array.from(viewRow.children)
+      const idMatch = viewRow.id.match(/\d+/)
+      const addrId = idMatch ? idMatch[0] : ''
+
+      const logradouro = document.getElementById(`view_rua_endereco${addrId}`)?.textContent?.trim() || null
+      const numero = document.getElementById(`view_numero_endereco${addrId}`)?.textContent?.trim() || null
+      const complemento = document.getElementById(`view_complemento_endereco${addrId}`)?.textContent?.trim() || null
+      const bairro = document.getElementById(`view_bairro_endereco${addrId}`)?.textContent?.trim() || null
+
+      const cidadeEstado = cells[5]?.textContent?.trim() || ''
+      let cidade = null
+      let uf = null
+
+      if (cidadeEstado && cidadeEstado.includes('-')) {
+        const parts = cidadeEstado.split('-')
+        cidade = parts[0].trim()
+        uf = parts[1].trim()
+      } else if (cidadeEstado) {
+        cidade = cidadeEstado
+      }
+
+      const cep = (document.querySelector('[name="cep_endereco"]') as HTMLInputElement | null)?.value?.trim() || null
+
       return {
-        logradouro: val('rua_endereco'),
-        numero: val('numero_endereco'),
-        complemento: val('complemento_endereco'),
-        bairro: val('bairro_endereco'),
-        cidade: selVal('cidade_id'),
-        uf: selVal('estado_id'),
-        cep: val('cep_endereco') || val('cep') || null,
+        logradouro,
+        numero,
+        complemento,
+        bairro,
+        cidade,
+        uf,
+        cep,
       }
     })
 
