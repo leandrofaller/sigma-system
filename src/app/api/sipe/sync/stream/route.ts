@@ -33,11 +33,37 @@ export async function GET(req: NextRequest) {
 
   const encoder = new TextEncoder()
 
+  let pollInterval: NodeJS.Timeout | null = null
+  let isClosed = false
+
   const stream = new ReadableStream({
     async start(controller) {
+      const safeClose = () => {
+        if (isClosed) return
+        isClosed = true
+        if (pollInterval) {
+          clearInterval(pollInterval)
+        }
+        try {
+          controller.close()
+        } catch (e) {
+          // Ignora erros se já estiver fechado
+        }
+      }
+
+      const safeEnqueue = (data: Uint8Array) => {
+        if (isClosed) return
+        try {
+          controller.enqueue(data)
+        } catch (e) {
+          // Ignora e fecha se der erro no controller
+          safeClose()
+        }
+      }
+
       try {
         // Enviar job inicial
-        controller.enqueue(
+        safeEnqueue(
           encoder.encode(
             `data: ${JSON.stringify({
               type: 'job-status',
@@ -57,21 +83,25 @@ export async function GET(req: NextRequest) {
         let ultimoLog = job.log || ''
         let ultimoStatus = job.status
 
-        const pollInterval = setInterval(async () => {
+        pollInterval = setInterval(async () => {
           try {
+            if (isClosed) {
+              if (pollInterval) clearInterval(pollInterval)
+              return
+            }
+
             const updated = await prisma.sipeSyncJob.findUnique({
               where: { id: jobId },
             })
 
             if (!updated) {
-              clearInterval(pollInterval)
-              controller.close()
+              safeClose()
               return
             }
 
             // Enviar novo log se mudou
             if ((updated.log ?? '') !== ultimoLog) {
-              controller.enqueue(
+              safeEnqueue(
                 encoder.encode(
                   `data: ${JSON.stringify({
                     type: 'log',
@@ -84,7 +114,7 @@ export async function GET(req: NextRequest) {
 
             // Enviar atualização de status
             if (updated.status !== ultimoStatus) {
-              controller.enqueue(
+              safeEnqueue(
                 encoder.encode(
                   `data: ${JSON.stringify({
                     type: 'progress',
@@ -97,28 +127,33 @@ export async function GET(req: NextRequest) {
               ultimoStatus = updated.status
             }
 
-            // Se completo, fechar stream
+            // Se completo, fechar stream e limpar intervalo
             if (
               updated.status === 'COMPLETED' ||
               updated.status === 'FAILED' ||
               updated.status === 'INTERRUPTED'
             ) {
-              controller.close()
+              safeClose()
             }
           } catch (err) {
-            clearInterval(pollInterval)
-            controller.close()
+            safeClose()
           }
         }, 500)
 
         setTimeout(() => {
-          clearInterval(pollInterval)
-          controller.close()
+          safeClose()
         }, 30 * 60 * 1000)
       } catch (err) {
-        controller.close()
+        safeClose()
       }
     },
+    cancel() {
+      // Disparado se o cliente fechar a aba ou abortar a conexão SSE
+      isClosed = true
+      if (pollInterval) {
+        clearInterval(pollInterval)
+      }
+    }
   })
 
   return new NextResponse(stream, {
