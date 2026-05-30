@@ -194,7 +194,7 @@ export async function GET() {
 
   const jobs = await prisma.sipeSyncJob.findMany({
     orderBy: { createdAt: 'desc' },
-    take: 20,
+    take: 100, // Aumentado de 20 para 100 registros
     // Don't send the full idsColetados (can be large)
     select: {
       id: true,
