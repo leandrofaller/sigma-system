@@ -58,11 +58,11 @@ class CapsolverService {
             if (key && key.length >= 35) return key
           }
 
-          // Procura em iframes reCAPTCHA - extrai do parâmetro k= da URL
-          const iframe = document.querySelector('iframe[src*="recaptcha"], iframe[name*="a-"]')
-          if (iframe) {
-            const src = iframe.getAttribute('src')
-            if (src) {
+          // Procura em QUALQUER iframe que tenha k= na URL
+          const iframes = document.querySelectorAll('iframe')
+          for (const iframe of iframes) {
+            const src = iframe.getAttribute('src') || ''
+            if (src && src.includes('k=')) {
               const match = src.match(/[?&]k=([a-zA-Z0-9_-]+)/)
               if (match && match[1] && match[1].length >= 35) {
                 return match[1]
