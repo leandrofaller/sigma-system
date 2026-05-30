@@ -44,32 +44,37 @@ class CapsolverService {
 
   /**
    * Detecta reCAPTCHA v3 na página e retorna a chave do site
-   * reCAPTCHA v3 sitekeys têm 40 caracteres e começam com "6L"
+   * Estratégia: Extrai a chave do URL do iframe reCAPTCHA (parâmetro k=)
    */
   async detectRecaptchaKey(page: any): Promise<string | null> {
     try {
-      // Estratégia 1: Tenta extrair do DOM com retry
+      // Estratégia 1: Procura em data-sitekey no DOM
       for (let attempt = 0; attempt < 3; attempt++) {
         const sitekey = await page.evaluate(() => {
-          // Procura em data-sitekey
+          // Procura em todos os elementos com data-sitekey
           const elem = document.querySelector('[data-sitekey]')
           if (elem) {
             const key = elem.getAttribute('data-sitekey')
-            if (key && key.length === 40 && key.startsWith('6L')) return key
+            if (key && key.length >= 35) return key
           }
 
-          // Procura em divs/iframes
-          const iframes = Array.from(document.querySelectorAll('div[data-sitekey], iframe[data-sitekey]'))
-          for (const iframe of iframes) {
-            const key = iframe.getAttribute('data-sitekey')
-            if (key && key.length === 40 && key.startsWith('6L')) return key
+          // Procura em iframes reCAPTCHA - extrai do parâmetro k= da URL
+          const iframe = document.querySelector('iframe[src*="recaptcha"], iframe[name*="a-"]')
+          if (iframe) {
+            const src = iframe.getAttribute('src')
+            if (src) {
+              const match = src.match(/[?&]k=([a-zA-Z0-9_-]+)/)
+              if (match && match[1] && match[1].length >= 35) {
+                return match[1]
+              }
+            }
           }
 
           return null
         })
 
         if (sitekey) {
-          console.log(`[Capsolver] ✓ Chave detectada no DOM: ${sitekey}`)
+          console.log(`[Capsolver] ✓ Chave detectada: ${sitekey}`)
           return sitekey
         }
 
@@ -78,30 +83,35 @@ class CapsolverService {
         }
       }
 
-      // Estratégia 2: Tenta extrair do HTML bruto - procura especificamente por 6L...
+      // Estratégia 2: Extrai do HTML bruto
       try {
         const content = await page.content()
 
-        // Procura por 6L + 38 caracteres (padrão reCAPTCHA v3)
-        const match1 = content.match(/(6L[a-zA-Z0-9_-]{38})/g)
-        if (match1 && match1.length > 0) {
-          // Filtra por único resultado ou o primeiro
-          const key = match1[0]
-          console.log(`[Capsolver] ✓ Chave detectada no HTML: ${key}`)
-          return key
+        // Procura por iframe src com k=
+        const match1 = content.match(/iframe[^>]*src="[^"]*k=([a-zA-Z0-9_-]{35,})[^"]*"/)
+        if (match1 && match1[1]) {
+          console.log(`[Capsolver] ✓ Chave detectada no HTML (iframe src): ${match1[1]}`)
+          return match1[1]
         }
 
-        // Fallback: procura por data-sitekey
-        const match2 = content.match(/data-sitekey=["']([a-zA-Z0-9_-]{40})["']/i)
-        if (match2 && match2[1]) {
-          console.log(`[Capsolver] ✓ Chave detectada via data-sitekey: ${match2[1]}`)
+        // Procura por data-sitekey=
+        const match2 = content.match(/data-sitekey=["']([a-zA-Z0-9_-]{30,})["']/i)
+        if (match2 && match2[1] && match2[1].length >= 35) {
+          console.log(`[Capsolver] ✓ Chave detectada no HTML (data-sitekey): ${match2[1]}`)
           return match2[1]
+        }
+
+        // Procura por "sitekey": "..."
+        const match3 = content.match(/["']sitekey["']\s*:\s*["']([a-zA-Z0-9_-]{30,})["']/i)
+        if (match3 && match3[1] && match3[1].length >= 35) {
+          console.log(`[Capsolver] ✓ Chave detectada no HTML (sitekey JSON): ${match3[1]}`)
+          return match3[1]
         }
       } catch (err) {
         console.warn(`[Capsolver] Erro ao extrair do HTML:`, err)
       }
 
-      console.warn('[Capsolver] ⚠️ Não foi possível detectar a chave reCAPTCHA v3 (esperado: 6L + 38 chars)')
+      console.warn('[Capsolver] ⚠️ Não foi possível detectar a chave reCAPTCHA')
       return null
     } catch (error) {
       console.error('[Capsolver] Erro ao detectar reCAPTCHA:', error)

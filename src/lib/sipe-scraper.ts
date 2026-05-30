@@ -3065,6 +3065,29 @@ export async function scrapeCnaOabDetails(
             // Reseta a flag de CAPTCHA e tenta novamente
             apiCaptchaDetected = false
 
+            // Tenta fechar qualquer modal/dialog que possa estar bloqueando
+            try {
+              const closed = await cnaPage.evaluate(() => {
+                const dialog = document.querySelector('[role="dialog"], .modal, .dialog')
+                if (dialog) {
+                  const closeBtn = dialog.querySelector('[aria-label*="close"], button.close, .btn-close')
+                  if (closeBtn) {
+                    (closeBtn as HTMLElement).click()
+                    return true
+                  }
+                  // Tenta pressionar Escape
+                  dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+                  return true
+                }
+                return false
+              })
+              if (closed) {
+                await cnaPage.waitForTimeout(500)
+              }
+            } catch (e) {
+              // Ignora erro ao tentar fechar modal
+            }
+
             // Retorna para clicar novamente em pesquisar
             await cnaPage.click('button:has-text("Pesquisar")')
             await cnaPage.waitForTimeout(delays.afterClick)
