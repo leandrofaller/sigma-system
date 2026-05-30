@@ -26,6 +26,7 @@ import sharp from 'sharp'
 import { join } from 'path'
 import { getApenadosDir } from './storage'
 import { createHash } from 'crypto'
+import { capsolverService } from './capsolver-service'
 
 // ── Config ────────────────────────────────────────────────────
 const SIPE_URL = 'https://sipe.sejus.ro.gov.br'
@@ -3038,11 +3039,79 @@ export async function scrapeCnaOabDetails(
     }
 
     if (apiCaptchaDetected) {
-      lastCnaCaptchaDetectedAt = Date.now() // Ativa o cooldown
-      const captchaMsg = `${logPrefix} Bloqueado por CAPTCHA ao consultar OAB "${oabString}". As consultas subsequentes ao CNA OAB estão suspensas por 10 minutos.`
+      const captchaMsg = `${logPrefix} Bloqueado por CAPTCHA ao consultar OAB "${oabString}". Tentando resolver com Capsolver...`
       if (jobId) log(jobId, captchaMsg)
       console.warn(captchaMsg)
-      throw new Error('CNA_CAPTCHA_DETECTED')
+
+      // Tentar resolver CAPTCHA com Capsolver
+      try {
+        const sitekey = await capsolverService.detectRecaptchaKey(cnaPage)
+        if (sitekey) {
+          const token = await capsolverService.solveRecaptchaV3(
+            'https://cna.oab.org.br/',
+            sitekey,
+            'submit'
+          )
+
+          if (token) {
+            // Injectar token e tentar novamente
+            await capsolverService.injectRecaptchaToken(cnaPage, token)
+            await cnaPage.waitForTimeout(2000)
+
+            const resolvedMsg = `${logPrefix} ✅ CAPTCHA resolvido com Capsolver! Retentando requisição...`
+            if (jobId) log(jobId, resolvedMsg)
+            console.log(resolvedMsg)
+
+            // Reseta a flag de CAPTCHA e tenta novamente
+            apiCaptchaDetected = false
+
+            // Retorna para clicar novamente em pesquisar
+            await cnaPage.click('button:has-text("Pesquisar")')
+            await cnaPage.waitForTimeout(delays.afterClick)
+
+            // Re-avalia os resultados
+            for (let i = 0; i < 16; i++) {
+              await cnaPage.waitForTimeout(500)
+              if (apiCaptchaDetected) break
+
+              const resultsFound = await cnaPage.evaluate(() => {
+                const noResultSec = document.querySelector('app-cna section.bg-blue-100')
+                const hasNoResult = noResultSec ? !noResultSec.className.includes('opacity-0') : false
+                const resultSec = document.querySelector('app-cna section.pt-16 ~ section')
+                const hasResults = resultSec ? (!resultSec.className.includes('opacity-0') && document.querySelectorAll('app-cna li button').length > 0) : false
+                return hasNoResult || hasResults
+              })
+              if (resultsFound) break
+            }
+
+            // Se CAPTCHA foi detectado novamente, desistir
+            if (apiCaptchaDetected) {
+              lastCnaCaptchaDetectedAt = Date.now()
+              throw new Error('CNA_CAPTCHA_DETECTED')
+            }
+          } else {
+            // Falhou em resolver
+            lastCnaCaptchaDetectedAt = Date.now()
+            const failMsg = `${logPrefix} Falha ao resolver CAPTCHA com Capsolver. Ativando cooldown de 10 minutos.`
+            if (jobId) log(jobId, failMsg)
+            console.warn(failMsg)
+            throw new Error('CNA_CAPTCHA_DETECTED')
+          }
+        } else {
+          // Não detectou a chave do CAPTCHA
+          lastCnaCaptchaDetectedAt = Date.now()
+          throw new Error('CNA_CAPTCHA_DETECTED')
+        }
+      } catch (err: any) {
+        if (err?.message === 'CNA_CAPTCHA_DETECTED') throw err
+
+        // Erro ao tentar resolver, ativar cooldown
+        lastCnaCaptchaDetectedAt = Date.now()
+        const errorMsg = `${logPrefix} Erro ao tentar resolver CAPTCHA: ${err?.message}. Ativando cooldown.`
+        if (jobId) log(jobId, errorMsg)
+        console.error(errorMsg)
+        throw new Error('CNA_CAPTCHA_DETECTED')
+      }
     }
 
     // Clicar no resultado correspondente ao advogado na lista do lado direito

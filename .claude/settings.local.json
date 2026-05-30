@@ -106,7 +106,15 @@
       "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
       "Bash(xargs grep -l \"TCP\\\\|PCC\\\\|COMANDO VERMELHO\\\\|BONDE\")",
       "Bash(xargs grep -l \"faccao\\\\|faction\")",
-      "Bash(curl -s http://localhost:3000/api/health)"
+      "Bash(curl -s http://localhost:3000/api/health)",
+      "Bash(curl -s -X POST http://localhost:3000/api/sipe/advogados/sync-cna-all -H 'Content-Type: application/json')",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(npm run *)",
+      "Bash(awk '{print $2}')",
+      "Bash(xargs -r kill -9)",
+      "mcp__Claude_in_Chrome__tabs_close_mcp",
+      "mcp__Claude_in_Chrome__tabs_create_mcp"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
