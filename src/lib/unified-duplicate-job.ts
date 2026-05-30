@@ -211,7 +211,8 @@ async function runFacePhase(
     const batch = await prisma.$queryRaw<{ id: string; fd: string }[]>`
       SELECT id, "faceDescriptor" AS fd
       FROM apenados
-      WHERE "faceDescriptor" LIKE '[%'
+      WHERE "faceDescriptor" IS NOT NULL
+        AND "faceDescriptor" != ''
         AND id > ${cursor}
       ORDER BY id ASC
       LIMIT ${FACE_BATCH_SIZE}
@@ -265,24 +266,70 @@ async function runFacePhase(
     if ((i + 1) % 2000 === 0) await new Promise<void>((r) => setImmediate(r));
   }
 
-  // Pairwise Hamming scan + exact cosine verification for candidates
-  let iter = 0;
-  for (let i = 0; i < N - 1; i++) {
-    const iLo = simLo[i], iHi = simHi[i];
-    for (let j = i + 1; j < N; j++) {
-      const hamming = popcount32(iLo ^ simLo[j]) + popcount32(iHi ^ simHi[j]);
-      if (hamming <= FACE_HAMMING_THRESHOLD) {
-        // Exact cosine similarity (dot product on L2-normalized embeddings)
-        const iBase = i * DIMS, jBase = j * DIMS;
-        let dot = 0;
-        for (let d = 0; d < DIMS; d++) dot += vecArray[iBase + d] * vecArray[jBase + d];
-        if (dot >= FACE_SIM_THRESHOLD) {
-          const ra = find(ids[i]), rb = find(ids[j]);
-          if (ra !== rb) parent.set(ra, rb);
+  // ── LSH Bucket Indexing for Face SimHash ──────────────────────────────────
+  const faceBandMaps: Map<number, number[]>[] = [new Map(), new Map(), new Map(), new Map()];
+  const MAX_FACE_BUCKET_SIZE = 100;
+
+  for (let i = 0; i < N; i++) {
+    const lo = simLo[i];
+    const hi = simHi[i];
+    const bands = [
+      lo & 0xffff,
+      (lo >>> 16) & 0xffff,
+      hi & 0xffff,
+      (hi >>> 16) & 0xffff,
+    ];
+    for (let b = 0; b < 4; b++) {
+      const val = bands[b];
+      const bucket = faceBandMaps[b].get(val);
+      if (!bucket) {
+        faceBandMaps[b].set(val, [i]);
+      } else if (bucket.length < MAX_FACE_BUCKET_SIZE) {
+        bucket.push(i);
+      }
+    }
+    if ((i + 1) % 5000 === 0) await new Promise<void>((r) => setImmediate(r));
+  }
+
+  // Coletar pares de candidatos a partir dos baldes
+  const faceCandidatePairs = new Set<string>();
+  let iteration = 0;
+
+  for (const bm of faceBandMaps) {
+    for (const indices of bm.values()) {
+      if (indices.length < 2) continue;
+      for (let i = 0; i < indices.length; i++) {
+        for (let j = i + 1; j < indices.length; j++) {
+          const idxA = indices[i];
+          const idxB = indices[j];
+          const a = idxA < idxB ? idxA : idxB;
+          const b = idxA < idxB ? idxB : idxA;
+          faceCandidatePairs.add(`${a}|${b}`);
+          if (++iteration % 50_000 === 0) await new Promise<void>((r) => setImmediate(r));
         }
       }
-      if (++iter % 100_000 === 0) await new Promise<void>((r) => setImmediate(r));
     }
+  }
+
+  // Comparação detalhada (distância de Hamming + cosseno exato) dos candidatos
+  iteration = 0;
+  for (const pair of faceCandidatePairs) {
+    const [idxAStr, idxBStr] = pair.split('|');
+    const idxA = parseInt(idxAStr, 10);
+    const idxB = parseInt(idxBStr, 10);
+
+    const hamming = popcount32(simLo[idxA] ^ simLo[idxB]) + popcount32(simHi[idxA] ^ simHi[idxB]);
+    if (hamming <= FACE_HAMMING_THRESHOLD) {
+      // Exact cosine similarity (dot product on L2-normalized embeddings)
+      const iBase = idxA * DIMS, jBase = idxB * DIMS;
+      let dot = 0;
+      for (let d = 0; d < DIMS; d++) dot += vecArray[iBase + d] * vecArray[jBase + d];
+      if (dot >= FACE_SIM_THRESHOLD) {
+        const ra = find(ids[idxA]), rb = find(ids[idxB]);
+        if (ra !== rb) parent.set(ra, rb);
+      }
+    }
+    if (++iteration % 50_000 === 0) await new Promise<void>((r) => setImmediate(r));
   }
 }
 
