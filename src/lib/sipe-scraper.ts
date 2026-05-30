@@ -1771,7 +1771,53 @@ async function scrapeApenadoFicha(
     where: { sipeId },
     create: { sipeId, ...upsertData },
     update: upsertData,
+    include: { faccao: true }
   })
+
+  // ============ SINCRONIZAÇÃO COM AIP ============
+  // Se existe registro em AIP para este apenado, atualizar campos SIPE
+  // Campos de inteligência NÃO são sobrescritos
+  try {
+    const apenadoEmAIP = await prisma.aIPApenado.findUnique({
+      where: { sipeId }
+    })
+
+    if (apenadoEmAIP) {
+      await prisma.aIPApenado.update({
+        where: { id: apenadoEmAIP.id },
+        data: {
+          // Atualizar apenas campos SIPE (não inteligência)
+          nome: apenado.nome,
+          cpf: apenado.cpf,
+          rg: apenado.rg,
+          dataNascimento: apenado.dataNascimento,
+          sexo: apenado.sexo,
+          etnia: apenado.etnia,
+          unidade: apenado.unidade,
+          cela: apenado.cela,
+          regime: apenado.regime,
+          situacao: apenado.situacao,
+          dataEntrada: apenado.dataEntrada,
+          tempoPena: apenado.tempoPena,
+          faccao: apenado.faccao?.nome || null,
+          monitorado: apenado.monitorado,
+          intramuro: apenado.intramuro,
+          logradouro: apenado.logradouro,
+          numero: apenado.numero,
+          bairro: apenado.bairro,
+          cidade: apenado.cidade,
+          uf: apenado.uf,
+          cep: apenado.cep,
+          ultimaSincAt: new Date(),
+          // Campos de inteligência NÃO são atualizados aqui
+        }
+      }).catch((err) => {
+        console.error(`[AIP] Erro ao sincronizar ${sipeId}:`, err.message)
+      })
+    }
+  } catch (err) {
+    console.error(`[AIP] Erro ao buscar registro em AIP:`, err)
+  }
 
   // Salva as fotos complementares encontradas na ficha de edição
   for (const src of complementaryPhotoSrcs) {

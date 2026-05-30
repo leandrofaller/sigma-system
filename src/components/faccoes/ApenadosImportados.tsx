@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock, Users, Image } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock, Users, Image, Brain, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface Alcunha { alcunha: string }
 interface Faccao { id: string; nome: string; sigla: string | null; cor: string }
@@ -185,6 +186,36 @@ export function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; o
 export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; onClose: () => void }) {
   const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
   const [zoomedPhotoTitle, setZoomedPhotoTitle] = useState<string>('')
+  const [cadastrandoEmAIP, setCadastrandoEmAIP] = useState(false)
+
+  const handleCadastrarEmAIP = async () => {
+    setCadastrandoEmAIP(true)
+    try {
+      const res = await fetch('/api/aip/apenados', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sipeApenadoId: apenado.sipeId,
+          cadastradoPor: 'current-user' // TODO: integrar com auth real
+        })
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        toast.success('Apenado cadastrado em AIP com sucesso!')
+      } else if (res.status === 409) {
+        toast.info('Apenado já cadastrado em AIP')
+      } else {
+        toast.error(data.message || 'Erro ao cadastrar em AIP')
+      }
+    } catch (error) {
+      console.error('Erro ao cadastrar em AIP:', error)
+      toast.error('Erro ao cadastrar em AIP')
+    } finally {
+      setCadastrandoEmAIP(false)
+    }
+  }
 
   const getPhotoUrl = (path: string) => {
     if (path.startsWith('uploads/')) {
@@ -239,6 +270,14 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
                   {apenado.faccao.nome}
                 </span>
               )}
+              <button
+                onClick={handleCadastrarEmAIP}
+                disabled={cadastrandoEmAIP}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {cadastrandoEmAIP ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
+                Cadastrar em AIP
+              </button>
               <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500">✕</button>
             </div>
           </div>

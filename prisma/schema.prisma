@@ -602,6 +602,7 @@ model SipeApenadoImportado {
   historicos       SipeHistorico[]
   documentos       SipeDocumento[]
   fotosComplementares SipeFotoComplementar[]
+  aipApenado       AIPApenado?  @relation("AIPApenadoToSipeApenado")
 
   @@index([nome])
   @@index([cpf])
@@ -775,4 +776,96 @@ model SipeSyncJob {
 
   @@index([status])
   @@map("sipe_sync_jobs")
+}
+
+// ============================================================
+// AIP (Análise de Inteligência Penitenciária)
+// Sistema dual de dados: SIPE (sincronizável) + Inteligência (permanente)
+// ============================================================
+
+model AIPApenado {
+  id String @id @default(cuid())
+
+  // ============ VÍNCULO COM SIPE ============
+  // Permite atualizar dados SIPE de novo scraping
+  sipeApenadoId Int   @unique
+  sipeApenado   SipeApenadoImportado @relation("AIPApenadoToSipeApenado", fields: [sipeApenadoId], references: [sipeId], onDelete: Cascade)
+
+  // ============ DADOS DO SIPE (atualizáveis) ============
+  // Copiados inicialmente de SipeApenadoImportado
+  // Atualizados automaticamente quando novo scraping acontece
+  nome              String
+  cpf               String?
+  rg                String?
+  dataNascimento    String? // YYYY-MM-DD
+  sexo              String? // M/F
+  etnia             String?
+  unidade           String?
+  cela              String?
+  regime            String?
+  situacao          String?
+  dataEntrada       String?
+  dataPrisao        String?
+  tempoPena         String?
+  faccao            String? // nome da facção conforme SIPE
+  monitorado        Boolean?
+  intramuro         Boolean?
+  logradouro        String?
+  numero            String?
+  bairro            String?
+  cidade            String?
+  uf                String?
+  cep               String?
+  sipeId            Int     @unique
+
+  // ============ DADOS DE INTELIGÊNCIA (imutáveis pelo Limpar Tudo) ============
+  // Adicionados manualmente pelo analista, nunca sobrescritos
+
+  // Override de facção (inteligência corrige SIPE)
+  facaoRealNome        String?
+  facaoNivel           String? // "confirmado", "suspeita", "negado"
+  facaoDataVerificacao DateTime?
+
+  // Campos de inteligência gerais
+  notasInteligencia String? @db.Text
+  observacoes       String? @db.Text
+
+  // Metadata de inteligência
+  cadastradoEm  DateTime  @default(now())
+  cadastradoPor String
+  atualizadoEm  DateTime  @updatedAt
+  atualizadoPor String?
+  ultimaSincAt  DateTime? // quando foi sincronizado pela última vez
+
+  // Status
+  ativo Boolean @default(true)
+
+  // Relacionamentos
+  vinculos AIPVinculo[]
+
+  @@index([sipeId])
+  @@index([unidade])
+  @@index([facaoRealNome])
+  @@index([cadastradoEm])
+  @@map("aip_apenados")
+}
+
+model AIPVinculo {
+  id String @id @default(cuid())
+
+  apenadoId String
+  apenado   AIPApenado @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+
+  // Para qual outro apenado em AIP?
+  vinculadoComId String?
+
+  tipo            String
+  forca           String? // "confirmado", "suspeita", "negado"
+  notaVinculo     String? @db.Text
+  documentadoEm   DateTime @default(now())
+  documentadoPor  String
+
+  @@index([apenadoId])
+  @@index([tipo])
+  @@map("aip_vinculos")
 }

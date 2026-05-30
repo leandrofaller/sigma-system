@@ -1,0 +1,436 @@
+'use client'
+
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight } from 'lucide-react'
+import { toast } from 'sonner'
+
+interface AIPApenado {
+  id: string
+  sipeId: number
+  nome: string
+  cpf?: string
+  unidade?: string
+  faccao?: string
+  regime?: string
+  situacao?: string
+
+  // Inteligência
+  facaoRealNome?: string
+  facaoNivel?: string
+  notasInteligencia?: string
+  observacoes?: string
+
+  cadastradoEm: string
+  cadastradoPor: string
+  atualizadoEm: string
+  atualizadoPor?: string
+}
+
+// ── Card de Apenado em AIP ──────────────────────────────
+
+function AIApenadoCard({ apenado, onSelect }: { apenado: AIPApenado; onSelect: (a: AIPApenado) => void }) {
+  const temInteligencia = !!(apenado.facaoRealNome || apenado.notasInteligencia)
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(apenado)}
+      className="w-full text-left bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all"
+    >
+      <div className="flex items-start gap-3">
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 font-bold text-white text-sm ${
+          temInteligencia ? 'bg-purple-500' : 'bg-blue-500'
+        }`}>
+          {apenado.nome.charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900 dark:text-white truncate">{apenado.nome}</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            {apenado.unidade && `${apenado.unidade} •`}
+            {apenado.faccao || '—'}
+          </p>
+          {temInteligencia && (
+            <div className="mt-2 flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-purple-500" />
+              <span className="text-xs text-purple-600 dark:text-purple-400">Dados de inteligência</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </button>
+  )
+}
+
+// ── Modal de Detalhes do Apenado em AIP ──────────────────────────────
+
+function AIApenadoModal({ apenado, onClose, onUpdate }: {
+  apenado: AIPApenado
+  onClose: () => void
+  onUpdate: (apenado: AIPApenado) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [formData, setFormData] = useState(apenado)
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/aip/apenados/${apenado.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          facaoRealNome: formData.facaoRealNome,
+          facaoNivel: formData.facaoNivel,
+          notasInteligencia: formData.notasInteligencia,
+          observacoes: formData.observacoes,
+          atualizadoPor: 'current-user' // TODO: integrar com auth real
+        })
+      })
+
+      if (res.ok) {
+        const { apenado: updated } = await res.json()
+        setFormData(updated)
+        onUpdate(updated)
+        setEditing(false)
+        toast.success('Inteligência atualizada com sucesso')
+      } else {
+        toast.error('Erro ao atualizar')
+      }
+    } catch (error) {
+      console.error('Erro ao salvar:', error)
+      toast.error('Erro ao salvar alterações')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700 shrink-0">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-purple-500 text-white font-bold shrink-0">
+              {apenado.nome.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="font-bold text-gray-900 dark:text-white truncate">{apenado.nome}</h2>
+              <p className="text-xs text-gray-500">SIPE ID: {apenado.sipeId}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {!editing ? (
+              <button
+                onClick={() => setEditing(true)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-400"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
+            ) : null}
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Conteúdo */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Seção SIPE (Readonly) */}
+          <div className="p-5 border-b border-gray-100 dark:border-gray-800">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-blue-500" />
+              Dados do SIPE (Sincronizados)
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Nome</p>
+                <p className="text-gray-900 dark:text-white font-medium">{apenado.nome}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">CPF</p>
+                <p className="text-gray-900 dark:text-white font-mono">{apenado.cpf || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Unidade</p>
+                <p className="text-gray-900 dark:text-white">{apenado.unidade || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Regime</p>
+                <p className="text-gray-900 dark:text-white">{apenado.regime || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Facção (SIPE)</p>
+                <p className="text-gray-900 dark:text-white">{apenado.faccao || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Situação</p>
+                <p className="text-gray-900 dark:text-white">{apenado.situacao || '—'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Seção Inteligência (Editável) */}
+          <div className="p-5">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-purple-500" />
+              Dados de Inteligência
+            </h3>
+
+            <div className="space-y-4">
+              {/* Facção Real */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Facção Real (Verificada)
+                </label>
+                {editing ? (
+                  <input
+                    type="text"
+                    value={formData.facaoRealNome || ''}
+                    onChange={e => setFormData({ ...formData, facaoRealNome: e.target.value })}
+                    placeholder="Ex: PCC, CV, TCP, etc."
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-900 dark:text-white">{formData.facaoRealNome || '(não informado)'}</p>
+                )}
+              </div>
+
+              {/* Nível de Confiança */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Nível de Confiança
+                </label>
+                {editing ? (
+                  <select
+                    value={formData.facaoNivel || ''}
+                    onChange={e => setFormData({ ...formData, facaoNivel: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">Selecionar...</option>
+                    <option value="confirmado">Confirmado</option>
+                    <option value="provavel">Provável</option>
+                    <option value="suspeita">Suspeita</option>
+                    <option value="improvavel">Improvável</option>
+                    <option value="negado">Negado</option>
+                  </select>
+                ) : (
+                  <p className="text-sm text-gray-900 dark:text-white">{formData.facaoNivel || '(não informado)'}</p>
+                )}
+              </div>
+
+              {/* Notas de Inteligência */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Notas de Inteligência
+                </label>
+                {editing ? (
+                  <textarea
+                    value={formData.notasInteligencia || ''}
+                    onChange={e => setFormData({ ...formData, notasInteligencia: e.target.value })}
+                    placeholder="Documentar observações, análises, vinculações..."
+                    rows={4}
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                    {formData.notasInteligencia || '(nenhuma nota)'}
+                  </p>
+                )}
+              </div>
+
+              {/* Observações */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Observações Adicionais
+                </label>
+                {editing ? (
+                  <textarea
+                    value={formData.observacoes || ''}
+                    onChange={e => setFormData({ ...formData, observacoes: e.target.value })}
+                    placeholder="Informações complementares..."
+                    rows={3}
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                    {formData.observacoes || '(nenhuma observação)'}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        {editing && (
+          <div className="flex items-center gap-3 p-5 border-t border-gray-200 dark:border-gray-700 shrink-0">
+            <button
+              onClick={() => {
+                setFormData(apenado)
+                setEditing(false)
+              }}
+              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Salvar
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main Panel ──────────────────────────────
+
+export function AIPanel() {
+  const [apenados, setApenados] = useState<AIPApenado[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedApenado, setSelectedApenado] = useState<AIPApenado | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+
+  const LIMIT = 20
+
+  const fetchApenados = useCallback(async (p: number, q: string) => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({
+        page: String(p),
+        limit: String(LIMIT)
+      })
+      if (q) params.set('q', q)
+
+      const res = await fetch(`/api/aip/apenados?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        setApenados(data.apenados)
+        setTotal(data.total)
+        setTotalPages(data.totalPages)
+        setPage(p)
+      }
+    } catch (error) {
+      console.error('Erro ao buscar apenados:', error)
+      toast.error('Erro ao carregar apenados')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchApenados(1, searchQuery)
+  }, [searchQuery, fetchApenados])
+
+  const handleSearch = (value: string) => {
+    setSearchQuery(value)
+    setPage(1)
+  }
+
+  const handlePageChange = (newPage: number) => {
+    fetchApenados(newPage, searchQuery)
+  }
+
+  const handleUpdate = (updated: AIPApenado) => {
+    setApenados(apenados.map(a => a.id === updated.id ? updated : a))
+    setSelectedApenado(updated)
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <Brain className="w-5 h-5 text-purple-500" />
+            Análise de Inteligência Penitenciária
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">{total} apenado{total !== 1 ? 's' : ''} registrado{total !== 1 ? 's' : ''}</p>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        <input
+          type="text"
+          placeholder="Buscar por nome ou CPF..."
+          value={searchQuery}
+          onChange={e => handleSearch(e.target.value)}
+          className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+        />
+      </div>
+
+      {/* Grid de Apenados */}
+      {loading ? (
+        <div className="flex items-center justify-center h-40 text-gray-400">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando...
+        </div>
+      ) : apenados.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
+          <Brain className="w-8 h-8 opacity-30" />
+          <p className="text-sm">Nenhum apenado registrado em AIP</p>
+          <p className="text-xs">Cadastre apenados do SIPE para começar a análise</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {apenados.map(a => (
+              <AIApenadoCard
+                key={a.id}
+                apenado={a}
+                onSelect={setSelectedApenado}
+              />
+            ))}
+          </div>
+
+          {/* Paginação */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500">
+                Página {page} de {totalPages} • {total} registros
+              </p>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => handlePageChange(page - 1)}
+                  disabled={page <= 1}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 text-gray-600 dark:text-gray-400"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handlePageChange(page + 1)}
+                  disabled={page >= totalPages}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 text-gray-600 dark:text-gray-400"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Modal */}
+      {selectedApenado && (
+        <AIApenadoModal
+          apenado={selectedApenado}
+          onClose={() => setSelectedApenado(null)}
+          onUpdate={handleUpdate}
+        />
+      )}
+    </div>
+  )
+}

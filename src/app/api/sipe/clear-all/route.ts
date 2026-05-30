@@ -19,6 +19,7 @@ export async function DELETE(req: NextRequest) {
 
   if (type === 'apenados') {
     // Deleção em ordem para apenados (tabelas dependentes de SipeApenadoImportado primeiro)
+    // IMPORTANTE: AIP records NÃO são deletados, apenas desincronizados
     const [
       vinculosVisitante,
       vinculosAdvogado,
@@ -27,6 +28,7 @@ export async function DELETE(req: NextRequest) {
       historicos,
       documentos,
       apenados,
+      desincronizadosAIP,
     ] = await prisma.$transaction([
       prisma.sipeVinculoVisitante.deleteMany(),
       prisma.sipeVinculoAdvogado.deleteMany(),
@@ -35,6 +37,11 @@ export async function DELETE(req: NextRequest) {
       prisma.sipeHistorico.deleteMany(),
       prisma.sipeDocumento.deleteMany(),
       prisma.sipeApenadoImportado.deleteMany(),
+      // Marcar AIP records como desincronizados (mas não deletar)
+      prisma.aIPApenado.updateMany({
+        where: { ultimaSincAt: { not: null } },
+        data: { ultimaSincAt: null }
+      })
     ])
 
     deletados = {
@@ -45,6 +52,7 @@ export async function DELETE(req: NextRequest) {
       documentos: documentos.count,
       vinculosAdvogado: vinculosAdvogado.count,
       vinculosVisitante: vinculosVisitante.count,
+      aipDesincronizados: desincronizadosAIP.count,
     }
   } else if (type === 'advogados') {
     // Deleção de advogados e seus respectivos vínculos
@@ -78,7 +86,7 @@ export async function DELETE(req: NextRequest) {
       vinculosVisitante: vinculosVisitante.count,
     }
   } else {
-    // Comportamento original: deleta tudo
+    // Comportamento original: deleta tudo (mas AIP é protegido)
     const [
       vinculosVisitante,
       vinculosAdvogado,
@@ -91,6 +99,7 @@ export async function DELETE(req: NextRequest) {
       visitantes,
       faccoes,
       jobs,
+      desincronizadosAIP,
     ] = await prisma.$transaction([
       prisma.sipeVinculoVisitante.deleteMany(),
       prisma.sipeVinculoAdvogado.deleteMany(),
@@ -103,6 +112,11 @@ export async function DELETE(req: NextRequest) {
       prisma.sipeVisitante.deleteMany(),
       prisma.sipeFaccao.deleteMany(),
       prisma.sipeSyncJob.deleteMany(),
+      // Marcar AIP records como desincronizados (mas não deletar)
+      prisma.aIPApenado.updateMany({
+        where: { ultimaSincAt: { not: null } },
+        data: { ultimaSincAt: null }
+      })
     ])
 
     deletados = {
@@ -117,6 +131,7 @@ export async function DELETE(req: NextRequest) {
       vinculosAdvogado: vinculosAdvogado.count,
       vinculosVisitante: vinculosVisitante.count,
       jobs: jobs.count,
+      aipDesincronizados: desincronizadosAIP.count,
     }
   }
 
