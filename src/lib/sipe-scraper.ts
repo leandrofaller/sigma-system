@@ -2805,8 +2805,8 @@ async function scrapeEndereço(
   apenadoId: string,
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/endereco`, { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('[name="logradouro"], body', { timeout: 10_000 })
+    await page.goto(`${SIPE_URL}/apenados/${sipeId}/enderecos`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('[name="rua_endereco"], body', { timeout: 10_000 })
 
     const endereco = await page.evaluate(() => {
       const val = (name: string) =>
@@ -2814,16 +2814,26 @@ async function scrapeEndereço(
           document.querySelector(`[name="${name}"]`) as HTMLInputElement | null
         )?.value?.trim() || null
 
+      const selVal = (name: string) => {
+        const el = document.querySelector(
+          `[name="${name}"]`
+        ) as HTMLSelectElement | null
+        return el?.options[el.selectedIndex]?.text?.trim() || null
+      }
+
       return {
-        logradouro: val('logradouro'),
-        numero: val('numero'),
-        complemento: val('complemento'),
-        bairro: val('bairro'),
-        cidade: val('cidade'),
-        uf: val('uf'),
-        cep: val('cep'),
+        logradouro: val('rua_endereco'),
+        numero: val('numero_endereco'),
+        complemento: val('complemento_endereco'),
+        bairro: val('bairro_endereco'),
+        cidade: selVal('cidade_id'),
+        uf: selVal('estado_id'),
+        cep: val('cep_endereco') || val('cep') || null,
       }
     })
+
+    const ufLimpa = endereco.uf && !endereco.uf.includes('Selecione') && !endereco.uf.includes('Escolha') ? endereco.uf : null
+    const cidadeLimpa = endereco.cidade && !endereco.cidade.includes('Selecione') && !endereco.cidade.includes('Escolha') ? endereco.cidade : null
 
     // Atualizar apenado com endereço
     await prisma.sipeApenadoImportado.update({
@@ -2833,13 +2843,13 @@ async function scrapeEndereço(
         numero: endereco.numero,
         complemento: endereco.complemento,
         bairro: endereco.bairro,
-        cidade: endereco.cidade,
-        uf: endereco.uf,
+        cidade: cidadeLimpa,
+        uf: ufLimpa,
         cep: endereco.cep,
       },
     })
   } catch (err) {
-    // Silently ignore if page doesn't exist
+    console.error(`Erro ao sincronizar endereço do apenado ${sipeId}:`, err)
   }
 }
 
