@@ -461,7 +461,7 @@ export function startCnaAllSync(jobId: string): void {
         if (adv.oab) {
           try {
             await scrapeCnaOabDetails(page, adv.id, adv.oab, jobId)
-            
+
             globalThis.__sipeState!.processado++
             globalThis.__sipeState!.pct = Math.round(
               (globalThis.__sipeState!.processado / advogados.length) * 100
@@ -471,8 +471,9 @@ export function startCnaAllSync(jobId: string): void {
               processado: globalThis.__sipeState!.processado,
             })
 
-            // Delay entre consultas
-            await page.waitForTimeout(2000 + Math.random() * 2000)
+            // Delay natural entre consultas (evita disparo de CAPTCHA)
+            const delayBetweenRequests = 4000 + Math.random() * 3000 // 4-7 segundos
+            await page.waitForTimeout(delayBetweenRequests)
           } catch (err: any) {
             globalThis.__sipeState!.erros++
             const errMsg = `Erro ao sincronizar ${adv.nome} (${adv.oab}): ${err?.message || err}`
@@ -2851,13 +2852,37 @@ let lastCnaCaptchaDetectedAt = 0
 let lastJobIdNotifiedCnaSuspended: string | null = null
 const CNA_COOLDOWN_MS = 10 * 60 * 1000 // 10 minutos
 
+// User-agents variados para evitar fingerprinting
+const CNA_USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0'
+]
+
+function getRandomUserAgent(): string {
+  return CNA_USER_AGENTS[Math.floor(Math.random() * CNA_USER_AGENTS.length)]
+}
+
+function generateRandomDelays() {
+  return {
+    navigation: 2000 + Math.random() * 3000,    // 2-5s
+    formFill: 800 + Math.random() * 1200,       // 0.8-2s
+    beforeClick: 1000 + Math.random() * 2000,   // 1-3s
+    afterClick: 3000 + Math.random() * 4000     // 3-7s
+  }
+}
+
 export async function scrapeCnaOabDetails(
   page: Page,
   advogadoId: string,
   oabString: string,
-  jobId?: string
+  jobId?: string,
+  retryAttempt = 1
 ): Promise<void> {
   const logPrefix = `[CNA OAB]`
+  const maxRetries = 3
 
   // Se detectamos captcha recentemente, suspende temporariamente para evitar spam e lentidão
   const timeSinceCaptcha = Date.now() - lastCnaCaptchaDetectedAt
@@ -2872,7 +2897,7 @@ export async function scrapeCnaOabDetails(
     return
   }
 
-  if (jobId) log(jobId, `${logPrefix} Iniciando consulta da OAB "${oabString}" no CNA...`)
+  if (jobId) log(jobId, `${logPrefix} Iniciando consulta da OAB "${oabString}" no CNA... (Tentativa ${retryAttempt}/${maxRetries})`)
 
   // 1. Parsear OAB (ex: "3092/RO", "12586", "28576/O", "3092A/RO")
   let inscricao = ''
@@ -2908,8 +2933,12 @@ export async function scrapeCnaOabDetails(
   }
 
   // 2. Criar uma nova página no contexto do browser para não interferir na sessão do SIPE
-  const cnaPage = await page.context().newPage()
-  
+  const cnaPage = await page.context().newPage({
+    userAgent: getRandomUserAgent()
+  })
+
+  const delays = generateRandomDelays()
+
   // Monitorar respostas HTTP para detecção precisa e instantânea de CAPTCHA
   let apiCaptchaDetected = false
   cnaPage.context().on('response', async (response) => {
@@ -2927,21 +2956,30 @@ export async function scrapeCnaOabDetails(
       }
     }
   })
-  
+
   try {
     cnaPage.setDefaultTimeout(20000)
 
-    // Ocultar flags de automação nesta página específica também
+    // Ocultar flags de automação e adicionar headers realistas
     await cnaPage.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
+      Object.defineProperty(navigator, 'plugins', { get: () => [] })
+      Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt'] })
     })
 
-    // Ir para a página do CNA
-    await cnaPage.goto('https://cna.oab.org.br/', { waitUntil: 'networkidle', timeout: 30000 })
-    await cnaPage.waitForTimeout(2000)
-    await cnaPage.waitForTimeout(1000 + Math.random() * 1000)
+    await cnaPage.setExtraHTTPHeaders({
+      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+      'Referer': 'https://cna.oab.org.br'
+    })
 
-    // Preencher campos forçando eventos reativos do Angular
+    // Ir para a página do CNA com delay natural
+    if (jobId) log(jobId, `${logPrefix} Acessando cna.oab.org.br...`)
+    await cnaPage.goto('https://cna.oab.org.br/', { waitUntil: 'networkidle', timeout: 30000 })
+    await cnaPage.waitForTimeout(delays.navigation)
+
+    // Preencher campos forçando eventos reativos do Angular com delay entre ações
+    if (jobId) log(jobId, `${logPrefix} Preenchendo campos de busca (OAB: ${oabString}, UF: ${uf})...`)
+
     await cnaPage.evaluate(({ inscricao, uf }) => {
       const regInput = document.querySelector('input[name="registration"]') as HTMLInputElement
       if (regInput) {
@@ -2962,24 +3000,32 @@ export async function scrapeCnaOabDetails(
         typeSelect.dispatchEvent(new Event('change', { bubbles: true }))
       }
     }, { inscricao, uf })
-    await cnaPage.waitForTimeout(500)
+
+    await cnaPage.waitForTimeout(delays.formFill)
+
+    // Aguardar antes de clicar (padrão humano)
+    await cnaPage.waitForTimeout(delays.beforeClick)
 
     // Pesquisar
+    if (jobId) log(jobId, `${logPrefix} Clicando em pesquisar...`)
     await cnaPage.click('button:has-text("Pesquisar")')
 
-    // Esperar de forma inteligente por sucesso ou falha/captcha (máximo de 4 segundos)
-    for (let i = 0; i < 8; i++) {
+    // Aguardar com delay natural após clique
+    await cnaPage.waitForTimeout(delays.afterClick)
+
+    // Esperar de forma inteligente por sucesso ou falha/captcha (máximo de 8 segundos com delays)
+    for (let i = 0; i < 16; i++) {
       await cnaPage.waitForTimeout(500)
       if (apiCaptchaDetected) {
         break
       }
-      
+
       // Se a lista de resultados ou "Nenhum resultado" apareceu, para de esperar
       const resultsFound = await cnaPage.evaluate(() => {
         // Verifica se a seção de sem resultados está visível (não tem a classe opacity-0)
         const noResultSec = document.querySelector('app-cna section.bg-blue-100')
         const hasNoResult = noResultSec ? !noResultSec.className.includes('opacity-0') : false
-        
+
         // Verifica se a lista de resultados está visível
         const resultSec = document.querySelector('app-cna section.pt-16 ~ section')
         const hasResults = resultSec ? (!resultSec.className.includes('opacity-0') && document.querySelectorAll('app-cna li button').length > 0) : false
@@ -2990,7 +3036,7 @@ export async function scrapeCnaOabDetails(
         break
       }
     }
-    
+
     if (apiCaptchaDetected) {
       lastCnaCaptchaDetectedAt = Date.now() // Ativa o cooldown
       const captchaMsg = `${logPrefix} Bloqueado por CAPTCHA ao consultar OAB "${oabString}". As consultas subsequentes ao CNA OAB estão suspensas por 10 minutos.`
@@ -3110,6 +3156,26 @@ export async function scrapeCnaOabDetails(
       if (jobId) log(jobId, `${logPrefix} Nenhum dado novo encontrado no CNA para OAB "${oabString}"`)
     }
 
+  } catch (err: any) {
+    // Se foi CAPTCHA e ainda temos tentativas, fazer retry com backoff exponencial
+    if (err?.message === 'CNA_CAPTCHA_DETECTED' && retryAttempt < maxRetries) {
+      const baseDelay = 30000 // 30 segundos
+      const exponentialDelay = baseDelay * Math.pow(2, retryAttempt - 1) // 30s, 60s, 120s
+      const minutes = Math.ceil(exponentialDelay / 60000)
+
+      const retryMsg = `${logPrefix} CAPTCHA detectado (tentativa ${retryAttempt}/${maxRetries}). Aguardando ${minutes} minuto(s) antes de nova tentativa...`
+
+      if (jobId) log(jobId, retryMsg)
+      console.log(retryMsg)
+
+      await new Promise(r => setTimeout(r, exponentialDelay))
+
+      // Recursivamente tenta novamente com novo contexto
+      return scrapeCnaOabDetails(page, advogadoId, oabString, jobId, retryAttempt + 1)
+    }
+
+    // Se foi outra falha, relançar o erro
+    throw err
   } finally {
     await cnaPage.close().catch(() => {})
   }

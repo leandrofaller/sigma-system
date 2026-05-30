@@ -105,7 +105,8 @@
       "Bash(SIPE_USER=77032055249 SIPE_PASSWORD='jxa7HWK@axw*mtw3avg' npx ts-node src/lib/debug-faccoes-modal.ts)",
       "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
       "Bash(xargs grep -l \"TCP\\\\|PCC\\\\|COMANDO VERMELHO\\\\|BONDE\")",
-      "Bash(xargs grep -l \"faccao\\\\|faction\")"
+      "Bash(xargs grep -l \"faccao\\\\|faction\")",
+      "Bash(curl -s http://localhost:3000/api/health)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
