@@ -27,7 +27,7 @@ export default async function AipPage() {
 
       {/* Painel AIP */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <AIPanel />
+        <AIPanel userRole={user.role} />
       </div>
     </div>
   )
