@@ -450,7 +450,7 @@ export function AIPanel() {
         <div>
           <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Brain className="w-5 h-5 text-purple-500" />
-            Análise de Inteligência Penitenciária
+            Análise de Inteligência Penal
           </h2>
           <p className="text-sm text-gray-500 mt-1">{total} apenado{total !== 1 ? 's' : ''} registrado{total !== 1 ? 's' : ''}</p>
         </div>
