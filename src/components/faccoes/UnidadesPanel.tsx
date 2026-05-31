@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Search, ChevronLeft, ChevronRight, Shield, Building2, Users, ChevronRight as ChevronRightIcon } from 'lucide-react'
 import { ApenadoCard, ApenadoModal } from './ApenadosImportados'
 import type { ApenadoImportado } from './ApenadosImportados'
+import { UnidadesDashboard } from './UnidadesDashboard'
 
 interface Unidade {
   id: string
@@ -227,6 +228,8 @@ export function UnidadesPanel() {
               </div>
             )}
           </>
+        ) : searchUnidade.trim() === '' ? (
+          <UnidadesDashboard />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-3 p-8">
             <Building2 className="w-12 h-12 text-gray-300 dark:text-gray-700 animate-pulse" />
