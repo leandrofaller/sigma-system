@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -35,6 +35,7 @@ const navItems: NavItem[] = [
   { label: 'Identificação de Apenados', href: '/apenados', icon: UserCheck },
   { label: 'Apenados & Facções', href: '/faccoes', icon: Shield, roles: ['SUPER_ADMIN'] },
   { label: 'SIAIP', href: '/siaip', icon: Database, roles: ['SUPER_ADMIN'] },
+  { label: 'AIP', href: '/aip', icon: Brain, roles: ['SUPER_ADMIN', 'OPERATOR'] },
 ];
 
 const baseAdminItems: NavItem[] = [

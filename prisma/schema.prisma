@@ -794,12 +794,30 @@ model AIPApenado {
   // ============ DADOS DO SIPE (atualizáveis) ============
   // Copiados inicialmente de SipeApenadoImportado
   // Atualizados automaticamente quando novo scraping acontece
+
+  // Dados Pessoais
   nome              String
+  nomeOutro         String?
   cpf               String?
   rg                String?
+  rgOrgao           String?
   dataNascimento    String? // YYYY-MM-DD
   sexo              String? // M/F
   etnia             String?
+  naturalidade      String?
+  orientacaoSexual  String?
+  tipoSanguineo     String?
+  grauInstrucao     String?
+  religiao          String?
+  estadoCivil       String?
+  nomeConjuge       String?
+  qtdFilhos         Int?
+  nomeMae           String?
+  nomePai           String?
+  telefone          String?
+  rji               String?
+
+  // Dados Prisionais
   unidade           String?
   cela              String?
   regime            String?
@@ -810,12 +828,24 @@ model AIPApenado {
   faccao            String? // nome da facção conforme SIPE
   monitorado        Boolean?
   intramuro         Boolean?
+  presoOriundo      String?
+  oficioEntrada     String?
+  celeAtual         String?
+  ultimaMovimentacao DateTime?
+
+  // Endereço Residencial
   logradouro        String?
   numero            String?
+  complemento       String?
   bairro            String?
   cidade            String?
   uf                String?
   cep               String?
+
+  // Fotos (caminho local do arquivo salvo)
+  photoPath         String? // foto de identificação do apenado
+
+  // Identificadores SIPE
   sipeId            Int     @unique
 
   // ============ DADOS DE INTELIGÊNCIA (imutáveis pelo Limpar Tudo) ============
@@ -842,6 +872,7 @@ model AIPApenado {
 
   // Relacionamentos
   vinculos AIPVinculo[]
+  fotoVisitantes AIPFotoVisitante[]
 
   @@index([sipeId])
   @@index([unidade])
@@ -868,4 +899,30 @@ model AIPVinculo {
   @@index([apenadoId])
   @@index([tipo])
   @@map("aip_vinculos")
+}
+
+model AIPFotoVisitante {
+  id String @id @default(cuid())
+
+  apenadoId String
+  apenado   AIPApenado @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+
+  // Dados do visitante (copiado de SipeVinculoVisitante)
+  visitanteId  String?
+  nomeVisitante String?
+  cpfVisitante  String?
+  parentescoVisitante String?
+  ativoVisitante Boolean?
+
+  // Foto do visitante
+  photoPath     String? // caminho do arquivo de foto
+  descricao     String? // descrição/notas sobre a foto
+
+  // Metadata
+  sincronizadoEm DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
+
+  @@index([apenadoId])
+  @@index([visitanteId])
+  @@map("aip_fotos_visitantes")
 }

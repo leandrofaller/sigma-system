@@ -8,8 +8,7 @@ import { AdvogadosImportados } from './AdvogadosImportados'
 import { FaccoesPanel } from './FaccoesPanel'
 import { DashboardPanel } from './DashboardPanel'
 import { UnidadesPanel } from './UnidadesPanel'
-import { AIPanel } from './AIPanel'
-import { Shield, Users, Briefcase, RefreshCw, BarChart2, Building2, Database, Brain } from 'lucide-react'
+import { Shield, Users, Briefcase, RefreshCw, BarChart2, Building2, Database } from 'lucide-react'
 
 interface FaccoesClientProps {
   /** 'admin' = visão completa com Sincronização; 'readonly' = espelho sem sync (SIAIP) */
@@ -72,12 +71,6 @@ export function FaccoesClient({ mode = 'admin' }: FaccoesClientProps) {
               Unidades
             </TabsTrigger>
             {showSync && (
-              <TabsTrigger value="aip" className="gap-2">
-                <Brain className="w-4 h-4" />
-                AIP
-              </TabsTrigger>
-            )}
-            {showSync && (
               <TabsTrigger value="sync" className="gap-2">
                 <RefreshCw className="w-4 h-4" />
                 Sincronização
@@ -104,12 +97,6 @@ export function FaccoesClient({ mode = 'admin' }: FaccoesClientProps) {
           <TabsContent value="unidades" className="flex-1 min-h-0 mt-0">
             <UnidadesPanel />
           </TabsContent>
-
-          {showSync && (
-            <TabsContent value="aip" className="flex-1 min-h-0 mt-0 overflow-y-auto">
-              <AIPanel />
-            </TabsContent>
-          )}
 
           {showSync && (
             <TabsContent value="sync" className="flex-1 min-h-0 mt-0 overflow-y-auto">

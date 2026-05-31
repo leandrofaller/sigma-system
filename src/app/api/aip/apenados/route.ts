@@ -63,20 +63,35 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Criar novo registro em AIP copiando dados do SIPE
+    // Criar novo registro em AIP copiando TODOS os dados do SIPE
     const novoApenado = await db.aIPApenado.create({
       data: {
         sipeApenadoId,
         sipeId: sipeApenado.sipeId,
 
-        // Dados SIPE (copiados inicialmente)
+        // ============ DADOS PESSOAIS ============
         nome: sipeApenado.nome,
+        nomeOutro: sipeApenado.nomeOutro,
         cpf: sipeApenado.cpf,
         rg: sipeApenado.rg,
+        rgOrgao: sipeApenado.rgOrgao,
         dataNascimento: sipeApenado.dataNascimento,
         sexo: sipeApenado.sexo,
         etnia: sipeApenado.etnia,
+        naturalidade: sipeApenado.naturalidade,
+        orientacaoSexual: sipeApenado.orientacaoSexual,
+        tipoSanguineo: sipeApenado.tipoSanguineo,
+        grauInstrucao: sipeApenado.grauInstrucao,
+        religiao: sipeApenado.religiao,
+        estadoCivil: sipeApenado.estadoCivil,
+        nomeConjuge: sipeApenado.nomeConjuge,
+        qtdFilhos: sipeApenado.qtdFilhos,
+        nomeMae: sipeApenado.nomeMae,
+        nomePai: sipeApenado.nomePai,
+        telefone: sipeApenado.telefone,
+        rji: sipeApenado.rji,
 
+        // ============ DADOS PRISIONAIS ============
         unidade: sipeApenado.unidade,
         cela: sipeApenado.cela,
         regime: sipeApenado.regime,
@@ -84,20 +99,27 @@ export async function POST(request: NextRequest) {
         dataEntrada: sipeApenado.dataEntrada,
         dataPrisao: sipeApenado.dataPrisao,
         tempoPena: sipeApenado.tempoPena,
-
         faccao: sipeApenado.faccao ? sipeApenado.faccao.nome : null,
         monitorado: sipeApenado.monitorado,
         intramuro: sipeApenado.intramuro,
+        presoOriundo: sipeApenado.presoOriundo,
+        oficioEntrada: sipeApenado.oficioEntrada,
+        celeAtual: sipeApenado.celeAtual,
+        ultimaMovimentacao: sipeApenado.ultimaMovimentacao,
 
-        // Endereço
+        // ============ ENDEREÇO RESIDENCIAL ============
         logradouro: sipeApenado.logradouro,
         numero: sipeApenado.numero,
+        complemento: sipeApenado.complemento,
         bairro: sipeApenado.bairro,
         cidade: sipeApenado.cidade,
         uf: sipeApenado.uf,
         cep: sipeApenado.cep,
 
-        // Metadata
+        // ============ FOTOS ============
+        photoPath: sipeApenado.photoPath,
+
+        // ============ METADATA ============
         ultimaSincAt: new Date(),
         cadastradoPor
       }
