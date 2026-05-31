@@ -32,6 +32,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       facaoNivel,
       notasInteligencia,
       observacoes,
+      facaoRelevancia,
+      vulgo,
       atualizadoPor
     } = body
 
@@ -53,6 +55,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (facaoNivel !== undefined) updateData.facaoNivel = facaoNivel
     if (notasInteligencia !== undefined) updateData.notasInteligencia = notasInteligencia
     if (observacoes !== undefined) updateData.observacoes = observacoes
+    if (facaoRelevancia !== undefined) updateData.facaoRelevancia = facaoRelevancia
+    if (vulgo !== undefined) updateData.vulgo = vulgo
 
     // Se está atualizando facão real pela primeira vez, registrar data
     if (facaoRealNome && !facaoNivel) {

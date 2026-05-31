@@ -855,6 +855,8 @@ model AIPApenado {
   facaoRealNome        String?
   facaoNivel           String? // "confirmado", "suspeita", "negado"
   facaoDataVerificacao DateTime?
+  facaoRelevancia      String? // "Membro", "Membro de Relevancia", "Liderança", "Já exerceu Liderança"
+  vulgo                String?
 
   // Campos de inteligência gerais
   notasInteligencia String? @db.Text

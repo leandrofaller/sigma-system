@@ -73,6 +73,8 @@ interface AIPApenado {
   facaoNivel?: string
   notasInteligencia?: string
   observacoes?: string
+  vulgo?: string | null
+  facaoRelevancia?: string | null
 
   cadastradoEm: string
   cadastradoPor: string
@@ -198,6 +200,8 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
           facaoNivel: formData.facaoNivel,
           notasInteligencia: formData.notasInteligencia,
           observacoes: formData.observacoes,
+          facaoRelevancia: formData.facaoRelevancia,
+          vulgo: formData.vulgo,
           atualizadoPor: 'current-user' // TODO: integrar com auth real
         })
       })
@@ -506,45 +510,88 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                       {section.title || 'Dados de Inteligência'}
                     </h3>
                     <div className="space-y-4">
-                      {/* Facção Real */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Facção Real (Verificada)
-                        </label>
-                        {editing ? (
-                          <input
-                            type="text"
-                            value={formData.facaoRealNome || ''}
-                            onChange={e => setFormData({ ...formData, facaoRealNome: e.target.value })}
-                            placeholder="Ex: PCC, CV, TCP, etc."
-                            className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
-                          />
-                        ) : (
-                          <p className="text-sm text-gray-900 dark:text-white font-medium">{formData.facaoRealNome || '(não informado)'}</p>
-                        )}
-                      </div>
+                      {/* Grid de Informações Estruturadas */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Facção Real */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Facção Real (Verificada)
+                          </label>
+                          {editing ? (
+                            <input
+                              type="text"
+                              value={formData.facaoRealNome || ''}
+                              onChange={e => setFormData({ ...formData, facaoRealNome: e.target.value })}
+                              placeholder="Ex: PCC, CV, TCP, etc."
+                              className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                            />
+                          ) : (
+                            <p className="text-sm text-gray-900 dark:text-white font-medium">{formData.facaoRealNome || '(não informado)'}</p>
+                          )}
+                        </div>
 
-                      {/* Nível de Confiança */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Nível de Confiança
-                        </label>
-                        {editing ? (
-                          <select
-                            value={formData.facaoNivel || ''}
-                            onChange={e => setFormData({ ...formData, facaoNivel: e.target.value })}
-                            className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
-                          >
-                            <option value="">Selecionar...</option>
-                            <option value="confirmado">Confirmado</option>
-                            <option value="provavel">Provável</option>
-                            <option value="suspeita">Suspeita</option>
-                            <option value="improvavel">Improvável</option>
-                            <option value="negado">Negado</option>
-                          </select>
-                        ) : (
-                          <p className="text-sm text-gray-900 dark:text-white font-medium">{formData.facaoNivel || '(não informado)'}</p>
-                        )}
+                        {/* Nível de Confiança */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Nível de Confiança
+                          </label>
+                          {editing ? (
+                            <select
+                              value={formData.facaoNivel || ''}
+                              onChange={e => setFormData({ ...formData, facaoNivel: e.target.value })}
+                              className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                            >
+                              <option value="">Selecionar...</option>
+                              <option value="confirmado">Confirmado</option>
+                              <option value="provavel">Provável</option>
+                              <option value="suspeita">Suspeita</option>
+                              <option value="improvavel">Improvável</option>
+                              <option value="negado">Negado</option>
+                            </select>
+                          ) : (
+                            <p className="text-sm text-gray-900 dark:text-white font-medium">{formData.facaoNivel || '(não informado)'}</p>
+                          )}
+                        </div>
+
+                        {/* Vulgo / Apelido */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Vulgo / Apelido
+                          </label>
+                          {editing ? (
+                            <input
+                              type="text"
+                              value={formData.vulgo || ''}
+                              onChange={e => setFormData({ ...formData, vulgo: e.target.value })}
+                              placeholder="Ex: Baixinho, Gordinho, etc."
+                              className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                            />
+                          ) : (
+                            <p className="text-sm text-gray-900 dark:text-white font-medium">{formData.vulgo || '(não informado)'}</p>
+                          )}
+                        </div>
+
+                        {/* Relevância na Facção */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Relevância na Facção
+                          </label>
+                          {editing ? (
+                            <select
+                              value={formData.facaoRelevancia || ''}
+                              onChange={e => setFormData({ ...formData, facaoRelevancia: e.target.value })}
+                              className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                            >
+                              <option value="">Selecionar...</option>
+                              <option value="Membro">Membro</option>
+                              <option value="Membro de Relevância">Membro de Relevância</option>
+                              <option value="Liderança">Liderança</option>
+                              <option value="Já exerceu Liderança">Já exerceu Liderança</option>
+                            </select>
+                          ) : (
+                            <p className="text-sm text-gray-900 dark:text-white font-medium">{formData.facaoRelevancia || '(não informado)'}</p>
+                          )}
+                        </div>
                       </div>
 
                       {/* Notas de Inteligência */}
