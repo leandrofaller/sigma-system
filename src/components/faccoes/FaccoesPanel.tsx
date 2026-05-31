@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Shield, Plus, Users, X, ChevronLeft, ChevronRight, Search, Loader2 } from 'lucide-react'
+import { Shield, Plus, Users, X, ChevronLeft, ChevronRight, Search, Loader2, User } from 'lucide-react'
 import { toast } from 'sonner'
+import { ApenadoModal, ApenadoFoto, ApenadoImportado } from './ApenadosImportados'
 
 interface Faccao {
   id: string
@@ -13,17 +14,6 @@ interface Faccao {
   descricao: string | null
   ativa: boolean
   _count?: { apenados: number }
-}
-
-interface Apenado {
-  id: string
-  sipeId: number
-  nome: string
-  cpf: string | null
-  regime: string | null
-  situacao: string | null
-  dataNascimento: string | null
-  sexo: string | null
 }
 
 function FaccaoCard({ faccao, onSelect }: { faccao: Faccao; onSelect: (f: Faccao) => void }) {
@@ -69,12 +59,13 @@ function FaccaoCard({ faccao, onSelect }: { faccao: Faccao; onSelect: (f: Faccao
 // ── Modal de apenados por facção ──────────────────────────────
 
 function ApenadosFaccaoModal({ faccao, onClose }: { faccao: Faccao; onClose: () => void }) {
-  const [apenados, setApenados] = useState<Apenado[]>([])
+  const [apenados, setApenados] = useState<ApenadoImportado[]>([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
   const [page, setPage] = useState(1)
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(false)
+  const [selectedApenado, setSelectedApenado] = useState<ApenadoImportado | null>(null)
   const LIMIT = 15
 
   const fetchApenados = useCallback(async (p: number, query: string) => {
@@ -168,12 +159,28 @@ function ApenadosFaccaoModal({ faccao, onClose }: { faccao: Faccao; onClose: () 
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {apenados.map(a => (
-                  <tr key={a.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <td className="px-5 py-3">
-                      <p className="font-medium text-gray-900 dark:text-white">{a.nome}</p>
-                      {a.dataNascimento && (
-                        <p className="text-xs text-gray-400">Nasc: {a.dataNascimento}</p>
-                      )}
+                  <tr 
+                    key={a.id} 
+                    onClick={() => setSelectedApenado(a)}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-850/50 cursor-pointer transition-colors"
+                  >
+                    <td className="px-5 py-2">
+                      <div className="flex items-center gap-3">
+                        {/* Foto do Apenado */}
+                        <ApenadoFoto
+                          id={a.id}
+                          nome={a.nome}
+                          photoPath={a.photoPath || a.apenado?.photoPath}
+                          className="w-9 h-11 rounded"
+                        />
+                        {/* Nome e Data */}
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-950 dark:text-white text-xs truncate max-w-[280px] sm:max-w-[340px]">{a.nome}</p>
+                          {a.dataNascimento && (
+                            <p className="text-[10px] text-gray-400 mt-0.5 font-medium">Nasc: {a.dataNascimento}</p>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-gray-500 font-mono text-xs hidden sm:table-cell">{a.cpf || '—'}</td>
                     <td className="px-3 py-3 text-gray-500 text-xs hidden md:table-cell">{a.regime || '—'}</td>
@@ -216,6 +223,13 @@ function ApenadosFaccaoModal({ faccao, onClose }: { faccao: Faccao; onClose: () 
           </div>
         )}
       </div>
+
+      {selectedApenado && (
+        <ApenadoModal 
+          apenado={selectedApenado} 
+          onClose={() => setSelectedApenado(null)} 
+        />
+      )}
     </div>
   )
 }

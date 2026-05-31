@@ -44,6 +44,9 @@ export async function GET(req: NextRequest) {
         },
         vinculosAdvogado: { include: { advogado: true } },
         vinculosVisitante: { include: { visitante: true } },
+        apenado: {
+          select: { photoPath: true }
+        },
       },
       orderBy: { nome: 'asc' },
       skip,

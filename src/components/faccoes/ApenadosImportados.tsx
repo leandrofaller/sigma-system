@@ -91,6 +91,53 @@ export interface ApenadoImportado {
   cidade: string | null
   uf: string | null
   cep: string | null
+  apenado?: { photoPath: string | null } | null
+}
+
+export function ApenadoFoto({
+  id,
+  nome,
+  photoPath,
+  className = "w-14 h-14 rounded-xl",
+  fallbackIcon: FallbackIcon = User,
+  fallbackText,
+  onClick
+}: {
+  id: string
+  nome: string
+  photoPath: string | null | undefined
+  className?: string
+  fallbackIcon?: React.ComponentType<{ className?: string }>
+  fallbackText?: string
+  onClick?: () => void
+}) {
+  const [hasError, setHasError] = useState(false)
+
+  const showPhoto = photoPath && !hasError
+
+  return (
+    <div
+      onClick={onClick}
+      className={`${className} overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold select-none border border-gray-200/60 dark:border-gray-700/50 bg-gray-100 dark:bg-gray-800 text-gray-400 ${
+        onClick ? 'cursor-pointer animate-duration-200' : ''
+      }`}
+    >
+      {showPhoto ? (
+        <img
+          src={`/api/sipe/apenados/${id}/foto`}
+          alt={nome}
+          className="w-full h-full object-cover"
+          onError={() => setHasError(true)}
+        />
+      ) : fallbackText ? (
+        <div className="w-full h-full bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center text-white text-lg">
+          {fallbackText}
+        </div>
+      ) : (
+        <FallbackIcon className="w-1/2 h-1/2 text-gray-400" />
+      )}
+    </div>
+  )
 }
 
 export function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; onClick: () => void }) {
@@ -101,20 +148,13 @@ export function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; o
     >
       <div className="flex gap-4">
         {/* Foto */}
-        <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-red-400 to-red-600 shadow-sm flex items-center justify-center text-white font-bold text-lg">
-          {apenado.photoPath ? (
-            <img
-              src={`/api/sipe/apenados/${apenado.id}/foto`}
-              alt={apenado.nome}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-          ) : (
-            <span>{apenado.nome.charAt(0)}</span>
-          )}
-        </div>
+        <ApenadoFoto
+          id={apenado.id}
+          nome={apenado.nome}
+          photoPath={apenado.photoPath || apenado.apenado?.photoPath}
+          className="w-14 h-14 rounded-xl"
+          fallbackText={apenado.nome.charAt(0)}
+        />
 
         {/* Informações */}
         <div className="flex-1 min-w-0">
@@ -231,30 +271,22 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
           <div className="flex items-start justify-between gap-4">
             <div className="flex gap-4 items-center">
               {/* Foto grande */}
-              <div
+              <ApenadoFoto
+                id={apenado.id}
+                nome={apenado.nome}
+                photoPath={apenado.photoPath || apenado.apenado?.photoPath}
+                className={`w-28 h-28 rounded-2xl text-4xl ${
+                  (apenado.photoPath || apenado.apenado?.photoPath) ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all' : ''
+                }`}
+                fallbackText={apenado.nome.charAt(0)}
                 onClick={() => {
-                  if (apenado.photoPath) {
+                  const finalPath = apenado.photoPath || apenado.apenado?.photoPath
+                  if (finalPath) {
                     setZoomedPhotoUrl(`/api/sipe/apenados/${apenado.id}/foto`);
                     setZoomedPhotoTitle(apenado.nome);
                   }
                 }}
-                className={`w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-red-400 to-red-600 shadow-md flex items-center justify-center text-white font-bold text-4xl select-none ${
-                  apenado.photoPath ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all' : ''
-                }`}
-              >
-                {apenado.photoPath ? (
-                  <img
-                    src={`/api/sipe/apenados/${apenado.id}/foto`}
-                    alt={apenado.nome}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <span>{apenado.nome.charAt(0)}</span>
-                )}
-              </div>
+              />
 
               <div>
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{apenado.nome}</h2>
