@@ -146,7 +146,7 @@ export function DashboardPanel() {
         {/* Por Facção */}
         <div className="lg:col-span-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-            <Shield className="w-4 h-4" /> Apenados por Facção
+            <Shield className="w-4 h-4" /> Apenados por Facção (DADOS DO SIPE)
           </h3>
           {porFaccao.length === 0 ? (
             <p className="text-sm text-gray-400">Nenhum apenado faccionado importado</p>
