@@ -299,3 +299,69 @@ export async function PUT(request: NextRequest) {
     )
   }
 }
+
+/**
+ * DELETE /api/aip/apenados/{id}
+ * Deleta um apenado do AIP (apenas SUPER_ADMIN e OPERATOR)
+ *
+ * Query params:
+ * - confirm: boolean (deve ser true para confirmar deleção)
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams, pathname } = new URL(request.url)
+    const id = pathname.split('/').pop()
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: 'ID do apenado não fornecido' },
+        { status: 400 }
+      )
+    }
+
+    // Validar confirmação
+    const confirm = searchParams.get('confirm') === 'true'
+    if (!confirm) {
+      return NextResponse.json(
+        { success: false, message: 'Deleção não confirmada' },
+        { status: 400 }
+      )
+    }
+
+    // Verificar se apenado existe
+    const apenado = await db.aIPApenado.findUnique({
+      where: { id }
+    })
+
+    if (!apenado) {
+      return NextResponse.json(
+        { success: false, message: 'Apenado não encontrado' },
+        { status: 404 }
+      )
+    }
+
+    // Deletar apenado (cascata deletará fotos de visitantes)
+    await db.aIPApenado.delete({
+      where: { id }
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Apenado deletado com sucesso'
+    })
+  } catch (error: any) {
+    console.error('[AIP] Erro ao deletar apenado:', error)
+
+    if (error.code === 'P2025') {
+      return NextResponse.json(
+        { success: false, message: 'Apenado não encontrado' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json(
+      { success: false, message: 'Erro ao deletar apenado' },
+      { status: 500 }
+    )
+  }
+}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface AIPApenado {
@@ -63,14 +63,17 @@ function AIApenadoCard({ apenado, onSelect }: { apenado: AIPApenado; onSelect: (
 
 // ── Modal de Detalhes do Apenado em AIP ──────────────────────────────
 
-function AIApenadoModal({ apenado, onClose, onUpdate }: {
+function AIApenadoModal({ apenado, onClose, onUpdate, onDelete }: {
   apenado: AIPApenado
   onClose: () => void
   onUpdate: (apenado: AIPApenado) => void
+  onDelete?: (id: string) => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState(apenado)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const handleSave = async () => {
     setSaving(true)
@@ -104,6 +107,32 @@ function AIApenadoModal({ apenado, onClose, onUpdate }: {
     }
   }
 
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/aip/apenados/${apenado.id}?confirm=true`, {
+        method: 'DELETE'
+      })
+
+      if (res.ok) {
+        toast.success('Apenado deletado com sucesso')
+        if (onDelete) {
+          await onDelete(apenado.id)
+        }
+        onClose()
+      } else {
+        const data = await res.json()
+        toast.error(data.message || 'Erro ao deletar')
+      }
+    } catch (error) {
+      console.error('Erro ao deletar:', error)
+      toast.error('Erro ao deletar apenado')
+    } finally {
+      setDeleting(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
@@ -123,12 +152,22 @@ function AIApenadoModal({ apenado, onClose, onUpdate }: {
           </div>
           <div className="flex items-center gap-2">
             {!editing ? (
-              <button
-                onClick={() => setEditing(true)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-400"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
+              <>
+                <button
+                  onClick={() => setEditing(true)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-400"
+                  title="Editar dados de inteligência"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg text-red-600 dark:text-red-400"
+                  title="Deletar apenado"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </>
             ) : null}
             <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500">
               <X className="w-4 h-4" />
@@ -265,6 +304,44 @@ function AIApenadoModal({ apenado, onClose, onUpdate }: {
           </div>
         </div>
 
+        {/* Confirmação de Deleção */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-[51] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)}>
+            <div
+              className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm p-6"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Deletar Apenado?</h3>
+              </div>
+
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                Você tem certeza que deseja deletar <strong>{apenado.nome}</strong> do AIP? Esta ação não pode ser desfeita.
+              </p>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  Deletar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         {editing && (
           <div className="flex items-center gap-3 p-5 border-t border-gray-200 dark:border-gray-700 shrink-0">
@@ -348,6 +425,13 @@ export function AIPanel() {
     setSelectedApenado(updated)
   }
 
+  const handleDelete = async (id: string) => {
+    setApenados(apenados.filter(a => a.id !== id))
+    setSelectedApenado(null)
+    // Recarregar a lista se necessário
+    await fetchApenados(page, searchQuery)
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -429,6 +513,7 @@ export function AIPanel() {
           apenado={selectedApenado}
           onClose={() => setSelectedApenado(null)}
           onUpdate={handleUpdate}
+          onDelete={handleDelete}
         />
       )}
     </div>
