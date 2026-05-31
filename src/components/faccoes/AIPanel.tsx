@@ -618,21 +618,27 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                                 setZoomedPhotoTitle(v.nomeVisitante || 'Visitante');
                               }
                             }}
-                            className={`w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 select-none ${
-                              v.photoPath && v.visitanteId ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all' : ''
-                            }`}
+                            className={`${
+                               isPhotoStyleFull 
+                                 ? 'w-16 h-20 rounded-xl' 
+                                 : 'w-10 h-10 rounded-lg'
+                             } overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 select-none transition-all ${
+                               v.photoPath && v.visitanteId ? 'cursor-zoom-in hover:opacity-90 active:scale-95' : ''
+                             }`}
                           >
                             {v.photoPath && v.visitanteId ? (
                               <img
                                 src={`/api/sipe/visitantes/${v.visitanteId}/foto`}
                                 alt={v.nomeVisitante || 'Visitante'}
-                                className="w-full h-full object-cover"
+                                className={`w-full h-full ${
+                                   isPhotoStyleFull ? 'object-contain' : 'object-cover'
+                                 }`}
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).style.display = 'none';
                                 }}
                               />
                             ) : (
-                              <User className="w-5 h-5" />
+                              <User className={isPhotoStyleFull ? 'w-8 h-8' : 'w-5 h-5'} />
                             )}
                           </div>
                           
