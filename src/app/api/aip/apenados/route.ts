@@ -359,9 +359,18 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Deletar apenado (cascata deletará fotos de visitantes)
-    await db.aIPApenado.delete({
-      where: { id }
-    })
+    try {
+      await db.aIPApenado.delete({
+        where: { id }
+      })
+    } catch (deleteError: any) {
+      console.error('[AIP] Erro específico ao deletar:', {
+        code: deleteError.code,
+        message: deleteError.message,
+        meta: deleteError.meta
+      })
+      throw deleteError
+    }
 
     return NextResponse.json({
       success: true,
@@ -377,8 +386,20 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    // Erro de constraint ou outro erro
+    if (error.code === 'P2003') {
+      return NextResponse.json(
+        { success: false, message: 'Não é possível deletar: apenado está vinculado a outros registros' },
+        { status: 400 }
+      )
+    }
+
     return NextResponse.json(
-      { success: false, message: 'Erro ao deletar apenado' },
+      {
+        success: false,
+        message: 'Erro ao deletar apenado',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      },
       { status: 500 }
     )
   }

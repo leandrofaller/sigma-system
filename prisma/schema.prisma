@@ -922,6 +922,7 @@ model AIPFotoVisitante {
   sincronizadoEm DateTime @default(now())
   atualizadoEm   DateTime @updatedAt
 
+  @@unique([apenadoId, visitanteId])
   @@index([apenadoId])
   @@index([visitanteId])
   @@map("aip_fotos_visitantes")
