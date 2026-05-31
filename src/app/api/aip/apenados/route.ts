@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/db'
 import { auth } from '@/lib/auth'
-
-const db = new PrismaClient()
 
 /**
  * POST /api/aip/apenados
@@ -35,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar se existe em SipeApenadoImportado
-    const sipeApenado = await db.sipeApenadoImportado.findUnique({
+    const sipeApenado = await prisma.sipeApenadoImportado.findUnique({
       where: { sipeId: sipeApenadoId },
       include: { faccao: true }
     })
@@ -48,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar se já existe em AIP
-    const existeEmAIP = await db.aIPApenado.findUnique({
+    const existeEmAIP = await prisma.aIPApenado.findUnique({
       where: { sipeApenadoId }
     })
 
@@ -65,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar novo registro em AIP copiando TODOS os dados do SIPE
-    const novoApenado = await db.aIPApenado.create({
+    const novoApenado = await prisma.aIPApenado.create({
       data: {
         sipeApenadoId,
         sipeId: sipeApenado.sipeId,
@@ -189,11 +187,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Contar total
-    const total = await db.aIPApenado.count({ where })
+    const total = await prisma.aIPApenado.count({ where })
     const totalPages = Math.ceil(total / limit)
 
     // Buscar apenados
-    const apenados = await db.aIPApenado.findMany({
+    const apenados = await prisma.aIPApenado.findMany({
       where,
       orderBy: [{ cadastradoEm: 'desc' }, { nome: 'asc' }],
       skip: (page - 1) * limit,
@@ -274,7 +272,7 @@ export async function PUT(request: NextRequest) {
       updateData.facaoDataVerificacao = new Date()
     }
 
-    const apenado = await db.aIPApenado.update({
+    const apenado = await prisma.aIPApenado.update({
       where: { id },
       data: updateData
     })
@@ -347,7 +345,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Verificar se apenado existe
-    const apenado = await db.aIPApenado.findUnique({
+    const apenado = await prisma.aIPApenado.findUnique({
       where: { id }
     })
 
@@ -359,15 +357,23 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Deletar apenado (cascata deletará fotos de visitantes)
+    console.log(`[AIP] Iniciando deleção do apenado: ${id}`)
+
     try {
-      await db.aIPApenado.delete({
-        where: { id }
+      const result = await prisma.aIPApenado.delete({
+        where: { id },
+        include: {
+          fotoVisitantes: true
+        }
       })
+
+      console.log(`[AIP] Apenado deletado com sucesso. Fotos removidas: ${result.fotoVisitantes.length}`)
     } catch (deleteError: any) {
       console.error('[AIP] Erro específico ao deletar:', {
         code: deleteError.code,
         message: deleteError.message,
-        meta: deleteError.meta
+        meta: deleteError.meta,
+        apenadoId: id
       })
       throw deleteError
     }

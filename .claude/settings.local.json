@@ -121,7 +121,8 @@
       "Bash(xargs grep -l \"Apenados\\\\|Facções\\\\|Unidades\")",
       "Bash(xargs grep -l \"Unidades\")",
       "mcp__Claude_Preview__preview_start",
-      "mcp__Claude_in_Chrome__read_console_messages"
+      "mcp__Claude_in_Chrome__read_console_messages",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
