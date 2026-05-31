@@ -1488,9 +1488,6 @@ async function scrapeApenadoFicha(
   // Resolve faccao local id
   let faccaoId: string | null = null
   let lookupSipeId = dados.faccaoSipeId
-  if (lookupSipeId === 8) {
-    lookupSipeId = 2 // Mescla SIPE ID 8 (PCC) no SIPE ID 2 (Primeiro Comando da Capital)
-  }
   if (lookupSipeId && lookupSipeId > 0) {
     const faccao = await prisma.sipeFaccao.findUnique({
       where: { sipeId: lookupSipeId },
@@ -3543,11 +3540,6 @@ export async function scrapeFaccoes(): Promise<void> {
     for (const opt of options) {
       const id = parseInt(opt.value)
       if (isNaN(id)) continue
-
-      if (id === 8) {
-        console.log('[FACCOES] 📌 Ignorando SIPE ID 8 (PCC duplicado) para mesclar com ID 2')
-        continue
-      }
 
       let nome = opt.text
       let sigla: string | null = null
