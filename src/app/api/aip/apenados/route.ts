@@ -32,10 +32,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verificar se existe em SipeApenadoImportado
+    // Verificar se existe em SipeApenadoImportado com visitantes incluídos
     const sipeApenado = await prisma.sipeApenadoImportado.findUnique({
       where: { sipeId: sipeApenadoId },
-      include: { faccao: true }
+      include: {
+        faccao: true,
+        vinculosVisitante: {
+          include: {
+            visitante: true
+          }
+        }
+      }
     })
 
     if (!sipeApenado) {
@@ -124,6 +131,30 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    // Copiar visitantes para AIPFotoVisitante
+    if (sipeApenado.vinculosVisitante && sipeApenado.vinculosVisitante.length > 0) {
+      await Promise.all(
+        sipeApenado.vinculosVisitante.map(async (v) => {
+          if (v.visitante) {
+            await prisma.aIPFotoVisitante.create({
+              data: {
+                apenadoId: novoApenado.id,
+                visitanteId: v.visitante.id,
+                nomeVisitante: v.visitante.nome,
+                cpfVisitante: v.visitante.cpf,
+                parentescoVisitante: v.visitante.parentesco || '',
+                ativoVisitante: v.ativo,
+                photoPath: v.visitante.photoPath,
+                descricao: 'Importado do SIPE'
+              }
+            }).catch(e => {
+              console.error(`Erro ao importar visitante ${v.visitante?.id} para AIP:`, e);
+            });
+          }
+        })
+      );
+    }
+
     return NextResponse.json(
       {
         success: true,
@@ -190,9 +221,12 @@ export async function GET(request: NextRequest) {
     const total = await prisma.aIPApenado.count({ where })
     const totalPages = Math.ceil(total / limit)
 
-    // Buscar apenados
+    // Buscar apenados com visitantes incluídos
     const apenados = await prisma.aIPApenado.findMany({
       where,
+      include: {
+        fotoVisitantes: true
+      },
       orderBy: [{ cadastradoEm: 'desc' }, { nome: 'asc' }],
       skip: (page - 1) * limit,
       take: limit

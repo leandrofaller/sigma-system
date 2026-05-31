@@ -61,7 +61,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const apenado = await prisma.aIPApenado.update({
       where: { id },
-      data: updateData
+      data: updateData,
+      include: {
+        fotoVisitantes: true
+      }
     })
 
     return NextResponse.json({
