@@ -221,11 +221,20 @@ export async function GET(request: NextRequest) {
     const total = await prisma.aIPApenado.count({ where })
     const totalPages = Math.ceil(total / limit)
 
-    // Buscar apenados com visitantes incluídos
+    // Buscar apenados com visitantes incluídos e advogados do SIPE
     const apenados = await prisma.aIPApenado.findMany({
       where,
       include: {
-        fotoVisitantes: true
+        fotoVisitantes: true,
+        sipeApenado: {
+          include: {
+            vinculosAdvogado: {
+              include: {
+                advogado: true
+              }
+            }
+          }
+        }
       },
       orderBy: [{ cadastradoEm: 'desc' }, { nome: 'asc' }],
       skip: (page - 1) * limit,

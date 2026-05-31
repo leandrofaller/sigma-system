@@ -63,7 +63,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       where: { id },
       data: updateData,
       include: {
-        fotoVisitantes: true
+        fotoVisitantes: true,
+        sipeApenado: {
+          include: {
+            vinculosAdvogado: {
+              include: {
+                advogado: true
+              }
+            }
+          }
+        }
       }
     })
 

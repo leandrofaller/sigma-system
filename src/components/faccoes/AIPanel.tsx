@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, Image } from 'lucide-react'
+import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, Image, Briefcase } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface AIPFotoVisitante {
@@ -81,6 +81,15 @@ interface AIPApenado {
 
   // Relacionamento com visitantes
   fotoVisitantes?: AIPFotoVisitante[]
+  sipeApenado?: {
+    vinculosAdvogado: Array<{
+      advogado: {
+        id: string
+        nome: string
+        oab: string | null
+      }
+    }>
+  }
 }
 
 // ── Card de Apenado em AIP ──────────────────────────────
@@ -377,6 +386,24 @@ function AIApenadoModal({ apenado, onClose, onUpdate, onDelete }: {
                     <span className="font-semibold text-gray-500">CEP:</span> {apenado.cep}
                   </p>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Advogados (SIPE) */}
+          {apenado.sipeApenado?.vinculosAdvogado && apenado.sipeApenado.vinculosAdvogado.length > 0 && (
+            <div className="p-5 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-blue-500" />
+                Advogados (SIPE)
+              </h3>
+              <div className="space-y-2">
+                {apenado.sipeApenado.vinculosAdvogado.map(v => (
+                  <div key={v.advogado.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/40 rounded-xl p-3 text-sm border border-gray-100 dark:border-gray-700/50">
+                    <span className="font-medium text-gray-900 dark:text-white">{v.advogado.nome}</span>
+                    {v.advogado.oab && <span className="text-xs text-gray-500">OAB {v.advogado.oab}</span>}
+                  </div>
+                ))}
               </div>
             </div>
           )}
