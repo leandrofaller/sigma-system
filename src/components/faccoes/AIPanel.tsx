@@ -667,7 +667,7 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                             }}
                             className={`${
                                isPhotoStyleFull 
-                                 ? 'w-16 h-20 rounded-xl' 
+                                 ? 'w-24 h-32 rounded-xl' 
                                  : 'w-10 h-10 rounded-lg'
                              } overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 select-none transition-all ${
                                v.photoPath && v.visitanteId ? 'cursor-zoom-in hover:opacity-90 active:scale-95' : ''
@@ -685,7 +685,7 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                                 }}
                               />
                             ) : (
-                              <User className={isPhotoStyleFull ? 'w-8 h-8' : 'w-5 h-5'} />
+                              <User className={isPhotoStyleFull ? 'w-12 h-12' : 'w-5 h-5'} />
                             )}
                           </div>
                           
