@@ -14,14 +14,23 @@ async function main() {
     let cor = f.cor || '#ef4444'
 
     const nomeUpper = f.nome.toUpperCase()
+    const ehCompanheiro = nomeUpper.includes('COMPANHEIRO DE FACÇÃO')
     let alterou = false
 
-    if (nomeUpper.includes('COMPANHEIRO DE FACÇÃO CV') || nomeUpper === 'CV' || nomeUpper === 'COMANDO VERMELHO') {
+    if (
+      (ehCompanheiro && (nomeUpper.includes('CV') || nomeUpper.includes('COMANDO VERMELHO'))) || 
+      nomeUpper === 'CV' || 
+      nomeUpper === 'COMANDO VERMELHO'
+    ) {
       nome = 'Comando Vermelho'
       sigla = 'CV'
       cor = '#dc2626'
       alterou = true
-    } else if (nomeUpper.includes('COMPANHEIRO DE FACÇÃO PCC') || nomeUpper === 'PRIMEIRO COMANDO DA CAPITAL' || nomeUpper === 'PCC') {
+    } else if (
+      (ehCompanheiro && (nomeUpper.includes('PCC') || nomeUpper.includes('PRIMEIRO COMANDO DA CAPITAL'))) || 
+      nomeUpper === 'PRIMEIRO COMANDO DA CAPITAL' || 
+      nomeUpper === 'PCC'
+    ) {
       nome = 'Primeiro Comando da Capital'
       sigla = 'PCC'
       cor = '#1d4ed8'
@@ -46,7 +55,7 @@ async function main() {
       sigla = 'CCA'
       cor = '#6d28d9'
       alterou = true
-    } else if (nomeUpper.includes('COMPANHEIRO DE FACÇÃO') || nomeUpper === 'CF') {
+    } else if (ehCompanheiro || nomeUpper === 'CF') {
       nome = 'Companheiro de Facção'
       sigla = 'CF'
       cor = '#4b5563'
