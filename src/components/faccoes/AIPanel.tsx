@@ -110,22 +110,33 @@ function AIApenadoModal({ apenado, onClose, onUpdate, onDelete }: {
   const handleDelete = async () => {
     setDeleting(true)
     try {
-      const res = await fetch(`/api/aip/apenados/${apenado.id}?confirm=true`, {
+      console.log(`[AIPanel] Iniciando deleção de: ${apenado.id}`)
+
+      const url = `/api/aip/apenados/${apenado.id}?confirm=true`
+      console.log(`[AIPanel] URL: ${url}`)
+
+      const res = await fetch(url, {
         method: 'DELETE'
       })
 
+      console.log(`[AIPanel] Status da resposta: ${res.status}`)
+
+      const data = await res.json()
+      console.log(`[AIPanel] Dados da resposta:`, data)
+
       if (res.ok) {
+        console.log(`[AIPanel] Deleção bem-sucedida`)
         toast.success('Apenado deletado com sucesso')
         if (onDelete) {
           await onDelete(apenado.id)
         }
         onClose()
       } else {
-        const data = await res.json()
+        console.error(`[AIPanel] Erro na deleção: ${data.message}`)
         toast.error(data.message || 'Erro ao deletar')
       }
     } catch (error) {
-      console.error('Erro ao deletar:', error)
+      console.error('[AIPanel] Erro ao deletar:', error)
       toast.error('Erro ao deletar apenado')
     } finally {
       setDeleting(false)
