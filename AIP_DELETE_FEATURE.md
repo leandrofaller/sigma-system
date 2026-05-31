@@ -2,11 +2,19 @@
 
 ## Status: IMPLEMENTADO
 
-Administradores (SUPER_ADMIN e OPERATOR) agora podem deletar registros de apenados da aba AIP com confirmação de segurança.
+Apenas Super Admin e Admin podem deletar registros de apenados da aba AIP com confirmação de segurança.
 
 ---
 
 ## 📋 O Que Foi Implementado
+
+### Quem Pode Deletar?
+
+- ✅ **SUPER_ADMIN**: Acesso total, pode deletar qualquer apenado
+- ✅ **ADMIN**: Acesso de administrador, pode deletar qualquer apenado
+- ❌ **OPERATOR**: Acesso removido, não pode mais deletar
+- ❌ **ANALYST**: Sem acesso
+- ❌ **USER**: Sem acesso
 
 ### 1. Endpoint DELETE na API
 
@@ -17,10 +25,14 @@ DELETE /api/aip/apenados/{id}?confirm=true
 ```
 
 **Funcionalidade**:
+- ✅ Validação de autenticação (deve estar logado)
+- ✅ Validação de role (apenas SUPER_ADMIN e ADMIN)
 - ✅ Validação de ID do apenado
 - ✅ Require confirmação via query param `confirm=true`
 - ✅ Verifica se apenado existe antes de deletar
 - ✅ Deleta apenado (cascata deleta fotos de visitantes)
+- ✅ Retorna status 401 se não autenticado
+- ✅ Retorna status 403 se role não autorizado
 - ✅ Retorna status 404 se não encontrado
 - ✅ Suporta tratamento de erro com mensagens descritivas
 
@@ -32,11 +44,45 @@ DELETE /api/aip/apenados/{id}?confirm=true
 }
 ```
 
-**Response de Erro** (400, 404, 500):
+**Response de Erro**:
+
+- (400 - Bad Request):
 ```json
 {
   "success": false,
-  "message": "Descrição do erro"
+  "message": "Deleção não confirmada"
+}
+```
+
+- (401 - Unauthorized):
+```json
+{
+  "success": false,
+  "message": "Não autenticado"
+}
+```
+
+- (403 - Forbidden):
+```json
+{
+  "success": false,
+  "message": "Acesso negado. Apenas Super Admin e Admin podem deletar."
+}
+```
+
+- (404 - Not Found):
+```json
+{
+  "success": false,
+  "message": "Apenado não encontrado"
+}
+```
+
+- (500 - Server Error):
+```json
+{
+  "success": false,
+  "message": "Erro ao deletar apenado"
 }
 ```
 
@@ -125,18 +171,26 @@ Se Deletar:
 | Role | Botão Delete | Operação | Status |
 |------|-----------|-----------|--------|
 | SUPER_ADMIN | ✅ | DELETE | ✅ |
-| OPERATOR | ✅ | DELETE | ✅ |
+| ADMIN | ✅ | DELETE | ✅ |
+| OPERATOR | ❌ | — | ❌ |
 | ANALYST | ❌ | — | ❌ |
 | USER | ❌ | — | ❌ |
 
-**Nota**: A permissão é controlada pela autenticação. O endpoint DELETE não faz validação de role (assume que apenas roles apropriadas podem acessar a página AIP). Para adicionar validação de role no endpoint, seria necessário integrar com o auth:
+**Validação de Role**: O endpoint DELETE valida a autenticação e a role do usuário. Apenas SUPER_ADMIN e ADMIN podem deletar registros:
 
 ```typescript
 const session = await auth()
-const user = session.user as any
-if (user.role !== 'SUPER_ADMIN' && user.role !== 'OPERATOR') {
+if (!session?.user) {
   return NextResponse.json(
-    { success: false, message: 'Acesso negado' },
+    { success: false, message: 'Não autenticado' },
+    { status: 401 }
+  )
+}
+
+const user = session.user as any
+if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+  return NextResponse.json(
+    { success: false, message: 'Acesso negado. Apenas Super Admin e Admin podem deletar.' },
     { status: 403 }
   )
 }
@@ -223,33 +277,55 @@ AIPanel (Componente)
 
 ## 🎯 Comportamento em Diferentes Cenários
 
-### Cenário 1: Deleção Bem-Sucedida
+### Cenário 1: Super Admin/Admin Deletando com Sucesso
 ```
-Usuario: Clica em Trash → Confirma Deleção
+Usuario: SUPER_ADMIN ou ADMIN clica em Trash → Confirma Deleção
+Auth: Validação OK (role = SUPER_ADMIN ou ADMIN)
 API: DELETE retorna 200
 UI: Toast verde + Modal fecha + Lista atualiza
 Resultado: ✅ Apenado removido
 ```
 
-### Cenário 2: Apenado Já Deletado
+### Cenário 2: Operador Tentando Deletar
 ```
-Usuario: Clica em Trash → Confirma Deleção
+Usuario: OPERATOR clica em Trash → Confirma Deleção
+Auth: Validação falha (role = OPERATOR, não autorizado)
+API: DELETE retorna 403
+UI: Toast vermelho "Acesso negado. Apenas Super Admin e Admin podem deletar."
+Resultado: ❌ Apenado não é deletado, acesso negado
+```
+
+### Cenário 3: Apenado Já Deletado
+```
+Usuario: SUPER_ADMIN clica em Trash → Confirma Deleção
+Auth: Validação OK
 API: DELETE retorna 404
 UI: Toast vermelho "Apenado não encontrado"
 Resultado: ❌ Modal permanece aberta
 ```
 
-### Cenário 3: Erro no Servidor
+### Cenário 4: Erro no Servidor
 ```
-Usuario: Clica em Trash → Confirma Deleção
+Usuario: ADMIN clica em Trash → Confirma Deleção
+Auth: Validação OK
 API: DELETE retorna 500
 UI: Toast vermelho "Erro ao deletar apenado"
 Resultado: ❌ Modal permanece aberta, retry possível
 ```
 
-### Cenário 4: Usuário Arrependido
+### Cenário 5: Usuário Não Autenticado
 ```
-Usuario: Clica em Trash → Vê modal → Clica "Cancelar"
+Usuario: Usuário deslogado clica em Trash → Confirma Deleção
+Auth: Validação falha (não autenticado)
+API: DELETE retorna 401
+UI: Toast vermelho "Não autenticado"
+Resultado: ❌ Usuário deve fazer login novamente
+```
+
+### Cenário 6: Usuário Arrependido
+```
+Usuario: SUPER_ADMIN clica em Trash → Vê modal → Clica "Cancelar"
+Auth: Validação não é executada
 API: Nada é chamado
 UI: Modal fecha, apenado permanece
 Resultado: ✅ Apenado preservado
@@ -259,11 +335,13 @@ Resultado: ✅ Apenado preservado
 
 ## 📌 Notas Importantes
 
-1. **Não há soft delete**: Apenado é completamente removido do banco
-2. **Cascata automática**: Fotos de visitantes são deletadas também
-3. **Sem recuperação**: Não há undo ou lixeira
-4. **Feedback visual**: Toast e spinner indicam progresso
-5. **Confirmação visual**: Modal impede cliques acidentais
+1. **Permissão restrita**: Apenas SUPER_ADMIN e ADMIN podem deletar
+2. **Não há soft delete**: Apenado é completamente removido do banco
+3. **Cascata automática**: Fotos de visitantes são deletadas também
+4. **Sem recuperação**: Não há undo ou lixeira
+5. **Feedback visual**: Toast e spinner indicam progresso
+6. **Confirmação visual**: Modal impede cliques acidentais
+7. **Validação de autenticação**: Usuário deve estar logado para deletar
 
 ---
 
@@ -288,10 +366,12 @@ Resultado: ✅ Apenado preservado
 
 - ✅ Botão de deleção implementado
 - ✅ Modal de confirmação estilizada
-- ✅ Endpoint DELETE seguro
-- ✅ Feedback ao usuário
-- ✅ Lista atualiza automaticamente
+- ✅ Endpoint DELETE com validação de autenticação
+- ✅ Validação de role (apenas SUPER_ADMIN e ADMIN)
+- ✅ OPERATOR removido do acesso de deleção
+- ✅ Feedback ao usuário com toast notifications
+- ✅ Lista atualiza automaticamente após deleção
 - ✅ Código compilado sem erros
 - ✅ Sem breaking changes
 
-**Administradores agora podem deletar registros de AIP com segurança! 🗑️**
+**Apenas SUPER_ADMIN e ADMIN podem deletar registros de AIP com segurança! 🗑️**

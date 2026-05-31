@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
+import { auth } from '@/lib/auth'
 
 const db = new PrismaClient()
 
@@ -302,13 +303,30 @@ export async function PUT(request: NextRequest) {
 
 /**
  * DELETE /api/aip/apenados/{id}
- * Deleta um apenado do AIP (apenas SUPER_ADMIN e OPERATOR)
+ * Deleta um apenado do AIP (apenas SUPER_ADMIN e ADMIN)
  *
  * Query params:
  * - confirm: boolean (deve ser true para confirmar deleção)
  */
 export async function DELETE(request: NextRequest) {
   try {
+    // Validar autenticação e permissão
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json(
+        { success: false, message: 'Não autenticado' },
+        { status: 401 }
+      )
+    }
+
+    const user = session.user as any
+    if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+      return NextResponse.json(
+        { success: false, message: 'Acesso negado. Apenas Super Admin e Admin podem deletar.' },
+        { status: 403 }
+      )
+    }
+
     const { searchParams, pathname } = new URL(request.url)
     const id = pathname.split('/').pop()
 
