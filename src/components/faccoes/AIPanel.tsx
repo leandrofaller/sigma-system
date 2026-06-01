@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff } from 'lucide-react'
+import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface AIPFotoVisitante {
@@ -92,6 +92,22 @@ interface AIPApenado {
       }
     }>
   }
+}
+
+interface AIPApenadoAnexo {
+  id: string
+  apenadoId: string
+  nomeOriginal: string
+  nomeS3: string
+  tipoMime: string
+  tamanhoOriginal: number
+  tamanhoS3: number
+  urlS3: string
+  chaveS3: string
+  usuarioUploadId: string
+  usuarioUpload: { name: string }
+  dataUpload: string
+  descricao?: string | null
 }
 
 // ── Card de Apenado em AIP ──────────────────────────────
@@ -188,6 +204,17 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
   const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
   const [zoomedPhotoTitle, setZoomedPhotoTitle] = useState<string>('')
 
+  // Controle de Anexos
+  const [anexos, setAnexos] = useState<AIPApenadoAnexo[]>([])
+  const [uploadandoAnexo, setUploadandoAnexo] = useState(false)
+
+  // Carregar anexos quando apenado é selecionado
+  useEffect(() => {
+    if (apenado?.id) {
+      carregarAnexos(apenado.id)
+    }
+  }, [apenado?.id])
+
   const isPhotoStyleFull = layout?.photoStyle === 'full'
   const isFaccaoConfirmada = apenado.facaoRealNome && apenado.facaoNivel === 'confirmado'
 
@@ -199,6 +226,60 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
     { id: 'dados_inteligencia', title: 'Dados de Inteligência', visible: true },
     { id: 'visitantes', title: 'Visitantes Cadastrados', visible: true }
   ]
+
+  // Funções de Gerenciamento de Anexos
+  async function carregarAnexos(apenadoId: string) {
+    try {
+      const res = await fetch(`/api/aip/apenados/${apenadoId}/anexos`)
+      const data = await res.json()
+      setAnexos(data.anexos || [])
+    } catch (e) {
+      console.error('Erro ao carregar anexos:', e)
+    }
+  }
+
+  async function handleAnexoUpload(e: React.ChangeEvent<HTMLInputElement>, apenadoId: string) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadandoAnexo(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('tipoCompactacao', file.type.startsWith('image/') ? 'imagem' : 'documento')
+
+      const res = await fetch(`/api/aip/apenados/${apenadoId}/anexos`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) throw new Error()
+
+      const data = await res.json()
+      setAnexos([data.anexo, ...anexos])
+      toast.success('Arquivo enviado com sucesso')
+      // Reset input
+      e.target.value = ''
+    } catch {
+      toast.error('Erro ao enviar arquivo')
+    } finally {
+      setUploadandoAnexo(false)
+    }
+  }
+
+  async function handleDeleteAnexo(anexoId: string, apenadoId: string) {
+    if (!confirm('Remover anexo?')) return
+    try {
+      const res = await fetch(`/api/aip/apenados/${apenadoId}/anexos/${anexoId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error()
+      setAnexos(anexos.filter(a => a.id !== anexoId))
+      toast.success('Anexo removido')
+    } catch {
+      toast.error('Erro ao remover anexo')
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -645,6 +726,67 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                           <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                             {formData.observacoes || '(nenhuma observação)'}
                           </p>
+                        )}
+                      </div>
+
+                      {/* Anexos - Dados de Inteligência */}
+                      <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                          <Paperclip className="w-4 h-4" /> Anexos - Dados de Inteligência
+                        </h3>
+
+                        {/* Input de upload */}
+                        {editing && (
+                          <div className="mb-4">
+                            <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
+                              <Paperclip className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm text-gray-600 dark:text-gray-400">Clique para anexar arquivo ou imagem</span>
+                              <input
+                                type="file"
+                                onChange={e => handleAnexoUpload(e, apenado.id)}
+                                disabled={uploadandoAnexo}
+                                className="hidden"
+                              />
+                            </label>
+                            {uploadandoAnexo && <p className="text-xs text-gray-500 mt-2">Enviando...</p>}
+                          </div>
+                        )}
+
+                        {/* Lista de anexos */}
+                        {anexos.length > 0 ? (
+                          <div className="space-y-2">
+                            {anexos.map(anexo => (
+                              <div key={anexo.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium truncate text-gray-900 dark:text-white">{anexo.nomeOriginal}</p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {(anexo.tamanhoS3 / 1024).toFixed(0)}KB • {new Date(anexo.dataUpload).toLocaleDateString('pt-BR')}
+                                  </p>
+                                </div>
+                                <div className="flex gap-1 ml-2">
+                                  <a
+                                    href={anexo.urlS3}
+                                    target="_blank"
+                                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                                    title="Download"
+                                  >
+                                    <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                                  </a>
+                                  {editing && (
+                                    <button
+                                      onClick={() => handleDeleteAnexo(anexo.id, apenado.id)}
+                                      className="p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded transition-colors"
+                                      title="Remover"
+                                    >
+                                      <Trash2 className="w-4 h-4 text-red-500" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">(nenhum anexo)</p>
                         )}
                       </div>
                     </div>

@@ -80,6 +80,7 @@ model User {
   boardCardAssignments BoardCardAssignee[]
   boardComments    BoardComment[]
   devices          UserDevice[]
+  aipApenadoAnexos AIPApenadoAnexo[]
 
   @@map("users")
 }
@@ -875,12 +876,40 @@ model AIPApenado {
   // Relacionamentos
   vinculos AIPVinculo[]
   fotoVisitantes AIPFotoVisitante[]
+  anexos AIPApenadoAnexo[]
 
   @@index([sipeId])
   @@index([unidade])
   @@index([facaoRealNome])
   @@index([cadastradoEm])
   @@map("aip_apenados")
+}
+
+model AIPApenadoAnexo {
+  id              String    @id @default(cuid())
+  apenadoId       String
+  apenado         AIPApenado @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+
+  // Informações do arquivo
+  nomeOriginal    String    // Nome original do arquivo
+  nomeS3          String    // Nome armazenado em S3 (com hash)
+  tipoMime        String    // application/pdf, image/jpeg, etc
+  tamanhoOriginal Int       // Tamanho antes da compactação
+  tamanhoS3       Int       // Tamanho após compactação
+
+  // Localização
+  urlS3           String    // https://bucket.s3.amazonaws.com/...
+  chaveS3         String    // aip-anexos/apenado-id/hash-timestamp.pdf
+
+  // Metadados
+  usuarioUploadId String
+  usuarioUpload   User      @relation(fields: [usuarioUploadId], references: [id])
+  dataUpload      DateTime  @default(now())
+  descricao       String?   @db.Text
+
+  @@index([apenadoId])
+  @@index([dataUpload])
+  @@map("aip_apenado_anexos")
 }
 
 model AIPVinculo {
