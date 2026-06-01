@@ -10,9 +10,10 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { lat, lng, address } = body as { lat: number; lng: number; address?: string };
+  const { lat, lng, address } = body as { lat: number | null; lng: number | null; address?: string | null };
 
-  if (typeof lat !== 'number' || typeof lng !== 'number') {
+  const hasLocation = typeof lat === 'number' && typeof lng === 'number';
+  if (!hasLocation && (lat !== null || lng !== null)) {
     return NextResponse.json({ error: 'Coordenadas inválidas' }, { status: 400 });
   }
 
@@ -32,12 +33,12 @@ export async function POST(req: NextRequest) {
   await prisma.userDevice.update({
     where: { token },
     data: {
-      latitude: lat,
-      longitude: lng,
-      locationAddress: address ?? null,
-      locationAt: new Date(),
+      latitude: hasLocation ? lat : null,
+      longitude: hasLocation ? lng : null,
+      locationAddress: hasLocation && address ? address : null,
+      locationAt: hasLocation ? new Date() : null,
     },
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, hasLocation });
 }

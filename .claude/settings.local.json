@@ -124,7 +124,8 @@
       "mcp__Claude_in_Chrome__read_console_messages",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
       "Bash(npx ts-node *)",
-      "Bash(Get-ChildItem -Path \"F:\\\\relatorio_claude\" -Filter \"*stats*\" -Recurse)"
+      "Bash(Get-ChildItem -Path \"F:\\\\relatorio_claude\" -Filter \"*stats*\" -Recurse)",
+      "Bash(Start-Sleep -Seconds 15)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

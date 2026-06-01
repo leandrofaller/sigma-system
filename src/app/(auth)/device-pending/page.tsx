@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { MapPin, Loader2, AlertTriangle, CheckCircle2, Navigation } from 'lucide-react';
+import { MapPin, Loader2, AlertTriangle, CheckCircle2, Navigation, Send } from 'lucide-react';
 
-type GeoStep = 'idle' | 'requesting' | 'captured' | 'submitting' | 'done' | 'geo-denied';
+type GeoStep = 'idle' | 'requesting' | 'captured' | 'submitting' | 'done' | 'geo-denied' | 'no-geo';
 
 interface CapturedLocation {
   lat: number;
@@ -59,24 +59,31 @@ export default function DevicePendingPage() {
     );
   }
 
-  async function submitLocation() {
-    if (!location) return;
+  function confirmNoGeo() {
+    setStep('no-geo');
+  }
+
+  async function submitLocation(withLocation: boolean = true) {
     setStep('submitting');
     try {
+      const body = withLocation && location
+        ? { lat: location.lat, lng: location.lng, address: location.address }
+        : { lat: null, lng: null, address: null };
+
       const res = await fetch('/api/device/location', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lat: location.lat, lng: location.lng, address: location.address }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         setStep('done');
       } else {
-        setGeoError('Erro ao enviar localização. Tente novamente.');
-        setStep('captured');
+        setGeoError('Erro ao enviar solicitação. Tente novamente.');
+        setStep(withLocation ? 'captured' : 'no-geo');
       }
     } catch {
       setGeoError('Erro de conexão. Tente novamente.');
-      setStep('captured');
+      setStep(withLocation ? 'captured' : 'no-geo');
     }
   }
 
@@ -109,19 +116,28 @@ export default function DevicePendingPage() {
 
           <p className="text-gray-300 text-sm leading-relaxed text-center">
             Sua solicitação de acesso ao Portal LogiTrack está sendo verificada
-            pela equipe de segurança. Para enviar sua solicitação, precisamos
-            confirmar sua localização atual.
+            pela equipe de segurança. Você pode compartilhar sua localização para
+            facilitar a verificação, mas não é obrigatório.
           </p>
 
           {/* Step: idle */}
           {step === 'idle' && (
-            <button
-              onClick={requestLocation}
-              className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
-            >
-              <Navigation className="w-4 h-4" />
-              Compartilhar minha localização
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={requestLocation}
+                className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
+              >
+                <Navigation className="w-4 h-4" />
+                Compartilhar minha localização
+              </button>
+              <button
+                onClick={confirmNoGeo}
+                className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
+              >
+                <Send className="w-4 h-4" />
+                Enviar sem localização
+              </button>
+            </div>
           )}
 
           {/* Step: requesting */}
@@ -147,6 +163,13 @@ export default function DevicePendingPage() {
                 <Navigation className="w-4 h-4" />
                 Tentar novamente
               </button>
+              <button
+                onClick={confirmNoGeo}
+                className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
+              >
+                <Send className="w-4 h-4" />
+                Enviar sem localização
+              </button>
             </div>
           )}
 
@@ -169,6 +192,36 @@ export default function DevicePendingPage() {
                 className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
               >
                 Enviar solicitação para análise
+              </button>
+            </div>
+          )}
+
+          {/* Step: no-geo (enviando sem localização) */}
+          {step === 'no-geo' && (
+            <div className="space-y-3">
+              <div className="rounded-xl px-4 py-3 flex items-start gap-3"
+                style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
+                <svg className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zm-11-1a1 1 0 11-2 0 1 1 0 012 0zM8 8a1 1 0 000 2h.01a1 1 0 000-2H8zm4-1a1 1 0 11-2 0 1 1 0 012 0zm1 3a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                </svg>
+                <p className="text-blue-300 text-xs leading-relaxed">
+                  Você enviará a solicitação sem localização. O administrador poderá ainda autorizar seu dispositivo baseado em outros dados (IP, navegador, etc).
+                </p>
+              </div>
+              {geoError && (
+                <p className="text-red-400 text-xs text-center">{geoError}</p>
+              )}
+              <button
+                onClick={() => submitLocation(false)}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
+              >
+                Enviar solicitação sem localização
+              </button>
+              <button
+                onClick={() => setStep('idle')}
+                className="w-full text-gray-400 hover:text-gray-200 font-medium py-2 rounded-xl transition-colors text-sm"
+              >
+                Voltar
               </button>
             </div>
           )}
