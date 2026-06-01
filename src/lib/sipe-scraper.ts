@@ -536,8 +536,11 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
   const context = await createSession()
   const page = await context.newPage()
 
+  // EXTRAMUROS não tem unidade específica; usa unidade padrão só para fazer login
+  const loginUnidade = unidadeId === 'EXTRAMUROS' ? '3' : unidadeId
+
   try {
-    const ok = await login(page, unidadeId)
+    const ok = await login(page, loginUnidade)
     if (!ok) throw new Error('Falha no login do SIPE')
 
     log(jobId, 'Login realizado com sucesso')
@@ -556,7 +559,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
       }
       const alreadyDone = (job.processado ?? 0)
       refreshMemory(jobId, {
-        fase: job.tipo === 'ADVOGADOS' ? 'Retomando scraping de advogados...' : 'Retomando scraping de apenados...',
+        fase: job.tipo === 'ADVOGADOS' ? 'Retomando scraping de advogados...' : job.tipo === 'EXTRAMUROS' ? 'Retomando scraping extramuros...' : 'Retomando scraping de apenados...',
         total: (JSON.parse(job.idsColetados) as number[]).length,
         processado: alreadyDone,
         ultimoLog: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
@@ -584,6 +587,23 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
           total: ids.length,
           fase: 'Scraping advogados',
           ultimoLog: `${ids.length} advogados encontrados`,
+        })
+      } else if (job.tipo === 'EXTRAMUROS') {
+        refreshMemory(jobId, { fase: 'Consultando banco por apenados extramuros...' })
+
+        ids = await coletarIdsExtramuros(jobId)
+
+        // Persist checkpoint
+        await dbProgress(jobId, {
+          idsColetados: JSON.stringify(ids),
+          total: ids.length,
+          log: `${ids.length} apenados extramuros encontrados — iniciando scraping`,
+          fase: 'Scraping extramuros',
+        })
+        refreshMemory(jobId, {
+          total: ids.length,
+          fase: 'Scraping extramuros',
+          ultimoLog: `${ids.length} apenados extramuros encontrados`,
         })
       } else {
         refreshMemory(jobId, { fase: 'Coletando lista de apenados...' })
@@ -981,6 +1001,49 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
 
 // Cache temporário para associar dados coletados da listagem geral aos apenados
 const listagemInfoCache = new Map<number, { cela?: string }>()
+
+// ── Situações que indicam que o apenado está fora do sistema prisional ──
+const SITUACOES_EXTRAMUROS = [
+  'Em Liberdade',
+  'Solto',
+  'Prisão Domiciliar',
+  'Evasão / Abandono',
+  'Óbito em Fuga',
+  'Fuga',
+  'Preso Recambiado',
+  'Livramento Condicional',
+  'DEPEN',
+  'Descumprimento de cautelar',
+]
+
+async function coletarIdsExtramuros(jobId: string): Promise<number[]> {
+  await dbProgress(jobId, { log: 'Consultando banco local por apenados extramuros...', fase: 'Coletando IDs' })
+
+  const apenados = await prisma.sipeApenadoImportado.findMany({
+    where: { situacao: { in: SITUACOES_EXTRAMUROS } },
+    select: { sipeId: true, situacao: true },
+    orderBy: { sipeId: 'asc' },
+  })
+
+  const ids = apenados.map((a) => a.sipeId)
+
+  // Resumo por situação para o log
+  const porSituacao: Record<string, number> = {}
+  for (const a of apenados) {
+    const s = a.situacao ?? 'Desconhecido'
+    porSituacao[s] = (porSituacao[s] ?? 0) + 1
+  }
+  const resumo = Object.entries(porSituacao)
+    .map(([s, n]) => `${s}: ${n}`)
+    .join(', ')
+
+  await dbProgress(jobId, {
+    log: `${ids.length} apenados extramuros encontrados — ${resumo}`,
+    fase: 'Coletando IDs',
+  })
+
+  return ids
+}
 
 // ── ID collection ─────────────────────────────────────────────
 

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
   RefreshCw, Play, CheckCircle, XCircle, Clock,
-  AlertCircle, RotateCcw, Pause, Wifi, WifiOff, Trash2, ShieldAlert,
+  AlertCircle, RotateCcw, Pause, Wifi, WifiOff, Trash2, ShieldAlert, AlertTriangle,
 } from 'lucide-react'
 
 // Lista de fallback usada quando o SIPE estiver inacessível
@@ -515,6 +515,16 @@ export function SyncPanel() {
           >
             <Play className="w-4 h-4" />
             Sincronizar Unidades Prisionais
+          </button>
+
+          <button
+            onClick={() => startSync('EXTRAMUROS')}
+            disabled={isActive || loading}
+            title="Atualiza apenados com situações: Em Liberdade, Solto, Fuga, Prisão Domiciliar, etc."
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <AlertTriangle className="w-4 h-4" />
+            Sincronizar Extramuros
           </button>
         </div>
       </div>

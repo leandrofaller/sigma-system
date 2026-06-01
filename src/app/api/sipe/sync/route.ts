@@ -164,6 +164,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
+  // ── Extramuros sync (por situação no banco local) ──
+  if (tipo === 'EXTRAMUROS') {
+    const job = await prisma.sipeSyncJob.create({
+      data: {
+        tipo: 'EXTRAMUROS',
+        unidade: 'EXTRAMUROS',
+        unidadeNome: 'Extramuros (Em Liberdade, Fuga, etc.)',
+        status: 'RUNNING',
+        iniciadoEm: new Date(),
+        criadoPor: session.user.id,
+      },
+    })
+
+    startSipeSync(job.id, 'EXTRAMUROS')
+    return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
+  }
+
   // ── Full apenados + advogados sync ──
   const job = await prisma.sipeSyncJob.create({
     data: {
