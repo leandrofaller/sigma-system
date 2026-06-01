@@ -549,8 +549,9 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
     let ids: number[] = []
 
     if (job.idsColetados) {
-      // Resume: reuse previously collected list
+      // Resume (or IDS_MANUAIS with pre-populated IDs): reuse previously collected list
       ids = JSON.parse(job.idsColetados) as number[]
+      const allIds = ids
       // Determine which IDs remain (after cursor)
       const cursor = job.ultimoIdProcessado ?? null
       if (cursor !== null) {
@@ -558,15 +559,22 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
         ids = cursorIndex >= 0 ? ids.slice(cursorIndex + 1) : ids
       }
       const alreadyDone = (job.processado ?? 0)
+      const isManual = job.tipo === 'IDS_MANUAIS'
+      const faseMsg = isManual
+        ? `Scraping de ${ids.length} ID(s) manuais`
+        : job.tipo === 'ADVOGADOS' ? 'Retomando scraping de advogados...' : job.tipo === 'EXTRAMUROS' ? 'Retomando scraping extramuros...' : 'Retomando scraping de apenados...'
+      const logMsg = isManual
+        ? `${ids.length} ID(s) para scraping: ${ids.slice(0, 5).join(', ')}${ids.length > 5 ? '...' : ''}`
+        : `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`
       refreshMemory(jobId, {
-        fase: job.tipo === 'ADVOGADOS' ? 'Retomando scraping de advogados...' : job.tipo === 'EXTRAMUROS' ? 'Retomando scraping extramuros...' : 'Retomando scraping de apenados...',
-        total: (JSON.parse(job.idsColetados) as number[]).length,
+        fase: faseMsg,
+        total: allIds.length,
         processado: alreadyDone,
-        ultimoLog: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
+        ultimoLog: logMsg,
       })
       await dbProgress(jobId, {
-        log: `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`,
-        fase: 'Retomando',
+        log: logMsg,
+        fase: isManual ? 'Scraping por IDs manuais' : 'Retomando',
       })
     } else {
       // Fresh start: collect all IDs

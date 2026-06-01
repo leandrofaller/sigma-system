@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
   RefreshCw, Play, CheckCircle, XCircle, Clock,
-  AlertCircle, RotateCcw, Pause, Wifi, WifiOff, Trash2, ShieldAlert, AlertTriangle,
+  AlertCircle, RotateCcw, Pause, Wifi, WifiOff, Trash2, ShieldAlert, AlertTriangle, Hash,
 } from 'lucide-react'
 
 // Lista de fallback usada quando o SIPE estiver inacessível
@@ -290,6 +290,7 @@ export function SyncPanel() {
   const [jobs, setJobs] = useState<SyncJob[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedUnidade, setSelectedUnidade] = useState('3')
+  const [manualIds, setManualIds] = useState('')
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const [clearing, setClearing] = useState(false)
@@ -351,6 +352,29 @@ export function SyncPanel() {
       }
       setActiveJobId(data.jobId)
       toast.info('Sincronização iniciada')
+      fetchJobs()
+    } catch {
+      toast.error('Erro de conexão')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const startSyncManual = async (ids: number[]) => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/sipe/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: 'IDS_MANUAIS', idsManual: ids }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Erro ao iniciar sincronização por ID')
+        return
+      }
+      setActiveJobId(data.jobId)
+      toast.info(`Sincronização iniciada para ${ids.length} ID(s)`)
       fetchJobs()
     } catch {
       toast.error('Erro de conexão')
@@ -478,6 +502,44 @@ export function SyncPanel() {
               Lista local — SIPE inacessível ou credenciais não configuradas
             </p>
           )}
+        </div>
+
+        {/* Sincronizar por SIPE ID(s) */}
+        <div className="space-y-2 border border-violet-200 dark:border-violet-800 rounded-lg p-4 bg-violet-50 dark:bg-violet-900/10">
+          <label className="block text-sm font-medium text-violet-800 dark:text-violet-300">
+            Sincronizar por SIPE ID(s) específico(s)
+          </label>
+          <textarea
+            value={manualIds}
+            onChange={e => setManualIds(e.target.value)}
+            placeholder={`Digite um ID por linha ou separados por vírgula\nEx: 12345, 67890\nou\n12345\n67890`}
+            rows={3}
+            disabled={isActive || loading}
+            className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-violet-300 dark:border-violet-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none disabled:opacity-50"
+          />
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-violet-600 dark:text-violet-400">
+              {(() => {
+                const ids = manualIds.split(/[\n,]+/).map(s => parseInt(s.trim())).filter(n => Number.isInteger(n) && n > 0)
+                return ids.length > 0 ? `${ids.length} ID(s) válido(s) detectado(s)` : 'Nenhum ID detectado'
+              })()}
+            </p>
+            <button
+              onClick={() => {
+                const ids = manualIds.split(/[\n,]+/).map(s => parseInt(s.trim())).filter(n => Number.isInteger(n) && n > 0)
+                if (ids.length === 0) {
+                  toast.error('Informe pelo menos um SIPE ID válido')
+                  return
+                }
+                startSyncManual(ids)
+              }}
+              disabled={isActive || loading || !manualIds.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Hash className="w-4 h-4" />}
+              Sincronizar por ID(s)
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-3">

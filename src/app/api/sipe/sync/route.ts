@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   await detectAndMarkCrashedJobs()
 
   // Parse body safely (allow empty body)
-  let body: { unidadeId?: string; tipo?: string; resumeJobId?: string } = {}
+  let body: { unidadeId?: string; tipo?: string; resumeJobId?: string; idsManual?: number[] } = {}
   try {
     const contentLength = req.headers.get('content-length')
     if (contentLength && parseInt(contentLength) > 0) {
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     body = {}
   }
 
-  const { unidadeId = '3', tipo = 'APENADOS', resumeJobId } = body
+  const { unidadeId = '3', tipo = 'APENADOS', resumeJobId, idsManual } = body
 
   // ── Resume an interrupted job ──
   if (resumeJobId) {
@@ -178,6 +178,36 @@ export async function POST(req: NextRequest) {
     })
 
     startSipeSync(job.id, 'EXTRAMUROS')
+    return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
+  }
+
+  // ── IDs manuais ──
+  if (tipo === 'IDS_MANUAIS') {
+    const ids = (idsManual ?? [])
+      .map((id) => parseInt(String(id)))
+      .filter((id) => Number.isInteger(id) && id > 0)
+
+    if (ids.length === 0) {
+      return NextResponse.json({ error: 'Nenhum SIPE ID válido fornecido' }, { status: 400 })
+    }
+
+    const uniqueIds = [...new Set(ids)].sort((a, b) => a - b)
+
+    const job = await prisma.sipeSyncJob.create({
+      data: {
+        tipo: 'IDS_MANUAIS',
+        unidade: 'MANUAL',
+        unidadeNome: `${uniqueIds.length} ID(s) manual(is)`,
+        status: 'RUNNING',
+        idsColetados: JSON.stringify(uniqueIds),
+        total: uniqueIds.length,
+        fase: 'Aguardando início...',
+        iniciadoEm: new Date(),
+        criadoPor: session.user.id,
+      },
+    })
+
+    startSipeSync(job.id, 'IDS_MANUAIS')
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
