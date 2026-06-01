@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AIPDashboard } from './AIPDashboard'
 import { AIPanel } from './AIPanel'
+import { AIPFaccoesPanel } from './AIPFaccoesPanel'
 import { AIPAdvogadosPanel } from './AIPAdvogadosPanel'
 import { AIPVisitantesPanel } from './AIPVisitantesPanel'
-import { Brain, BarChart2, Users, Briefcase, Camera } from 'lucide-react'
+import { Brain, BarChart2, Users, Shield, Briefcase, Camera } from 'lucide-react'
 
 interface AIPClientProps {
   userRole: string
@@ -46,6 +47,10 @@ export function AIPClient({ userRole }: AIPClientProps) {
               <Users className="w-4 h-4" />
               Apenados
             </TabsTrigger>
+            <TabsTrigger value="faccoes" className="gap-2">
+              <Shield className="w-4 h-4" />
+              Facções
+            </TabsTrigger>
             <TabsTrigger value="advogados" className="gap-2">
               <Briefcase className="w-4 h-4" />
               Advogados
@@ -62,6 +67,10 @@ export function AIPClient({ userRole }: AIPClientProps) {
 
           <TabsContent value="apenados" className="flex-1 min-h-0 mt-0">
             <AIPanel userRole={userRole} />
+          </TabsContent>
+
+          <TabsContent value="faccoes" className="flex-1 min-h-0 mt-0 overflow-y-auto">
+            <AIPFaccoesPanel userRole={userRole} />
           </TabsContent>
 
           <TabsContent value="advogados" className="flex-1 min-h-0 mt-0 overflow-y-auto">

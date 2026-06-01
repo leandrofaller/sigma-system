@@ -172,7 +172,18 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  
+  const [faccoes, setFaccoes] = useState<{ id: string; nome: string; cor: string }[]>([])
+
+  // Carregar facções disponíveis quando entrar em modo de edição
+  useEffect(() => {
+    if (editing && faccoes.length === 0) {
+      fetch('/api/aip/faccoes')
+        .then((r) => r.json())
+        .then((d) => setFaccoes(d.faccoes ?? []))
+        .catch(() => {})
+    }
+  }, [editing]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Controle do Visualizador de Imagem (Zoom)
   const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
   const [zoomedPhotoTitle, setZoomedPhotoTitle] = useState<string>('')
@@ -518,13 +529,16 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                             Facção Real (Verificada)
                           </label>
                           {editing ? (
-                            <input
-                              type="text"
+                            <select
                               value={formData.facaoRealNome || ''}
                               onChange={e => setFormData({ ...formData, facaoRealNome: e.target.value })}
-                              placeholder="Ex: PCC, CV, TCP, etc."
                               className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
-                            />
+                            >
+                              <option value="">Selecionar facção...</option>
+                              {faccoes.map((f) => (
+                                <option key={f.id} value={f.nome}>{f.nome}</option>
+                              ))}
+                            </select>
                           ) : (
                             <p className="text-sm text-gray-900 dark:text-white font-medium">{formData.facaoRealNome || '(não informado)'}</p>
                           )}
