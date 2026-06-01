@@ -13,11 +13,21 @@ export async function GET() {
     return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
   }
 
-  // 1. Buscar todos os sipeApenadoId dos apenados cadastrados no AIP
+  // 1. Buscar os sipeId (Int) dos apenados AIP e mapear para o id (cuid) do SipeApenadoImportado
+  //    SipeVinculoAdvogado e SipeProcesso usam apenadoId (cuid), não sipeId (Int)
   const aipEntries = await prisma.aIPApenado.findMany({
     select: { sipeApenadoId: true },
   })
-  const sipeIds = aipEntries.map((a) => a.sipeApenadoId)
+  const sipeIntIds = aipEntries.map((a) => a.sipeApenadoId)
+
+  // Buscar os cuid ids correspondentes em SipeApenadoImportado
+  const sipeRegistros = sipeIntIds.length > 0
+    ? await prisma.sipeApenadoImportado.findMany({
+        where: { sipeId: { in: sipeIntIds } },
+        select: { id: true },
+      })
+    : []
+  const sipeCuidIds = sipeRegistros.map((r) => r.id)
 
   const [
     totalApenados,
@@ -46,9 +56,9 @@ export async function GET() {
     }).then((r) => r.length),
 
     // Vínculos de advogados (ativos) para os apenados AIP
-    sipeIds.length > 0
+    sipeCuidIds.length > 0
       ? prisma.sipeVinculoAdvogado.findMany({
-          where: { sipeApenadoId: { in: sipeIds }, ativo: true },
+          where: { apenadoId: { in: sipeCuidIds }, ativo: true },
           select: { advogadoId: true },
         })
       : Promise.resolve([]),
@@ -63,9 +73,9 @@ export async function GET() {
       },
     }),
 
-    // Processos criminais dos apenados AIP (via sipeApenado)
-    sipeIds.length > 0
-      ? prisma.sipeProcesso.count({ where: { sipeApenadoId: { in: sipeIds } } })
+    // Processos criminais dos apenados AIP (via apenadoId cuid)
+    sipeCuidIds.length > 0
+      ? prisma.sipeProcesso.count({ where: { apenadoId: { in: sipeCuidIds } } })
       : Promise.resolve(0),
 
     // Fotos de visitantes cadastradas em AIP
