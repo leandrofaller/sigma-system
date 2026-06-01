@@ -196,8 +196,8 @@ export async function POST(req: NextRequest) {
     const job = await prisma.sipeSyncJob.create({
       data: {
         tipo: 'IDS_MANUAIS',
-        unidade: 'MANUAL',
-        unidadeNome: `${uniqueIds.length} ID(s) manual(is)`,
+        unidade: unidadeId,
+        unidadeNome: `${uniqueIds.length} ID(s) manual(is) — ${unidadeNome}`,
         status: 'RUNNING',
         idsColetados: JSON.stringify(uniqueIds),
         total: uniqueIds.length,
@@ -207,7 +207,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    startSipeSync(job.id, 'IDS_MANUAIS')
+    startSipeSync(job.id, unidadeId)
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 

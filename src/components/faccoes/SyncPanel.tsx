@@ -366,7 +366,7 @@ export function SyncPanel() {
       const res = await fetch('/api/sipe/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tipo: 'IDS_MANUAIS', idsManual: ids }),
+        body: JSON.stringify({ tipo: 'IDS_MANUAIS', idsManual: ids, unidadeId: selectedUnidade }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -509,6 +509,9 @@ export function SyncPanel() {
           <label className="block text-sm font-medium text-violet-800 dark:text-violet-300">
             Sincronizar por SIPE ID(s) específico(s)
           </label>
+          <p className="text-xs text-violet-600 dark:text-violet-400">
+            Usa a unidade selecionada acima para login. Selecione a unidade correta do apenado.
+          </p>
           <textarea
             value={manualIds}
             onChange={e => setManualIds(e.target.value)}
