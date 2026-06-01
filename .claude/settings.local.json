@@ -125,7 +125,9 @@
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
       "Bash(npx ts-node *)",
       "Bash(Get-ChildItem -Path \"F:\\\\relatorio_claude\" -Filter \"*stats*\" -Recurse)",
-      "Bash(Start-Sleep -Seconds 15)"
+      "Bash(Start-Sleep -Seconds 15)",
+      "Bash(Get-ChildItem -Path \"F:\\\\relatorio_claude\" -Recurse -Filter \"*.prisma\" -ErrorAction SilentlyContinue)",
+      "Bash(xargs ls -la)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
