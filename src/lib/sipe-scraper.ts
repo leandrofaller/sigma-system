@@ -536,8 +536,8 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
   const context = await createSession()
   const page = await context.newPage()
 
-  // EXTRAMUROS não tem unidade específica; usa unidade padrão só para fazer login
-  const loginUnidade = unidadeId === 'EXTRAMUROS' ? '3' : unidadeId
+  // Tipos sem unidade específica usam a unidade padrão '3' apenas para fazer login
+  const loginUnidade = (unidadeId === 'EXTRAMUROS' || unidadeId === 'GLOBAL') ? '3' : unidadeId
 
   try {
     const ok = await login(page, loginUnidade)
@@ -562,7 +562,10 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
       const isManual = job.tipo === 'IDS_MANUAIS'
       const faseMsg = isManual
         ? `Scraping de ${ids.length} ID(s) manuais`
-        : job.tipo === 'ADVOGADOS' ? 'Retomando scraping de advogados...' : job.tipo === 'EXTRAMUROS' ? 'Retomando scraping extramuros...' : 'Retomando scraping de apenados...'
+        : job.tipo === 'ADVOGADOS' ? 'Retomando scraping de advogados...'
+        : job.tipo === 'EXTRAMUROS' ? 'Retomando scraping extramuros...'
+        : job.tipo === 'GLOBAL' ? 'Retomando scraping global...'
+        : 'Retomando scraping de apenados...'
       const logMsg = isManual
         ? `${ids.length} ID(s) para scraping: ${ids.slice(0, 5).join(', ')}${ids.length > 5 ? '...' : ''}`
         : `Retomando do ID #${cursor ?? 'início'} — ${ids.length} restantes`
@@ -613,6 +616,24 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
           fase: 'Scraping extramuros',
           ultimoLog: `${ids.length} apenados extramuros encontrados`,
         })
+      } else if (job.tipo === 'GLOBAL') {
+        refreshMemory(jobId, { fase: 'Coletando lista global de apenados...' })
+        await dbProgress(jobId, { fase: 'Coletando IDs', log: 'Iniciando coleta global via /apenados/index...' })
+
+        ids = await coletarIdsApenados(page, 'GLOBAL', jobId, null, true)
+
+        // Persist checkpoint
+        await dbProgress(jobId, {
+          idsColetados: JSON.stringify(ids),
+          total: ids.length,
+          log: `${ids.length} apenados encontrados globalmente — iniciando scraping`,
+          fase: 'Scraping global',
+        })
+        refreshMemory(jobId, {
+          total: ids.length,
+          fase: 'Scraping global',
+          ultimoLog: `${ids.length} apenados encontrados globalmente`,
+        })
       } else {
         refreshMemory(jobId, { fase: 'Coletando lista de apenados...' })
         await dbProgress(jobId, { fase: 'Coletando IDs', log: 'Coletando lista de apenados...' })
@@ -647,7 +668,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
         return
       }
 
-      const useSearch = job.tipo === 'IDS_MANUAIS' || job.tipo === 'EXTRAMUROS'
+      const useSearch = job.tipo === 'IDS_MANUAIS' || job.tipo === 'EXTRAMUROS' || job.tipo === 'GLOBAL'
 
       try {
         await withRetry(async () => {
@@ -1061,10 +1082,11 @@ async function coletarIdsApenados(
   page: Page,
   unidadeId: string,
   jobId: string,
-  unidadeNomeEsperada?: string | null
+  unidadeNomeEsperada?: string | null,
+  globalMode = false
 ): Promise<number[]> {
   // Validação da unidade ativa no menu superior do SIPE para garantir a troca correta
-  if (unidadeNomeEsperada) {
+  if (!globalMode && unidadeNomeEsperada) {
     try {
       // Garante que o menu superior carregou completamente antes de inspecionar
       await page.waitForSelector('a[name="btnMudaUnidade"]', { timeout: 10_000 }).catch(() => {})
@@ -1159,25 +1181,34 @@ async function coletarIdsApenados(
     }
   }
 
-  let tableFound = false
-  try {
-    log(jobId, `Acessando listagem geral: ${SIPE_URL}/listagem/geral`)
-    await page.goto(`${SIPE_URL}/listagem/geral`, {
+  if (globalMode) {
+    log(jobId, `Acessando listagem global cross-unit: ${SIPE_URL}/apenados/index`)
+    await page.goto(`${SIPE_URL}/apenados/index`, {
       waitUntil: 'domcontentloaded',
-      timeout: 20_000,
-    })
-    await page.waitForSelector('table', { timeout: 15_000 })
-    tableFound = true
-  } catch (err) {
-    log(jobId, `⚠️ Falha ao carregar listagem geral, tentando carceragem...`)
-  }
-
-  if (!tableFound) {
-    await page.goto(`${SIPE_URL}/listagem/${unidadeId}/carceragem`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000,
+      timeout: 45_000,
     })
     await page.waitForSelector('table', { timeout: 30_000 })
+  } else {
+    let tableFound = false
+    try {
+      log(jobId, `Acessando listagem geral: ${SIPE_URL}/listagem/geral`)
+      await page.goto(`${SIPE_URL}/listagem/geral`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 20_000,
+      })
+      await page.waitForSelector('table', { timeout: 15_000 })
+      tableFound = true
+    } catch (err) {
+      log(jobId, `⚠️ Falha ao carregar listagem geral, tentando carceragem...`)
+    }
+
+    if (!tableFound) {
+      await page.goto(`${SIPE_URL}/listagem/${unidadeId}/carceragem`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30_000,
+      })
+      await page.waitForSelector('table', { timeout: 30_000 })
+    }
   }
 
   // ── Estratégia A: DataTables JS API ──────────────────────────

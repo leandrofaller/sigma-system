@@ -181,6 +181,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
+  // ── Global sync (todas as unidades via /apenados/index) ──
+  if (tipo === 'GLOBAL') {
+    const job = await prisma.sipeSyncJob.create({
+      data: {
+        tipo: 'GLOBAL',
+        unidade: 'GLOBAL',
+        unidadeNome: 'Todas as Unidades (Global)',
+        status: 'RUNNING',
+        iniciadoEm: new Date(),
+        criadoPor: session.user.id,
+      },
+    })
+
+    startSipeSync(job.id, 'GLOBAL')
+    return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
+  }
+
   // ── IDs manuais ──
   if (tipo === 'IDS_MANUAIS') {
     const ids = (idsManual ?? [])

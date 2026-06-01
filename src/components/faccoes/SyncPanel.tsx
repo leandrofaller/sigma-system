@@ -591,6 +591,16 @@ export function SyncPanel() {
             <AlertTriangle className="w-4 h-4" />
             Sincronizar Extramuros
           </button>
+
+          <button
+            onClick={() => startSync('GLOBAL')}
+            disabled={isActive || loading}
+            title="Coleta e atualiza todos os apenados de todas as unidades via /apenados/index (sem selecionar unidade)"
+            className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Play className="w-4 h-4" />
+            Scraping Global (Todas as Unidades)
+          </button>
         </div>
       </div>
 
