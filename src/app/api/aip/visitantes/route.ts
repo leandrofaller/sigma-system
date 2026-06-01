@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   const visitantes = await prisma.aIPFotoVisitante.findMany({
     include: {
       apenado: {
-        select: { id: true, nome: true },
+        select: { id: true, nome: true, photoPath: true },
       },
     },
     orderBy: { sincronizadoEm: 'desc' },

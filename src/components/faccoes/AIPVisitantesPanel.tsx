@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, User, X, RefreshCw, ChevronLeft, ChevronRight, Shield, Camera } from 'lucide-react'
+import { Search, User, X, RefreshCw, ChevronLeft, ChevronRight, Shield } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Visitante {
@@ -13,7 +13,7 @@ interface Visitante {
   ativoVisitante: boolean | null
   photoPath: string | null
   descricao: string | null
-  apenado: { id: string; nome: string }
+  apenado: { id: string; nome: string; photoPath?: string | null }
 }
 
 function FotoVisitante({ visitanteId, nome }: { visitanteId: string | null; nome: string | null }) {
@@ -257,7 +257,24 @@ export function AIPVisitantesPanel() {
                   <Shield className="w-4 h-4" /> Apenado Vinculado (AIP)
                 </h3>
                 <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                  <Camera className="w-4 h-4 text-gray-400 shrink-0" />
+                  {selected.apenado.photoPath ? (
+                    <img
+                      src={`/api/aip/apenados/${selected.apenado.id}/foto`}
+                      alt={selected.apenado.nome}
+                      className="w-10 h-10 rounded-lg object-cover shrink-0"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none'
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className="w-10 h-10 rounded-lg bg-gray-300 dark:bg-gray-600 flex items-center justify-center shrink-0"
+                    style={{ display: selected.apenado.photoPath ? 'none' : 'flex' }}
+                  >
+                    <span className="text-xs font-bold text-white">
+                      {selected.apenado.nome.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">{selected.apenado.nome}</p>
                 </div>
               </section>
