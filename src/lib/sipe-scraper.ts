@@ -647,23 +647,25 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
         return
       }
 
+      const useSearch = job.tipo === 'IDS_MANUAIS' || job.tipo === 'EXTRAMUROS'
+
       try {
         await withRetry(async () => {
           try {
             if (job.tipo === 'ADVOGADOS') {
               await scrapeAdvogadoDetalhe(page, sipeId, jobId)
             } else {
-              await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
+              await scrapeApenadoFicha(page, sipeId, job.unidadeNome, useSearch)
             }
           } catch (err: any) {
             if (err?.message === 'SESSAO_EXPIRADA') {
               log(jobId, 'Sessão expirada detectada. Re-autenticando no SIPE...')
-              await login(page, unidadeId)
-              
+              await login(page, loginUnidade)
+
               if (job.tipo === 'ADVOGADOS') {
                 await scrapeAdvogadoDetalhe(page, sipeId, jobId)
               } else {
-                await scrapeApenadoFicha(page, sipeId, job.unidadeNome)
+                await scrapeApenadoFicha(page, sipeId, job.unidadeNome, useSearch)
               }
             } else {
               throw err
@@ -1452,39 +1454,96 @@ async function coletarIdsApenados(
 async function scrapeApenadoFicha(
   page: Page,
   sipeId: number,
-  unidadeNome?: string | null
+  unidadeNome?: string | null,
+  useSearch = false
 ): Promise<void> {
-  const response = await page.goto(`${SIPE_URL}/apenados/${sipeId}/editar`, {
-    waitUntil: 'domcontentloaded',
-    timeout: 45_000,
-  })
+  if (useSearch) {
+    // ── Busca cross-unit: contorna restrição de unidade da sessão ──
+    await page.goto(
+      `${SIPE_URL}/apenados/index?escolha=nomeapenado&parametro=${sipeId}`,
+      { waitUntil: 'domcontentloaded', timeout: 45_000 }
+    )
 
-  // Detect session expiration / redirect to login page
-  const currentUrl = page.url()
-  if (
-    currentUrl.includes('/login') ||
-    currentUrl === `${SIPE_URL}/` ||
-    currentUrl === `${SIPE_URL}` ||
-    currentUrl.includes('/selectRole')
-  ) {
-    throw new Error('SESSAO_EXPIRADA')
-  }
+    // Verificar sessão expirada
+    const searchUrl = page.url()
+    if (
+      searchUrl.includes('/login') ||
+      searchUrl.includes('/selectRole') ||
+      searchUrl === `${SIPE_URL}/` ||
+      searchUrl === `${SIPE_URL}`
+    ) {
+      throw new Error('SESSAO_EXPIRADA')
+    }
 
-  // Detect HTTP errors
-  const status = response?.status()
-  if (status && (status === 404 || status === 403 || status === 500)) {
-    throw new Error('APENADO_NAO_ENCONTRADO')
-  }
+    // Localizar link do apenado na tabela de resultados
+    const link = await page.evaluate((id) => {
+      // 1. Procura linha da tabela que contenha o sipeId exato
+      const rows = Array.from(document.querySelectorAll('table tbody tr'))
+      for (const row of rows) {
+        const text = row.textContent ?? ''
+        if (text.includes(String(id))) {
+          const a = row.querySelector('a[href]') as HTMLAnchorElement | null
+          if (a?.href) return a.href
+        }
+      }
+      // 2. Fallback: qualquer link na página que contenha o sipeId na URL
+      const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[]
+      for (const a of anchors) {
+        if (a.href.includes(`/apenados/${id}`)) return a.href
+      }
+      return null
+    }, sipeId)
 
-  // Fast check for not found errors in body text
-  const bodyText = await page.innerText('body').catch(() => '')
-  if (
-    bodyText.includes('não encontrado') ||
-    bodyText.includes('Não foi possível encontrar') ||
-    bodyText.includes('Registro não encontrado') ||
-    bodyText.includes('404')
-  ) {
-    throw new Error('APENADO_NAO_ENCONTRADO')
+    if (!link) {
+      throw new Error('APENADO_NAO_ENCONTRADO')
+    }
+
+    // Navegar para o link encontrado (chega na /editar via fluxo legítimo de busca)
+    const editResponse = await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+
+    const editUrl = page.url()
+    if (editUrl.includes('/login') || editUrl.includes('/selectRole')) {
+      throw new Error('SESSAO_EXPIRADA')
+    }
+
+    const editStatus = editResponse?.status()
+    if (editStatus && (editStatus === 404 || editStatus === 403 || editStatus === 500)) {
+      throw new Error('APENADO_NAO_ENCONTRADO')
+    }
+  } else {
+    // ── Fluxo original: acesso direto por URL ──
+    const response = await page.goto(`${SIPE_URL}/apenados/${sipeId}/editar`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 45_000,
+    })
+
+    // Detect session expiration / redirect to login page
+    const currentUrl = page.url()
+    if (
+      currentUrl.includes('/login') ||
+      currentUrl === `${SIPE_URL}/` ||
+      currentUrl === `${SIPE_URL}` ||
+      currentUrl.includes('/selectRole')
+    ) {
+      throw new Error('SESSAO_EXPIRADA')
+    }
+
+    // Detect HTTP errors
+    const status = response?.status()
+    if (status && (status === 404 || status === 403 || status === 500)) {
+      throw new Error('APENADO_NAO_ENCONTRADO')
+    }
+
+    // Fast check for not found errors in body text
+    const bodyText = await page.innerText('body').catch(() => '')
+    if (
+      bodyText.includes('não encontrado') ||
+      bodyText.includes('Não foi possível encontrar') ||
+      bodyText.includes('Registro não encontrado') ||
+      bodyText.includes('404')
+    ) {
+      throw new Error('APENADO_NAO_ENCONTRADO')
+    }
   }
 
   await page.waitForSelector('[name="nomeapenado"]', { timeout: 30_000 })
