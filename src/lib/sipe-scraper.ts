@@ -911,6 +911,8 @@ async function runScrapeTodasUnidades(jobId: string): Promise<void> {
       // Processa apenados da unidade atual
       const apenadosIds = [...checkpoint.currentApenadosIds]
       let lastProcessedId: number | undefined
+      let checkpointBatchCount = 0; // 🔧 OTIMIZAÇÃO: Batched checkpoints
+      let pageRenewCount = 0; // 🔧 OTIMIZAÇÃO: Page renewal
 
       for (const sipeId of apenadosIds) {
         if (globalThis.__sipeStopFlag) {
@@ -923,7 +925,30 @@ async function runScrapeTodasUnidades(jobId: string): Promise<void> {
           return
         }
 
+        // 🔧 OTIMIZAÇÃO: Renovar page instance a cada 25 apenados para evitar memory leak
+        if (pageRenewCount % 25 === 0 && pageRenewCount > 0) {
+          try {
+            log(jobId, `🔄 Renovando page instance após ${pageRenewCount} apenados...`);
+            await page.close().catch(() => {});
+            page = await context.newPage();
+            await login(page, u.id);
+            log(jobId, `✅ Page renovada com sucesso`);
+          } catch (renewErr) {
+            log(jobId, `⚠️ Erro ao renovar page: ${renewErr}. Continuando...`);
+          }
+        }
+        pageRenewCount++;
+
         try {
+          // 📍 OTIMIZAÇÃO: Logging detalhado para rastrear progresso
+          const currentIdx = apenadosIds.indexOf(sipeId) + 1;
+          const progressMsg = `[${currentIdx}/${apenadosIds.length}] Scraping apenado SIPE ID #${sipeId} na unidade "${u.nome}"...`;
+
+          // Log apenas a cada 10 apenados para não poluir o banco
+          if (currentIdx % 10 === 0 || currentIdx === 1 || currentIdx === apenadosIds.length) {
+            log(jobId, progressMsg);
+          }
+
           await withRetry(async () => {
             try {
               await scrapeApenadoFicha(page, sipeId, u.nome)
@@ -950,13 +975,24 @@ async function runScrapeTodasUnidades(jobId: string): Promise<void> {
             }
           }
 
-          await dbProgress(jobId, {
-            processado: globalThis.__sipeState?.processado ?? 0,
-            ultimoIdProcessado: sipeId,
-            idsColetados: JSON.stringify(checkpoint),
-          })
+          // 🔧 OTIMIZAÇÃO: Salvar checkpoint apenas a cada 10 apenados processados (evita JSON grande)
+          checkpointBatchCount++;
+          if (checkpointBatchCount % 10 === 0 || checkpoint.currentApenadosIds.length === 1) {
+            await dbProgress(jobId, {
+              processado: globalThis.__sipeState?.processado ?? 0,
+              ultimoIdProcessado: sipeId,
+              idsColetados: JSON.stringify(checkpoint),
+            })
+          } else {
+            // Update rápido sem checkpoint JSON
+            await dbProgress(jobId, {
+              processado: globalThis.__sipeState?.processado ?? 0,
+              ultimoIdProcessado: sipeId,
+            })
+          }
 
-          await page.waitForTimeout(300 + Math.random() * 500)
+          // 🔧 OTIMIZAÇÃO: Delay maior para governos servidores lentos (2-5s)
+          await page.waitForTimeout(2000 + Math.random() * 3000)
         } catch (err) {
           const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
           if (globalThis.__sipeState) {
@@ -1015,7 +1051,8 @@ function log(jobId: string, msg: string) {
   logPromiseChain = logPromiseChain.then(() => dbProgress(jobId, { log: msg })).catch(() => {})
 }
 
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+// 🔧 OTIMIZAÇÃO: Backoff exponencial com mais tentativas para servidores lentos
+async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn()
@@ -1024,14 +1061,30 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
         throw err
       }
       if (i === attempts - 1) throw err
-      await new Promise(r => setTimeout(r, 2000 * (i + 1))) // 2s, 4s, 6s
+
+      // Backoff exponencial: 2s, 4s, 8s, 16s, 32s (máximo)
+      const delayMs = Math.min(2000 * Math.pow(2, i), 32000);
+      console.log(`⏳ [Retry ${i + 1}/${attempts}] Aguardando ${(delayMs / 1000).toFixed(0)}s...`);
+      await new Promise(r => setTimeout(r, delayMs));
     }
   }
   throw new Error('unreachable')
 }
 
 // Cache temporário para associar dados coletados da listagem geral aos apenados
-const listagemInfoCache = new Map<number, { cela?: string }>()
+// 🔄 OTIMIZAÇÃO: Limpeza automática a cada 50 páginas para evitar memory leak
+const listagemInfoCache = new Map<number, { cela?: string }>();
+
+let lastCacheClearPageCount = 0;
+
+function clearCacheIfNeeded(currentPageCount: number) {
+  if (currentPageCount % 50 === 0 && currentPageCount !== lastCacheClearPageCount) {
+    const sizeAntes = listagemInfoCache.size;
+    listagemInfoCache.clear();
+    lastCacheClearPageCount = currentPageCount;
+    console.log(`♻️ [Page ${currentPageCount}] Cache limpo: removidas ${sizeAntes} entradas`);
+  }
+}
 
 // ── Situações que indicam que o apenado está fora do sistema prisional ──
 const SITUACOES_EXTRAMUROS = [
@@ -1450,12 +1503,19 @@ async function coletarIdsApenados(
 
     try {
       pageNum++
+
+      // 🔧 OTIMIZAÇÃO: Limpeza de cache a cada 50 páginas
+      clearCacheIfNeeded(pageNum);
+
+      // 🔧 OTIMIZAÇÃO: Delay aumentado entre páginas (1-3s)
+      await page.waitForTimeout(1000 + Math.random() * 2000);
+
       await botaoLocator.click()
       await page.waitForTimeout(1000)
       const before = ids.size
       await extractIds()
       const novos = ids.size - before
-      log(jobId, `📄 Página ${pageNum}: +${novos} IDs (total: ${ids.size})`)
+      log(jobId, `📄 Página ${pageNum}: +${novos} IDs (total: ${ids.size}, cache: ${listagemInfoCache.size} entradas)`)
 
       if (novos === 0) {
         emptyConsecutivos++
@@ -1466,7 +1526,8 @@ async function coletarIdsApenados(
       } else {
         emptyConsecutivos = 0
       }
-    } catch {
+    } catch (err) {
+      log(jobId, `⚠️ Erro ao processar página ${pageNum}: ${err}`);
       continuar = false
     }
   }
