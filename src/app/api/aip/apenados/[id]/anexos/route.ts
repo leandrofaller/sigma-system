@@ -31,12 +31,16 @@ export async function POST(
   }
 
   try {
+    console.log(`[ANEXO] Iniciando upload: arquivo=${file.name}, tamanho=${file.size}, tipo=${file.type}`)
+
     // Upload para S3
     const { urlS3, chaveS3, tamanho } = await uploadAnexoS3(
       file,
       params.id,
       tipoCompactacao
     )
+
+    console.log(`[ANEXO] Upload S3 concluído: chave=${chaveS3}, tamanho=${tamanho}`)
 
     // Salvar metadados no banco
     const anexo = await prisma.aIPApenadoAnexo.create({
@@ -57,10 +61,25 @@ export async function POST(
       },
     })
 
+    console.log(`[ANEXO] Metadados salvos: id=${anexo.id}`)
     return NextResponse.json({ anexo })
-  } catch (erro) {
-    console.error('Erro ao upload:', erro)
-    return NextResponse.json({ error: 'Erro ao fazer upload' }, { status: 500 })
+  } catch (erro: any) {
+    console.error('[ANEXO] Erro ao fazer upload:', {
+      name: erro?.name,
+      message: erro?.message,
+      code: erro?.code,
+      stack: erro?.stack?.split('\n')[0],
+    })
+    return NextResponse.json(
+      {
+        error: `Erro ao fazer upload: ${erro?.message || 'desconhecido'}`,
+        details: {
+          name: erro?.name,
+          code: erro?.code,
+        },
+      },
+      { status: 500 }
+    )
   }
 }
 

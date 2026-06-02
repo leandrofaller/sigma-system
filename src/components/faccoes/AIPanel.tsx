@@ -248,20 +248,39 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
       formData.append('file', file)
       formData.append('tipoCompactacao', file.type.startsWith('image/') ? 'imagem' : 'documento')
 
+      console.log('📤 Iniciando upload:', {
+        fileName: file.name,
+        size: file.size,
+        type: file.type,
+        apenadoId,
+        endpoint: `/api/aip/apenados/${apenadoId}/anexos`,
+      })
+
       const res = await fetch(`/api/aip/apenados/${apenadoId}/anexos`, {
         method: 'POST',
         body: formData,
       })
 
-      if (!res.ok) throw new Error()
+      console.log('📥 Resposta do servidor:', {
+        status: res.status,
+        statusText: res.statusText,
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        console.error('❌ Erro na resposta:', errorData)
+        throw new Error(errorData.error || `Erro HTTP ${res.status}: ${res.statusText}`)
+      }
 
       const data = await res.json()
+      console.log('✅ Arquivo enviado:', data)
       setAnexos([data.anexo, ...anexos])
       toast.success('Arquivo enviado com sucesso')
       // Reset input
       e.target.value = ''
-    } catch {
-      toast.error('Erro ao enviar arquivo')
+    } catch (err: any) {
+      console.error('💥 Erro ao fazer upload:', err)
+      toast.error(`Erro ao enviar arquivo: ${err?.message || 'desconhecido'}`)
     } finally {
       setUploadandoAnexo(false)
     }
