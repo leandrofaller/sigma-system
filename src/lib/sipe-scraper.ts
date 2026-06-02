@@ -27,6 +27,7 @@ import { join } from 'path'
 import { getApenadosDir } from './storage'
 import { createHash } from 'crypto'
 import { capsolverService } from './capsolver-service'
+import Mutex from 'async-lock'
 
 // ── Config ────────────────────────────────────────────────────
 const SIPE_URL = 'https://sipe.sejus.ro.gov.br'
@@ -59,11 +60,14 @@ declare global {
   var __sipeState: SipeSyncProgress | null
   // eslint-disable-next-line no-var
   var __sipeStopFlag: boolean
+  // eslint-disable-next-line no-var
+  var __sipeMutex: Mutex
 }
 
 // Initialize once per process; no-op on hot-reloads
 if (globalThis.__sipeState === undefined) globalThis.__sipeState = null
 if (globalThis.__sipeStopFlag === undefined) globalThis.__sipeStopFlag = false
+if (globalThis.__sipeMutex === undefined) globalThis.__sipeMutex = new Mutex()
 
 export function getSipeState(): SipeSyncProgress | null {
   return globalThis.__sipeState
@@ -160,6 +164,41 @@ async function createSession(): Promise<BrowserContext> {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
       'Chrome/120.0.0.0 Safari/537.36',
   })
+}
+
+// ── Passo 1: Context Pool Manager (Paralelização) ───────────────────────────
+/**
+ * Cria um pool de múltiplos contexts do navegador para paralelizar scraping
+ * @param size - Número de workers paralelos (default: 8)
+ * @returns Array de contexts criados
+ */
+async function createContextPool(size: number = 8): Promise<BrowserContext[]> {
+  console.log(`[Context Pool] Criando ${size} contexts paralelos...`)
+  const contexts = await Promise.all(
+    Array(size)
+      .fill(null)
+      .map(async (_, i) => {
+        const ctx = await createSession()
+        console.log(`[Context Pool] Context ${i + 1}/${size} criado`)
+        return ctx
+      })
+  )
+  console.log(`[Context Pool] Pool completo com ${size} contexts`)
+  return contexts
+}
+
+/**
+ * Fecha todos os contexts do pool
+ * @param contexts - Array de contexts a fechar
+ */
+async function closeContextPool(contexts: BrowserContext[]): Promise<void> {
+  console.log(`[Context Pool] Fechando ${contexts.length} contexts...`)
+  await Promise.all(contexts.map((ctx, i) =>
+    ctx.close()
+      .then(() => console.log(`[Context Pool] Context ${i + 1} fechado`))
+      .catch(err => console.warn(`[Context Pool] Erro ao fechar context ${i + 1}:`, err.message))
+  ))
+  console.log(`[Context Pool] Todos os contexts foram fechados`)
 }
 
 // ── SIPE authentication ───────────────────────────────────────
@@ -674,87 +713,129 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
       }
     }
 
-    // ── Phase 2: scrape each profile ──────────────────────────
+    // ── Phase 2: scrape each profile (PARALELIZADO) ──────────────────────────
+    // Passo 2: Criar pool de contexts para paralelização
+    const POOL_SIZE = 8  // 8 workers paralelos
+    const contextPool = await createContextPool(POOL_SIZE)
+    const pagePool = await Promise.all(
+      contextPool.map((ctx, i) => ctx.newPage().catch(err => {
+        console.error(`Erro ao criar page ${i}:`, err)
+        throw err
+      }))
+    )
+
+    // Fazer login em todos os pages
+    log(jobId, `🔐 Autenticando ${POOL_SIZE} workers no SIPE...`)
+    await Promise.all(
+      pagePool.map((p, i) =>
+        login(p, loginUnidade).catch(err => {
+          console.error(`Erro ao fazer login no worker ${i}:`, err)
+          throw err
+        })
+      )
+    )
+    log(jobId, `✅ Todos ${POOL_SIZE} workers autenticados`)
+
     let lastProcessedId: number | undefined
-    let errosConsecutivos = 0
-    const MAX_ERROS_CONSECUTIVOS = 5  // Se 5 seguidos falharem, provavelmente sessão expirou
+    const tasks: Promise<void>[] = []
+    let pageIdx = 0
+
+    // Distribuir apenados entre pages (não aguarda sequencial)
+    const useSearch = job.tipo === 'IDS_MANUAIS' || job.tipo === 'EXTRAMUROS' || job.tipo === 'GLOBAL'
 
     for (const sipeId of ids) {
       if (globalThis.__sipeStopFlag) {
+        // Aguardar tasks em progresso antes de interromper
+        await Promise.allSettled(tasks)
         await dbProgress(jobId, {
           status: 'INTERRUPTED',
           finalizadoEm: new Date(),
           log: 'Sincronização interrompida pelo usuário',
         })
         refreshMemory(jobId, { status: 'INTERRUPTED' })
+        // Limpar pool antes de retornar
+        await closeContextPool(contextPool)
         return
       }
 
-      const useSearch = job.tipo === 'IDS_MANUAIS' || job.tipo === 'EXTRAMUROS' || job.tipo === 'GLOBAL'
+      const workerPage = pagePool[pageIdx % pagePool.length]
+      const workerId = pageIdx % pagePool.length
+      pageIdx++
 
-      try {
-        await withRetry(async () => {
-          try {
-            if (job.tipo === 'ADVOGADOS') {
-              await scrapeAdvogadoDetalhe(page, sipeId, jobId)
-            } else {
-              await scrapeApenadoFicha(page, sipeId, job.unidadeNome, useSearch)
-            }
-          } catch (err: any) {
-            if (err?.message === 'SESSAO_EXPIRADA') {
-              log(jobId, 'Sessão expirada detectada. Re-autenticando no SIPE...')
-              await login(page, loginUnidade)
-
+      // Criar tarefa para este apenado (não aguarda)
+      const task = (async () => {
+        try {
+          await withRetry(async () => {
+            try {
               if (job.tipo === 'ADVOGADOS') {
-                await scrapeAdvogadoDetalhe(page, sipeId, jobId)
+                await scrapeAdvogadoDetalhe(workerPage, sipeId, jobId)
               } else {
-                await scrapeApenadoFicha(page, sipeId, job.unidadeNome, useSearch)
+                await scrapeApenadoFicha(workerPage, sipeId, job.unidadeNome, useSearch)
               }
-            } else {
-              throw err
+            } catch (err: any) {
+              if (err?.message === 'SESSAO_EXPIRADA') {
+                log(jobId, `Worker #${workerId}: Sessão expirada. Re-autenticando...`)
+                await login(workerPage, loginUnidade)
+
+                if (job.tipo === 'ADVOGADOS') {
+                  await scrapeAdvogadoDetalhe(workerPage, sipeId, jobId)
+                } else {
+                  await scrapeApenadoFicha(workerPage, sipeId, job.unidadeNome, useSearch)
+                }
+              } else {
+                throw err
+              }
             }
+          })
+
+          lastProcessedId = sipeId
+
+          // Usar mutex para evitar race condition
+          await globalThis.__sipeMutex.acquire('state', () => {
+            globalThis.__sipeState!.processado++
+            globalThis.__sipeState!.pct = globalThis.__sipeState!.total
+              ? Math.round(
+                  (globalThis.__sipeState!.processado / globalThis.__sipeState!.total) * 100
+                )
+              : 0
+          })
+
+          // Persiste cursor periodicamente (menos frequente que antes)
+          if (globalThis.__sipeState!.processado % 10 === 0) {
+            await dbProgress(jobId, {
+              processado: globalThis.__sipeState!.processado,
+              ultimoIdProcessado: sipeId,
+            })
           }
-        })
-        lastProcessedId = sipeId
-        errosConsecutivos = 0  // Reset counter on success
-        globalThis.__sipeState!.processado++
-        globalThis.__sipeState!.pct = globalThis.__sipeState!.total
-          ? Math.round(
-              (globalThis.__sipeState!.processado / globalThis.__sipeState!.total) * 100
-            )
-          : 0
 
-        // Persiste cursor a cada registro para recovery sem perda em crash/restart
-        await dbProgress(jobId, {
-          processado: globalThis.__sipeState!.processado,
-          ultimoIdProcessado: sipeId,
-        })
-        // Polite delay
-        await page.waitForTimeout(300 + Math.random() * 500)
-      } catch (err) {
-        globalThis.__sipeState!.erros++
-        errosConsecutivos++
+          // Pequeno delay para não sobrecarregar servidor
+          await workerPage.waitForTimeout(200 + Math.random() * 300)
+        } catch (err) {
+          await globalThis.__sipeMutex.acquire('state', () => {
+            globalThis.__sipeState!.erros++
+          })
 
-        const msg = job.tipo === 'ADVOGADOS'
-          ? `Erro advogado #${sipeId} (após 3 tentativas): ${err}`
-          : `Erro apenado #${sipeId} (após 3 tentativas): ${err}`
-        globalThis.__sipeState!.ultimoLog = msg
-        await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
-
-        // Se há muitos erros consecutivos, pode ser sessão expirada silenciosamente
-        if (errosConsecutivos >= MAX_ERROS_CONSECUTIVOS) {
-          log(jobId, `⚠️ ${errosConsecutivos} erros consecutivos — provável timeout de sessão. Tentando re-login...`)
-          try {
-            await login(page, loginUnidade)
-            errosConsecutivos = 0
-            log(jobId, '✅ Re-login bem-sucedido. Retomando scraping...')
-          } catch (loginErr) {
-            log(jobId, `❌ Re-login falhou: ${loginErr}. Encerrando.`)
-            throw loginErr
-          }
+          const msg = job.tipo === 'ADVOGADOS'
+            ? `Erro advogado #${sipeId} (worker #${workerId}, após 3 tentativas): ${err}`
+            : `Erro apenado #${sipeId} (worker #${workerId}, após 3 tentativas): ${err}`
+          globalThis.__sipeState!.ultimoLog = msg
+          await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
         }
-      }
+      })()
+
+      tasks.push(task)
     }
+
+    // Aguardar TODAS as tarefas em paralelo (chave da otimização)
+    log(jobId, `⏳ Processando ${ids.length} apenados em ${POOL_SIZE} workers paralelos...`)
+    const results = await Promise.allSettled(tasks)
+    const failedTasks = results.filter(r => r.status === 'rejected').length
+    if (failedTasks > 0) {
+      log(jobId, `⚠️ ${failedTasks} tarefas falharam durante processamento paralelo`)
+    }
+
+    // Limpar pool de contexts
+    await closeContextPool(contextPool)
 
     // Final cursor flush — use the actual last processed ID, not ids[last]
     await dbProgress(jobId, {
