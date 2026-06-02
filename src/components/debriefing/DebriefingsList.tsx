@@ -141,10 +141,12 @@ export function DebriefingsList({ debriefings, role, userId }: Props) {
                         className="p-1.5 text-gray-400 hover:text-sigma-600 dark:hover:text-sigma-400 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 rounded-lg transition-colors">
                         <Eye className="w-4 h-4" />
                       </Link>
-                      <Link href={`/debriefings/${d.id}/editar`}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
-                        <Pencil className="w-4 h-4" />
-                      </Link>
+                      {(role === 'SUPER_ADMIN' || role === 'ADMIN' || d.authorId === userId) && (
+                        <Link href={`/debriefings/${d.id}/editar`}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                          <Pencil className="w-4 h-4" />
+                        </Link>
+                      )}
 
                       {(role === 'SUPER_ADMIN' || role === 'ADMIN' || d.authorId === userId) && (
                         <button
