@@ -95,6 +95,12 @@ model User {
   aipApenadoAnexos AIPApenadoAnexo[]
   maintenanceAvisos SystemMaintenance[]
 
+  // Rastreamento de geolocalização
+  locationTracking OfficerLocationTracking[]
+  locationAuditsAsAdmin LocationAudit[]
+  locationAuditsAsOfficer LocationAudit[]  @relation("LocationAuditOfficer")
+  locationConsent  LocationConsent?
+
   @@map("users")
 }
 
@@ -996,4 +1002,83 @@ model SystemMaintenance {
   @@index([status])
   @@index([createdAt])
   @@map("system_maintenance")
+}
+
+// ── Sistema de Rastreamento de Geolocalização ──────────────────────────
+model OfficerLocationTracking {
+  id String @id @default(cuid())
+
+  // Policial sendo rastreado
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Localização
+  latitude    Float
+  longitude   Float
+  accuracy    Float?  // Precisão do GPS em metros
+  altitude    Float?
+  speed       Float?  // Velocidade em m/s
+
+  // Timestamp
+  timestamp   DateTime @default(now())
+
+  // Metadata
+  deviceId    String?
+  source      String @default("GPS")  // GPS, NETWORK, FUSED
+  batteryLevel Int?    // 0-100
+
+  @@index([userId])
+  @@index([timestamp])
+  @@index([userId, timestamp])
+  @@map("officer_location_tracking")
+}
+
+model LocationAudit {
+  id String @id @default(cuid())
+
+  // Admin que acessou
+  adminId     String
+  admin       User   @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  // Policial cujos dados foram acessados
+  officerId   String
+  officer     User?  @relation("LocationAuditOfficer", fields: [officerId], references: [id], onDelete: SetNull)
+
+  // Ação
+  action      String // VIEW_LOCATION, EXPORT_HISTORY, VIEW_MAP, etc.
+  details     String? @db.Text
+
+  // Metadata
+  ipAddress   String?
+  userAgent   String? @db.Text
+  timestamp   DateTime @default(now())
+
+  @@index([adminId])
+  @@index([officerId])
+  @@index([timestamp])
+  @@index([action])
+  @@map("location_audits")
+}
+
+model LocationConsent {
+  id String @id @default(cuid())
+
+  // Policial
+  userId      String @unique
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Consentimento
+  consentGiven Boolean @default(false)
+  consentDate  DateTime?
+  consentDocumentId String?  // Referência ao documento assinado
+
+  // Revogação
+  revokedAt   DateTime?
+  revokedReason String?
+
+  // Auditoria
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("location_consents")
 }

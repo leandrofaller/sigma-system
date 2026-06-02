@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { GeoMonitorPanel } from '@/components/admin/GeoMonitorPanel';
+import { OfficerLocationMap } from '@/components/admin/OfficerLocationMap';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Monitoramento — SIAIP' };
@@ -63,10 +64,37 @@ export default async function MonitoramentoPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Seção de Localização de Policiais */}
       <div>
-        <h1 className="text-2xl font-bold text-title">Monitoramento de Localização</h1>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-title">Monitoramento de Localização de Policiais</h1>
+            <p className="text-sm text-subtle mt-1">
+              Acompanhe a localização em tempo real dos policiais durante operações. Todos os acessos são auditados.
+            </p>
+          </div>
+          <div className="space-x-2">
+            <a
+              href="/admin/monitoramento/auditoria"
+              className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+            >
+              📋 Auditoria
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Mapa de Localização em Tempo Real */}
+      <OfficerLocationMap />
+
+      {/* Divisor */}
+      <div className="border-t-2 border-gray-300 my-8" />
+
+      {/* Seção Original de Monitoramento */}
+      <div>
+        <h2 className="text-2xl font-bold text-title">Monitoramento de Sessão</h2>
         <p className="text-sm text-subtle mt-1">
-          Visualize em tempo real a última posição registrada de cada usuário. Os dados são coletados no login com permissão do navegador.
+          Visualize em tempo real a última posição registrada de cada usuário do sistema. Os dados são coletados no login com permissão do navegador.
         </p>
       </div>
       {tablesMissing ? (
