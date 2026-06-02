@@ -634,6 +634,25 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
           fase: 'Scraping global',
           ultimoLog: `${ids.length} apenados encontrados globalmente`,
         })
+      } else if (job.tipo === 'GLOBAL_SITUACAO') {
+        // Global sync with situacao fallback - identical to GLOBAL
+        refreshMemory(jobId, { fase: 'Coletando lista global com situações...' })
+        await dbProgress(jobId, { fase: 'Coletando IDs', log: 'Iniciando coleta global com situações via /apenados/index...' })
+
+        ids = await coletarIdsApenados(page, 'GLOBAL', jobId, null, true)
+
+        // Persist checkpoint
+        await dbProgress(jobId, {
+          idsColetados: JSON.stringify(ids),
+          total: ids.length,
+          log: `${ids.length} apenados encontrados (com situações) — iniciando scraping`,
+          fase: 'Scraping global com situações',
+        })
+        refreshMemory(jobId, {
+          total: ids.length,
+          fase: 'Scraping global com situações',
+          ultimoLog: `${ids.length} apenados encontrados (com situações)`,
+        })
       } else {
         refreshMemory(jobId, { fase: 'Coletando lista de apenados...' })
         await dbProgress(jobId, { fase: 'Coletando IDs', log: 'Coletando lista de apenados...' })
@@ -1684,6 +1703,18 @@ async function scrapeApenadoFicha(
     const unidadeMatch = bodyText.match(/Unidade:\s*([^\n]+)/i) || bodyText.match(/Estabelecimento:\s*([^\n]+)/i) || bodyText.match(/Unidade\s*Prisional:\s*([^\n]+)/i)
     if (unidadeMatch) {
       unidadeFicha = unidadeMatch[1].trim()
+    }
+
+    // Extract situacao first before we potentially use it as fallback
+    let situacaoExtract = null
+    const situacaoEl = document.querySelector('[name="situacao"]') as HTMLSelectElement | null
+    if (situacaoEl) {
+      situacaoExtract = situacaoEl.options[situacaoEl.selectedIndex]?.text?.trim() || null
+    }
+
+    // Fallback: if unidade is empty but situacao exists, use situacao as unidade label
+    if (!unidadeFicha && situacaoExtract) {
+      unidadeFicha = situacaoExtract
     }
 
     return {

@@ -198,6 +198,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
+  // ── Global sync com fallback de situação ──
+  if (tipo === 'GLOBAL_SITUACAO') {
+    const job = await prisma.sipeSyncJob.create({
+      data: {
+        tipo: 'GLOBAL_SITUACAO',
+        unidade: 'GLOBAL',
+        unidadeNome: 'Sincronização Global com Situações',
+        status: 'RUNNING',
+        iniciadoEm: new Date(),
+        criadoPor: session.user.id,
+      },
+    })
+
+    startSipeSync(job.id, 'GLOBAL_SITUACAO')
+    return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
+  }
+
   // ── IDs manuais ──
   if (tipo === 'IDS_MANUAIS') {
     const ids = (idsManual ?? [])
