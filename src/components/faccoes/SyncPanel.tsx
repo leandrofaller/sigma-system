@@ -601,6 +601,16 @@ export function SyncPanel() {
             <Play className="w-4 h-4" />
             Scraping Global (Todas as Unidades)
           </button>
+
+          <button
+            onClick={() => startSync('GLOBAL_SITUACAO')}
+            disabled={isActive || loading}
+            title="Coleta todos os apenados via /apenados/index. Se a unidade prisional estiver vazia, usa a situação (Em Liberdade, Fuga, etc.) como label"
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Play className="w-4 h-4" />
+            Scraping Global + Situações
+          </button>
         </div>
       </div>
 
