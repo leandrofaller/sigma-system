@@ -623,6 +623,7 @@ export function ApenadosImportados() {
   const [faccoes, setFaccoes] = useState<Faccao[]>([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<ApenadoImportado | null>(null)
+  const [incluirSemUnidade, setIncluirSemUnidade] = useState(false)
 
   const fetchFaccoes = async () => {
     const res = await fetch('/api/sipe/faccoes')
@@ -634,6 +635,7 @@ export function ApenadosImportados() {
     const params = new URLSearchParams({ page: String(page), limit: '24' })
     if (q) params.set('q', q)
     if (faccaoId) params.set('faccaoId', faccaoId)
+    if (incluirSemUnidade) params.set('incluirSemUnidade', 'true')
 
     const res = await fetch(`/api/sipe/apenados?${params}`)
     if (res.ok) {
@@ -643,7 +645,7 @@ export function ApenadosImportados() {
       setTotalPages(data.totalPages)
     }
     setLoading(false)
-  }, [page, q, faccaoId])
+  }, [page, q, faccaoId, incluirSemUnidade])
 
   useEffect(() => { fetchFaccoes() }, [])
   useEffect(() => { fetchApenados() }, [fetchApenados])
@@ -670,6 +672,15 @@ export function ApenadosImportados() {
           <option value="">Todas as facções</option>
           {faccoes.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
         </select>
+        <label className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+          <input
+            type="checkbox"
+            checked={incluirSemUnidade}
+            onChange={e => { setIncluirSemUnidade(e.target.checked); setPage(1) }}
+            className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-2 focus:ring-red-500"
+          />
+          <span>Incluir sem unidade</span>
+        </label>
         <div className="flex items-center text-sm text-gray-500">
           {total} apenado{total !== 1 ? 's' : ''}
         </div>
