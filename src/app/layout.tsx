@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { SessionProvider } from '@/components/providers/SessionProvider';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import { MaintenanceAlert } from '@/components/MaintenanceAlert';
 
 export const metadata: Metadata = {
   title: 'LogiTrack Express — Soluções em Logística',
@@ -25,7 +26,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" suppressHydrationWarning>
       <body>
         <SessionProvider>
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider>
+            <MaintenanceAlert />
+            {children}
+          </ThemeProvider>
         </SessionProvider>
       </body>
     </html>
