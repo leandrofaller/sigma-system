@@ -657,6 +657,9 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
 
     // ── Phase 2: scrape each profile ──────────────────────────
     let lastProcessedId: number | undefined
+    let errosConsecutivos = 0
+    const MAX_ERROS_CONSECUTIVOS = 5  // Se 5 seguidos falharem, provavelmente sessão expirou
+
     for (const sipeId of ids) {
       if (globalThis.__sipeStopFlag) {
         await dbProgress(jobId, {
@@ -694,6 +697,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
           }
         })
         lastProcessedId = sipeId
+        errosConsecutivos = 0  // Reset counter on success
         globalThis.__sipeState!.processado++
         globalThis.__sipeState!.pct = globalThis.__sipeState!.total
           ? Math.round(
@@ -710,11 +714,26 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
         await page.waitForTimeout(300 + Math.random() * 500)
       } catch (err) {
         globalThis.__sipeState!.erros++
+        errosConsecutivos++
+
         const msg = job.tipo === 'ADVOGADOS'
           ? `Erro advogado #${sipeId} (após 3 tentativas): ${err}`
           : `Erro apenado #${sipeId} (após 3 tentativas): ${err}`
         globalThis.__sipeState!.ultimoLog = msg
         await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
+
+        // Se há muitos erros consecutivos, pode ser sessão expirada silenciosamente
+        if (errosConsecutivos >= MAX_ERROS_CONSECUTIVOS) {
+          log(jobId, `⚠️ ${errosConsecutivos} erros consecutivos — provável timeout de sessão. Tentando re-login...`)
+          try {
+            await login(page, loginUnidade)
+            errosConsecutivos = 0
+            log(jobId, '✅ Re-login bem-sucedido. Retomando scraping...')
+          } catch (loginErr) {
+            log(jobId, `❌ Re-login falhou: ${loginErr}. Encerrando.`)
+            throw loginErr
+          }
+        }
       }
     }
 
