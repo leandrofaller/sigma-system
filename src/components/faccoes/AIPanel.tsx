@@ -207,6 +207,8 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
   // Controle de Anexos
   const [anexos, setAnexos] = useState<AIPApenadoAnexo[]>([])
   const [uploadandoAnexo, setUploadandoAnexo] = useState(false)
+  const [zoomedAnexoUrl, setZoomedAnexoUrl] = useState<string | null>(null)
+  const [zoomedAnexoNome, setZoomedAnexoNome] = useState<string>('')
 
   // Carregar anexos quando apenado é selecionado
   useEffect(() => {
@@ -298,6 +300,16 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
     } catch {
       toast.error('Erro ao remover anexo')
     }
+  }
+
+  // Helper para determinar tipo de arquivo e se suporta visualização
+  function getFileTypeInfo(tipoMime: string, nome: string) {
+    const isImage = tipoMime.startsWith('image/')
+    const isPdf = tipoMime === 'application/pdf'
+    let icon = '📄'
+    if (isImage) icon = '🖼️'
+    if (isPdf) icon = '📑'
+    return { isImage, isPdf, icon }
   }
 
   const handleSave = async () => {
@@ -774,35 +786,67 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                         {/* Lista de anexos */}
                         {anexos.length > 0 ? (
                           <div className="space-y-2">
-                            {anexos.map(anexo => (
-                              <div key={anexo.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium truncate text-gray-900 dark:text-white">{anexo.nomeOriginal}</p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    {(anexo.tamanhoS3 / 1024).toFixed(0)}KB • {new Date(anexo.dataUpload).toLocaleDateString('pt-BR')}
-                                  </p>
-                                </div>
-                                <div className="flex gap-1 ml-2">
-                                  <a
-                                    href={anexo.urlS3}
-                                    target="_blank"
-                                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-                                    title="Download"
-                                  >
-                                    <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-                                  </a>
-                                  {editing && (
-                                    <button
-                                      onClick={() => handleDeleteAnexo(anexo.id, apenado.id)}
-                                      className="p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded transition-colors"
-                                      title="Remover"
+                            {anexos.map(anexo => {
+                              const { isImage, isPdf, icon } = getFileTypeInfo(anexo.tipoMime, anexo.nomeOriginal)
+                              return (
+                                <div key={anexo.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-lg flex-shrink-0">{icon}</span>
+                                      <p className="text-xs font-medium truncate text-gray-900 dark:text-white">{anexo.nomeOriginal}</p>
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">
+                                      {(anexo.tamanhoS3 / 1024).toFixed(0)}KB • {new Date(anexo.dataUpload).toLocaleDateString('pt-BR')} por {anexo.usuarioUpload?.name || 'desconhecido'}
+                                    </p>
+                                    {anexo.descricao && (
+                                      <p className="text-xs text-gray-600 dark:text-gray-400 ml-6 mt-1 italic">{anexo.descricao}</p>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-2 ml-2 flex-shrink-0">
+                                    {isImage && (
+                                      <button
+                                        onClick={() => {
+                                          setZoomedAnexoUrl(anexo.urlS3)
+                                          setZoomedAnexoNome(anexo.nomeOriginal)
+                                        }}
+                                        className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                                        title="Visualizar"
+                                      >
+                                        <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                      </button>
+                                    )}
+                                    {isPdf && (
+                                      <a
+                                        href={anexo.urlS3}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                                        title="Abrir PDF"
+                                      >
+                                        <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                      </a>
+                                    )}
+                                    <a
+                                      href={anexo.urlS3}
+                                      download={anexo.nomeOriginal}
+                                      className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                                      title="Download"
                                     >
-                                      <Trash2 className="w-4 h-4 text-red-500" />
-                                    </button>
-                                  )}
+                                      <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                                    </a>
+                                    {editing && (
+                                      <button
+                                        onClick={() => handleDeleteAnexo(anexo.id, apenado.id)}
+                                        className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
+                                        title="Remover"
+                                      >
+                                        <Trash2 className="w-4 h-4 text-red-500" />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         ) : (
                           <p className="text-xs text-gray-500 dark:text-gray-400">(nenhum anexo)</p>
@@ -969,6 +1013,34 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
               onClick={(e) => {
                 e.stopPropagation()
                 setZoomedPhotoUrl(null)
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Visualização de Anexos */}
+      {zoomedAnexoUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md cursor-zoom-out p-4"
+          onClick={() => setZoomedAnexoUrl(null)}
+        >
+          <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
+            <img
+              src={zoomedAnexoUrl}
+              alt={zoomedAnexoNome}
+              className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl border border-gray-800 animate-in fade-in zoom-in-95 duration-200"
+            />
+            <div className="bg-black/60 text-white px-4 py-2 rounded-full text-sm font-semibold backdrop-blur-sm max-w-xl text-center">
+              {zoomedAnexoNome}
+            </div>
+            <button
+              className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white p-2 rounded-full transition-colors backdrop-blur-sm text-lg"
+              onClick={(e) => {
+                e.stopPropagation()
+                setZoomedAnexoUrl(null)
               }}
             >
               ✕
