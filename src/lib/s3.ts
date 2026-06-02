@@ -2,34 +2,33 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client
 import sharp from 'sharp'
 import crypto from 'crypto'
 
-// 🔧 VALIDAÇÃO: Verificar se credenciais estão carregadas
-function validateAWSConfig() {
-  const errors: string[] = []
+// 🔧 CRÍTICO: Criar S3Client DINAMICAMENTE dentro da função
+// Não na inicialização do módulo, pois as variáveis de ambiente podem não estar carregadas
+function createS3Client() {
+  const region = process.env.AWS_REGION || 'us-east-1'
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY
 
-  if (!process.env.AWS_REGION) errors.push('AWS_REGION não está definido')
-  if (!process.env.AWS_BUCKET_NAME) errors.push('AWS_BUCKET_NAME não está definido')
-  if (!process.env.AWS_ACCESS_KEY_ID) errors.push('AWS_ACCESS_KEY_ID não está definido')
-  if (!process.env.AWS_SECRET_ACCESS_KEY) errors.push('AWS_SECRET_ACCESS_KEY não está definido')
-
-  if (errors.length > 0) {
-    console.error('❌ Erro de configuração AWS:', errors.join('; '))
-    console.error('💡 Dica: Verifique se as variáveis estão em .env e reinicie o servidor (Ctrl+C, npm run dev)')
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error(
+      `Credenciais AWS incompletas. AccessKey: ${accessKeyId ? 'OK' : 'MISSING'}, SecretKey: ${secretAccessKey ? 'OK' : 'MISSING'}`
+    )
   }
 
-  return errors.length === 0
+  console.log('[S3] Criando cliente com:', {
+    region,
+    accessKeyId: accessKeyId.substring(0, 10) + '...',
+    hasSecretKey: !!secretAccessKey,
+  })
+
+  return new S3Client({
+    region,
+    credentials: {
+      accessKeyId,
+      secretAccessKey,
+    },
+  })
 }
-
-// 🔧 CORRIGIDO: Passar credenciais explicitamente em vez de usar credential providers
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-})
-
-// Validar na inicialização
-validateAWSConfig()
 
 export async function uploadAnexoS3(
   file: File,
@@ -51,6 +50,9 @@ export async function uploadAnexoS3(
       `AWS_BUCKET_NAME está undefined. Variáveis carregadas: REGION=${process.env.AWS_REGION}, ACCESS_KEY=${process.env.AWS_ACCESS_KEY_ID ? 'OK' : 'MISSING'}`
     )
   }
+
+  // 🔧 CRÍTICO: Criar S3Client AQUI (não global) para pegar credenciais atualizadas
+  const s3Client = createS3Client()
 
   const buffer = await file.arrayBuffer()
   const hash = generateHash(file.name + Date.now())
@@ -106,6 +108,8 @@ export async function uploadAnexoS3(
 }
 
 export async function deleteAnexoS3(chaveS3: string): Promise<void> {
+  const s3Client = createS3Client()
+
   const comando = new DeleteObjectCommand({
     Bucket: process.env.AWS_BUCKET_NAME!,
     Key: chaveS3,
