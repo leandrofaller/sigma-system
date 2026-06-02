@@ -1,11 +1,20 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { fromEnv } from '@aws-sdk/credential-providers'
 import sharp from 'sharp'
 import crypto from 'crypto'
 
 // 🔧 CRÍTICO: Criar S3Client DINAMICAMENTE dentro da função
-// Não na inicialização do módulo, pois as variáveis de ambiente podem não estar carregadas
+// Usando FromEnv para carregamento automático de credenciais
 function createS3Client() {
   const region = (process.env.AWS_REGION || 'us-east-1').trim()
+
+  console.log('[S3] DEBUG Variáveis de ambiente brutas:', {
+    region: process.env.AWS_REGION,
+    accessKeyIdRaw: process.env.AWS_ACCESS_KEY_ID?.substring(0, 10),
+    secretKeyRaw: process.env.AWS_SECRET_ACCESS_KEY?.substring(0, 10),
+  })
+
+  // Validar credenciais antes de criar cliente
   const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || '').trim()
   const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY || '').trim()
 
@@ -15,7 +24,7 @@ function createS3Client() {
     )
   }
 
-  console.log('[S3] Criando cliente com:', {
+  console.log('[S3] Criando cliente com credenciais:', {
     region,
     accessKeyId: accessKeyId.substring(0, 10) + '...',
     hasSecretKey: !!secretAccessKey,
@@ -25,10 +34,7 @@ function createS3Client() {
 
   return new S3Client({
     region,
-    credentials: {
-      accessKeyId,
-      secretAccessKey,
-    },
+    credentials: fromEnv(), // 🔥 Usar carregamento automático do SDK
   })
 }
 
