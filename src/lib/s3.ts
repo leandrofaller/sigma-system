@@ -5,9 +5,9 @@ import crypto from 'crypto'
 // 🔧 CRÍTICO: Criar S3Client DINAMICAMENTE dentro da função
 // Não na inicialização do módulo, pois as variáveis de ambiente podem não estar carregadas
 function createS3Client() {
-  const region = process.env.AWS_REGION || 'us-east-1'
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY
+  const region = (process.env.AWS_REGION || 'us-east-1').trim()
+  const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || '').trim()
+  const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY || '').trim()
 
   if (!accessKeyId || !secretAccessKey) {
     throw new Error(
@@ -19,6 +19,8 @@ function createS3Client() {
     region,
     accessKeyId: accessKeyId.substring(0, 10) + '...',
     hasSecretKey: !!secretAccessKey,
+    accessKeyLength: accessKeyId.length,
+    secretKeyLength: secretAccessKey.length,
   })
 
   return new S3Client({
