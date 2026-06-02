@@ -1281,6 +1281,18 @@ async function coletarIdsApenados(
         timeout: 60_000,
       })
       log(jobId, `✓ Página carregada, aguardando tabela...`)
+
+      // Aguarda por scripts jQuery/DataTables carregarem
+      await page.waitForFunction(() => {
+        const w = window as any
+        return w.$ && w.$.fn && w.$.fn.dataTable
+      }, { timeout: 15_000 }).catch(() => {
+        log(jobId, `⚠️ jQuery/DataTables não detectado, continuando...`)
+      })
+
+      // Aguarda um pouco mais para scripts de carregamento de dados executarem
+      await page.waitForTimeout(2_000)
+      log(jobId, `✓ Scripts carregados, verificando tabela...`)
     } catch (err) {
       log(jobId, `⚠️ Erro ao navegar para /apenados/index: ${err}`)
     }
@@ -1329,13 +1341,48 @@ async function coletarIdsApenados(
     }
 
     if (!tableDetected) {
-      // Debug: obtem conteúdo da página para diagnóstico
-      const pageText = await page.evaluate(() => {
+      // Debug: obtem conteúdo detalhado da página para diagnóstico
+      const debugInfo = await page.evaluate(() => {
         const heading = document.querySelector('h1, h2, h3')?.textContent
         const errorDiv = document.querySelector('[class*="error"], [class*="alert"]')?.textContent
-        return `Heading: ${heading} | Error: ${errorDiv}`
-      }).catch(() => 'N/A')
-      log(jobId, `DEBUG: Conteúdo da página: ${pageText}`)
+        const bodyText = document.body?.innerText?.substring(0, 500) || ''
+        const hasTable = !!document.querySelector('table')
+        const hasForm = !!document.querySelector('form')
+        const titleTag = document.title
+        const mainContent = document.querySelector('main, [role="main"], .container, .content')?.textContent?.substring(0, 300) || ''
+
+        return {
+          heading,
+          errorDiv,
+          bodyText,
+          hasTable,
+          hasForm,
+          titleTag,
+          mainContent,
+          documentHeight: document.documentElement.scrollHeight,
+          bodyHeight: document.body?.scrollHeight,
+        }
+      }).catch(() => ({ error: 'Falha ao coletar debug' }))
+
+      log(jobId, `DEBUG: Página info: ${JSON.stringify(debugInfo, null, 2)}`)
+
+      // Tenta força uma recarga da página com reload
+      log(jobId, `💡 Tentando reload da página...`)
+      try {
+        await page.reload({ waitUntil: 'networkidle', timeout: 60_000 })
+        log(jobId, `✓ Página recarregada`)
+
+        // Tenta novamente detectar tabela após reload
+        const retryDebug = await page.evaluate(() => {
+          const tables = document.querySelectorAll('table')
+          const rows = document.querySelectorAll('table tr')
+          return { tableCount: tables.length, rowCount: rows.length }
+        }).catch(() => ({}))
+
+        log(jobId, `DEBUG após reload: ${JSON.stringify(retryDebug)}`)
+      } catch (reloadErr) {
+        log(jobId, `⚠️ Erro ao recarregar página: ${reloadErr}`)
+      }
     }
   } else {
     let tableFound = false
