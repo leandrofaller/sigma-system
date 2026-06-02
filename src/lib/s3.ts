@@ -36,6 +36,22 @@ export async function uploadAnexoS3(
   apenadoId: string,
   tipoCompactacao: 'imagem' | 'documento' | 'auto'
 ): Promise<{ urlS3: string; chaveS3: string; tamanho: number }> {
+  // 🔍 DEBUG: Log das variáveis
+  console.log('[S3] Iniciando upload com configuração:', {
+    region: process.env.AWS_REGION,
+    bucket: process.env.AWS_BUCKET_NAME,
+    hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+    hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+    file: file.name,
+    apenadoId,
+  })
+
+  if (!process.env.AWS_BUCKET_NAME) {
+    throw new Error(
+      `AWS_BUCKET_NAME está undefined. Variáveis carregadas: REGION=${process.env.AWS_REGION}, ACCESS_KEY=${process.env.AWS_ACCESS_KEY_ID ? 'OK' : 'MISSING'}`
+    )
+  }
+
   const buffer = await file.arrayBuffer()
   const hash = generateHash(file.name + Date.now())
 
