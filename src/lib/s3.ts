@@ -4,19 +4,24 @@ import sharp from 'sharp'
 import crypto from 'crypto'
 
 // 🔧 CRÍTICO: Criar S3Client DINAMICAMENTE dentro da função
-// Usando FromEnv para carregamento automático de credenciais
+// Com credenciais explícitas e validação rigorosa
 function createS3Client() {
   const region = (process.env.AWS_REGION || 'us-east-1').trim()
-
-  console.log('[S3] DEBUG Variáveis de ambiente brutas:', {
-    region: process.env.AWS_REGION,
-    accessKeyIdRaw: process.env.AWS_ACCESS_KEY_ID?.substring(0, 10),
-    secretKeyRaw: process.env.AWS_SECRET_ACCESS_KEY?.substring(0, 10),
-  })
-
-  // Validar credenciais antes de criar cliente
   const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || '').trim()
   const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY || '').trim()
+
+  // DEBUG: Log detalhado
+  console.log('[S3] ============ DEBUG CREDENCIAIS ============')
+  console.log('[S3] Variáveis de ambiente (brutas):')
+  console.log('  - AWS_REGION:', process.env.AWS_REGION)
+  console.log('  - AWS_ACCESS_KEY_ID length:', process.env.AWS_ACCESS_KEY_ID?.length)
+  console.log('  - AWS_SECRET_ACCESS_KEY length:', process.env.AWS_SECRET_ACCESS_KEY?.length)
+  console.log('[S3] Variáveis após trim():')
+  console.log('  - region:', region)
+  console.log('  - accessKeyId length:', accessKeyId.length, 'value:', accessKeyId.substring(0, 15) + '...')
+  console.log('  - secretAccessKey length:', secretAccessKey.length)
+  console.log('[S3] Hora do servidor:', new Date().toISOString())
+  console.log('[S3] ==========================================')
 
   if (!accessKeyId || !secretAccessKey) {
     throw new Error(
@@ -24,17 +29,18 @@ function createS3Client() {
     )
   }
 
-  console.log('[S3] Criando cliente com credenciais:', {
-    region,
-    accessKeyId: accessKeyId.substring(0, 10) + '...',
-    hasSecretKey: !!secretAccessKey,
-    accessKeyLength: accessKeyId.length,
-    secretKeyLength: secretAccessKey.length,
-  })
-
   return new S3Client({
     region,
-    credentials: fromEnv(), // 🔥 Usar carregamento automático do SDK
+    credentials: {
+      accessKeyId,
+      secretAccessKey,
+    },
+    requestHandler: {
+      /**
+       * @deprecated set httpHandlerOptions instead
+       */
+      httpsAgent: undefined,
+    },
   })
 }
 
