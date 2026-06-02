@@ -128,7 +128,9 @@
       "Bash(Start-Sleep -Seconds 15)",
       "Bash(Get-ChildItem -Path \"F:\\\\relatorio_claude\" -Recurse -Filter \"*.prisma\" -ErrorAction SilentlyContinue)",
       "Bash(xargs ls -la)",
-      "Bash(xargs grep -l \"Scraping Global\\\\|scraping\\\\|sincroniz\")"
+      "Bash(xargs grep -l \"Scraping Global\\\\|scraping\\\\|sincroniz\")",
+      "Bash(pkill -f \"next\")",
+      "Bash(rm -rf .next)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
