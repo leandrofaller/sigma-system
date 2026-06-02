@@ -32,10 +32,19 @@ export default function DevicePendingPage() {
         const { latitude: lat, longitude: lng } = pos.coords;
         let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
         try {
+          // Tentar obter endereço com timeout de 5 segundos
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-            { headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' } }
+            {
+              headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' },
+              signal: controller.signal
+            }
           );
+          clearTimeout(timeoutId);
+
           if (res.ok) {
             const data = await res.json();
             if (data.display_name) address = data.display_name;
@@ -49,13 +58,13 @@ export default function DevicePendingPage() {
       (err) => {
         const msgs: Record<number, string> = {
           1: 'Permissão negada. Clique no ícone de localização na barra do navegador e permita o acesso.',
-          2: 'Não foi possível determinar sua localização. Verifique se o GPS está ativo.',
-          3: 'A solicitação expirou. Tente novamente.',
+          2: 'Não foi possível determinar sua localização. Verifique se o GPS está ativo ou se você tem sinal.',
+          3: 'A solicitação expirou (45 segundos). O GPS pode estar desativado ou sem sinal. Tente novamente.',
         };
         setGeoError(msgs[err.code] ?? 'Erro ao obter localização.');
         setStep('geo-denied');
       },
-      { timeout: 15000, maximumAge: 0 }
+      { timeout: 45000, maximumAge: 0, enableHighAccuracy: true }
     );
   }
 
