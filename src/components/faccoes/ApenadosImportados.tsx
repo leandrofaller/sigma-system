@@ -620,14 +620,47 @@ export function ApenadosImportados() {
   const [totalPages, setTotalPages] = useState(1)
   const [q, setQ] = useState('')
   const [faccaoId, setFaccaoId] = useState('')
+  const [unidade, setUnidade] = useState('')
+  const [situacao, setSituacao] = useState('')
   const [faccoes, setFaccoes] = useState<Faccao[]>([])
+  const [unidades, setUnidades] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<ApenadoImportado | null>(null)
-  const [incluirSemUnidade, setIncluirSemUnidade] = useState(false)
+
+  // Situações padrão do SIPE
+  const SITUACOES = [
+    'Em Liberdade',
+    'Solto',
+    'Apenado Preso',
+    'Fuga',
+    'Evasão / Abandono',
+    'Prisão Domiciliar',
+    'Livramento Condicional',
+    'Óbito em Fuga',
+    'Óbito',
+    'Preso Recambiado',
+    'DEPEN',
+    'Descumprimento de cautelar',
+  ]
 
   const fetchFaccoes = async () => {
     const res = await fetch('/api/sipe/faccoes')
     if (res.ok) setFaccoes(await res.json())
+  }
+
+  const fetchUnidades = async () => {
+    try {
+      const res = await fetch('/api/sipe/unidades')
+      if (res.ok) {
+        const data = await res.json()
+        const unidadeNames = Array.from(new Set(
+          data.unidades?.map((u: any) => u.nome).filter((n: string) => n) || []
+        )).sort() as string[]
+        setUnidades(unidadeNames)
+      }
+    } catch (err) {
+      console.error('Erro ao carregar unidades:', err)
+    }
   }
 
   const fetchApenados = useCallback(async () => {
@@ -635,7 +668,8 @@ export function ApenadosImportados() {
     const params = new URLSearchParams({ page: String(page), limit: '24' })
     if (q) params.set('q', q)
     if (faccaoId) params.set('faccaoId', faccaoId)
-    if (incluirSemUnidade) params.set('incluirSemUnidade', 'true')
+    if (unidade) params.set('unidade', unidade)
+    if (situacao) params.set('situacao', situacao)
 
     const res = await fetch(`/api/sipe/apenados?${params}`)
     if (res.ok) {
@@ -645,9 +679,9 @@ export function ApenadosImportados() {
       setTotalPages(data.totalPages)
     }
     setLoading(false)
-  }, [page, q, faccaoId, incluirSemUnidade])
+  }, [page, q, faccaoId, unidade, situacao])
 
-  useEffect(() => { fetchFaccoes() }, [])
+  useEffect(() => { fetchFaccoes(); fetchUnidades() }, [])
   useEffect(() => { fetchApenados() }, [fetchApenados])
 
   return (
@@ -672,15 +706,22 @@ export function ApenadosImportados() {
           <option value="">Todas as facções</option>
           {faccoes.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
         </select>
-        <label className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-          <input
-            type="checkbox"
-            checked={incluirSemUnidade}
-            onChange={e => { setIncluirSemUnidade(e.target.checked); setPage(1) }}
-            className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-2 focus:ring-red-500"
-          />
-          <span>Incluir sem unidade</span>
-        </label>
+        <select
+          value={unidade}
+          onChange={e => { setUnidade(e.target.value); setPage(1) }}
+          className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+        >
+          <option value="">Todas as unidades</option>
+          {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+        </select>
+        <select
+          value={situacao}
+          onChange={e => { setSituacao(e.target.value); setPage(1) }}
+          className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+        >
+          <option value="">Todas as situações</option>
+          {SITUACOES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
         <div className="flex items-center text-sm text-gray-500">
           {total} apenado{total !== 1 ? 's' : ''}
         </div>
