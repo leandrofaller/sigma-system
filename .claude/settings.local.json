@@ -130,7 +130,8 @@
       "Bash(xargs ls -la)",
       "Bash(xargs grep -l \"Scraping Global\\\\|scraping\\\\|sincroniz\")",
       "Bash(pkill -f \"next\")",
-      "Bash(rm -rf .next)"
+      "Bash(rm -rf .next)",
+      "Bash(xargs grep -l \"Dispositivos\\\\|geolocation\\\\|geolocalização\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

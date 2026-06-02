@@ -1,16 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { MapPin, Loader2, AlertTriangle, CheckCircle2, Navigation, Send } from 'lucide-react';
+import { MapPin, Loader2, AlertTriangle, CheckCircle2, Navigation, Send, Wifi, WifiOff } from 'lucide-react';
 
-type GeoStep = 'idle' | 'requesting' | 'captured' | 'submitting' | 'done' | 'geo-denied' | 'no-geo';
+type GeoStep = 'idle' | 'requesting' | 'captured' | 'submitting' | 'done' | 'geo-denied' | 'no-geo' | 'fallback-attempting';
 
 interface CapturedLocation {
   lat: number;
   lng: number;
   address: string;
+  method: 'gps' | 'ip'; // GPS ou IP-based
 }
 
 export default function DevicePendingPage() {
@@ -19,44 +20,137 @@ export default function DevicePendingPage() {
   const [location, setLocation] = useState<CapturedLocation | null>(null);
   const [geoError, setGeoError] = useState('');
   const [signingOut, setSigningOut] = useState(false);
+  const [progress, setProgress] = useState(0); // Para mostrar progresso
+  const [attemptsLeft, setAttemptsLeft] = useState(2); // Tentativas restantes
 
+  // 🔄 Função para reverter coordenadas em endereço (com fallback)
+  async function reverseGeocode(lat: number, lng: number): Promise<string> {
+    const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
+    try {
+      // Tenta com Google Maps (mais rápido e confiável)
+      // Se não tiver chave, usa OpenStreetMap como fallback
+      const res = await Promise.race([
+        fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10&addressdetails=1`,
+          { headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' } }
+        ),
+        new Promise<Response>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 5000) // Timeout 5s
+        ),
+      ]);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.display_name) return data.display_name;
+      }
+    } catch (err) {
+      console.log('[GEO] Reverse geocode falhou, usando fallback:', err);
+    }
+
+    return fallback;
+  }
+
+  // 🌐 Função para obter localização por IP (fallback)
+  async function getLocationByIP(): Promise<CapturedLocation | null> {
+    try {
+      const res = await fetch('/api/device/location/by-ip', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.latitude && data.longitude) {
+          const address = data.city && data.country
+            ? `${data.city}, ${data.country}`
+            : data.city || data.country || 'Localização por IP';
+
+          return {
+            lat: data.latitude,
+            lng: data.longitude,
+            address: address,
+            method: 'ip',
+          };
+        }
+      }
+    } catch (err) {
+      console.log('[GEO] Fallback por IP falhou:', err);
+    }
+    return null;
+  }
+
+  // 📍 Função principal de geolocalização com retry
   async function requestLocation() {
     if (!navigator.geolocation) {
       setGeoError('Seu navegador não suporta geolocalização.');
       setStep('geo-denied');
       return;
     }
+
     setStep('requesting');
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-            { headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' } }
-          );
-          if (res.ok) {
-            const data = await res.json();
-            if (data.display_name) address = data.display_name;
+    setProgress(0);
+    setGeoError('');
+    let progressInterval: NodeJS.Timeout | null = null;
+
+    try {
+      // Simular progresso visual
+      progressInterval = setInterval(() => {
+        setProgress((p) => Math.min(p + 5, 90));
+      }, 1000);
+
+      // Esperar por geolocalização com timeout maior (45s)
+      const geoPromise = new Promise<GeolocationCoordinates>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos.coords),
+          (err) => reject(err),
+          {
+            timeout: 45000,        // ⬆️ Aumentado de 15s para 45s
+            maximumAge: 0,          // Sempre obter posição fresca
+            enableHighAccuracy: true // ⬆️ Tentar usar GPS de alta precisão
           }
-        } catch {
-          // Falha silenciosa: mantém coordenadas como endereço
+        );
+      });
+
+      const coords = await geoPromise;
+      const { latitude: lat, longitude: lng } = coords;
+
+      // Obter endereço
+      const address = await reverseGeocode(lat, lng);
+
+      setLocation({ lat, lng, address, method: 'gps' });
+      setProgress(100);
+
+      if (progressInterval) clearInterval(progressInterval);
+      setStep('captured');
+      setAttemptsLeft(2); // Reset tentativas se sucesso
+    } catch (err: any) {
+      if (progressInterval) clearInterval(progressInterval);
+
+      const errorCode = err?.code;
+      const msgs: Record<number, string> = {
+        1: 'Permissão negada. Clique no ícone de localização na barra do navegador e permita o acesso.',
+        2: 'Não foi possível determinar sua localização. Verifique se o GPS está ativo e você tem sinal.',
+        3: 'A solicitação expirou (45 segundos). O GPS pode estar desativado ou sem sinal.',
+      };
+
+      const errorMsg = msgs[errorCode] ?? 'Erro ao obter localização.';
+      setGeoError(errorMsg);
+
+      // ⚡ Se falhou, tentar fallback por IP
+      if (attemptsLeft > 0) {
+        setStep('fallback-attempting');
+        console.log('[GEO] Tentando fallback por IP...');
+
+        const ipLocation = await getLocationByIP();
+        if (ipLocation) {
+          setLocation(ipLocation);
+          setGeoError('');
+          setStep('captured');
+          setAttemptsLeft(attemptsLeft - 1);
+          return;
         }
-        setLocation({ lat, lng, address });
-        setStep('captured');
-      },
-      (err) => {
-        const msgs: Record<number, string> = {
-          1: 'Permissão negada. Clique no ícone de localização na barra do navegador e permita o acesso.',
-          2: 'Não foi possível determinar sua localização. Verifique se o GPS está ativo.',
-          3: 'A solicitação expirou. Tente novamente.',
-        };
-        setGeoError(msgs[err.code] ?? 'Erro ao obter localização.');
-        setStep('geo-denied');
-      },
-      { timeout: 15000, maximumAge: 0 }
-    );
+      }
+
+      setAttemptsLeft(Math.max(0, attemptsLeft - 1));
+      setStep('geo-denied');
+    }
   }
 
   function confirmNoGeo() {
@@ -142,9 +236,26 @@ export default function DevicePendingPage() {
 
           {/* Step: requesting */}
           {step === 'requesting' && (
-            <div className="flex flex-col items-center gap-3 py-2">
+            <div className="flex flex-col items-center gap-4 py-4">
               <Loader2 className="w-7 h-7 text-orange-400 animate-spin" />
-              <p className="text-gray-400 text-sm">Aguardando permissão do navegador…</p>
+              <div className="w-full">
+                <p className="text-gray-400 text-sm text-center mb-2">Obtendo sua localização…</p>
+                <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-orange-400 to-orange-500 transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <p className="text-gray-500 text-xs text-center mt-2">Tempo limite: 45 segundos</p>
+              </div>
+            </div>
+          )}
+
+          {/* Step: fallback-attempting */}
+          {step === 'fallback-attempting' && (
+            <div className="flex flex-col items-center gap-3 py-2">
+              <Wifi className="w-7 h-7 text-blue-400 animate-pulse" />
+              <p className="text-gray-400 text-sm text-center">GPS indisponível, usando localização por IP…</p>
             </div>
           )}
 
@@ -154,15 +265,24 @@ export default function DevicePendingPage() {
               <div className="rounded-xl px-4 py-3 flex items-start gap-3"
                 style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)' }}>
                 <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
-                <p className="text-yellow-300 text-xs leading-relaxed">{geoError}</p>
+                <div className="min-w-0">
+                  <p className="text-yellow-300 text-xs leading-relaxed">{geoError}</p>
+                  {attemptsLeft > 0 && (
+                    <p className="text-yellow-400 text-xs mt-2 font-medium">
+                      Tentativas restantes: {attemptsLeft}
+                    </p>
+                  )}
+                </div>
               </div>
-              <button
-                onClick={requestLocation}
-                className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
-              >
-                <Navigation className="w-4 h-4" />
-                Tentar novamente
-              </button>
+              {attemptsLeft > 0 && (
+                <button
+                  onClick={requestLocation}
+                  className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
+                >
+                  <Navigation className="w-4 h-4" />
+                  Tentar novamente ({attemptsLeft})
+                </button>
+              )}
               <button
                 onClick={confirmNoGeo}
                 className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
@@ -178,15 +298,18 @@ export default function DevicePendingPage() {
             <div className="space-y-3">
               <div className="rounded-xl px-4 py-3 flex items-start gap-3"
                 style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)' }}>
-                <MapPin className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                {location.method === 'gps' ? (
+                  <MapPin className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <Wifi className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                )}
                 <div className="min-w-0">
-                  <p className="text-green-400 text-xs font-medium mb-0.5">Localização capturada</p>
+                  <p className={`text-xs font-medium mb-0.5 ${location.method === 'gps' ? 'text-green-400' : 'text-blue-400'}`}>
+                    {location.method === 'gps' ? '📍 Localização GPS' : '🌐 Localização por IP'}
+                  </p>
                   <p className="text-gray-300 text-xs leading-relaxed break-words">{location.address}</p>
                 </div>
               </div>
-              {geoError && (
-                <p className="text-red-400 text-xs text-center">{geoError}</p>
-              )}
               <button
                 onClick={submitLocation}
                 className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
