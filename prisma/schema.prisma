@@ -48,6 +48,18 @@ enum DeviceStatus {
   REVOKED
 }
 
+enum MaintenanceStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum MaintenanceSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
 model User {
   id           String    @id @default(cuid())
   name         String
@@ -81,6 +93,7 @@ model User {
   boardComments    BoardComment[]
   devices          UserDevice[]
   aipApenadoAnexos AIPApenadoAnexo[]
+  maintenanceAvisos SystemMaintenance[]
 
   @@map("users")
 }
@@ -957,4 +970,30 @@ model AIPFotoVisitante {
   @@index([apenadoId])
   @@index([visitanteId])
   @@map("aip_fotos_visitantes")
+}
+
+// ── Sistema de Avisos de Manutenção ──────────────────────────────
+model SystemMaintenance {
+  id String @id @default(cuid())
+
+  // Conteúdo do aviso
+  title       String
+  message     String      @db.Text
+  status      MaintenanceStatus @default(DRAFT)
+  severity    MaintenanceSeverity @default(WARNING)
+
+  // Grace time / Countdown (opcional)
+  // Se null, aviso fica indefinido
+  // Se preenchido, mostra countdown até esta data
+  graceTimeUntil DateTime?
+
+  // Auditoria
+  createdBy   String
+  createdByUser User @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("system_maintenance")
 }
