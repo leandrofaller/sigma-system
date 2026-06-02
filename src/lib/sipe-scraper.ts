@@ -306,16 +306,33 @@ async function login(page: Page, unidadeId: string): Promise<boolean> {
   if (!submitBtn2) throw new Error('Botão de submit não encontrado na página selectRole')
   await submitBtn2.click()
 
-  // Aguarda /home (30s)
+  // Aguarda mudança de URL ou chegada em /home (30s)
   try {
-    if (!page.url().includes('/home')) {
-      await page.waitForURL('**/home**', { timeout: 30_000 })
+    // Aguarda qualquer navegação com waitForNavigation
+    await Promise.race([
+      page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20_000 }).catch(() => {}),
+      page.waitForTimeout(3000) // Fallback de 3s se navegação não dispara
+    ])
+  } catch {}
+
+  // Pequeno delay adicional para estabilização
+  await page.waitForTimeout(1000)
+
+  // Verifica URL final
+  const finalUrl = page.url()
+  if (!finalUrl.includes('/home') && !finalUrl.includes('/apenados') && !finalUrl.includes('selectRole')) {
+    // Tenta novamente aguardar por /home especificamente
+    try {
+      await page.waitForURL('**/home**', { timeout: 10_000 })
+    } catch {
+      // Se falhar, log mas continua (pode ter redirecionado para outra página válida)
+      console.warn(`⚠️  Perfil selecionado mas URL é: ${finalUrl}`)
     }
-  } catch {
-    const url = page.url()
-    if (!url.includes('/home')) {
-      throw new Error(`Seleção de perfil não redirecionou para /home. URL atual: ${url}`)
-    }
+  }
+
+  const urlCheck = page.url()
+  if (!urlCheck.includes('/home') && !urlCheck.includes('/apenados') && !urlCheck.includes('api')) {
+    throw new Error(`Seleção de perfil não redirecionou para /home. URL atual: ${urlCheck}`)
   }
 
   return true
