@@ -2,6 +2,23 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client
 import sharp from 'sharp'
 import crypto from 'crypto'
 
+// 🔧 VALIDAÇÃO: Verificar se credenciais estão carregadas
+function validateAWSConfig() {
+  const errors: string[] = []
+
+  if (!process.env.AWS_REGION) errors.push('AWS_REGION não está definido')
+  if (!process.env.AWS_BUCKET_NAME) errors.push('AWS_BUCKET_NAME não está definido')
+  if (!process.env.AWS_ACCESS_KEY_ID) errors.push('AWS_ACCESS_KEY_ID não está definido')
+  if (!process.env.AWS_SECRET_ACCESS_KEY) errors.push('AWS_SECRET_ACCESS_KEY não está definido')
+
+  if (errors.length > 0) {
+    console.error('❌ Erro de configuração AWS:', errors.join('; '))
+    console.error('💡 Dica: Verifique se as variáveis estão em .env e reinicie o servidor (Ctrl+C, npm run dev)')
+  }
+
+  return errors.length === 0
+}
+
 // 🔧 CORRIGIDO: Passar credenciais explicitamente em vez de usar credential providers
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
@@ -10,6 +27,9 @@ const s3Client = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   },
 })
+
+// Validar na inicialização
+validateAWSConfig()
 
 export async function uploadAnexoS3(
   file: File,
