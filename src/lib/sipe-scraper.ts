@@ -1274,11 +1274,69 @@ async function coletarIdsApenados(
 
   if (globalMode) {
     log(jobId, `Acessando listagem global cross-unit: ${SIPE_URL}/apenados/index`)
-    await page.goto(`${SIPE_URL}/apenados/index`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 45_000,
-    })
-    await page.waitForSelector('table', { timeout: 30_000 })
+
+    try {
+      await page.goto(`${SIPE_URL}/apenados/index`, {
+        waitUntil: 'networkidle',
+        timeout: 60_000,
+      })
+      log(jobId, `✓ Página carregada, aguardando tabela...`)
+    } catch (err) {
+      log(jobId, `⚠️ Erro ao navegar para /apenados/index: ${err}`)
+    }
+
+    // Aguarda a tabela ou conteúdo alternativo (pode usar div com dados, DataTable injetado, etc)
+    let tableDetected = false
+    try {
+      await page.waitForSelector('table', { timeout: 45_000 })
+      tableDetected = true
+      log(jobId, `✓ Tabela detectada`)
+    } catch (err) {
+      log(jobId, `⚠️ Timeout aguardando seletor 'table', verificando alternativas...`)
+
+      // Fallback: aguarda por conteúdo alternativo
+      try {
+        const pageContent = await page.waitForFunction(() => {
+          // Verifica se há DataTable carregado na memória
+          const w = window as any
+          const tables = w.$.fn?.dataTable?.fnTables?.(true) ?? w.DataTable?.tables?.({ visible: true, hidden: false }) ?? []
+          if (tables.length > 0) return true
+
+          // Verifica se há thead ou tbody na página
+          if (document.querySelector('thead') || document.querySelector('tbody')) return true
+
+          // Verifica se há alguma div com class contendo dados (padrão de DataTables moderno)
+          if (document.querySelector('[role="table"]') || document.querySelector('.datatable')) return true
+
+          // Log de debug: mostra o que tem na página
+          const bodyText = document.body?.innerText || ''
+          if (bodyText.includes('erro') || bodyText.includes('Erro') || bodyText.includes('ERROR')) {
+            console.log('Página contém mensagem de erro:', bodyText.substring(0, 200))
+          }
+
+          return false
+        }, { timeout: 30_000 }).catch(() => null)
+
+        if (pageContent) {
+          tableDetected = true
+          log(jobId, `✓ Tabela detectada via fallback`)
+        } else {
+          log(jobId, `⚠️ Nenhum elemento de tabela detectado após múltiplas tentativas`)
+        }
+      } catch (fallbackErr) {
+        log(jobId, `⚠️ Erro no fallback de detecção de tabela: ${fallbackErr}`)
+      }
+    }
+
+    if (!tableDetected) {
+      // Debug: obtem conteúdo da página para diagnóstico
+      const pageText = await page.evaluate(() => {
+        const heading = document.querySelector('h1, h2, h3')?.textContent
+        const errorDiv = document.querySelector('[class*="error"], [class*="alert"]')?.textContent
+        return `Heading: ${heading} | Error: ${errorDiv}`
+      }).catch(() => 'N/A')
+      log(jobId, `DEBUG: Conteúdo da página: ${pageText}`)
+    }
   } else {
     let tableFound = false
     try {
