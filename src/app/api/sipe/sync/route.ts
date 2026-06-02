@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
       data: {
         tipo: 'GLOBAL',
         unidade: 'GLOBAL',
-        unidadeNome: 'Todas as Unidades (Global)',
+        unidadeNome: null,
         status: 'RUNNING',
         iniciadoEm: new Date(),
         criadoPor: session.user.id,
