@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
 
   const debriefings = await prisma.debriefing.findMany({
-    where: isAdmin ? {} : { groupId: user.groupId ?? 'none' },
+    where: isAdmin ? {} : { groupId: user.groupId ?? null },
     orderBy: { createdAt: 'desc' },
     include: { author: { select: { id: true, name: true } }, group: true },
   });

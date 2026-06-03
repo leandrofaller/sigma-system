@@ -5,7 +5,7 @@ import { ReceivedRelintsList } from '@/components/relint/ReceivedRelintsList';
 async function getReceivedRelints(role: string, groupId?: string) {
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
   return prisma.receivedRelint.findMany({
-    where: isAdmin ? {} : { groupId: groupId ?? 'none' },
+    where: isAdmin ? {} : { groupId: groupId ?? null },
     orderBy: { createdAt: 'desc' },
     include: { uploadedBy: true, group: true, folder: true },
   });

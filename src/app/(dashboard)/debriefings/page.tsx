@@ -6,7 +6,7 @@ import { DebriefingsList } from '@/components/debriefing/DebriefingsList';
 async function getDebriefings(role: string, groupId?: string | null) {
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
   return prisma.debriefing.findMany({
-    where: isAdmin ? {} : { groupId: groupId ?? 'none' },
+    where: isAdmin ? {} : { groupId: groupId ?? null },
     orderBy: { createdAt: 'desc' },
     include: { author: true, group: true },
   });

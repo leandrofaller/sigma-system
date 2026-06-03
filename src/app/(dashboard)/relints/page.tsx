@@ -5,7 +5,7 @@ import { RelintsList } from '@/components/relint/RelintsList';
 async function getRelints(role: string, groupId?: string) {
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
   return prisma.relint.findMany({
-    where: isAdmin ? {} : { groupId: groupId ?? 'none' },
+    where: isAdmin ? {} : { groupId: groupId ?? null },
     orderBy: { createdAt: 'desc' },
     include: { author: true, group: true },
   });

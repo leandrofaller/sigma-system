@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const files = await prisma.receivedRelint.findMany({
-      where: isAdmin ? {} : { groupId: user.groupId ?? 'none' },
+      where: isAdmin ? {} : { groupId: user.groupId ?? null },
       orderBy: { createdAt: 'desc' },
       include: { uploadedBy: { select: { name: true } }, group: { select: { name: true } }, folder: true },
     });
