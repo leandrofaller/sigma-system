@@ -2173,7 +2173,11 @@ async function scrapeApenadoFicha(
       updateData.matricula = dados.rji || dados.cpf;
     }
 
-    if (!localApenado.unidade && unidade) {
+    // Atualiza unidade se: (1) não tem unidade OU (2) vem de GLOBAL e agora tem unidade real
+    if (unidade && (
+      !localApenado.unidade ||
+      localApenado.unidade === 'Todas as Unidades (Global)'
+    )) {
       updateData.unidade = unidade;
     }
     if (!localApenado.faccao && faccaoNome) {
@@ -3297,7 +3301,11 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
         }
       });
     } else {
-      if (!localApenado.unidade && ap.unidade) {
+      // Atualiza unidade se: (1) não tem unidade OU (2) vem de GLOBAL e agora tem unidade real
+      if (ap.unidade && (
+        !localApenado.unidade ||
+        localApenado.unidade === 'Todas as Unidades (Global)'
+      )) {
         localApenado = await prisma.apenado.update({
           where: { id: localApenado.id },
           data: { unidade: ap.unidade }
@@ -3337,7 +3345,11 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
     } else {
       // Se ele já existe, atualiza informações básicas de cela e unidade se estiverem nulas/vazias
       const updateData: any = {}
-      if (!apenado.unidade && ap.unidade) updateData.unidade = ap.unidade
+      // Atualiza unidade se: (1) não tem unidade OU (2) vem de GLOBAL e agora tem unidade real
+      if (ap.unidade && (
+        !apenado.unidade ||
+        apenado.unidade === 'Todas as Unidades (Global)'
+      )) updateData.unidade = ap.unidade
       if (!apenado.cela && ap.cela) updateData.cela = ap.cela
       if (!apenado.tempoPena && ap.tempoPena) updateData.tempoPena = ap.tempoPena
       if (!apenado.dataNascimento && ap.dataNascimento) updateData.dataNascimento = ap.dataNascimento
