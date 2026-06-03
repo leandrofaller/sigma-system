@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -43,6 +43,7 @@ const baseAdminItems: NavItem[] = [
   { label: 'Grupos / Setores', href: '/admin/grupos', icon: FolderOpen, roles: ['SUPER_ADMIN'] },
   { label: 'Dispositivos', href: '/admin/dispositivos', icon: Monitor },
   { label: 'Monitoramento', href: '/admin/monitoramento', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Avisos de Manutenção', href: '/admin/manutencao', icon: AlertCircle, roles: ['SUPER_ADMIN'] },
   { label: 'Auditoria', href: '/auditoria', icon: ClipboardList },
   { label: 'Backups', href: '/admin/backups', icon: Database, roles: ['SUPER_ADMIN'] },
   { label: 'Configurações', href: '/admin/configuracoes', icon: Settings, roles: ['SUPER_ADMIN'] },
