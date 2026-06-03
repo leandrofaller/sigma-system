@@ -305,8 +305,43 @@ async function scrapeApenadoFichaFirecrawl(
       include: { faccao: true }
     })
 
-    // Sync with AIP if exists
+    // Sync with AIP if exists, or create if not
     try {
+      const aipSyncData = {
+        nome: apenado.nome,
+        nomeOutro: apenado.nomeOutro,
+        cpf: apenado.cpf,
+        rg: apenado.rg,
+        rgOrgao: apenado.rgOrgao,
+        dataNascimento: apenado.dataNascimento,
+        sexo: apenado.sexo,
+        etnia: apenado.etnia,
+        naturalidade: apenado.naturalidade,
+        orientacaoSexual: apenado.orientacaoSexual,
+        tipoSanguineo: apenado.tipoSanguineo,
+        grauInstrucao: apenado.grauInstrucao,
+        religiao: apenado.religiao,
+        estadoCivil: apenado.estadoCivil,
+        nomeConjuge: apenado.nomeConjuge,
+        qtdFilhos: apenado.qtdFilhos,
+        nomeMae: apenado.nomeMae,
+        nomePai: apenado.nomePai,
+        telefone: apenado.telefone,
+        rji: apenado.rji,
+        unidade: apenado.unidade,
+        regime: apenado.regime,
+        situacao: apenado.situacao,
+        dataEntrada: apenado.dataEntrada,
+        dataPrisao: apenado.dataPrisao,
+        tempoPena: apenado.tempoPena,
+        monitorado: apenado.monitorado,
+        intramuro: apenado.intramuro,
+        presoOriundo: apenado.presoOriundo,
+        oficioEntrada: apenado.oficioEntrada,
+        faccao: apenado.faccao?.nome || null,
+        ultimaSincAt: new Date(),
+      }
+
       const apenadoEmAIP = await prisma.aIPApenado.findUnique({
         where: { sipeId }
       })
@@ -314,43 +349,19 @@ async function scrapeApenadoFichaFirecrawl(
       if (apenadoEmAIP) {
         await prisma.aIPApenado.update({
           where: { id: apenadoEmAIP.id },
+          data: aipSyncData
+        })
+      } else {
+        // CRIAR novo registro em AIP com dados do SIPE
+        await prisma.aIPApenado.create({
           data: {
-            nome: apenado.nome,
-            nomeOutro: apenado.nomeOutro,
-            cpf: apenado.cpf,
-            rg: apenado.rg,
-            rgOrgao: apenado.rgOrgao,
-            dataNascimento: apenado.dataNascimento,
-            sexo: apenado.sexo,
-            etnia: apenado.etnia,
-            naturalidade: apenado.naturalidade,
-            orientacaoSexual: apenado.orientacaoSexual,
-            tipoSanguineo: apenado.tipoSanguineo,
-            grauInstrucao: apenado.grauInstrucao,
-            religiao: apenado.religiao,
-            estadoCivil: apenado.estadoCivil,
-            nomeConjuge: apenado.nomeConjuge,
-            qtdFilhos: apenado.qtdFilhos,
-            nomeMae: apenado.nomeMae,
-            nomePai: apenado.nomePai,
-            telefone: apenado.telefone,
-            rji: apenado.rji,
-            regime: apenado.regime,
-            situacao: apenado.situacao,
-            dataEntrada: apenado.dataEntrada,
-            dataPrisao: apenado.dataPrisao,
-            tempoPena: apenado.tempoPena,
-            monitorado: apenado.monitorado,
-            intramuro: apenado.intramuro,
-            presoOriundo: apenado.presoOriundo,
-            oficioEntrada: apenado.oficioEntrada,
-            faccao: apenado.faccao ? { connect: { id: apenado.faccao.id } } : undefined,
-            ultimaSincronizacaoSipeEm: new Date(),
+            sipeId: apenado.sipeId,
+            ...aipSyncData,
+            cadastradoPor: 'FIRECRAWL_SCRAPER'
           }
         })
       }
     } catch (err) {
-      // Silently fail AIP sync — not critical
       console.error(`Erro ao sincronizar com AIP para apenado #${sipeId}:`, err)
     }
 

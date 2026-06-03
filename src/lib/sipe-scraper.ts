@@ -2066,76 +2066,90 @@ async function scrapeApenadoFicha(
 
   // ============ SINCRONIZAÇÃO COM AIP ============
   // Se existe registro em AIP para este apenado, atualizar campos SIPE
+  // Se não existe, CRIAR um novo registro
   // Campos de inteligência NÃO são sobrescritos
   try {
+    const aipSyncData = {
+      // ============ DADOS PESSOAIS ============
+      nome: apenado.nome,
+      nomeOutro: apenado.nomeOutro,
+      cpf: apenado.cpf,
+      rg: apenado.rg,
+      rgOrgao: apenado.rgOrgao,
+      dataNascimento: apenado.dataNascimento,
+      sexo: apenado.sexo,
+      etnia: apenado.etnia,
+      naturalidade: apenado.naturalidade,
+      orientacaoSexual: apenado.orientacaoSexual,
+      tipoSanguineo: apenado.tipoSanguineo,
+      grauInstrucao: apenado.grauInstrucao,
+      religiao: apenado.religiao,
+      estadoCivil: apenado.estadoCivil,
+      nomeConjuge: apenado.nomeConjuge,
+      qtdFilhos: apenado.qtdFilhos,
+      nomeMae: apenado.nomeMae,
+      nomePai: apenado.nomePai,
+      telefone: apenado.telefone,
+      rji: apenado.rji,
+
+      // ============ DADOS PRISIONAIS ============
+      unidade: apenado.unidade,
+      cela: apenado.cela,
+      regime: apenado.regime,
+      situacao: apenado.situacao,
+      dataEntrada: apenado.dataEntrada,
+      dataPrisao: apenado.dataPrisao,
+      tempoPena: apenado.tempoPena,
+      faccao: apenado.faccao?.nome || null,
+      monitorado: apenado.monitorado,
+      intramuro: apenado.intramuro,
+      presoOriundo: apenado.presoOriundo,
+      oficioEntrada: apenado.oficioEntrada,
+      celeAtual: apenado.celeAtual,
+      ultimaMovimentacao: apenado.ultimaMovimentacao,
+
+      // ============ ENDEREÇO RESIDENCIAL ============
+      logradouro: apenado.logradouro,
+      numero: apenado.numero,
+      complemento: apenado.complemento,
+      bairro: apenado.bairro,
+      cidade: apenado.cidade,
+      uf: apenado.uf,
+      cep: apenado.cep,
+
+      // ============ FOTOS ============
+      photoPath: apenado.photoPath,
+
+      // ============ METADATA ============
+      ultimaSincAt: new Date(),
+    }
+
     const apenadoEmAIP = await prisma.aIPApenado.findUnique({
       where: { sipeId }
     })
 
     if (apenadoEmAIP) {
+      // Atualizar registro existente
       await prisma.aIPApenado.update({
         where: { id: apenadoEmAIP.id },
-        data: {
-          // ============ DADOS PESSOAIS ============
-          nome: apenado.nome,
-          nomeOutro: apenado.nomeOutro,
-          cpf: apenado.cpf,
-          rg: apenado.rg,
-          rgOrgao: apenado.rgOrgao,
-          dataNascimento: apenado.dataNascimento,
-          sexo: apenado.sexo,
-          etnia: apenado.etnia,
-          naturalidade: apenado.naturalidade,
-          orientacaoSexual: apenado.orientacaoSexual,
-          tipoSanguineo: apenado.tipoSanguineo,
-          grauInstrucao: apenado.grauInstrucao,
-          religiao: apenado.religiao,
-          estadoCivil: apenado.estadoCivil,
-          nomeConjuge: apenado.nomeConjuge,
-          qtdFilhos: apenado.qtdFilhos,
-          nomeMae: apenado.nomeMae,
-          nomePai: apenado.nomePai,
-          telefone: apenado.telefone,
-          rji: apenado.rji,
-
-          // ============ DADOS PRISIONAIS ============
-          unidade: apenado.unidade,
-          cela: apenado.cela,
-          regime: apenado.regime,
-          situacao: apenado.situacao,
-          dataEntrada: apenado.dataEntrada,
-          dataPrisao: apenado.dataPrisao,
-          tempoPena: apenado.tempoPena,
-          faccao: apenado.faccao?.nome || null,
-          monitorado: apenado.monitorado,
-          intramuro: apenado.intramuro,
-          presoOriundo: apenado.presoOriundo,
-          oficioEntrada: apenado.oficioEntrada,
-          celeAtual: apenado.celeAtual,
-          ultimaMovimentacao: apenado.ultimaMovimentacao,
-
-          // ============ ENDEREÇO RESIDENCIAL ============
-          logradouro: apenado.logradouro,
-          numero: apenado.numero,
-          complemento: apenado.complemento,
-          bairro: apenado.bairro,
-          cidade: apenado.cidade,
-          uf: apenado.uf,
-          cep: apenado.cep,
-
-          // ============ FOTOS ============
-          photoPath: apenado.photoPath,
-
-          // ============ METADATA ============
-          ultimaSincAt: new Date(),
-          // Campos de inteligência NÃO são atualizados aqui
-        }
+        data: aipSyncData
       }).catch((err) => {
         console.error(`[AIP] Erro ao sincronizar ${sipeId}:`, err.message)
       })
+    } else {
+      // CRIAR novo registro em AIP com dados do SIPE
+      await prisma.aIPApenado.create({
+        data: {
+          sipeId: apenado.sipeId,
+          ...aipSyncData,
+          cadastradoPor: 'SIPE_SCRAPER'
+        }
+      }).catch((err) => {
+        console.error(`[AIP] Erro ao criar apenado ${sipeId}:`, err.message)
+      })
     }
   } catch (err) {
-    console.error(`[AIP] Erro ao buscar registro em AIP:`, err)
+    console.error(`[AIP] Erro na sincronização AIP:`, err)
   }
 
   // Salva as fotos complementares encontradas na ficha de edição
