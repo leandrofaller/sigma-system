@@ -69,6 +69,10 @@ export async function POST(req: NextRequest) {
 
   const { unidadeId = '3', tipo = 'APENADOS', resumeJobId, idsManual } = body
 
+  // Validação para GLOBAL_TESTE
+  const isTeste = tipo === 'GLOBAL_TESTE'
+  const tipoReal = isTeste ? 'GLOBAL' : tipo
+
   // ── Resume an interrupted job ──
   if (resumeJobId) {
     const existing = await prisma.sipeSyncJob.findUnique({
@@ -204,17 +208,25 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Global sync (todas as unidades via /apenados/index) ──
-  if (tipo === 'GLOBAL') {
+  if (tipo === 'GLOBAL' || tipo === 'GLOBAL_TESTE') {
+    const label = tipo === 'GLOBAL_TESTE' ? '🧪 GLOBAL TESTE (2 páginas)' : 'Todas as Unidades (Global)'
     const job = await prisma.sipeSyncJob.create({
       data: {
-        tipo: 'GLOBAL',
+        tipo: tipoReal,
         unidade: 'GLOBAL',
         unidadeNome: null,
         status: 'RUNNING',
         iniciadoEm: new Date(),
         criadoPor: session.user.id,
+        log: isTeste ? 'Teste: limitado a 2 páginas' : null,
       },
     })
+
+    // Passar informação de teste para o scraper via globalThis ou através de job metadata
+    if (isTeste) {
+      ;(globalThis as any).SCRAPING_TESTE_MODE = true
+      ;(globalThis as any).SCRAPING_TESTE_MAX_PAGES = 2
+    }
 
     startSipeSyncWithEngine(job.id, 'GLOBAL', engine)
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })

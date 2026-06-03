@@ -154,7 +154,10 @@
       "Bash(cat > *)",
       "Bash(node)",
       "Bash(file scratch/ficha-geral-*.html)",
-      "Bash(xargs ls -lh)"
+      "Bash(xargs ls -lh)",
+      "Bash(curl -X POST http://localhost:3000/api/sipe/sync -H 'Content-Type: application/json' -d '{\"tipo\":\"GLOBAL\"}')",
+      "Bash(env)",
+      "Bash(curl -s http://localhost:3002/health)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
