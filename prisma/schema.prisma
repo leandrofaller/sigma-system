@@ -95,6 +95,14 @@ model User {
   aipApenadoAnexos AIPApenadoAnexo[]
   maintenanceAvisos SystemMaintenance[]
 
+  // Mural de Eventos
+  eventsCreated OccurrenceEvent[] @relation("EventsCreatedBy")
+  eventsUpdated OccurrenceEvent[] @relation("EventsUpdatedBy")
+  eventsDeleted OccurrenceEvent[] @relation("EventsDeletedBy")
+  attachmentsUploaded EventAttachment[]
+  deletionRequestsCreated DeleteApprovalRequest[] @relation("DeletionRequestedBy")
+  deletionRequestsResponded DeleteApprovalRequest[] @relation("DeletionRespondedBy")
+
   @@map("users")
 }
 
@@ -997,3 +1005,106 @@ model SystemMaintenance {
   @@index([createdAt])
   @@map("system_maintenance")
 }
+
+// ── Mural de Eventos ────────────────────────────────────────────
+// Sistema de calendário de ocorrências com anexos (fotos/documentos)
+// Suporta compartilhamento entre usuários e gerenciamento de permissões
+
+model OccurrenceEvent {
+  id        String   @id @default(cuid())
+
+  // Informações do evento
+  titulo    String
+  descricao String?  @db.Text
+  categoria String?  // ex: "Movimento", "Conflito", "Inteligência", etc
+
+  // Data/Hora do evento
+  dataEvento    DateTime
+  dataOcorrencia DateTime @default(now()) // quando foi registrado
+
+  // Relacionamentos
+  anexos        EventAttachment[]
+  solicitacoes  DeleteApprovalRequest[]
+
+  // Auditoria
+  criadoPor     String
+  criadoByUser  User @relation("EventsCreatedBy", fields: [criadoPor], references: [id], onDelete: SetNull)
+  criadoEm      DateTime @default(now())
+
+  atualizadoPor String?
+  atualizadoByUser User? @relation("EventsUpdatedBy", fields: [atualizadoPor], references: [id], onDelete: SetNull)
+  atualizadoEm  DateTime @updatedAt
+
+  // Soft delete
+  deletadoEm    DateTime?
+  deletadoPor   String?
+  deletadoByUser User? @relation("EventsDeletedBy", fields: [deletadoPor], references: [id], onDelete: SetNull)
+
+  @@index([dataEvento])
+  @@index([categoria])
+  @@index([criadoEm])
+  @@index([deletadoEm])
+  @@map("occurrence_events")
+}
+
+model EventAttachment {
+  id        String   @id @default(cuid())
+
+  // Relacionamento com evento
+  eventId   String
+  event     OccurrenceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Informações do arquivo
+  nomeOriginal String    // nome que o usuário viu
+  nomeS3       String    // hash/path em S3
+  tipo         String    // 'foto', 'pdf', 'documento', 'outro'
+  tipoMime     String    // application/pdf, image/jpeg, etc
+  tamanho      Int       // em bytes
+  urlS3        String    // URL completa ou path em S3
+
+  // Metadados
+  uploadedBy    String
+  uploadedByUser User @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+  uploadedAt    DateTime @default(now())
+
+  // Soft delete (usuário comum pode "deletar", precisa aprovação)
+  deletadoEm    DateTime?
+  deletadoPor   String?
+
+  @@index([eventId])
+  @@index([uploadedAt])
+  @@map("event_attachments")
+}
+
+model DeleteApprovalRequest {
+  id        String   @id @default(cuid())
+
+  // O que está sendo deletado
+  eventId   String?
+  event     OccurrenceEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  attachmentId String?
+  attachment   EventAttachment? @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+
+  // Quem pediu a deleção
+  solicitadoPor String
+  solicitadoByUser User @relation("DeletionRequestedBy", fields: [solicitadoPor], references: [id], onDelete: SetNull)
+  motivo       String? @db.Text
+  solicitadoEm DateTime @default(now())
+
+  // Status da aprovação
+  status       String  @default("PENDENTE") // PENDENTE, APROVADO, REJEITADO
+  resposta     String? @db.Text
+
+  // Quem respondeu
+  respondidoPor String?
+  respondidoByUser User? @relation("DeletionRespondedBy", fields: [respondidoPor], references: [id], onDelete: SetNull)
+  respondidoEm DateTime?
+
+  @@index([status])
+  @@index([eventId])
+  @@index([attachmentId])
+  @@index([solicitadoEm])
+  @@map("event_deletion_requests")
+}
+
