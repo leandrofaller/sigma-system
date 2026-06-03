@@ -2025,6 +2025,10 @@ async function scrapeApenadoFicha(
     }
   }
 
+  // FIX: Para GLOBAL scraping, usar unidade extraída do formulário (dados.unidadeFicha)
+  // como fallback quando unidade parameter é null/undefined
+  const resolvedUnidade = unidade || dados.unidadeFicha || undefined
+
   const upsertData = {
     nome: dados.nome || 'SEM NOME',
     nomeOutro: dados.nomeOutro,
@@ -2057,7 +2061,7 @@ async function scrapeApenadoFicha(
     oficioEntrada: dados.oficioEntrada,
     faccaoId,
     photoPath,
-    unidade: unidade || undefined,
+    unidade: resolvedUnidade,
     cela: cela || undefined,
     ultimaSyncAt: new Date(),
   }

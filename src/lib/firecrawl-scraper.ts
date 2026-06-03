@@ -261,6 +261,10 @@ async function scrapeApenadoFichaFirecrawl(
       faccaoId = faccao?.id ?? null
     }
 
+    // FIX: Para GLOBAL scraping, usar unidade extraída do HTML (dados.unidadeFicha)
+    // como fallback quando unidade parameter é null/undefined
+    const resolvedUnidade = unidade || dados.unidadeFicha || undefined
+
     // Prepare upsert data
     const upsertData = {
       nome: dados.nome || 'SEM NOME',
@@ -293,7 +297,7 @@ async function scrapeApenadoFichaFirecrawl(
       presoOriundo: dados.presoOriundo,
       oficioEntrada: dados.oficioEntrada,
       faccaoId,
-      unidade: unidade || undefined,
+      unidade: resolvedUnidade,
       ultimaSyncAt: new Date(),
     }
 
@@ -410,6 +414,27 @@ function extractApenadoData(html: string) {
     return match ? match[1].trim() : null
   }
 
+  // Extract unidade from text (for GLOBAL scraping fallback)
+  const extractLabel = (label: string): string | null => {
+    // Padrão 1: "Label : Valor" ou "Label Valor" (mesmo na linha)
+    let match = html.match(new RegExp(`${label}\\s*:?\\s*([^\\n<]+)`, 'i'))
+    if (match) {
+      const value = match[1].trim()
+      if (value && value.length > 0 && !value.match(/^[\s•\-–—]+$/)) {
+        return value
+      }
+    }
+    return null
+  }
+
+  let unidadeFicha = null
+  const unidadeMatch = html.match(/Unidade:\s*([^\n<]+)/i) ||
+                       html.match(/Estabelecimento:\s*([^\n<]+)/i) ||
+                       html.match(/Unidade\s*Prisional:\s*([^\n<]+)/i)
+  if (unidadeMatch) {
+    unidadeFicha = unidadeMatch[1].trim()
+  }
+
   return {
     nome: extractValue('nomeapenado'),
     nomeOutro: extractValue('nomefalso'),
@@ -441,6 +466,7 @@ function extractApenadoData(html: string) {
     monitorado: extractValue('monitorado') === 'SIM',
     intramuro: extractValue('intramuro') === 'SIM',
     faccaoSipeId: parseInt(extractValue('faccao_id') || '0') || null,
+    unidadeFicha,
   }
 }
 
