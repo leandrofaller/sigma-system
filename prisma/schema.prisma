@@ -1071,6 +1071,9 @@ model EventAttachment {
   deletadoEm    DateTime?
   deletadoPor   String?
 
+  // Relação inversa com pedidos de deleção
+  deletionRequests DeleteApprovalRequest[]
+
   @@index([eventId])
   @@index([uploadedAt])
   @@map("event_attachments")
