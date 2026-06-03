@@ -2,13 +2,26 @@
 
 import dynamic from 'next/dynamic';
 import { useState, useMemo, useEffect } from 'react';
-import { MapPin, Users, Clock, Download, Layers, Activity, Loader2, Wifi } from 'lucide-react';
+import { MapPin, Users, Clock, Download, Layers, Activity, Loader2, Wifi, AlertCircle } from 'lucide-react';
 import type { LocationEntry, TileStyle } from './GeoMap';
 import { TILE_LAYERS } from './GeoMap';
 
-const GeoMap = dynamic(() => import('./GeoMap'), { ssr: false, loading: () => (
-  <div className="flex items-center justify-center h-full text-subtle text-sm">Carregando mapa...</div>
-) });
+const GeoMap = dynamic(() => import('./GeoMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full text-subtle text-sm">Carregando mapa...</div>
+  ),
+  onError: (error) => {
+    console.error('Erro ao carregar mapa:', error);
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-subtle text-sm p-6">
+        <AlertCircle className="w-8 h-8 text-amber-500 mb-2" />
+        <p>Erro ao carregar o mapa</p>
+        <p className="text-xs mt-1 text-center">Por favor, recarregue a página ou tente novamente</p>
+      </div>
+    );
+  }
+});
 
 interface UserSummary {
   id: string;
@@ -81,12 +94,18 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
   useEffect(() => {
     setStatsLoading(true);
     fetch('/api/geolocation/stats?range=24h')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data: GeoStats) => {
         setGeoStats(data);
         setStatsLoading(false);
       })
-      .catch(() => setStatsLoading(false));
+      .catch((err) => {
+        console.error('Erro ao carregar stats:', err);
+        setStatsLoading(false);
+      });
   }, []);
 
   // Fetch the 4-hour trail whenever a user is selected
@@ -98,12 +117,19 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
     setTrailLoading(true);
     const since = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
     fetch(`/api/geolocation?userId=${selectedUserId}&since=${encodeURIComponent(since)}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data: LocationEntry[]) => {
         setUserTrail(data);
         setTrailLoading(false);
       })
-      .catch(() => setTrailLoading(false));
+      .catch((err) => {
+        console.error('Erro ao carregar trilha:', err);
+        setUserTrail([]);
+        setTrailLoading(false);
+      });
   }, [selectedUserId]);
 
   const latestByUser = useMemo(() => {
