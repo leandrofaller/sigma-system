@@ -24,15 +24,31 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    const mission = await prisma.mission.findUnique({ where: { id } });
+    const mission = await prisma.mission.findUnique({
+      where: { id },
+      include: {
+        group: {
+          select: {
+            id: true,
+            users: {
+              where: { id: user.id },
+              select: { id: true }
+            }
+          }
+        }
+      }
+    });
 
     if (!mission) {
       return NextResponse.json({ error: 'Missão não encontrada' }, { status: 404 });
     }
 
     const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
-    if (!isAdmin && mission.userId !== user.id) {
-      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    const isCreator = mission.userId === user.id;
+    const isGroupMember = mission.group && mission.group.users.length > 0;
+
+    if (!isAdmin && !isCreator && !isGroupMember) {
+      return NextResponse.json({ error: 'Acesso negado. Você não é membro do grupo ou criador da missão' }, { status: 403 });
     }
 
     // ===== Regras de transição de status =====
@@ -165,15 +181,31 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    const mission = await prisma.mission.findUnique({ where: { id } });
+    const mission = await prisma.mission.findUnique({
+      where: { id },
+      include: {
+        group: {
+          select: {
+            id: true,
+            users: {
+              where: { id: user.id },
+              select: { id: true }
+            }
+          }
+        }
+      }
+    });
 
     if (!mission) {
       return NextResponse.json({ error: 'Missão não encontrada' }, { status: 404 });
     }
 
     const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
-    if (!isAdmin && mission.userId !== user.id) {
-      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    const isCreator = mission.userId === user.id;
+    const isGroupMember = mission.group && mission.group.users.length > 0;
+
+    if (!isAdmin && !isCreator && !isGroupMember) {
+      return NextResponse.json({ error: 'Acesso negado. Você não é membro do grupo ou criador da missão' }, { status: 403 });
     }
 
     await prisma.mission.delete({ where: { id } });
