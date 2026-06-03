@@ -7,6 +7,7 @@ import {
   detectAndMarkCrashedJobs,
   scrapeUnidadesPrisionais,
 } from '@/lib/sipe-scraper'
+import { runScrapeFirecrawl } from '@/lib/firecrawl-scraper'
 
 const UNIDADES: Record<string, string> = {
   '3': 'CDPPVH - Centro de Detenção Provisório de Porto Velho',
@@ -19,6 +20,23 @@ const UNIDADES: Record<string, string> = {
   '91': 'Penitenciária Jorge Thiago Aguiar Afonso',
   '12': 'CRVG - Centro de Ressocialização Vale do Guaporé',
   '25': 'Centro de Ressocialização Jonas Ferreti',
+}
+
+/**
+ * Start sync with specified engine (playwright or firecrawl)
+ * Runs in background — returns immediately
+ */
+function startSipeSyncWithEngine(jobId: string, unidadeId: string, engine: 'playwright' | 'firecrawl'): void {
+  if (engine === 'firecrawl') {
+    // Start Firecrawl scraper in background
+    runScrapeFirecrawl(jobId, unidadeId)
+      .catch((err) => {
+        console.error(`[FIRECRAWL] ❌ Erro no scraping: ${err}`)
+      })
+  } else {
+    // Start Playwright scraper (default)
+    startSipeSync(jobId, unidadeId)
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -34,7 +52,7 @@ export async function POST(req: NextRequest) {
   await detectAndMarkCrashedJobs()
 
   // Parse body safely (allow empty body)
-  let body: { unidadeId?: string; tipo?: string; resumeJobId?: string; idsManual?: number[] } = {}
+  let body: { unidadeId?: string; tipo?: string; resumeJobId?: string; idsManual?: number[]; engine?: string } = {}
   try {
     const contentLength = req.headers.get('content-length')
     if (contentLength && parseInt(contentLength) > 0) {
@@ -44,6 +62,10 @@ export async function POST(req: NextRequest) {
     // If no body or invalid JSON, use defaults
     body = {}
   }
+
+  // Extract engine from body or query params (default: playwright)
+  const engineParam = body.engine || req.nextUrl.searchParams.get('engine')
+  const engine = (engineParam === 'firecrawl') ? 'firecrawl' : 'playwright'
 
   const { unidadeId = '3', tipo = 'APENADOS', resumeJobId, idsManual } = body
 
@@ -64,7 +86,7 @@ export async function POST(req: NextRequest) {
       data: { status: 'RUNNING', ultimaAtividade: new Date() },
     })
 
-    startSipeSync(resumeJobId, existing.unidade ?? unidadeId)
+    startSipeSyncWithEngine(resumeJobId, existing.unidade ?? unidadeId, engine)
     return NextResponse.json({ jobId: resumeJobId, status: 'RUNNING', resumed: true })
   }
 
@@ -143,7 +165,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    startSipeSync(job.id, 'ALL')
+    startSipeSyncWithEngine(job.id, 'ALL', engine)
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
@@ -160,7 +182,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    startSipeSync(job.id, unidadeId)
+    startSipeSyncWithEngine(job.id, unidadeId, engine)
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
@@ -177,7 +199,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    startSipeSync(job.id, 'EXTRAMUROS')
+    startSipeSyncWithEngine(job.id, 'EXTRAMUROS', engine)
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
@@ -194,7 +216,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    startSipeSync(job.id, 'GLOBAL')
+    startSipeSyncWithEngine(job.id, 'GLOBAL', engine)
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
@@ -224,7 +246,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    startSipeSync(job.id, unidadeId)
+    startSipeSyncWithEngine(job.id, unidadeId, engine)
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
@@ -240,7 +262,7 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  startSipeSync(job.id, unidadeId)
+  startSipeSyncWithEngine(job.id, unidadeId, engine)
   return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
 }
 

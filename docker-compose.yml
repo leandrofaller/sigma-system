@@ -60,6 +60,20 @@ services:
     networks:
       - sigma_network
 
+  firecrawl:
+    image: mendableai/firecrawl:latest
+    container_name: sigma_firecrawl
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      - LOG_LEVEL=info
+      - FIRECRAWL_HEADLESS_ONLY=false
+    networks:
+      - sigma_network
+    profiles:
+      - firecrawl
+
 volumes:
   postgres_data:
   redis_data:
