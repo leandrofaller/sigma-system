@@ -261,15 +261,19 @@ async function scrapeApenadoFichaFirecrawl(
       faccaoId = faccao?.id ?? null
     }
 
-    // FIX: Para GLOBAL scraping, usar unidade extraída do HTML (dados.unidadeFicha)
-    // como fallback quando unidade parameter é null/undefined
-    const resolvedUnidade = unidade || dados.unidadeFicha || undefined
+    // FIX: Para GLOBAL scraping, usar unidade extraída do HTML como fallback
+    // Se não encontrar "Unidade:", tenta usar "cela" (que contém o nome da unidade prisional)
+    const resolvedUnidade = unidade || dados.unidadeFicha || dados.celaFicha || undefined
 
-    // DEBUG: Log para verificar se unidade está sendo extraída
-    if (!unidade && dados.unidadeFicha) {
-      console.log(`[FIRECRAWL] ✅ GLOBAL fallback - Apenado #${sipeId}: unidadeParam=${unidade}, unidadeFicha="${dados.unidadeFicha}" => usando "${resolvedUnidade}"`)
-    } else if (!unidade && !dados.unidadeFicha) {
-      console.log(`[FIRECRAWL] ⚠️ GLOBAL sem fallback - Apenado #${sipeId}: unidadeParam=${unidade}, unidadeFicha=${dados.unidadeFicha} => resolvedUnidade=${resolvedUnidade}`)
+    // DEBUG: Log para verificar qual fallback foi usado
+    if (!unidade) {
+      if (dados.unidadeFicha) {
+        console.log(`[FIRECRAWL] ✅ GLOBAL fallback (unidadeFicha) - Apenado #${sipeId}: => "${resolvedUnidade}"`)
+      } else if (dados.celaFicha) {
+        console.log(`[FIRECRAWL] ✅ GLOBAL fallback (celaFicha) - Apenado #${sipeId}: => "${resolvedUnidade}"`)
+      } else {
+        console.log(`[FIRECRAWL] ⚠️ GLOBAL sem fallback - Apenado #${sipeId}: nenhuma unidade encontrada`)
+      }
     }
 
     // Prepare upsert data
@@ -438,12 +442,21 @@ function extractApenadoData(html: string) {
     return null
   }
 
+  // Extract unidade from text
   let unidadeFicha = null
   const unidadeMatch = html.match(/Unidade:\s*([^\n<]+)/i) ||
                        html.match(/Estabelecimento:\s*([^\n<]+)/i) ||
                        html.match(/Unidade\s*Prisional:\s*([^\n<]+)/i)
   if (unidadeMatch) {
     unidadeFicha = unidadeMatch[1].trim()
+  }
+
+  // Extract cela from text
+  let celaFicha = null
+  const celaMatch = html.match(/Cela:\s*([^\n<]+)/i) ||
+                    html.match(/Cela\s*-\s*([^\n<]+)/i)
+  if (celaMatch) {
+    celaFicha = celaMatch[1].trim()
   }
 
   return {
@@ -478,6 +491,7 @@ function extractApenadoData(html: string) {
     intramuro: extractValue('intramuro') === 'SIM',
     faccaoSipeId: parseInt(extractValue('faccao_id') || '0') || null,
     unidadeFicha,
+    celaFicha,
   }
 }
 

@@ -2025,15 +2025,19 @@ async function scrapeApenadoFicha(
     }
   }
 
-  // FIX: Para GLOBAL scraping, usar unidade extraída do formulário (dados.unidadeFicha)
-  // como fallback quando unidade parameter é null/undefined
-  const resolvedUnidade = unidade || dados.unidadeFicha || undefined
+  // FIX: Para GLOBAL scraping, usar unidade extraída do formulário como fallback
+  // Se não encontrar "Unidade:", tenta usar "cela" (que contém o nome da unidade prisional)
+  const resolvedUnidade = unidade || dados.unidadeFicha || cela || undefined
 
-  // DEBUG: Log para verificar se unidade está sendo extraída
-  if (!unidade && dados.unidadeFicha) {
-    console.log(`[SCRAPER] ✅ GLOBAL fallback - Apenado #${sipeId}: unidadeParam=${unidade}, unidadeFicha="${dados.unidadeFicha}" => usando "${resolvedUnidade}"`)
-  } else if (!unidade && !dados.unidadeFicha) {
-    console.log(`[SCRAPER] ⚠️ GLOBAL sem fallback - Apenado #${sipeId}: unidadeParam=${unidade}, unidadeFicha=${dados.unidadeFicha} => resolvedUnidade=${resolvedUnidade}`)
+  // DEBUG: Log para verificar qual fallback foi usado
+  if (!unidade) {
+    if (dados.unidadeFicha) {
+      console.log(`[SCRAPER] ✅ GLOBAL fallback (unidadeFicha) - Apenado #${sipeId}: => "${resolvedUnidade}"`)
+    } else if (cela) {
+      console.log(`[SCRAPER] ✅ GLOBAL fallback (cela) - Apenado #${sipeId}: => "${resolvedUnidade}"`)
+    } else {
+      console.log(`[SCRAPER] ⚠️ GLOBAL sem fallback - Apenado #${sipeId}: nenhuma unidade encontrada`)
+    }
   }
 
   const upsertData = {
