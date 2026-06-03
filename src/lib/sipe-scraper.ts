@@ -27,7 +27,6 @@ import { join } from 'path'
 import { getApenadosDir } from './storage'
 import { createHash } from 'crypto'
 import { capsolverService } from './capsolver-service'
-import Mutex from 'async-lock'
 
 // ── Config ────────────────────────────────────────────────────
 const SIPE_URL = 'https://sipe.sejus.ro.gov.br'
@@ -60,14 +59,11 @@ declare global {
   var __sipeState: SipeSyncProgress | null
   // eslint-disable-next-line no-var
   var __sipeStopFlag: boolean
-  // eslint-disable-next-line no-var
-  var __sipeMutex: Mutex
 }
 
 // Initialize once per process; no-op on hot-reloads
 if (globalThis.__sipeState === undefined) globalThis.__sipeState = null
 if (globalThis.__sipeStopFlag === undefined) globalThis.__sipeStopFlag = false
-if (globalThis.__sipeMutex === undefined) globalThis.__sipeMutex = new Mutex()
 
 export function getSipeState(): SipeSyncProgress | null {
   return globalThis.__sipeState
@@ -164,41 +160,6 @@ async function createSession(): Promise<BrowserContext> {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
       'Chrome/120.0.0.0 Safari/537.36',
   })
-}
-
-// ── Passo 1: Context Pool Manager (Paralelização) ───────────────────────────
-/**
- * Cria um pool de múltiplos contexts do navegador para paralelizar scraping
- * @param size - Número de workers paralelos (default: 8)
- * @returns Array de contexts criados
- */
-async function createContextPool(size: number = 8): Promise<BrowserContext[]> {
-  console.log(`[Context Pool] Criando ${size} contexts paralelos...`)
-  const contexts = await Promise.all(
-    Array(size)
-      .fill(null)
-      .map(async (_, i) => {
-        const ctx = await createSession()
-        console.log(`[Context Pool] Context ${i + 1}/${size} criado`)
-        return ctx
-      })
-  )
-  console.log(`[Context Pool] Pool completo com ${size} contexts`)
-  return contexts
-}
-
-/**
- * Fecha todos os contexts do pool
- * @param contexts - Array de contexts a fechar
- */
-async function closeContextPool(contexts: BrowserContext[]): Promise<void> {
-  console.log(`[Context Pool] Fechando ${contexts.length} contexts...`)
-  await Promise.all(contexts.map((ctx, i) =>
-    ctx.close()
-      .then(() => console.log(`[Context Pool] Context ${i + 1} fechado`))
-      .catch(err => console.warn(`[Context Pool] Erro ao fechar context ${i + 1}:`, err.message))
-  ))
-  console.log(`[Context Pool] Todos os contexts foram fechados`)
 }
 
 // ── SIPE authentication ───────────────────────────────────────
@@ -306,33 +267,16 @@ async function login(page: Page, unidadeId: string): Promise<boolean> {
   if (!submitBtn2) throw new Error('Botão de submit não encontrado na página selectRole')
   await submitBtn2.click()
 
-  // Aguarda mudança de URL ou chegada em /home (30s)
+  // Aguarda /home (30s)
   try {
-    // Aguarda qualquer navegação com waitForNavigation
-    await Promise.race([
-      page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20_000 }).catch(() => {}),
-      page.waitForTimeout(3000) // Fallback de 3s se navegação não dispara
-    ])
-  } catch {}
-
-  // Pequeno delay adicional para estabilização
-  await page.waitForTimeout(1000)
-
-  // Verifica URL final
-  const finalUrl = page.url()
-  if (!finalUrl.includes('/home') && !finalUrl.includes('/apenados') && !finalUrl.includes('selectRole')) {
-    // Tenta novamente aguardar por /home especificamente
-    try {
-      await page.waitForURL('**/home**', { timeout: 10_000 })
-    } catch {
-      // Se falhar, log mas continua (pode ter redirecionado para outra página válida)
-      console.warn(`⚠️  Perfil selecionado mas URL é: ${finalUrl}`)
+    if (!page.url().includes('/home')) {
+      await page.waitForURL('**/home**', { timeout: 30_000 })
     }
-  }
-
-  const urlCheck = page.url()
-  if (!urlCheck.includes('/home') && !urlCheck.includes('/apenados') && !urlCheck.includes('api')) {
-    throw new Error(`Seleção de perfil não redirecionou para /home. URL atual: ${urlCheck}`)
+  } catch {
+    const url = page.url()
+    if (!url.includes('/home')) {
+      throw new Error(`Seleção de perfil não redirecionou para /home. URL atual: ${url}`)
+    }
   }
 
   return true
@@ -711,129 +655,68 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
       }
     }
 
-    // ── Phase 2: scrape each profile (PARALELIZADO) ──────────────────────────
-    // Passo 2: Criar pool de contexts para paralelização
-    const POOL_SIZE = 8  // 8 workers paralelos
-    const contextPool = await createContextPool(POOL_SIZE)
-    const pagePool = await Promise.all(
-      contextPool.map((ctx, i) => ctx.newPage().catch(err => {
-        console.error(`Erro ao criar page ${i}:`, err)
-        throw err
-      }))
-    )
-
-    // Fazer login em todos os pages
-    log(jobId, `🔐 Autenticando ${POOL_SIZE} workers no SIPE...`)
-    await Promise.all(
-      pagePool.map((p, i) =>
-        login(p, loginUnidade).catch(err => {
-          console.error(`Erro ao fazer login no worker ${i}:`, err)
-          throw err
-        })
-      )
-    )
-    log(jobId, `✅ Todos ${POOL_SIZE} workers autenticados`)
-
+    // ── Phase 2: scrape each profile ──────────────────────────
     let lastProcessedId: number | undefined
-    const tasks: Promise<void>[] = []
-    let pageIdx = 0
-
-    // Distribuir apenados entre pages (não aguarda sequencial)
-    const useSearch = job.tipo === 'IDS_MANUAIS' || job.tipo === 'EXTRAMUROS' || job.tipo === 'GLOBAL'
-
     for (const sipeId of ids) {
       if (globalThis.__sipeStopFlag) {
-        // Aguardar tasks em progresso antes de interromper
-        await Promise.allSettled(tasks)
         await dbProgress(jobId, {
           status: 'INTERRUPTED',
           finalizadoEm: new Date(),
           log: 'Sincronização interrompida pelo usuário',
         })
         refreshMemory(jobId, { status: 'INTERRUPTED' })
-        // Limpar pool antes de retornar
-        await closeContextPool(contextPool)
         return
       }
 
-      const workerPage = pagePool[pageIdx % pagePool.length]
-      const workerId = pageIdx % pagePool.length
-      pageIdx++
+      const useSearch = job.tipo === 'IDS_MANUAIS' || job.tipo === 'EXTRAMUROS' || job.tipo === 'GLOBAL'
 
-      // Criar tarefa para este apenado (não aguarda)
-      const task = (async () => {
-        try {
-          await withRetry(async () => {
-            try {
-              if (job.tipo === 'ADVOGADOS') {
-                await scrapeAdvogadoDetalhe(workerPage, sipeId, jobId)
-              } else {
-                await scrapeApenadoFicha(workerPage, sipeId, job.unidadeNome, useSearch)
-              }
-            } catch (err: any) {
-              if (err?.message === 'SESSAO_EXPIRADA') {
-                log(jobId, `Worker #${workerId}: Sessão expirada. Re-autenticando...`)
-                await login(workerPage, loginUnidade)
-
-                if (job.tipo === 'ADVOGADOS') {
-                  await scrapeAdvogadoDetalhe(workerPage, sipeId, jobId)
-                } else {
-                  await scrapeApenadoFicha(workerPage, sipeId, job.unidadeNome, useSearch)
-                }
-              } else {
-                throw err
-              }
+      try {
+        await withRetry(async () => {
+          try {
+            if (job.tipo === 'ADVOGADOS') {
+              await scrapeAdvogadoDetalhe(page, sipeId, jobId)
+            } else {
+              await scrapeApenadoFicha(page, sipeId, job.unidadeNome, useSearch)
             }
-          })
+          } catch (err: any) {
+            if (err?.message === 'SESSAO_EXPIRADA') {
+              log(jobId, 'Sessão expirada detectada. Re-autenticando no SIPE...')
+              await login(page, loginUnidade)
 
-          lastProcessedId = sipeId
-
-          // Usar mutex para evitar race condition
-          await globalThis.__sipeMutex.acquire('state', () => {
-            globalThis.__sipeState!.processado++
-            globalThis.__sipeState!.pct = globalThis.__sipeState!.total
-              ? Math.round(
-                  (globalThis.__sipeState!.processado / globalThis.__sipeState!.total) * 100
-                )
-              : 0
-          })
-
-          // Persiste cursor periodicamente (menos frequente que antes)
-          if (globalThis.__sipeState!.processado % 10 === 0) {
-            await dbProgress(jobId, {
-              processado: globalThis.__sipeState!.processado,
-              ultimoIdProcessado: sipeId,
-            })
+              if (job.tipo === 'ADVOGADOS') {
+                await scrapeAdvogadoDetalhe(page, sipeId, jobId)
+              } else {
+                await scrapeApenadoFicha(page, sipeId, job.unidadeNome, useSearch)
+              }
+            } else {
+              throw err
+            }
           }
+        })
+        lastProcessedId = sipeId
+        globalThis.__sipeState!.processado++
+        globalThis.__sipeState!.pct = globalThis.__sipeState!.total
+          ? Math.round(
+              (globalThis.__sipeState!.processado / globalThis.__sipeState!.total) * 100
+            )
+          : 0
 
-          // Pequeno delay para não sobrecarregar servidor
-          await workerPage.waitForTimeout(200 + Math.random() * 300)
-        } catch (err) {
-          await globalThis.__sipeMutex.acquire('state', () => {
-            globalThis.__sipeState!.erros++
-          })
-
-          const msg = job.tipo === 'ADVOGADOS'
-            ? `Erro advogado #${sipeId} (worker #${workerId}, após 3 tentativas): ${err}`
-            : `Erro apenado #${sipeId} (worker #${workerId}, após 3 tentativas): ${err}`
-          globalThis.__sipeState!.ultimoLog = msg
-          await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
-        }
-      })()
-
-      tasks.push(task)
+        // Persiste cursor a cada registro para recovery sem perda em crash/restart
+        await dbProgress(jobId, {
+          processado: globalThis.__sipeState!.processado,
+          ultimoIdProcessado: sipeId,
+        })
+        // Polite delay
+        await page.waitForTimeout(300 + Math.random() * 500)
+      } catch (err) {
+        globalThis.__sipeState!.erros++
+        const msg = job.tipo === 'ADVOGADOS'
+          ? `Erro advogado #${sipeId} (após 3 tentativas): ${err}`
+          : `Erro apenado #${sipeId} (após 3 tentativas): ${err}`
+        globalThis.__sipeState!.ultimoLog = msg
+        await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
+      }
     }
-
-    // Aguardar TODAS as tarefas em paralelo (chave da otimização)
-    log(jobId, `⏳ Processando ${ids.length} apenados em ${POOL_SIZE} workers paralelos...`)
-    const results = await Promise.allSettled(tasks)
-    const failedTasks = results.filter(r => r.status === 'rejected').length
-    if (failedTasks > 0) {
-      log(jobId, `⚠️ ${failedTasks} tarefas falharam durante processamento paralelo`)
-    }
-
-    // Limpar pool de contexts
-    await closeContextPool(contextPool)
 
     // Final cursor flush — use the actual last processed ID, not ids[last]
     await dbProgress(jobId, {
@@ -1025,115 +908,74 @@ async function runScrapeTodasUnidades(jobId: string): Promise<void> {
         }
       }
 
-      // Processa apenados da unidade atual com 8 workers paralelos
+      // Processa apenados da unidade atual
       const apenadosIds = [...checkpoint.currentApenadosIds]
+      let lastProcessedId: number | undefined
 
-      // Criar pool de 8 contextos para paralelização
-      log(jobId, `🔧 Preparando ${POOL_SIZE} workers para paralelização da unidade "${u.nome}"...`)
-      const contextPool = await createContextPool(POOL_SIZE)
-      const pagePool = await Promise.all(
-        Array.from({ length: POOL_SIZE }, async (_, i) => {
-          const p = await contextPool[i].newPage()
-          const loginUnidade = u.id
-          const ok = await login(p, loginUnidade)
-          if (!ok) throw new Error(`Worker #${i} falhou no login`)
-          return p
-        })
-      )
-      log(jobId, `✅ Todos ${POOL_SIZE} workers autenticados na unidade "${u.nome}"`)
-
-      let pageIdx = 0
-      const tasks: Promise<void>[] = []
-
-      // Distribuir apenados entre workers (não aguarda sequencial)
       for (const sipeId of apenadosIds) {
         if (globalThis.__sipeStopFlag) {
-          await Promise.allSettled(tasks)
           await dbProgress(jobId, {
             status: 'INTERRUPTED',
             finalizadoEm: new Date(),
             log: 'Sincronização de unidades interrompida pelo usuário',
           })
           refreshMemory(jobId, { status: 'INTERRUPTED' })
-          await closeContextPool(contextPool)
           return
         }
 
-        const workerPage = pagePool[pageIdx % pagePool.length]
-        const workerId = pageIdx % pagePool.length
-        pageIdx++
-
-        // Criar tarefa para este apenado (não aguarda)
-        const task = (async () => {
-          try {
-            await withRetry(async () => {
-              try {
-                await scrapeApenadoFicha(workerPage, sipeId, u.nome)
-              } catch (err: any) {
-                if (err?.message === 'SESSAO_EXPIRADA') {
-                  log(jobId, `Worker #${workerId}: Sessão expirada na unidade "${u.nome}". Re-autenticando...`)
-                  await login(workerPage, u.id)
-                  await scrapeApenadoFicha(workerPage, sipeId, u.nome)
-                } else {
-                  throw err
-                }
+        try {
+          await withRetry(async () => {
+            try {
+              await scrapeApenadoFicha(page, sipeId, u.nome)
+            } catch (err: any) {
+              if (err?.message === 'SESSAO_EXPIRADA') {
+                log(jobId, `Sessão expirada. Re-autenticando para unidade "${u.nome}"...`)
+                await login(page, u.id)
+                await scrapeApenadoFicha(page, sipeId, u.nome)
+              } else {
+                throw err
               }
-            })
-
-            checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
-
-            await globalThis.__sipeMutex.lock('progress', async () => {
-              if (globalThis.__sipeState) {
-                globalThis.__sipeState.processado++
-                if (globalThis.__sipeState.total > 0) {
-                  globalThis.__sipeState.pct = Math.round(
-                    (globalThis.__sipeState.processado / globalThis.__sipeState.total) * 100
-                  )
-                }
-              }
-            })
-
-            // Salvar checkpoint a cada 10 apenados processados
-            if (apenadosIds.length - checkpoint.currentApenadosIds.length % 10 === 0 || checkpoint.currentApenadosIds.length === 0) {
-              await dbProgress(jobId, {
-                processado: globalThis.__sipeState?.processado ?? 0,
-                ultimoIdProcessado: sipeId,
-                idsColetados: JSON.stringify(checkpoint),
-              })
             }
-          } catch (err) {
-            const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
-            if (globalThis.__sipeState) {
-              globalThis.__sipeState.erros = errosCount
-            }
-            const msg = `Erro apenado #${sipeId} na unidade "${u.nome}" (worker #${workerId}): ${err}`
-            if (globalThis.__sipeState) {
-              globalThis.__sipeState.ultimoLog = msg
-            }
+          })
 
-            checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
-
-            await dbProgress(jobId, {
-              erros: errosCount,
-              log: msg,
-              idsColetados: JSON.stringify(checkpoint),
-            })
+          lastProcessedId = sipeId
+          checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
+          
+          if (globalThis.__sipeState) {
+            globalThis.__sipeState.processado++
+            if (globalThis.__sipeState.total > 0) {
+              globalThis.__sipeState.pct = Math.round(
+                (globalThis.__sipeState.processado / globalThis.__sipeState.total) * 100
+              )
+            }
           }
-        })()
 
-        tasks.push(task)
+          await dbProgress(jobId, {
+            processado: globalThis.__sipeState?.processado ?? 0,
+            ultimoIdProcessado: sipeId,
+            idsColetados: JSON.stringify(checkpoint),
+          })
+
+          await page.waitForTimeout(300 + Math.random() * 500)
+        } catch (err) {
+          const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
+          if (globalThis.__sipeState) {
+            globalThis.__sipeState.erros = errosCount
+          }
+          const msg = `Erro apenado #${sipeId} na unidade "${u.nome}" (após 3 tentativas): ${err}`
+          if (globalThis.__sipeState) {
+            globalThis.__sipeState.ultimoLog = msg
+          }
+          
+          checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
+          
+          await dbProgress(jobId, {
+            erros: errosCount,
+            log: msg,
+            idsColetados: JSON.stringify(checkpoint),
+          })
+        }
       }
-
-      // Aguardar TODAS as tarefas em paralelo (chave da otimização)
-      log(jobId, `⏳ Processando ${apenadosIds.length} apenados em ${POOL_SIZE} workers paralelos...`)
-      const results = await Promise.allSettled(tasks)
-      const failedTasks = results.filter(r => r.status === 'rejected').length
-      if (failedTasks > 0) {
-        log(jobId, `⚠️ ${failedTasks} tarefas falharam durante processamento paralelo na unidade "${u.nome}"`)
-      }
-
-      // Limpar pool de contexts
-      await closeContextPool(contextPool)
 
       u.concluida = true
       checkpoint.currentUnidadeId = null
@@ -1173,8 +1015,7 @@ function log(jobId: string, msg: string) {
   logPromiseChain = logPromiseChain.then(() => dbProgress(jobId, { log: msg })).catch(() => {})
 }
 
-// 🔧 OTIMIZAÇÃO: Backoff exponencial com mais tentativas para servidores lentos
-async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn()
@@ -1183,30 +1024,14 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
         throw err
       }
       if (i === attempts - 1) throw err
-
-      // Backoff exponencial: 2s, 4s, 8s, 16s, 32s (máximo)
-      const delayMs = Math.min(2000 * Math.pow(2, i), 32000);
-      console.log(`⏳ [Retry ${i + 1}/${attempts}] Aguardando ${(delayMs / 1000).toFixed(0)}s...`);
-      await new Promise(r => setTimeout(r, delayMs));
+      await new Promise(r => setTimeout(r, 2000 * (i + 1))) // 2s, 4s, 6s
     }
   }
   throw new Error('unreachable')
 }
 
 // Cache temporário para associar dados coletados da listagem geral aos apenados
-// 🔄 OTIMIZAÇÃO: Limpeza automática a cada 50 páginas para evitar memory leak
-const listagemInfoCache = new Map<number, { cela?: string }>();
-
-let lastCacheClearPageCount = 0;
-
-function clearCacheIfNeeded(currentPageCount: number) {
-  if (currentPageCount % 50 === 0 && currentPageCount !== lastCacheClearPageCount) {
-    const sizeAntes = listagemInfoCache.size;
-    listagemInfoCache.clear();
-    lastCacheClearPageCount = currentPageCount;
-    console.log(`♻️ [Page ${currentPageCount}] Cache limpo: removidas ${sizeAntes} entradas`);
-  }
-}
+const listagemInfoCache = new Map<number, { cela?: string }>()
 
 // ── Situações que indicam que o apenado está fora do sistema prisional ──
 const SITUACOES_EXTRAMUROS = [
@@ -1358,116 +1183,11 @@ async function coletarIdsApenados(
 
   if (globalMode) {
     log(jobId, `Acessando listagem global cross-unit: ${SIPE_URL}/apenados/index`)
-
-    try {
-      await page.goto(`${SIPE_URL}/apenados/index`, {
-        waitUntil: 'networkidle',
-        timeout: 60_000,
-      })
-      log(jobId, `✓ Página carregada, aguardando tabela...`)
-
-      // Aguarda por scripts jQuery/DataTables carregarem
-      await page.waitForFunction(() => {
-        const w = window as any
-        return w.$ && w.$.fn && w.$.fn.dataTable
-      }, { timeout: 15_000 }).catch(() => {
-        log(jobId, `⚠️ jQuery/DataTables não detectado, continuando...`)
-      })
-
-      // Aguarda um pouco mais para scripts de carregamento de dados executarem
-      await page.waitForTimeout(2_000)
-      log(jobId, `✓ Scripts carregados, verificando tabela...`)
-    } catch (err) {
-      log(jobId, `⚠️ Erro ao navegar para /apenados/index: ${err}`)
-    }
-
-    // Aguarda a tabela ou conteúdo alternativo (pode usar div com dados, DataTable injetado, etc)
-    let tableDetected = false
-    try {
-      await page.waitForSelector('table', { timeout: 45_000 })
-      tableDetected = true
-      log(jobId, `✓ Tabela detectada`)
-    } catch (err) {
-      log(jobId, `⚠️ Timeout aguardando seletor 'table', verificando alternativas...`)
-
-      // Fallback: aguarda por conteúdo alternativo
-      try {
-        const pageContent = await page.waitForFunction(() => {
-          // Verifica se há DataTable carregado na memória
-          const w = window as any
-          const tables = w.$.fn?.dataTable?.fnTables?.(true) ?? w.DataTable?.tables?.({ visible: true, hidden: false }) ?? []
-          if (tables.length > 0) return true
-
-          // Verifica se há thead ou tbody na página
-          if (document.querySelector('thead') || document.querySelector('tbody')) return true
-
-          // Verifica se há alguma div com class contendo dados (padrão de DataTables moderno)
-          if (document.querySelector('[role="table"]') || document.querySelector('.datatable')) return true
-
-          // Log de debug: mostra o que tem na página
-          const bodyText = document.body?.innerText || ''
-          if (bodyText.includes('erro') || bodyText.includes('Erro') || bodyText.includes('ERROR')) {
-            console.log('Página contém mensagem de erro:', bodyText.substring(0, 200))
-          }
-
-          return false
-        }, { timeout: 30_000 }).catch(() => null)
-
-        if (pageContent) {
-          tableDetected = true
-          log(jobId, `✓ Tabela detectada via fallback`)
-        } else {
-          log(jobId, `⚠️ Nenhum elemento de tabela detectado após múltiplas tentativas`)
-        }
-      } catch (fallbackErr) {
-        log(jobId, `⚠️ Erro no fallback de detecção de tabela: ${fallbackErr}`)
-      }
-    }
-
-    if (!tableDetected) {
-      // Debug: obtem conteúdo detalhado da página para diagnóstico
-      const debugInfo = await page.evaluate(() => {
-        const heading = document.querySelector('h1, h2, h3')?.textContent
-        const errorDiv = document.querySelector('[class*="error"], [class*="alert"]')?.textContent
-        const bodyText = document.body?.innerText?.substring(0, 500) || ''
-        const hasTable = !!document.querySelector('table')
-        const hasForm = !!document.querySelector('form')
-        const titleTag = document.title
-        const mainContent = document.querySelector('main, [role="main"], .container, .content')?.textContent?.substring(0, 300) || ''
-
-        return {
-          heading,
-          errorDiv,
-          bodyText,
-          hasTable,
-          hasForm,
-          titleTag,
-          mainContent,
-          documentHeight: document.documentElement.scrollHeight,
-          bodyHeight: document.body?.scrollHeight,
-        }
-      }).catch(() => ({ error: 'Falha ao coletar debug' }))
-
-      log(jobId, `DEBUG: Página info: ${JSON.stringify(debugInfo, null, 2)}`)
-
-      // Tenta força uma recarga da página com reload
-      log(jobId, `💡 Tentando reload da página...`)
-      try {
-        await page.reload({ waitUntil: 'networkidle', timeout: 60_000 })
-        log(jobId, `✓ Página recarregada`)
-
-        // Tenta novamente detectar tabela após reload
-        const retryDebug = await page.evaluate(() => {
-          const tables = document.querySelectorAll('table')
-          const rows = document.querySelectorAll('table tr')
-          return { tableCount: tables.length, rowCount: rows.length }
-        }).catch(() => ({}))
-
-        log(jobId, `DEBUG após reload: ${JSON.stringify(retryDebug)}`)
-      } catch (reloadErr) {
-        log(jobId, `⚠️ Erro ao recarregar página: ${reloadErr}`)
-      }
-    }
+    await page.goto(`${SIPE_URL}/apenados/index`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 45_000,
+    })
+    await page.waitForSelector('table', { timeout: 30_000 })
   } else {
     let tableFound = false
     try {
@@ -1730,19 +1450,12 @@ async function coletarIdsApenados(
 
     try {
       pageNum++
-
-      // 🔧 OTIMIZAÇÃO: Limpeza de cache a cada 50 páginas
-      clearCacheIfNeeded(pageNum);
-
-      // 🔧 OTIMIZAÇÃO: Delay aumentado entre páginas (1-3s)
-      await page.waitForTimeout(1000 + Math.random() * 2000);
-
       await botaoLocator.click()
       await page.waitForTimeout(1000)
       const before = ids.size
       await extractIds()
       const novos = ids.size - before
-      log(jobId, `📄 Página ${pageNum}: +${novos} IDs (total: ${ids.size}, cache: ${listagemInfoCache.size} entradas)`)
+      log(jobId, `📄 Página ${pageNum}: +${novos} IDs (total: ${ids.size})`)
 
       if (novos === 0) {
         emptyConsecutivos++
@@ -1753,8 +1466,7 @@ async function coletarIdsApenados(
       } else {
         emptyConsecutivos = 0
       }
-    } catch (err) {
-      log(jobId, `⚠️ Erro ao processar página ${pageNum}: ${err}`);
+    } catch {
       continuar = false
     }
   }
@@ -1776,73 +1488,60 @@ async function scrapeApenadoFicha(
   unidadeNome?: string | null,
   useSearch = false
 ): Promise<void> {
-  let searchFailed = false
-
   if (useSearch) {
     // ── Busca cross-unit: contorna restrição de unidade da sessão ──
-    try {
-      await page.goto(
-        `${SIPE_URL}/apenados/index?escolha=nomeapenado&parametro=${sipeId}`,
-        { waitUntil: 'domcontentloaded', timeout: 45_000 }
-      )
+    await page.goto(
+      `${SIPE_URL}/apenados/index?escolha=nomeapenado&parametro=${sipeId}`,
+      { waitUntil: 'domcontentloaded', timeout: 45_000 }
+    )
 
-      // Verificar sessão expirada
-      const searchUrl = page.url()
-      if (
-        searchUrl.includes('/login') ||
-        searchUrl.includes('/selectRole') ||
-        searchUrl === `${SIPE_URL}/` ||
-        searchUrl === `${SIPE_URL}`
-      ) {
-        throw new Error('SESSAO_EXPIRADA')
-      }
-
-      // Localizar link do apenado na tabela de resultados
-      const link = await page.evaluate((id) => {
-        // 1. Procura linha da tabela que contenha o sipeId exato
-        const rows = Array.from(document.querySelectorAll('table tbody tr'))
-        for (const row of rows) {
-          const text = row.textContent ?? ''
-          if (text.includes(String(id))) {
-            const a = row.querySelector('a[href]') as HTMLAnchorElement | null
-            if (a?.href) return a.href
-          }
-        }
-        // 2. Fallback: qualquer link na página que contenha o sipeId na URL
-        const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[]
-        for (const a of anchors) {
-          if (a.href.includes(`/apenados/${id}`)) return a.href
-        }
-        return null
-      }, sipeId)
-
-      if (!link) {
-        throw new Error('SEARCH_LINK_NOT_FOUND')
-      }
-
-      // Navegar para o link encontrado (chega na /editar via fluxo legítimo de busca)
-      const editResponse = await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45_000 })
-
-      const editUrl = page.url()
-      if (editUrl.includes('/login') || editUrl.includes('/selectRole')) {
-        throw new Error('SESSAO_EXPIRADA')
-      }
-
-      const editStatus = editResponse?.status()
-      if (editStatus && (editStatus === 404 || editStatus === 403 || editStatus === 500)) {
-        throw new Error('SEARCH_ACCESS_FAILED')
-      }
-    } catch (searchErr: any) {
-      // Se busca falhar, tenta acesso direto como fallback
-      if (searchErr?.message === 'SESSAO_EXPIRADA') {
-        throw searchErr
-      }
-      searchFailed = true
+    // Verificar sessão expirada
+    const searchUrl = page.url()
+    if (
+      searchUrl.includes('/login') ||
+      searchUrl.includes('/selectRole') ||
+      searchUrl === `${SIPE_URL}/` ||
+      searchUrl === `${SIPE_URL}`
+    ) {
+      throw new Error('SESSAO_EXPIRADA')
     }
-  }
 
-  // ── Fallback para acesso direto se busca falhou ──
-  if (!useSearch || searchFailed) {
+    // Localizar link do apenado na tabela de resultados
+    const link = await page.evaluate((id) => {
+      // 1. Procura linha da tabela que contenha o sipeId exato
+      const rows = Array.from(document.querySelectorAll('table tbody tr'))
+      for (const row of rows) {
+        const text = row.textContent ?? ''
+        if (text.includes(String(id))) {
+          const a = row.querySelector('a[href]') as HTMLAnchorElement | null
+          if (a?.href) return a.href
+        }
+      }
+      // 2. Fallback: qualquer link na página que contenha o sipeId na URL
+      const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[]
+      for (const a of anchors) {
+        if (a.href.includes(`/apenados/${id}`)) return a.href
+      }
+      return null
+    }, sipeId)
+
+    if (!link) {
+      throw new Error('APENADO_NAO_ENCONTRADO')
+    }
+
+    // Navegar para o link encontrado (chega na /editar via fluxo legítimo de busca)
+    const editResponse = await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+
+    const editUrl = page.url()
+    if (editUrl.includes('/login') || editUrl.includes('/selectRole')) {
+      throw new Error('SESSAO_EXPIRADA')
+    }
+
+    const editStatus = editResponse?.status()
+    if (editStatus && (editStatus === 404 || editStatus === 403 || editStatus === 500)) {
+      throw new Error('APENADO_NAO_ENCONTRADO')
+    }
+  } else {
     // ── Fluxo original: acesso direto por URL ──
     const response = await page.goto(`${SIPE_URL}/apenados/${sipeId}/editar`, {
       waitUntil: 'domcontentloaded',
@@ -1905,18 +1604,6 @@ async function scrapeApenadoFicha(
     const unidadeMatch = bodyText.match(/Unidade:\s*([^\n]+)/i) || bodyText.match(/Estabelecimento:\s*([^\n]+)/i) || bodyText.match(/Unidade\s*Prisional:\s*([^\n]+)/i)
     if (unidadeMatch) {
       unidadeFicha = unidadeMatch[1].trim()
-    }
-
-    // Extract situacao first before we potentially use it as fallback
-    let situacaoExtract = null
-    const situacaoEl = document.querySelector('[name="situacao"]') as HTMLSelectElement | null
-    if (situacaoEl) {
-      situacaoExtract = situacaoEl.options[situacaoEl.selectedIndex]?.text?.trim() || null
-    }
-
-    // Fallback: if unidade is empty but situacao exists, use situacao as unidade label
-    if (!unidadeFicha && situacaoExtract) {
-      unidadeFicha = situacaoExtract
     }
 
     return {
@@ -2186,11 +1873,7 @@ async function scrapeApenadoFicha(
       updateData.matricula = dados.rji || dados.cpf;
     }
 
-    // Atualiza unidade se: (1) não tem unidade OU (2) vem de GLOBAL e agora tem unidade real
-    if (unidade && (
-      !localApenado.unidade ||
-      localApenado.unidade === 'Todas as Unidades (Global)'
-    )) {
+    if (!localApenado.unidade && unidade) {
       updateData.unidade = unidade;
     }
     if (!localApenado.faccao && faccaoNome) {
@@ -3314,11 +2997,7 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
         }
       });
     } else {
-      // Atualiza unidade se: (1) não tem unidade OU (2) vem de GLOBAL e agora tem unidade real
-      if (ap.unidade && (
-        !localApenado.unidade ||
-        localApenado.unidade === 'Todas as Unidades (Global)'
-      )) {
+      if (!localApenado.unidade && ap.unidade) {
         localApenado = await prisma.apenado.update({
           where: { id: localApenado.id },
           data: { unidade: ap.unidade }
@@ -3358,11 +3037,7 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
     } else {
       // Se ele já existe, atualiza informações básicas de cela e unidade se estiverem nulas/vazias
       const updateData: any = {}
-      // Atualiza unidade se: (1) não tem unidade OU (2) vem de GLOBAL e agora tem unidade real
-      if (ap.unidade && (
-        !apenado.unidade ||
-        apenado.unidade === 'Todas as Unidades (Global)'
-      )) updateData.unidade = ap.unidade
+      if (!apenado.unidade && ap.unidade) updateData.unidade = ap.unidade
       if (!apenado.cela && ap.cela) updateData.cela = ap.cela
       if (!apenado.tempoPena && ap.tempoPena) updateData.tempoPena = ap.tempoPena
       if (!apenado.dataNascimento && ap.dataNascimento) updateData.dataNascimento = ap.dataNascimento
