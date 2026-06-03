@@ -33,20 +33,93 @@ export function Header({ user }: HeaderProps) {
     return () => clearInterval(timer);
   }, []);
 
+  // ── Geolocation tracking com reverse geocoding e retry ──
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-        await fetch('/api/geolocation', {
+    if (!navigator.geolocation) {
+      console.warn('[Geo] Geolocalização não suportada pelo navegador');
+      return;
+    }
+
+    const submitLocation = async (lat: number, lng: number, accuracy: number) => {
+      try {
+        // Reverse geocoding via Nominatim (OpenStreetMap)
+        const geoRes = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+          { signal: AbortSignal.timeout(5000) }
+        );
+        let address = null;
+        if (geoRes.ok) {
+          const geoData = await geoRes.json();
+          address = geoData.address?.city || geoData.address?.town || geoData.address?.village ||
+                   geoData.address?.county || geoData.name || null;
+        }
+
+        // POST para backend
+        const res = await fetch('/api/geolocation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
+            lat,
+            lng,
+            accuracy,
+            address,
           }),
         });
-      }, () => {}, { enableHighAccuracy: true, timeout: 10000 });
-    }
+
+        if (!res.ok) {
+          console.warn(`[Geo] API error: ${res.status}`);
+          return false;
+        }
+
+        const data = await res.json();
+        if (data.success) {
+          console.log(`[Geo] ✓ Localização enviada: ${address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}`);
+          return true;
+        }
+        return false;
+      } catch (err) {
+        console.warn(`[Geo] Erro ao submeter: ${err instanceof Error ? err.message : String(err)}`);
+        return false;
+      }
+    };
+
+    const requestLocation = async (attempt = 1) => {
+      const maxAttempts = 3;
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const success = await submitLocation(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            pos.coords.accuracy
+          );
+          if (!success && attempt < maxAttempts) {
+            console.log(`[Geo] Retry ${attempt}/${maxAttempts - 1}...`);
+            setTimeout(() => requestLocation(attempt + 1), 2000);
+          }
+        },
+        (error) => {
+          let msg = 'Erro desconhecido';
+          if (error.code === 1) msg = 'Permissão negada';
+          else if (error.code === 2) msg = 'Posição indisponível (sem sinal GPS)';
+          else if (error.code === 3) msg = 'Timeout ao adquirir GPS';
+
+          console.warn(`[Geo] ${msg} (tentativa ${attempt}/${maxAttempts})`);
+
+          if (attempt < maxAttempts && error.code !== 1) {
+            // Retry apenas se não for permissão negada
+            setTimeout(() => requestLocation(attempt + 1), 3000);
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 20000,  // Aumentado de 10s para 20s
+          maximumAge: 0,   // Sempre requisitar nova posição, não usar cache
+        }
+      );
+    };
+
+    requestLocation();
   }, []);
 
   useEffect(() => {

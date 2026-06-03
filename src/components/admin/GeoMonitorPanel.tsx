@@ -48,14 +48,46 @@ interface Props {
   onlineUsers: OnlineUser[];
 }
 
+interface GeoStats {
+  enabled: boolean;
+  timeRange: string;
+  stats: {
+    totalRecords: number;
+    recentRecords: number;
+    usersWithLocation: number;
+    activeUsersInRange: number;
+    avgPointsPerUser: number;
+    topUsers: any[];
+  };
+  health: {
+    isHealthy: boolean;
+    lastUpdate: string;
+    activeCount: number;
+  };
+}
+
 export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [tileStyle, setTileStyle] = useState<TileStyle>('standard');
   const [userTrail, setUserTrail] = useState<LocationEntry[] | null>(null);
   const [trailLoading, setTrailLoading] = useState(false);
+  const [geoStats, setGeoStats] = useState<GeoStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   const onlineIds = useMemo(() => new Set(onlineUsers.map((u) => u.id)), [onlineUsers]);
+
+  // Fetch stats on mount
+  useEffect(() => {
+    setStatsLoading(true);
+    fetch('/api/geolocation/stats?range=24h')
+      .then((r) => r.json())
+      .then((data: GeoStats) => {
+        setGeoStats(data);
+        setStatsLoading(false);
+      })
+      .catch(() => setStatsLoading(false));
+  }, []);
 
   // Fetch the 4-hour trail whenever a user is selected
   useEffect(() => {
@@ -124,6 +156,32 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Health Status */}
+      {geoStats && (
+        <div className={`card p-4 border-l-4 ${
+          geoStats.health.isHealthy
+            ? 'border-l-green-500 bg-green-50 dark:bg-green-900/10'
+            : 'border-l-amber-500 bg-amber-50 dark:bg-amber-900/10'
+        }`}>
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              <div className={`w-3 h-3 rounded-full mt-1.5 flex-shrink-0 ${
+                geoStats.health.isHealthy ? 'bg-green-500' : 'bg-amber-500'
+              }`} />
+              <div>
+                <p className="font-semibold text-sm">
+                  {geoStats.enabled ? '✓ Geolocalização ativa' : '⚠ Geolocalização desabilitada'}
+                </p>
+                <p className="text-xs text-body/70 mt-1">
+                  {geoStats.stats.recentRecords} pontos nas últimas 24h • {geoStats.stats.activeUsersInRange} usuários ativos
+                </p>
+              </div>
+            </div>
+            {statsLoading && <Loader2 className="w-4 h-4 animate-spin text-subtle" />}
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
