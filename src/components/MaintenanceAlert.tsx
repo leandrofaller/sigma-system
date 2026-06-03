@@ -51,7 +51,9 @@ export function MaintenanceAlert() {
       const diff = graceTime - now
 
       if (diff <= 0) {
-        setTimeRemaining('Começando agora!')
+        // Quando o prazo passa, desaparece o aviso automaticamente
+        setMaintenance(null)
+        setTimeRemaining('')
         return
       }
 
