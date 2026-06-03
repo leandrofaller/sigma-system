@@ -134,7 +134,8 @@
       "Bash(rtk npm *)",
       "Bash(git checkout *)",
       "Bash(git switch *)",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(git show *)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
