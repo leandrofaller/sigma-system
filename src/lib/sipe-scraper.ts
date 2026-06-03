@@ -1350,9 +1350,9 @@ async function coletarIdsApenados(
       let draw = 1
       let hasMore = true
 
-      // Modo teste: limitar a 2 páginas (1000 IDs)
+      // Modo teste: limitar a 3 páginas (~1500 IDs)
       const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
-      const maxPages = testMode ? 2 : Infinity
+      const maxPages = testMode ? 3 : Infinity
 
       while (hasMore) {
         // Se estamos em modo teste e já ultrapassamos o limite, parar
