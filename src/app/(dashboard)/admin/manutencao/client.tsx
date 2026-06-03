@@ -36,13 +36,13 @@ export default function ManutencaoClient() {
 
   const fetchMaintenances = async () => {
     try {
-      const res = await fetch('/api/system/maintenance')
-      const data = await res.json()
-      // Buscar todos
-      const allRes = await fetch('/api/system/maintenance/list')
+      // Buscar todos os avisos (requer admin)
+      const allRes = await fetch('/api/system/maintenance?all=true')
       if (allRes.ok) {
         const allData = await allRes.json()
         setMaintenances(allData.maintenance || [])
+      } else {
+        console.error('Erro ao carregar avisos:', allRes.status)
       }
     } catch (err) {
       console.error('Erro ao carregar avisos:', err)
