@@ -2155,9 +2155,10 @@ async function scrapeApenadoFicha(
       console.log(`[AIP] ✅ Apenado #${sipeId} atualizado em AIP (unidade="${aipSyncData.unidade}")`)
     } else {
       // CRIAR novo registro em AIP com dados do SIPE
-      // IMPORTANTE: Conectar com sipeApenadoImportado (relação obrigatória)
+      // IMPORTANTE: Passar AMBOS sipeApenadoId (relação) e sipeId (campo próprio)
       await prisma.aIPApenado.create({
         data: {
+          sipeId: apenado.sipeId,  // Campo próprio de aIPApenado
           sipeApenadoId: apenado.sipeId,  // Conectar com registro em sipeApenadoImportado
           ...aipSyncData,
           cadastradoPor: 'SIPE_SCRAPER'
