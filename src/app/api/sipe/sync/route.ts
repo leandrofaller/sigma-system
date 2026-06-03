@@ -67,6 +67,34 @@ export async function POST(req: NextRequest) {
   const engineParam = body.engine || req.nextUrl.searchParams.get('engine')
   const engine = (engineParam === 'firecrawl') ? 'firecrawl' : 'playwright'
 
+  // Verificar disponibilidade do Firecrawl se solicitado
+  if (engine === 'firecrawl') {
+    try {
+      const firecrawlUrl = process.env.FIRECRAWL_BASE_URL || 'http://localhost:3002'
+      const response = await fetch(`${firecrawlUrl}/health`, {
+        method: 'GET',
+        timeout: 5000
+      })
+      if (!response.ok) {
+        return NextResponse.json(
+          {
+            error: 'Firecrawl não está disponível',
+            details: `Verifique se Firecrawl está rodando em ${firecrawlUrl}. Execute: docker run -p 3002:3002 mendableai/firecrawl:latest`
+          },
+          { status: 503 }
+        )
+      }
+    } catch (err) {
+      return NextResponse.json(
+        {
+          error: 'Firecrawl não está disponível',
+          details: `Erro ao conectar em ${process.env.FIRECRAWL_BASE_URL || 'http://localhost:3002'}. Certifique-se que Firecrawl está rodando.`
+        },
+        { status: 503 }
+      )
+    }
+  }
+
   const { unidadeId = '3', tipo = 'APENADOS', resumeJobId, idsManual } = body
 
   // Validação para GLOBAL_TESTE
