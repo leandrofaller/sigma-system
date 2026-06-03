@@ -132,7 +132,9 @@
       "Bash(pkill -f \"next\")",
       "Bash(rm -rf .next)",
       "Bash(rtk npm *)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git merge *)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
