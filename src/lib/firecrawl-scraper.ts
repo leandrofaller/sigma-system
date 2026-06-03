@@ -265,6 +265,13 @@ async function scrapeApenadoFichaFirecrawl(
     // como fallback quando unidade parameter é null/undefined
     const resolvedUnidade = unidade || dados.unidadeFicha || undefined
 
+    // DEBUG: Log para verificar se unidade está sendo extraída
+    if (!unidade && dados.unidadeFicha) {
+      console.log(`[FIRECRAWL] ✅ GLOBAL fallback - Apenado #${sipeId}: unidadeParam=${unidade}, unidadeFicha="${dados.unidadeFicha}" => usando "${resolvedUnidade}"`)
+    } else if (!unidade && !dados.unidadeFicha) {
+      console.log(`[FIRECRAWL] ⚠️ GLOBAL sem fallback - Apenado #${sipeId}: unidadeParam=${unidade}, unidadeFicha=${dados.unidadeFicha} => resolvedUnidade=${resolvedUnidade}`)
+    }
+
     // Prepare upsert data
     const upsertData = {
       nome: dados.nome || 'SEM NOME',
@@ -355,6 +362,7 @@ async function scrapeApenadoFichaFirecrawl(
           where: { id: apenadoEmAIP.id },
           data: aipSyncData
         })
+        console.log(`[FIRECRAWL-AIP] ✅ Apenado #${sipeId} atualizado em AIP (unidade="${aipSyncData.unidade}")`)
       } else {
         // CRIAR novo registro em AIP com dados do SIPE
         await prisma.aIPApenado.create({
@@ -364,6 +372,7 @@ async function scrapeApenadoFichaFirecrawl(
             cadastradoPor: 'FIRECRAWL_SCRAPER'
           }
         })
+        console.log(`[FIRECRAWL-AIP] ✅ Apenado #${sipeId} CRIADO em AIP (unidade="${aipSyncData.unidade}")`)
       }
     } catch (err) {
       console.error(`Erro ao sincronizar com AIP para apenado #${sipeId}:`, err)

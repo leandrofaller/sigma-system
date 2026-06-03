@@ -2029,6 +2029,13 @@ async function scrapeApenadoFicha(
   // como fallback quando unidade parameter é null/undefined
   const resolvedUnidade = unidade || dados.unidadeFicha || undefined
 
+  // DEBUG: Log para verificar se unidade está sendo extraída
+  if (!unidade && dados.unidadeFicha) {
+    console.log(`[SCRAPER] ✅ GLOBAL fallback - Apenado #${sipeId}: unidadeParam=${unidade}, unidadeFicha="${dados.unidadeFicha}" => usando "${resolvedUnidade}"`)
+  } else if (!unidade && !dados.unidadeFicha) {
+    console.log(`[SCRAPER] ⚠️ GLOBAL sem fallback - Apenado #${sipeId}: unidadeParam=${unidade}, unidadeFicha=${dados.unidadeFicha} => resolvedUnidade=${resolvedUnidade}`)
+  }
+
   const upsertData = {
     nome: dados.nome || 'SEM NOME',
     nomeOutro: dados.nomeOutro,
@@ -2145,6 +2152,7 @@ async function scrapeApenadoFicha(
       }).catch((err) => {
         console.error(`[AIP] Erro ao sincronizar ${sipeId}:`, err.message)
       })
+      console.log(`[AIP] ✅ Apenado #${sipeId} atualizado em AIP (unidade="${aipSyncData.unidade}")`)
     } else {
       // CRIAR novo registro em AIP com dados do SIPE
       await prisma.aIPApenado.create({
@@ -2156,6 +2164,7 @@ async function scrapeApenadoFicha(
       }).catch((err) => {
         console.error(`[AIP] Erro ao criar apenado ${sipeId}:`, err.message)
       })
+      console.log(`[AIP] ✅ Apenado #${sipeId} CRIADO em AIP (unidade="${aipSyncData.unidade}")`)
     }
   } catch (err) {
     console.error(`[AIP] Erro na sincronização AIP:`, err)
