@@ -7,8 +7,7 @@ import { AIPanel } from './AIPanel'
 import { AIPFaccoesPanel } from './AIPFaccoesPanel'
 import { AIPAdvogadosPanel } from './AIPAdvogadosPanel'
 import { AIPVisitantesPanel } from './AIPVisitantesPanel'
-import { MuralClient } from '../aip/MuralClient'
-import { Brain, BarChart2, Users, Shield, Briefcase, Camera, Calendar } from 'lucide-react'
+import { Brain, BarChart2, Users, Shield, Briefcase, Camera } from 'lucide-react'
 
 interface AIPClientProps {
   userRole: string
@@ -60,10 +59,6 @@ export function AIPClient({ userRole }: AIPClientProps) {
               <Camera className="w-4 h-4" />
               Visitantes
             </TabsTrigger>
-            <TabsTrigger value="mural" className="gap-2">
-              <Calendar className="w-4 h-4" />
-              Mural de Eventos
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="flex-1 min-h-0 mt-0 overflow-y-auto">
@@ -84,10 +79,6 @@ export function AIPClient({ userRole }: AIPClientProps) {
 
           <TabsContent value="visitantes" className="flex-1 min-h-0 mt-0 overflow-y-auto">
             <AIPVisitantesPanel />
-          </TabsContent>
-
-          <TabsContent value="mural" className="flex-1 min-h-0 mt-0">
-            <MuralClient userRole={userRole} />
           </TabsContent>
         </Tabs>
       </div>
