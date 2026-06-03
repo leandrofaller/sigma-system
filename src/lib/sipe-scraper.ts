@@ -1736,12 +1736,12 @@ async function scrapeApenadoFicha(
       return null
     }
 
-    const sexoValue = selVal('sexo') || extractLabel('Sexo')
+    const sexoValue = selVal('sexo') || extractLabel('Sexo') || extractLabel('Sexo:') || extractLabel('Gênero')
     const etniaValue = selVal('fk_etnia') || extractLabel('Etnia')
     const estadoCivilValue = selVal('fk_estadocivil') || extractLabel('Estado Civil')
     const grauInstrucaoValue = selVal('fk_grauinstrucao') || extractLabel('Grau de Instrução') || extractLabel('Grau Instrução') || extractLabel('Instrução')
     const religiaoValue = selVal('fk_religiao') || extractLabel('Religião')
-    const situacaoValue = selVal('situacao') || extractLabel('Situação')
+    const situacaoValue = selVal('situacao') || extractLabel('Situação') || extractLabel('Situação:') || extractLabel('Status')
 
     return {
       nome: val('nomeapenado'),

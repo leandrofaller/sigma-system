@@ -16,9 +16,7 @@ export async function GET(req: NextRequest) {
   const limit = parseInt(searchParams.get('limit') || '20')
   const skip = (page - 1) * limit
 
-  const where: Record<string, any> = {
-    sexo: { not: null }
-  }
+  const where: Record<string, any> = {}
 
   if (q) {
     where.OR = [
