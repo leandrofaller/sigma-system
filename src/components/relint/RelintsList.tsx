@@ -12,6 +12,7 @@ interface Props {
   relints: RelintWithRelations[];
   role: string;
   userId: string;
+  userGroupId?: string | null;
 }
 
 const statusColors: Record<string, string> = {
@@ -25,7 +26,7 @@ const statusLabels: Record<string, string> = {
   DRAFT: 'Rascunho', PUBLISHED: 'Publicado', ARCHIVED: 'Arquivado', DELETION_REQUESTED: 'Exclusão Pendente',
 };
 
-export function RelintsList({ relints, role, userId }: Props) {
+export function RelintsList({ relints, role, userId, userGroupId }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -147,12 +148,14 @@ export function RelintsList({ relints, role, userId }: Props) {
                         className="p-1.5 text-gray-400 hover:text-sigma-600 dark:hover:text-sigma-400 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 rounded-lg transition-colors">
                         <Eye className="w-4 h-4" />
                       </Link>
-                      <Link href={`/relints/${relint.id}/editar`}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
-                        <Pencil className="w-4 h-4" />
-                      </Link>
+                      {(role === 'SUPER_ADMIN' || role === 'ADMIN' || relint.authorId === userId || relint.groupId === userGroupId) && (
+                        <Link href={`/relints/${relint.id}/editar`}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                          <Pencil className="w-4 h-4" />
+                        </Link>
+                      )}
 
-                      {(role === 'SUPER_ADMIN' || role === 'ADMIN' || relint.authorId === userId) && (
+                      {(role === 'SUPER_ADMIN' || role === 'ADMIN' || relint.authorId === userId || relint.groupId === userGroupId) && (
                         <button
                           onClick={() => handleDelete(relint.id, relint.status)}
                           disabled={deletingId === relint.id || (relint.status === 'DELETION_REQUESTED' && relint.authorId === userId && role !== 'SUPER_ADMIN' && role !== 'ADMIN')}

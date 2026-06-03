@@ -52,7 +52,7 @@ export default async function DebriefingsPage() {
           </p>
         </div>
       </div>
-      <DebriefingsList debriefings={debriefings} role={user.role} userId={user.id} />
+      <DebriefingsList debriefings={debriefings} role={user.role} userId={user.id} userGroupId={user.groupId} />
     </div>
   );
 }
