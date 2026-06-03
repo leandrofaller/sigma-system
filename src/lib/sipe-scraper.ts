@@ -1313,11 +1313,20 @@ async function coletarIdsApenados(
   }).catch(() => [])
 
   if (apenadosViaApi.length > 0) {
-    log(jobId, `⚡ Estratégia A (DataTables JS API): ${apenadosViaApi.length} IDs`)
+    // Modo teste: limitar a 150 IDs
+    const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
+    let idsFinais = [...new Set(apenadosViaApi.map(item => item.id))]
+
+    if (testMode && idsFinais.length > 150) {
+      console.log(`[TESTE] Limitando de ${idsFinais.length} para 150 IDs`)
+      idsFinais = idsFinais.slice(0, 150)
+    }
+
+    log(jobId, `⚡ Estratégia A (DataTables JS API): ${idsFinais.length} IDs`)
     for (const item of apenadosViaApi) {
       if (item.cela) listagemInfoCache.set(item.id, { cela: item.cela })
     }
-    return [...new Set(apenadosViaApi.map(item => item.id))]
+    return idsFinais
   }
 
   log(jobId, '⚠️ Estratégia A sem resultado — tentando estratégia B (fetch direto paginado)')
@@ -1413,11 +1422,20 @@ async function coletarIdsApenados(
   }, SIPE_URL).catch(() => [])
 
   if (apenadosViaFetch.length > 0) {
-    log(jobId, `⚡ Estratégia B (fetch direto paginado): ${apenadosViaFetch.length} IDs`)
+    // Modo teste: limitar a 150 IDs
+    const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
+    let idsFinais = [...new Set(apenadosViaFetch.map(item => item.id))]
+
+    if (testMode && idsFinais.length > 150) {
+      console.log(`[TESTE] Limitando de ${idsFinais.length} para 150 IDs`)
+      idsFinais = idsFinais.slice(0, 150)
+    }
+
+    log(jobId, `⚡ Estratégia B (fetch direto paginado): ${idsFinais.length} IDs`)
     for (const item of apenadosViaFetch) {
       if (item.cela) listagemInfoCache.set(item.id, { cela: item.cela })
     }
-    return [...new Set(apenadosViaFetch.map(item => item.id))]
+    return idsFinais
   }
 
   log(jobId, '⚠️ Estratégia B sem resultado — usando estratégia C (DOM + paginação)')
@@ -1543,13 +1561,22 @@ async function coletarIdsApenados(
     }
   }
 
-  log(jobId, `✅ Total IDs coletados: ${ids.size}`)
-  if (ids.size <= 50) {
-    log(jobId, `🔍 Todos os IDs: ${[...ids].sort((a, b) => a - b).join(', ')}`)
-  } else {
-    log(jobId, `🔍 IDs (primeiros 30): ${[...ids].sort((a, b) => a - b).slice(0, 30).join(', ')}`)
+  // Modo teste: limitar a 150 IDs
+  const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
+  let idsFinais = [...ids]
+
+  if (testMode && idsFinais.length > 150) {
+    console.log(`[TESTE] Limitando de ${idsFinais.length} para 150 IDs`)
+    idsFinais = idsFinais.slice(0, 150)
   }
-  return [...ids]
+
+  log(jobId, `✅ Total IDs coletados: ${idsFinais.length}`)
+  if (idsFinais.length <= 50) {
+    log(jobId, `🔍 Todos os IDs: ${idsFinais.sort((a, b) => a - b).join(', ')}`)
+  } else {
+    log(jobId, `🔍 IDs (primeiros 30): ${idsFinais.sort((a, b) => a - b).slice(0, 30).join(', ')}`)
+  }
+  return idsFinais
 }
 
 // ── Ficha scraping ────────────────────────────────────────────
