@@ -135,7 +135,11 @@
       "Bash(git checkout *)",
       "Bash(git switch *)",
       "Bash(git merge *)",
-      "Bash(git show *)"
+      "Bash(git show *)",
+      "Bash(Get-ChildItem -Path \"F:\\\\relatorio_claude\\\\src\\\\app\" -Recurse -Directory)",
+      "Bash(cd /F/relatorio_claude && find . -type f -name \"*.prisma\" | head -20)",
+      "Bash(grep -E \"\\(stats|route\\\\.ts$\\)\")",
+      "Bash(xargs grep -l \"letterCounts\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
