@@ -1546,7 +1546,12 @@ async function coletarIdsApenados(
       const novos = ids.size - before
       log(jobId, `📄 Página ${pageNum}: +${novos} IDs (total: ${ids.size}, cache: ${listagemInfoCache.size} entradas)`)
 
-      if (novos === 0) {
+      // Modo teste: parar ao atingir 150 IDs
+      const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
+      if (testMode && ids.size >= 150) {
+        log(jobId, `🧪 TESTE: Limite de 150 IDs atingido, parando paginação`)
+        continuar = false
+      } else if (novos === 0) {
         emptyConsecutivos++
         if (emptyConsecutivos >= MAX_VAZIAS) {
           log(jobId, `📄 ${MAX_VAZIAS} páginas consecutivas sem IDs novos — encerrando`)
