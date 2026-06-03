@@ -1653,8 +1653,9 @@ async function scrapeApenadoFicha(
       return el?.options[el.selectedIndex]?.text?.trim() || null
     }
 
-    // Busca textual de contingência para cela e unidade no corpo da página (caso o cache da listagem falhe)
+    // Busca textual de contingência para cela, unidade e campos select via regex
     const bodyText = document.body?.innerText || ''
+
     let celaFicha = null
     const celaMatch = bodyText.match(/Cela:\s*([^\n]+)/i) || bodyText.match(/Cela\s*-\s*([^\n]+)/i)
     if (celaMatch) {
@@ -1667,6 +1668,19 @@ async function scrapeApenadoFicha(
       unidadeFicha = unidadeMatch[1].trim()
     }
 
+    // Extração via regex para campos que vêm como texto (não selects)
+    const extractLabel = (label: string): string | null => {
+      const match = bodyText.match(new RegExp(`${label}\\s*[\\n:]*\\s*([^\\n]+)`, 'i'))
+      return match ? match[1].trim() : null
+    }
+
+    const sexoValue = selVal('sexo') || extractLabel('Sexo')
+    const etniaValue = selVal('fk_etnia') || extractLabel('Etnia')
+    const estadoCivilValue = selVal('fk_estadocivil') || extractLabel('Estado Civil')
+    const grauInstrucaoValue = selVal('fk_grauinstrucao') || extractLabel('Grau\\s+(?:de\\s+)?Instrução')
+    const religiaoValue = selVal('fk_religiao') || extractLabel('Religião')
+    const situacaoValue = selVal('situacao') || extractLabel('Situação')
+
     return {
       nome: val('nomeapenado'),
       nomeOutro: val('nomefalso'),
@@ -1675,13 +1689,13 @@ async function scrapeApenadoFicha(
       rgOrgao: val('orgaoexpedidor'),
       dataNascimento: val('datanascimento'),
       naturalidade: val('distrito'),
-      sexo: selVal('sexo'),
-      etnia: selVal('fk_etnia'),
-      orientacaoSexual: selVal('homosexual'),
-      tipoSanguineo: selVal('tiposanguineo'),
-      grauInstrucao: selVal('fk_grauinstrucao'),
-      religiao: selVal('fk_religiao'),
-      estadoCivil: selVal('fk_estadocivil'),
+      sexo: sexoValue,
+      etnia: etniaValue,
+      orientacaoSexual: selVal('homosexual') || extractLabel('Orientação\\s+Sexual'),
+      tipoSanguineo: selVal('tiposanguineo') || extractLabel('Tipo\\s+(?:de\\s+)?Sanguíneo'),
+      grauInstrucao: grauInstrucaoValue,
+      religiao: religiaoValue,
+      estadoCivil: estadoCivilValue,
       nomeConjuge: val('nomeesposa'),
       qtdFilhos: parseInt(val('qtdfilhos') || '0') || null,
       nomeMae: val('nomemae'),
@@ -1689,7 +1703,7 @@ async function scrapeApenadoFicha(
       telefone: val('telefone'),
       rji: val('rji'),
       regime: val('regime'),
-      situacao: selVal('situacao'),
+      situacao: situacaoValue,
       dataEntrada: val('dataentrada'),
       dataPrisao: val('dataprisao'),
       tempoPena: val('tempodepena'),

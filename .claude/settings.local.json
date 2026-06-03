@@ -139,7 +139,22 @@
       "Bash(Get-ChildItem -Path \"F:\\\\relatorio_claude\\\\src\\\\app\" -Recurse -Directory)",
       "Bash(cd /F/relatorio_claude && find . -type f -name \"*.prisma\" | head -20)",
       "Bash(grep -E \"\\(stats|route\\\\.ts$\\)\")",
-      "Bash(xargs grep -l \"letterCounts\")"
+      "Bash(xargs grep -l \"letterCounts\")",
+      "Bash(Get-ChildItem -Path \"F:\\\\relatorio_claude\" -Recurse -Filter \"src\" -Directory)",
+      "Bash(Select-Object -First 5)",
+      "Bash(grep -E \"\\\\.\\(prisma|ts|tsx|js|jsx\\)$\")",
+      "Bash(pkill -f node)",
+      "Bash(taskkill /F /IM node.exe)",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force -ErrorAction SilentlyContinue)",
+      "Bash(git revert *)",
+      "Bash(cd \"F:/relatorio_claude\" && git show 31b84e9:src/lib/sipe-scraper.ts > /tmp/stable-scraper.ts && wc -l /tmp/stable-scraper.ts)",
+      "Bash(psql -h 187.127.19.137 -U sigma_user -d sigma_db -c \"\\\\dt sipe_*\")",
+      "Bash(npm search *)",
+      "Bash(cat > *)",
+      "Bash(node)",
+      "Bash(file scratch/ficha-geral-*.html)",
+      "Bash(xargs ls -lh)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
