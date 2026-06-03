@@ -218,7 +218,7 @@ export async function POST(req: NextRequest) {
         status: 'RUNNING',
         iniciadoEm: new Date(),
         criadoPor: session.user.id,
-        log: isTeste ? 'Teste: limitado a 3 páginas (~1500 IDs)' : null,
+        log: isTeste ? 'Teste: limitado a 150 IDs' : null,
       },
     })
 

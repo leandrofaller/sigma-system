@@ -621,11 +621,11 @@ export function SyncPanel() {
           <button
             onClick={() => startSync('GLOBAL_TESTE', 'playwright')}
             disabled={isActive || loading}
-            title="Testa o scraping com 3 páginas de IDs (~1500 apenados) - inicia extração após coleta"
+            title="Testa o scraping com apenas 150 IDs - rápido para validar mudanças no código"
             className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
           >
             <Play className="w-4 h-4" />
-            🧪 Scraping Global TESTE (3 páginas)
+            🧪 Scraping Global TESTE (150 IDs)
           </button>
         </div>
       </div>

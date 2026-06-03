@@ -1350,18 +1350,11 @@ async function coletarIdsApenados(
       let draw = 1
       let hasMore = true
 
-      // Modo teste: limitar a 3 páginas (~1500 IDs)
+      // Modo teste: limitar a 150 IDs
       const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
-      const maxPages = testMode ? 3 : Infinity
+      const maxIds = testMode ? 150 : Infinity
 
       while (hasMore) {
-        // Se estamos em modo teste e já ultrapassamos o limite, parar
-        if (testMode && draw > maxPages) {
-          console.log(`[TESTE] Limite de ${maxPages} páginas atingido, parando coleta`)
-          hasMore = false
-          break
-        }
-
         const params = new URLSearchParams({
           draw: String(draw++),
           start: String(start),
@@ -1388,6 +1381,13 @@ async function coletarIdsApenados(
 
         const totalRecords = json.recordsFiltered ?? json.recordsTotal ?? rows.length
         start += length
+
+        // Modo teste: parar ao atingir 150 IDs
+        if (testMode && allRows.length >= maxIds) {
+          console.log(`[TESTE] Limite de ${maxIds} IDs atingido, parando coleta`)
+          hasMore = false
+          break
+        }
 
         // Se já puxamos tudo ou se o lote atual retornou menos que o solicitado (fim da lista)
         if (allRows.length >= totalRecords || rows.length < length) {
