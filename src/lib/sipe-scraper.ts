@@ -1707,15 +1707,34 @@ async function scrapeApenadoFicha(
     }
 
     // Extração via regex para campos que vêm como texto (não selects)
+    // Versão melhorada com múltiplos padrões
     const extractLabel = (label: string): string | null => {
-      const match = bodyText.match(new RegExp(`${label}\\s*[\\n:]*\\s*([^\\n]+)`, 'i'))
-      return match ? match[1].trim() : null
+      // Padrão 1: "Label : Valor" ou "Label Valor" (mesmo na linha)
+      let match = bodyText.match(new RegExp(`${label}\\s*:?\\s*([^\\n]+)`, 'i'))
+      if (match) {
+        const value = match[1].trim()
+        // Remove valores vazios ou inúteis
+        if (value && value.length > 0 && !value.match(/^[\s•\-–—]+$/)) {
+          return value
+        }
+      }
+
+      // Padrão 2: "Label" em uma linha, valor na próxima
+      match = bodyText.match(new RegExp(`${label}\\s*[\\n\\r]+\\s*([^\\n]+)`, 'i'))
+      if (match) {
+        const value = match[1].trim()
+        if (value && value.length > 0 && !value.match(/^[\s•\-–—]+$/)) {
+          return value
+        }
+      }
+
+      return null
     }
 
     const sexoValue = selVal('sexo') || extractLabel('Sexo')
     const etniaValue = selVal('fk_etnia') || extractLabel('Etnia')
     const estadoCivilValue = selVal('fk_estadocivil') || extractLabel('Estado Civil')
-    const grauInstrucaoValue = selVal('fk_grauinstrucao') || extractLabel('Grau\\s+(?:de\\s+)?Instrução')
+    const grauInstrucaoValue = selVal('fk_grauinstrucao') || extractLabel('Grau de Instrução') || extractLabel('Grau Instrução') || extractLabel('Instrução')
     const religiaoValue = selVal('fk_religiao') || extractLabel('Religião')
     const situacaoValue = selVal('situacao') || extractLabel('Situação')
 
