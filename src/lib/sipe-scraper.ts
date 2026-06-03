@@ -1044,110 +1044,115 @@ async function runScrapeTodasUnidades(jobId: string): Promise<void> {
         }
       }
 
-      // Processa apenados da unidade atual
+      // Processa apenados da unidade atual com 8 workers paralelos
       const apenadosIds = [...checkpoint.currentApenadosIds]
-      let lastProcessedId: number | undefined
-      let checkpointBatchCount = 0; // 🔧 OTIMIZAÇÃO: Batched checkpoints
-      let pageRenewCount = 0; // 🔧 OTIMIZAÇÃO: Page renewal
 
+      // Criar pool de 8 contextos para paralelização
+      log(jobId, `🔧 Preparando ${POOL_SIZE} workers para paralelização da unidade "${u.nome}"...`)
+      const contextPool = await createContextPool(POOL_SIZE)
+      const pagePool = await Promise.all(
+        Array.from({ length: POOL_SIZE }, async (_, i) => {
+          const p = await contextPool[i].newPage()
+          const loginUnidade = u.id
+          const ok = await login(p, loginUnidade)
+          if (!ok) throw new Error(`Worker #${i} falhou no login`)
+          return p
+        })
+      )
+      log(jobId, `✅ Todos ${POOL_SIZE} workers autenticados na unidade "${u.nome}"`)
+
+      let pageIdx = 0
+      const tasks: Promise<void>[] = []
+
+      // Distribuir apenados entre workers (não aguarda sequencial)
       for (const sipeId of apenadosIds) {
         if (globalThis.__sipeStopFlag) {
+          await Promise.allSettled(tasks)
           await dbProgress(jobId, {
             status: 'INTERRUPTED',
             finalizadoEm: new Date(),
             log: 'Sincronização de unidades interrompida pelo usuário',
           })
           refreshMemory(jobId, { status: 'INTERRUPTED' })
+          await closeContextPool(contextPool)
           return
         }
 
-        // 🔧 OTIMIZAÇÃO: Renovar page instance a cada 25 apenados para evitar memory leak
-        if (pageRenewCount % 25 === 0 && pageRenewCount > 0) {
+        const workerPage = pagePool[pageIdx % pagePool.length]
+        const workerId = pageIdx % pagePool.length
+        pageIdx++
+
+        // Criar tarefa para este apenado (não aguarda)
+        const task = (async () => {
           try {
-            log(jobId, `🔄 Renovando page instance após ${pageRenewCount} apenados...`);
-            await page.close().catch(() => {});
-            page = await context.newPage();
-            await login(page, u.id);
-            log(jobId, `✅ Page renovada com sucesso`);
-          } catch (renewErr) {
-            log(jobId, `⚠️ Erro ao renovar page: ${renewErr}. Continuando...`);
-          }
-        }
-        pageRenewCount++;
-
-        try {
-          // 📍 OTIMIZAÇÃO: Logging detalhado para rastrear progresso
-          const currentIdx = apenadosIds.indexOf(sipeId) + 1;
-          const progressMsg = `[${currentIdx}/${apenadosIds.length}] Scraping apenado SIPE ID #${sipeId} na unidade "${u.nome}"...`;
-
-          // Log apenas a cada 10 apenados para não poluir o banco
-          if (currentIdx % 10 === 0 || currentIdx === 1 || currentIdx === apenadosIds.length) {
-            log(jobId, progressMsg);
-          }
-
-          await withRetry(async () => {
-            try {
-              await scrapeApenadoFicha(page, sipeId, u.nome)
-            } catch (err: any) {
-              if (err?.message === 'SESSAO_EXPIRADA') {
-                log(jobId, `Sessão expirada. Re-autenticando para unidade "${u.nome}"...`)
-                await login(page, u.id)
-                await scrapeApenadoFicha(page, sipeId, u.nome)
-              } else {
-                throw err
+            await withRetry(async () => {
+              try {
+                await scrapeApenadoFicha(workerPage, sipeId, u.nome)
+              } catch (err: any) {
+                if (err?.message === 'SESSAO_EXPIRADA') {
+                  log(jobId, `Worker #${workerId}: Sessão expirada na unidade "${u.nome}". Re-autenticando...`)
+                  await login(workerPage, u.id)
+                  await scrapeApenadoFicha(workerPage, sipeId, u.nome)
+                } else {
+                  throw err
+                }
               }
-            }
-          })
+            })
 
-          lastProcessedId = sipeId
-          checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
-          
-          if (globalThis.__sipeState) {
-            globalThis.__sipeState.processado++
-            if (globalThis.__sipeState.total > 0) {
-              globalThis.__sipeState.pct = Math.round(
-                (globalThis.__sipeState.processado / globalThis.__sipeState.total) * 100
-              )
-            }
-          }
+            checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
 
-          // 🔧 OTIMIZAÇÃO: Salvar checkpoint apenas a cada 10 apenados processados (evita JSON grande)
-          checkpointBatchCount++;
-          if (checkpointBatchCount % 10 === 0 || checkpoint.currentApenadosIds.length === 1) {
+            await globalThis.__sipeMutex.lock('progress', async () => {
+              if (globalThis.__sipeState) {
+                globalThis.__sipeState.processado++
+                if (globalThis.__sipeState.total > 0) {
+                  globalThis.__sipeState.pct = Math.round(
+                    (globalThis.__sipeState.processado / globalThis.__sipeState.total) * 100
+                  )
+                }
+              }
+            })
+
+            // Salvar checkpoint a cada 10 apenados processados
+            if (apenadosIds.length - checkpoint.currentApenadosIds.length % 10 === 0 || checkpoint.currentApenadosIds.length === 0) {
+              await dbProgress(jobId, {
+                processado: globalThis.__sipeState?.processado ?? 0,
+                ultimoIdProcessado: sipeId,
+                idsColetados: JSON.stringify(checkpoint),
+              })
+            }
+          } catch (err) {
+            const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
+            if (globalThis.__sipeState) {
+              globalThis.__sipeState.erros = errosCount
+            }
+            const msg = `Erro apenado #${sipeId} na unidade "${u.nome}" (worker #${workerId}): ${err}`
+            if (globalThis.__sipeState) {
+              globalThis.__sipeState.ultimoLog = msg
+            }
+
+            checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
+
             await dbProgress(jobId, {
-              processado: globalThis.__sipeState?.processado ?? 0,
-              ultimoIdProcessado: sipeId,
+              erros: errosCount,
+              log: msg,
               idsColetados: JSON.stringify(checkpoint),
             })
-          } else {
-            // Update rápido sem checkpoint JSON
-            await dbProgress(jobId, {
-              processado: globalThis.__sipeState?.processado ?? 0,
-              ultimoIdProcessado: sipeId,
-            })
           }
+        })()
 
-          // 🔧 OTIMIZAÇÃO: Delay maior para governos servidores lentos (2-5s)
-          await page.waitForTimeout(2000 + Math.random() * 3000)
-        } catch (err) {
-          const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
-          if (globalThis.__sipeState) {
-            globalThis.__sipeState.erros = errosCount
-          }
-          const msg = `Erro apenado #${sipeId} na unidade "${u.nome}" (após 3 tentativas): ${err}`
-          if (globalThis.__sipeState) {
-            globalThis.__sipeState.ultimoLog = msg
-          }
-          
-          checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
-          
-          await dbProgress(jobId, {
-            erros: errosCount,
-            log: msg,
-            idsColetados: JSON.stringify(checkpoint),
-          })
-        }
+        tasks.push(task)
       }
+
+      // Aguardar TODAS as tarefas em paralelo (chave da otimização)
+      log(jobId, `⏳ Processando ${apenadosIds.length} apenados em ${POOL_SIZE} workers paralelos...`)
+      const results = await Promise.allSettled(tasks)
+      const failedTasks = results.filter(r => r.status === 'rejected').length
+      if (failedTasks > 0) {
+        log(jobId, `⚠️ ${failedTasks} tarefas falharam durante processamento paralelo na unidade "${u.nome}"`)
+      }
+
+      // Limpar pool de contexts
+      await closeContextPool(contextPool)
 
       u.concluida = true
       checkpoint.currentUnidadeId = null
