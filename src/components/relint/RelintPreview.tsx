@@ -204,8 +204,8 @@ export function RelintPreview({ form }: Props) {
           </div>
           <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>SECRETARIA DE ESTADO DA JUSTIÇA DE RONDÔNIA</p>
-            <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>POLÍCIA PENAL DE RONDÔNIA</p>
             <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>AGÊNCIA DE INTELIGÊNCIA PENAL</p>
+            <p style={{ fontWeight: 'bold', fontSize: '10pt', margin: '0 0 2px', textTransform: 'uppercase' }}>POLÍCIA PENAL DE RONDÔNIA</p>
             <p style={{ fontWeight: 'bold', fontSize: '12pt', margin: '2px 0 8px', textTransform: 'uppercase' }}>AIP/SEJUS/RO</p>
             <img src={badgeUrl('badge-aip')} alt="AIP/SEJUS/RO" style={{ width: badgeSizes.aip, height: 'auto' }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
