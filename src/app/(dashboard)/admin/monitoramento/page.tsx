@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { GeoMonitorPanel } from '@/components/admin/GeoMonitorPanel';
+import { GeoMonitorPanelWrapper } from '@/components/admin/GeoMonitorPanelWrapper';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 interface MonitoringData {
@@ -74,10 +74,10 @@ export default function MonitoramentoPage() {
         </div>
       ) : (
         <ErrorBoundary>
-          <GeoMonitorPanel
-            locations={locations as any}
-            allUsers={allUsers as any}
-            onlineUsers={onlineUsers as any}
+          <GeoMonitorPanelWrapper
+            locations={locations}
+            allUsers={allUsers}
+            onlineUsers={onlineUsers}
           />
         </ErrorBoundary>
       )}
