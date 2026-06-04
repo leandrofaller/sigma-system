@@ -3,8 +3,8 @@
 import dynamic from 'next/dynamic';
 import { useState, useMemo, useEffect } from 'react';
 import { MapPin, Users, Clock, Download, Layers, Activity, Loader2, Wifi, AlertCircle } from 'lucide-react';
-import type { LocationEntry, TileStyle } from './GeoMap';
-import { TILE_LAYERS } from './GeoMap';
+import type { LocationEntry, TileStyle } from './GeoMapTypes';
+import { TILE_LAYERS } from './GeoMapTypes';
 
 const GeoMap = dynamic(() => import('./GeoMap'), {
   ssr: false,
