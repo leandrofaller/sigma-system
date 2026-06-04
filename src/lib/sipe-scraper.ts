@@ -2149,7 +2149,8 @@ async function scrapeApenadoFicha(
     })
 
     if (apenadoEmAIP) {
-      // Atualizar registro existente
+      // Atualizar apenas se já foi cadastrado manualmente em AIP
+      // Nunca cria novos registros automaticamente - apenas o usuário via "Cadastrar em AIP" pode fazer isso
       await prisma.aIPApenado.update({
         where: { id: apenadoEmAIP.id },
         data: aipSyncData
@@ -2157,21 +2158,9 @@ async function scrapeApenadoFicha(
         console.error(`[AIP] Erro ao sincronizar ${sipeId}:`, err.message)
       })
       console.log(`[AIP] ✅ Apenado #${sipeId} atualizado em AIP (unidade="${aipSyncData.unidade}")`)
-    } else {
-      // CRIAR novo registro em AIP com dados do SIPE
-      // IMPORTANTE: Passar AMBOS sipeApenadoId (relação) e sipeId (campo próprio)
-      await prisma.aIPApenado.create({
-        data: {
-          sipeId: apenado.sipeId,  // Campo próprio de aIPApenado
-          sipeApenadoId: apenado.sipeId,  // Conectar com registro em sipeApenadoImportado
-          ...aipSyncData,
-          cadastradoPor: 'SIPE_SCRAPER'
-        }
-      }).catch((err) => {
-        console.error(`[AIP] Erro ao criar apenado ${sipeId}:`, err.message)
-      })
-      console.log(`[AIP] ✅ Apenado #${sipeId} CRIADO em AIP (unidade="${aipSyncData.unidade}")`)
     }
+    // REMOVIDO: Criação automática de registros em AIP durante scraping
+    // Apenas usuários podem cadastrar apenados em AIP manualmente via botão "Cadastrar em AIP"
   } catch (err) {
     console.error(`[AIP] Erro na sincronização AIP:`, err)
   }
