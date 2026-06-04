@@ -59,14 +59,16 @@ function markerColor(ts: string): string {
 /**
  * Reduces an array of raw locations into at most one point per 10-minute bucket
  * over the last 4 hours, sorted oldest → newest.
+ * If no points fall in the window, returns ALL points sorted oldest → newest.
  */
 function bucketTrail(locs: LocationEntry[]): LocationEntry[] {
-  if (!Array.isArray(locs)) return [];
+  if (!Array.isArray(locs) || locs.length === 0) return [];
   const now = Date.now();
   const cutoff = now - WINDOW_MS;
   const buckets = new Map<number, LocationEntry>();
 
   for (const loc of locs) {
+    if (!loc || !loc.timestamp) continue;
     const ts = new Date(loc.timestamp).getTime();
     if (ts < cutoff) continue;
     const idx = Math.floor((ts - cutoff) / BUCKET_MS);
@@ -77,17 +79,25 @@ function bucketTrail(locs: LocationEntry[]): LocationEntry[] {
     }
   }
 
+  // If no points in the 4-hour window, return the most recent point as fallback
+  if (buckets.size === 0) {
+    const sorted = [...locs]
+      .filter(l => l && l.timestamp)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return sorted.slice(0, 1);
+  }
+
   return Array.from(buckets.entries())
     .sort(([a], [b]) => a - b)
     .map(([, loc]) => loc);
 }
 
-function createPulsingIcon(): L.DivIcon {
+function createPulsingIcon(color = '#22c55e'): L.DivIcon {
   return L.divIcon({
     html: `
       <div style="position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
-        <div style="position:absolute;width:28px;height:28px;border-radius:50%;background:rgba(34,197,94,0.55);animation:geomarker-pulse 1.6s ease-out infinite;"></div>
-        <div style="position:absolute;width:14px;height:14px;border-radius:50%;background:#22c55e;border:2.5px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.35);"></div>
+        <div style="position:absolute;width:28px;height:28px;border-radius:50%;background:${color}88;animation:geomarker-pulse 1.6s ease-out infinite;"></div>
+        <div style="position:absolute;width:14px;height:14px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.35);"></div>
       </div>
     `,
     className: '',
@@ -112,44 +122,54 @@ function MapController({ targets }: { targets: [number, number][] }) {
 
 interface Props {
   locations: LocationEntry[];
-  userTrail: LocationEntry[] | null; // raw 4-hour trail fetched for the selected user
+  userTrail: LocationEntry[] | null; // raw trail fetched for the selected user
   selectedUserId: string | null;
+  onlineUserIds?: Set<string>; // IDs dos usuários online
   tileStyle?: TileStyle;
 }
 
-export default function GeoMap({ locations, userTrail, selectedUserId, tileStyle = 'standard' }: Props) {
+export default function GeoMap({ locations, userTrail, selectedUserId, onlineUserIds, tileStyle = 'standard' }: Props) {
   const tile = TILE_LAYERS[tileStyle] ?? TILE_LAYERS.standard;
-  const pulsingIcon = useMemo(() => createPulsingIcon(), []);
+  const pulsingGreenIcon = useMemo(() => createPulsingIcon('#22c55e'), []);
+  const pulsingBlueIcon = useMemo(() => createPulsingIcon('#6172f3'), []);
+  const onlineIds = onlineUserIds ?? new Set<string>();
 
   // Overview: latest position per user
   const latestByUser = useMemo(() => {
     const map = new Map<string, LocationEntry>();
     if (!Array.isArray(locations)) return map;
-    for (const loc of [...locations].reverse()) {
-      if (loc && loc.userId) map.set(loc.userId, loc);
+    // locations vem ordenado por timestamp desc, então o primeiro de cada user é o mais recente
+    for (const loc of locations) {
+      if (loc && loc.userId && !map.has(loc.userId)) {
+        map.set(loc.userId, loc);
+      }
     }
     return map;
   }, [locations]);
 
-  // Trail: bucket the fetched 4-hour data into 10-min intervals
+  // Trail: bucket the fetched trail data into 10-min intervals
   const trail = useMemo(() => {
-    if (!selectedUserId || !userTrail) return [];
-    const bucketed = bucketTrail(userTrail);
-    // If no point falls in the 4-hour window, fall back to the very latest known point
-    if (bucketed.length === 0) {
-      const fallback = [...userTrail].sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
-      return fallback.slice(0, 1);
+    if (!selectedUserId) return [];
+    
+    // Se temos dados da API de trail, usar eles
+    if (userTrail && Array.isArray(userTrail) && userTrail.length > 0) {
+      return bucketTrail(userTrail);
     }
-    return bucketed;
-  }, [selectedUserId, userTrail]);
+    
+    // Fallback: usar a posição mais recente do overview
+    const latestLoc = latestByUser.get(selectedUserId);
+    if (latestLoc) return [latestLoc];
+    
+    return [];
+  }, [selectedUserId, userTrail, latestByUser]);
 
   const overviewMarkers = Array.from(latestByUser.values());
   const trailPoints: [number, number][] = trail.map((l) => [l.lat, l.lng]);
   const latestPoint = trail[trail.length - 1] ?? null;
 
-  const targets: [number, number][] = selectedUserId ? trailPoints : overviewMarkers.map((m) => [m.lat, m.lng]);
+  const targets: [number, number][] = selectedUserId 
+    ? (trailPoints.length > 0 ? trailPoints : []) 
+    : overviewMarkers.map((m) => [m.lat, m.lng]);
 
   return (
     <MapContainer
@@ -162,30 +182,62 @@ export default function GeoMap({ locations, userTrail, selectedUserId, tileStyle
       <MapController targets={targets} />
 
       {/* Overview mode: one marker per user */}
-      {!selectedUserId && overviewMarkers.map((loc) => (
-        <CircleMarker
-          key={loc.id}
-          center={[loc.lat, loc.lng]}
-          radius={9}
-          fillColor={markerColor(loc.timestamp)}
-          fillOpacity={0.85}
-          color="#fff"
-          weight={2}
-        >
-          <Popup>
-            <div style={{ minWidth: 160 }}>
-              <strong>{loc.user.name}</strong><br />
-              <span style={{ fontSize: 11, color: '#666' }}>{loc.user.email}</span><br /><br />
-              <span style={{ fontSize: 12 }}>
-                {new Date(loc.timestamp).toLocaleString('pt-BR')}<br />
-                Lat: {loc.lat.toFixed(5)} · Lng: {loc.lng.toFixed(5)}<br />
-                {loc.accuracy != null && <>Acurácia: {loc.accuracy.toFixed(0)}m<br /></>}
-                {loc.address && <>{loc.address}</>}
-              </span>
-            </div>
-          </Popup>
-        </CircleMarker>
-      ))}
+      {!selectedUserId && overviewMarkers.map((loc) => {
+        const isOnline = onlineIds.has(loc.userId);
+        
+        if (isOnline) {
+          // Usuários online: marcador pulsante verde
+          return (
+            <Marker
+              key={`online-${loc.id}`}
+              position={[loc.lat, loc.lng]}
+              icon={pulsingGreenIcon}
+            >
+              <Popup>
+                <div style={{ minWidth: 160 }}>
+                  <strong>{loc.user.name}</strong>
+                  <span style={{ marginLeft: 6, fontSize: 11, background: '#22c55e', color: '#fff', borderRadius: 4, padding: '1px 5px' }}>
+                    Online
+                  </span><br />
+                  <span style={{ fontSize: 11, color: '#666' }}>{loc.user.email}</span><br /><br />
+                  <span style={{ fontSize: 12 }}>
+                    {new Date(loc.timestamp).toLocaleString('pt-BR')}<br />
+                    Lat: {loc.lat.toFixed(5)} · Lng: {loc.lng.toFixed(5)}<br />
+                    {loc.accuracy != null && <>Acurácia: {loc.accuracy.toFixed(0)}m<br /></>}
+                    {loc.address && <>{loc.address}</>}
+                  </span>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        }
+        
+        // Usuários offline: marcador circular colorido por tempo
+        return (
+          <CircleMarker
+            key={loc.id}
+            center={[loc.lat, loc.lng]}
+            radius={9}
+            fillColor={markerColor(loc.timestamp)}
+            fillOpacity={0.85}
+            color="#fff"
+            weight={2}
+          >
+            <Popup>
+              <div style={{ minWidth: 160 }}>
+                <strong>{loc.user.name}</strong><br />
+                <span style={{ fontSize: 11, color: '#666' }}>{loc.user.email}</span><br /><br />
+                <span style={{ fontSize: 12 }}>
+                  {new Date(loc.timestamp).toLocaleString('pt-BR')}<br />
+                  Lat: {loc.lat.toFixed(5)} · Lng: {loc.lng.toFixed(5)}<br />
+                  {loc.accuracy != null && <>Acurácia: {loc.accuracy.toFixed(0)}m<br /></>}
+                  {loc.address && <>{loc.address}</>}
+                </span>
+              </div>
+            </Popup>
+          </CircleMarker>
+        );
+      })}
 
       {/* Trail mode: polyline + bucketed points + pulsing latest */}
       {selectedUserId && trail.length > 0 && (
@@ -231,12 +283,15 @@ export default function GeoMap({ locations, userTrail, selectedUserId, tileStyle
 
           {/* Pulsing current position */}
           {latestPoint && (
-            <Marker position={[latestPoint.lat, latestPoint.lng]} icon={pulsingIcon}>
+            <Marker 
+              position={[latestPoint.lat, latestPoint.lng]} 
+              icon={onlineIds.has(selectedUserId) ? pulsingGreenIcon : pulsingBlueIcon}
+            >
               <Popup>
                 <div style={{ minWidth: 160 }}>
                   <strong>{latestPoint.user.name}</strong>
-                  <span style={{ marginLeft: 6, fontSize: 11, background: '#22c55e', color: '#fff', borderRadius: 4, padding: '1px 5px' }}>
-                    Posição atual
+                  <span style={{ marginLeft: 6, fontSize: 11, background: onlineIds.has(selectedUserId) ? '#22c55e' : '#6172f3', color: '#fff', borderRadius: 4, padding: '1px 5px' }}>
+                    {onlineIds.has(selectedUserId) ? 'Online agora' : 'Posição mais recente'}
                   </span><br />
                   <span style={{ fontSize: 11, color: '#666' }}>{latestPoint.user.email}</span><br /><br />
                   <span style={{ fontSize: 12 }}>

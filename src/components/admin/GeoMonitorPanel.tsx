@@ -118,8 +118,9 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
       return;
     }
     setTrailLoading(true);
-    const since = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
-    fetch(`/api/geolocation?userId=${selectedUserId}&since=${encodeURIComponent(since)}`)
+    // Buscar todos os pontos do usuário (sem filtro de tempo)
+    // para garantir que sempre mostre algo no mapa
+    fetch(`/api/geolocation?userId=${selectedUserId}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -127,7 +128,13 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
       .then((data: any) => {
         // A API retorna { locations: [...], count: N }, não um array direto
         const trailData = Array.isArray(data) ? data : (Array.isArray(data?.locations) ? data.locations : []);
-        setUserTrail(trailData);
+        // Serializar timestamps se necessário
+        const normalized = trailData.map((loc: any) => ({
+          ...loc,
+          timestamp: typeof loc.timestamp === 'string' ? loc.timestamp : new Date(loc.timestamp).toISOString(),
+        }));
+        console.log(`[GeoMonitor] Trail carregada: ${normalized.length} pontos para userId=${selectedUserId}`);
+        setUserTrail(normalized);
         setTrailLoading(false);
       })
       .catch((err) => {
@@ -384,6 +391,7 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
               locations={locations}
               userTrail={userTrail}
               selectedUserId={selectedUserId}
+              onlineUserIds={onlineIds}
               tileStyle={tileStyle}
             />
           </div>
