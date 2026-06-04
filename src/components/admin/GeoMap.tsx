@@ -61,6 +61,7 @@ function markerColor(ts: string): string {
  * over the last 4 hours, sorted oldest → newest.
  */
 function bucketTrail(locs: LocationEntry[]): LocationEntry[] {
+  if (!Array.isArray(locs)) return [];
   const now = Date.now();
   const cutoff = now - WINDOW_MS;
   const buckets = new Map<number, LocationEntry>();
@@ -123,7 +124,10 @@ export default function GeoMap({ locations, userTrail, selectedUserId, tileStyle
   // Overview: latest position per user
   const latestByUser = useMemo(() => {
     const map = new Map<string, LocationEntry>();
-    for (const loc of [...locations].reverse()) map.set(loc.userId, loc);
+    if (!Array.isArray(locations)) return map;
+    for (const loc of [...locations].reverse()) {
+      if (loc && loc.userId) map.set(loc.userId, loc);
+    }
     return map;
   }, [locations]);
 

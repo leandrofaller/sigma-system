@@ -124,8 +124,10 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((data: LocationEntry[]) => {
-        setUserTrail(data);
+      .then((data: any) => {
+        // A API retorna { locations: [...], count: N }, não um array direto
+        const trailData = Array.isArray(data) ? data : (Array.isArray(data?.locations) ? data.locations : []);
+        setUserTrail(trailData);
         setTrailLoading(false);
       })
       .catch((err) => {
@@ -272,7 +274,7 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
       </div>
 
       {/* Online users strip */}
-      {onlineUsers.length > 0 && (
+      {Array.isArray(onlineUsers) && onlineUsers.length > 0 && (
         <div className="card p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="relative flex h-2.5 w-2.5">
