@@ -13,7 +13,7 @@ interface CalendarDayWithEvents {
 interface EventCalendarProps {
   mes: string // YYYY-MM
   onMesChange: (mes: string) => void
-  onDateSelect: (date: Date) => void
+  onDateSelect: (date: Date, eventsCount: number) => void
   refreshTrigger: number
 }
 
@@ -138,7 +138,7 @@ export function EventCalendar({
         {dias.map((dia, idx) => (
           <button
             key={idx}
-            onClick={() => dia.day > 0 && onDateSelect(dia.date)}
+            onClick={() => dia.day > 0 && onDateSelect(dia.date, dia.eventsCount)}
             disabled={dia.day === 0}
             className={`
               aspect-square rounded-lg border-2 font-medium transition-all

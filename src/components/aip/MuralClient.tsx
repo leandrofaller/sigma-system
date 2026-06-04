@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Calendar, Plus, Filter, Clock, FolderOpen } from 'lucide-react'
+import { Calendar, Plus, Filter, Clock, FolderOpen, X, Eye } from 'lucide-react'
 import { EventCalendar } from './mural/EventCalendar'
 import { EventModal } from './mural/EventModal'
 import { EventList } from './mural/EventList'
@@ -15,6 +15,10 @@ export function MuralClient({ userRole }: { userRole: string }) {
   const [mes, setMes] = useState(new Date().toISOString().slice(0, 7))
   const [categoria, setCategoria] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  
+  // Novo modal de decisão e filtro
+  const [decisionModal, setDecisionModal] = useState<{ isOpen: boolean; date: Date; count: number } | null>(null)
+  const [diaFilter, setDiaFilter] = useState<Date | null>(null)
 
   const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN'
 
@@ -74,9 +78,13 @@ export function MuralClient({ userRole }: { userRole: string }) {
             <EventCalendar
               mes={mes}
               onMesChange={setMes}
-              onDateSelect={(date) => {
+              onDateSelect={(date, count) => {
                 setSelectedDate(date)
-                setIsModalOpen(true)
+                if (count > 0) {
+                  setDecisionModal({ isOpen: true, date, count })
+                } else {
+                  setIsModalOpen(true)
+                }
               }}
               refreshTrigger={refreshTrigger}
             />
@@ -115,6 +123,8 @@ export function MuralClient({ userRole }: { userRole: string }) {
                 categoria={categoria}
                 refreshTrigger={refreshTrigger}
                 onEventUpdated={() => setRefreshTrigger((p) => p + 1)}
+                diaFilter={diaFilter}
+                onClearDiaFilter={() => setDiaFilter(null)}
               />
             </div>
           </TabsContent>
@@ -146,6 +156,69 @@ export function MuralClient({ userRole }: { userRole: string }) {
           }}
           initialDate={selectedDate || undefined}
         />
+      )}
+
+      {/* Modal de Decisão (Visualizar ou Criar) */}
+      {decisionModal?.isOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full border border-gray-200 dark:border-gray-700 overflow-hidden transform transition-all">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+              <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-amber-500" />
+                Ocorrências em {new Date(decisionModal.date).toLocaleDateString('pt-BR')}
+              </h3>
+              <button
+                onClick={() => setDecisionModal(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Há <strong className="text-amber-600 dark:text-amber-400">{decisionModal.count} ocorrência(s)</strong> registrada(s) para este dia. O que você gostaria de fazer?
+              </p>
+
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    setDiaFilter(decisionModal.date)
+                    setView('list')
+                    setDecisionModal(null)
+                  }}
+                  className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 rounded-lg font-semibold text-sm transition"
+                >
+                  <Eye className="w-4 h-4" />
+                  Visualizar Ocorrências ({decisionModal.count})
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setIsModalOpen(true)
+                    setDecisionModal(null)
+                  }}
+                  className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold text-sm transition shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  Registrar Nova Ocorrência
+                </button>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 bg-gray-50 dark:bg-gray-800/80 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+              <button
+                onClick={() => setDecisionModal(null)}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-medium transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

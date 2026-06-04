@@ -1,13 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Trash2, Eye, Download, X, FileText, FileSpreadsheet, FileArchive } from 'lucide-react'
+import { Loader2, Trash2, Eye, Download, X, FileText, FileSpreadsheet, FileArchive, Calendar } from 'lucide-react'
 
 interface EventListProps {
   mes: string
   categoria: string | null
   refreshTrigger: number
   onEventUpdated: () => void
+  diaFilter?: Date | null
+  onClearDiaFilter?: () => void
 }
 
 function getAttachmentIcon(mime: string, tipo: string) {
@@ -35,7 +37,14 @@ function formatBytes(bytes: number) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-export function EventList({ mes, categoria, refreshTrigger, onEventUpdated }: EventListProps) {
+export function EventList({
+  mes,
+  categoria,
+  refreshTrigger,
+  onEventUpdated,
+  diaFilter,
+  onClearDiaFilter,
+}: EventListProps) {
   const [eventos, setEventos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeImage, setActiveImage] = useState<{ url: string; nome: string } | null>(null)
@@ -102,14 +111,42 @@ export function EventList({ mes, categoria, refreshTrigger, onEventUpdated }: Ev
     )
   }
 
+  // Filtragem local baseada na data
+  const eventosFiltrados = eventos.filter((evento) => {
+    if (!diaFilter) return true
+    const evDateStr = new Date(evento.dataEvento).toISOString().split('T')[0]
+    const filterDateStr = new Date(diaFilter).toISOString().split('T')[0]
+    return evDateStr === filterDateStr
+  })
+
   return (
     <div className="space-y-4">
-      {eventos.length === 0 ? (
+      {/* Banner de filtro de dia ativo */}
+      {diaFilter && onClearDiaFilter && (
+        <div className="flex items-center justify-between p-3.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/50 rounded-xl text-sm">
+          <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-medium">
+            <Calendar className="w-4 h-4 text-amber-500" />
+            <span>
+              Filtrado por: <strong>{new Date(diaFilter).toLocaleDateString('pt-BR')}</strong>
+            </span>
+          </div>
+          <button
+            onClick={onClearDiaFilter}
+            className="text-xs text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200 underline font-semibold transition"
+          >
+            Ver mês inteiro
+          </button>
+        </div>
+      )}
+
+      {eventosFiltrados.length === 0 ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
-          Nenhum evento encontrado para os filtros selecionados.
+          {diaFilter 
+            ? 'Nenhum evento encontrado para o dia selecionado.'
+            : 'Nenhum evento encontrado para os filtros selecionados.'}
         </div>
       ) : (
-        eventos.map((evento) => {
+        eventosFiltrados.map((evento) => {
           // Separar fotos de outros tipos de arquivos
           const anexosValidos = evento.anexos || []
           const imagens = anexosValidos.filter(
@@ -287,4 +324,3 @@ export function EventList({ mes, categoria, refreshTrigger, onEventUpdated }: Ev
     </div>
   )
 }
-
