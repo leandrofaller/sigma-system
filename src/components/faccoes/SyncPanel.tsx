@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
   RefreshCw, Play, CheckCircle, XCircle, Clock,
-  AlertCircle, RotateCcw, Pause, Wifi, WifiOff, Trash2, ShieldAlert, AlertTriangle, Hash,
+  AlertCircle, RotateCcw, Pause, Wifi, WifiOff, Trash2, ShieldAlert, AlertTriangle, Hash, Zap,
 } from 'lucide-react'
 
 // Lista de fallback usada quando o SIPE estiver inacessível
@@ -583,6 +583,16 @@ export function SyncPanel() {
           >
             <Play className="w-4 h-4" />
             Sincronizar Unidades Prisionais
+          </button>
+
+          <button
+            onClick={() => startSync('UNIDADES_FAST')}
+            disabled={isActive || loading}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+            title="Sincronização otimizada com bloqueio de assets redundantes e delay reduzido (~0.75s) - 5x mais rápido"
+          >
+            <Zap className="w-4 h-4" />
+            Sincronizar Unidades (Rápida)
           </button>
 
           <button

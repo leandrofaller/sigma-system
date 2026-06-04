@@ -354,7 +354,9 @@ export function startSipeSync(jobId: string, unidadeId: string): void {
     if (!job) throw new Error('Job não encontrado')
 
     if (job.tipo === 'UNIDADES') {
-      await runScrapeTodasUnidades(jobId)
+      await runScrapeTodasUnidades(jobId, false)
+    } else if (job.tipo === 'UNIDADES_FAST') {
+      await runScrapeTodasUnidades(jobId, true)
     } else {
       await runScrape(jobId, unidadeId)
     }
@@ -747,7 +749,34 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
   }
 }
 
-async function runScrapeTodasUnidades(jobId: string): Promise<void> {
+async function setupFastPageIfNeeded(page: Page, fast: boolean): Promise<void> {
+  if (!fast) return
+  await page.route('**/*', (route) => {
+    const url = route.request().url().toLowerCase();
+    const resourceType = route.request().resourceType();
+    
+    // Bloquear recursos que não impedem a leitura dos textos e fotos
+    if (
+      resourceType === 'font' ||
+      resourceType === 'stylesheet' ||
+      url.includes('google-analytics') ||
+      url.includes('analytics') ||
+      url.includes('facebook') ||
+      // Bloquear imagens comuns que não sejam a foto do apenado
+      (resourceType === 'image' && 
+       !url.includes('foto') && 
+       !url.includes('photo') && 
+       !url.includes('imagem') && 
+       !url.includes('getfoto'))
+    ) {
+      route.abort();
+    } else {
+      route.continue();
+    }
+  });
+}
+
+async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void> {
   const job = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
   if (!job) throw new Error('Job não encontrado')
 
@@ -758,7 +787,8 @@ async function runScrapeTodasUnidades(jobId: string): Promise<void> {
   refreshMemory(jobId, { fase: 'Login', ultimoLog: 'Iniciando sessão no SIPE...' })
 
   const context = await createSession()
-  const page = await context.newPage()
+  let page = await context.newPage()
+  await setupFastPageIfNeeded(page, fast)
 
   try {
     const ok = await login(page, SIPE_UNIDADE)
@@ -931,6 +961,7 @@ async function runScrapeTodasUnidades(jobId: string): Promise<void> {
             log(jobId, `🔄 Renovando page instance após ${pageRenewCount} apenados...`);
             await page.close().catch(() => {});
             page = await context.newPage();
+            await setupFastPageIfNeeded(page, fast);
             await login(page, u.id);
             log(jobId, `✅ Page renovada com sucesso`);
           } catch (renewErr) {
@@ -991,8 +1022,9 @@ async function runScrapeTodasUnidades(jobId: string): Promise<void> {
             })
           }
 
-          // 🔧 OTIMIZAÇÃO: Delay maior para governos servidores lentos (2-5s)
-          await page.waitForTimeout(2000 + Math.random() * 3000)
+          // 🔧 OTIMIZAÇÃO: Delay maior para governos servidores lentos (2-5s), menor no modo fast
+          const currentDelay = fast ? (500 + Math.random() * 500) : (2000 + Math.random() * 3000)
+          await page.waitForTimeout(currentDelay)
         } catch (err) {
           const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
           if (globalThis.__sipeState) {
