@@ -161,6 +161,9 @@ export function LogosPanel() {
                 SECRETARIA DE ESTADO DA JUSTIÇA DE RONDÔNIA
               </p>
               <p style={{ fontWeight: 'bold', fontSize: '8px', margin: '0 0 1px', textTransform: 'uppercase', color: '#111' }}>
+                POLÍCIA PENAL DE RONDÔNIA
+              </p>
+              <p style={{ fontWeight: 'bold', fontSize: '8px', margin: '0 0 1px', textTransform: 'uppercase', color: '#111' }}>
                 AGÊNCIA DE INTELIGÊNCIA PENAL
               </p>
               <p style={{ fontWeight: 'bold', fontSize: '10px', margin: '1px 0 4px', textTransform: 'uppercase', color: '#111' }}>

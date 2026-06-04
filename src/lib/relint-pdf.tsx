@@ -139,7 +139,7 @@ function Header() {
       </View>
       <View style={{ flex: 1, alignItems: 'center' }}>
         <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, textTransform: 'uppercase', textAlign: 'center', marginBottom: 2 }}>SECRETARIA DE ESTADO DA JUSTIÇA DE RONDÔNIA</Text>
-        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, textTransform: 'uppercase', textAlign: 'center', marginBottom: 2 }}>POLICIA PENAL DE RONDÔNIA</Text>
+        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, textTransform: 'uppercase', textAlign: 'center', marginBottom: 2 }}>POLÍCIA PENAL DE RONDÔNIA</Text>
         <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, textTransform: 'uppercase', textAlign: 'center', marginBottom: 2 }}>AGÊNCIA DE INTELIGÊNCIA PENAL</Text>
         <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 11, textTransform: 'uppercase', textAlign: 'center', marginBottom: 6 }}>AIP/SEJUS/RO</Text>
         {existsSync(aip) && <Image src={aip} style={{ width: 80 }} />}
