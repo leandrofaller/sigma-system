@@ -37,7 +37,10 @@ export function MuralClient({ userRole }: { userRole: string }) {
             </div>
           </div>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setSelectedDate(null)
+              setIsModalOpen(true)
+            }}
             className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -71,7 +74,10 @@ export function MuralClient({ userRole }: { userRole: string }) {
             <EventCalendar
               mes={mes}
               onMesChange={setMes}
-              onDateSelect={setSelectedDate}
+              onDateSelect={(date) => {
+                setSelectedDate(date)
+                setIsModalOpen(true)
+              }}
               refreshTrigger={refreshTrigger}
             />
           </TabsContent>
@@ -129,11 +135,16 @@ export function MuralClient({ userRole }: { userRole: string }) {
       {isModalOpen && (
         <EventModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={() => {
+            setIsModalOpen(false)
+            setSelectedDate(null)
+          }}
           onEventCreated={() => {
             setRefreshTrigger((p) => p + 1)
             setIsModalOpen(false)
+            setSelectedDate(null)
           }}
+          initialDate={selectedDate || undefined}
         />
       )}
     </div>

@@ -6,11 +6,36 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { deleteFromS3 } from '@/lib/s3-service'
+import { deleteFromS3, getDownloadUrl } from '@/lib/s3-service'
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit'
 
 interface Params {
   params: { id: string; attachmentId: string }
+}
+
+export async function GET(req: NextRequest, { params }: Params) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
+
+  try {
+    const anexo = await prisma.eventAttachment.findUnique({
+      where: { id: params.attachmentId },
+    })
+
+    if (!anexo || anexo.eventId !== params.id || anexo.deletadoEm) {
+      return NextResponse.json({ error: 'Anexo não encontrado' }, { status: 404 })
+    }
+
+    // Gerar URL assinada válida por 1 hora
+    const url = await getDownloadUrl(anexo.nomeS3)
+
+    return NextResponse.redirect(url)
+  } catch (err) {
+    console.error('[Attachment GET] Erro:', err)
+    return NextResponse.json({ error: 'Erro ao obter anexo' }, { status: 500 })
+  }
 }
 
 export async function DELETE(req: NextRequest, { params }: Params) {
