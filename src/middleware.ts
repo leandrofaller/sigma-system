@@ -45,6 +45,7 @@ export default auth((req) => {
   const isApiPublicRoute = apiPublicRoutes.some((route) =>
     nextUrl.pathname.startsWith(route),
   );
+  const isGeoPage = nextUrl.pathname === '/geolocation-permission';
 
   const existingToken = req.cookies.get(DEVICE_COOKIE)?.value;
   const newToken = existingToken ?? crypto.randomUUID();
@@ -57,6 +58,21 @@ export default auth((req) => {
       return Response.json({ error: 'Não autorizado' }, { status: 401 });
     }
     return;
+  }
+
+  // Verificar geolocalização (obrigatória antes de acessar dashboard)
+  if (isLoggedIn && !isPublicRoute && !isGeoPage && !nextUrl.pathname.startsWith('/api')) {
+    const user = (req.auth as any)?.user as any;
+    const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+
+    // Bypass para ADMIN/SUPER_ADMIN (opcional - remover se quiser forçar mesmo para admin)
+    if (!isAdmin) {
+      const geoStatus = user?.geoStatus || 'pending';
+      if (geoStatus === 'pending' || geoStatus === 'denied') {
+        const res = NextResponse.redirect(buildRedirect(req, '/geolocation-permission'));
+        return needsCookie ? attachDeviceCookie(res, newToken) : res;
+      }
+    }
   }
 
   // Dispositivo não autorizado — redireciona para página de espera

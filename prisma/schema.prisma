@@ -74,6 +74,14 @@ model User {
   lastLogin    DateTime?
   lastSeenAt   DateTime?
   lastLocation Json?
+
+  // Geolocalização
+  geoStatus         String    @default("pending")  // pending|authorized|denied|admin-approved
+  geoLocationData   Json?     // { lat, lng, accuracy, address, timestamp }
+  geoDeniedAt       DateTime?
+  geoApprovedBy     String?
+  geoApprovedAt     DateTime?
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -494,6 +502,11 @@ model UserDevice {
   longitude       Float?
   locationAddress String?
   locationAt      DateTime?
+
+  // Geolocalização
+  geoLocationData   Json?     // { lat, lng, accuracy, address, timestamp }
+  geoPermissionDenied Boolean @default(false)
+  geoForcedApproval Boolean   @default(false)
 
   @@index([userId, status])
   @@map("user_devices")

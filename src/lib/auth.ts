@@ -48,6 +48,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             groupId: user.groupId,
             groupName: user.group?.name,
             phone: user.phone,
+            geoStatus: user.geoStatus || 'pending',
             deviceAuthorized: true,
           };
         }
@@ -91,6 +92,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           groupId: user.groupId,
           groupName: user.group?.name,
           phone: user.phone,
+          geoStatus: user.geoStatus || 'pending',
           deviceAuthorized,
         };
       },
