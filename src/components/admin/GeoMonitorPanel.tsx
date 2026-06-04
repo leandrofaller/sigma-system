@@ -166,7 +166,7 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
 
   // Table shows the raw trail when a user is selected (all points, not bucketed)
   const tableRows = selectedUserId
-    ? (Array.isArray(userTrail) ? userTrail : locations.filter((l) => l.userId === selectedUserId))
+    ? (Array.isArray(userTrail) ? userTrail : (Array.isArray(locations) ? locations.filter((l) => l.userId === selectedUserId) : []))
     : (Array.isArray(locations) ? locations : []);
 
   const trackedToday = useMemo(() => {
