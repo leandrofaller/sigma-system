@@ -164,7 +164,10 @@
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
       "Bash(git reset *)",
       "Bash(cat)",
-      "Bash(bash /tmp/analyze_aip.sh)"
+      "Bash(bash /tmp/analyze_aip.sh)",
+      "Bash(mkdir -p \"F:/relatorio_claude/src/lib/scraper-engines\")",
+      "PowerShell(git add src/lib/relint-pdf.tsx)",
+      "PowerShell(Get-ChildItem \"F:\\\\relatorio_claude\" | Where-Object { $_.Name -match \"next.config|.env|vercel\" } | Select-Object Name)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
