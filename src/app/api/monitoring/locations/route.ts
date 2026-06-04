@@ -56,8 +56,15 @@ export async function GET(req: NextRequest) {
       tablesMissing = true;
     } else {
       console.error('[Monitoring] Error fetching locations:', err);
+      console.error('[Monitoring] Error code:', err?.code);
+      console.error('[Monitoring] Error message:', err?.message);
+      console.error('[Monitoring] Full error:', JSON.stringify(err, null, 2));
       return NextResponse.json(
-        { error: 'Erro ao buscar dados de localização' },
+        {
+          error: 'Erro ao buscar dados de localização',
+          details: err?.message,
+          code: err?.code
+        },
         { status: 500 }
       );
     }
