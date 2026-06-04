@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { GeoMonitorPanel } from '@/components/admin/GeoMonitorPanel';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 interface MonitoringData {
   locations: any[];
@@ -72,11 +73,13 @@ export default function MonitoramentoPage() {
           <pre className="bg-gray-900 text-gray-300 rounded-lg p-3 text-xs overflow-x-auto">npx prisma migrate deploy</pre>
         </div>
       ) : (
-        <GeoMonitorPanel
-          locations={locations as any}
-          allUsers={allUsers as any}
-          onlineUsers={onlineUsers as any}
-        />
+        <ErrorBoundary>
+          <GeoMonitorPanel
+            locations={locations as any}
+            allUsers={allUsers as any}
+            onlineUsers={onlineUsers as any}
+          />
+        </ErrorBoundary>
       )}
     </div>
   );
