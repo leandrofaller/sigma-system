@@ -162,7 +162,9 @@
       "Bash(awk '/^async function coletarIdsApenados/,/^async function/ {print NR\": \"$0}' F:/relatorio_claude/src/lib/sipe-scraper.ts)",
       "Bash(grep -E \"\\\\.tsx?$\")",
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(cat)",
+      "Bash(bash /tmp/analyze_aip.sh)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

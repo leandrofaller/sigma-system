@@ -362,24 +362,16 @@ async function scrapeApenadoFichaFirecrawl(
       })
 
       if (apenadoEmAIP) {
+        // Atualizar apenas se já foi cadastrado manualmente em AIP
+        // Nunca cria novos registros automaticamente - apenas o usuário via "Cadastrar em AIP" pode fazer isso
         await prisma.aIPApenado.update({
           where: { id: apenadoEmAIP.id },
           data: aipSyncData
         })
         console.log(`[FIRECRAWL-AIP] ✅ Apenado #${sipeId} atualizado em AIP (unidade="${aipSyncData.unidade}")`)
-      } else {
-        // CRIAR novo registro em AIP com dados do SIPE
-        // IMPORTANTE: Passar AMBOS sipeApenadoId (relação) e sipeId (campo próprio)
-        await prisma.aIPApenado.create({
-          data: {
-            sipeId: apenado.sipeId,  // Campo próprio de aIPApenado
-            sipeApenadoId: apenado.sipeId,  // Conectar com registro em sipeApenadoImportado
-            ...aipSyncData,
-            cadastradoPor: 'FIRECRAWL_SCRAPER'
-          }
-        })
-        console.log(`[FIRECRAWL-AIP] ✅ Apenado #${sipeId} CRIADO em AIP (unidade="${aipSyncData.unidade}")`)
       }
+      // REMOVIDO: Criação automática de registros em AIP durante scraping
+      // Apenas usuários podem cadastrar apenados em AIP manualmente via botão "Cadastrar em AIP"
     } catch (err) {
       console.error(`Erro ao sincronizar com AIP para apenado #${sipeId}:`, err)
     }

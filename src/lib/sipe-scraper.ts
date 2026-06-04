@@ -4586,7 +4586,9 @@ function setupAutoSyncScheduler() {
   autoSyncTimeout = setInterval(checkAndRunAutoSync, INTERVAL_CHECK)
 }
 
-// Inicia o scheduler em segundo plano
-if (typeof window === 'undefined') {
-  setupAutoSyncScheduler()
-}
+// DESATIVADO: Auto-sync scheduler foi removido
+// Razão: Usuários devem ter controle total sobre quando a sincronização ocorre
+// Sincronizações automáticas eram criando apenados em AIP sem autorização manual
+// if (typeof window === 'undefined') {
+//   setupAutoSyncScheduler()
+// }
