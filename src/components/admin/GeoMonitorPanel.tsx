@@ -254,10 +254,10 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { icon: Wifi,     label: 'Logados agora',         value: onlineUsers.length, highlight: true },
+          { icon: Wifi,     label: 'Logados agora',         value: Array.isArray(onlineUsers) ? onlineUsers.length : 0, highlight: true },
           { icon: Activity, label: 'Ativos agora (10 min)', value: activeNow,           highlight: false },
           { icon: Clock,    label: 'Ativos nas últimas 24h', value: trackedToday,       highlight: false },
-          { icon: MapPin,   label: 'Registros totais',      value: locations.length,   highlight: false },
+          { icon: MapPin,   label: 'Registros totais',      value: Array.isArray(locations) ? locations.length : 0,   highlight: false },
         ].map(({ icon: Icon, label, value, highlight }) => (
           <div key={label} className="card p-4 flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${highlight ? 'icon-badge-green' : 'icon-badge-sigma'}`}>
