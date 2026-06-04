@@ -88,7 +88,10 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
   const [geoStats, setGeoStats] = useState<GeoStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
-  const onlineIds = useMemo(() => new Set(onlineUsers.map((u) => u.id)), [onlineUsers]);
+  const onlineIds = useMemo(() =>
+    new Set(Array.isArray(onlineUsers) ? onlineUsers.map((u) => u.id) : []),
+    [onlineUsers]
+  );
 
   // Fetch stats on mount
   useEffect(() => {
@@ -134,18 +137,24 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
 
   const latestByUser = useMemo(() => {
     const map = new Map<string, LocationEntry>();
-    for (const loc of [...locations].reverse()) map.set(loc.userId, loc);
+    if (Array.isArray(locations)) {
+      for (const loc of [...locations].reverse()) {
+        if (loc && loc.userId) map.set(loc.userId, loc);
+      }
+    }
     return map;
   }, [locations]);
 
-  const usersWithLoc: UserSummary[] = allUsers.map((u) => ({
-    ...u,
-    lastLoc: latestByUser.get(u.id) ?? null,
-  }));
+  const usersWithLoc: UserSummary[] = Array.isArray(allUsers)
+    ? allUsers.map((u) => ({
+        ...u,
+        lastLoc: latestByUser.get(u.id) ?? null,
+      }))
+    : [];
 
   const filteredUsers = usersWithLoc.filter((u) =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+    u.name?.toLowerCase().includes(search.toLowerCase()) ||
+    u.email?.toLowerCase().includes(search.toLowerCase())
   );
 
   // Table shows the raw trail when a user is selected (all points, not bucketed)
@@ -154,23 +163,30 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
     : (Array.isArray(locations) ? locations : []);
 
   const trackedToday = useMemo(() => {
+    if (!Array.isArray(locations)) return 0;
     const since = Date.now() - 86400000;
     return new Set(locations.filter((l) => new Date(l.timestamp).getTime() > since).map((l) => l.userId)).size;
   }, [locations]);
 
   const activeNow = useMemo(() => {
+    if (!Array.isArray(locations)) return 0;
     const since = Date.now() - 10 * 60 * 1000;
     return new Set(locations.filter((l) => new Date(l.timestamp).getTime() > since).map((l) => l.userId)).size;
   }, [locations]);
 
   const exportCSV = () => {
+    if (!Array.isArray(tableRows)) return;
     const rows = [['Usuário', 'Email', 'Data/Hora', 'Latitude', 'Longitude', 'Acurácia (m)', 'Endereço']];
-    tableRows.forEach((l) => rows.push([
-      l.user.name, l.user.email,
-      new Date(l.timestamp).toLocaleString('pt-BR'),
-      String(l.lat), String(l.lng),
-      String(l.accuracy ?? ''), l.address ?? '',
-    ]));
+    tableRows.forEach((l) => {
+      if (l && l.user) {
+        rows.push([
+          l.user.name || '', l.user.email || '',
+          new Date(l.timestamp).toLocaleString('pt-BR'),
+          String(l.lat), String(l.lng),
+          String(l.accuracy ?? ''), l.address ?? '',
+        ]);
+      }
+    });
     const csv = rows.map((r) => r.map((v) => `"${v}"`).join(';')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
@@ -178,7 +194,9 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
     a.click();
   };
 
-  const selectedUserName = allUsers.find((u) => u.id === selectedUserId)?.name;
+  const selectedUserName = Array.isArray(allUsers)
+    ? allUsers.find((u) => u.id === selectedUserId)?.name
+    : undefined;
 
   return (
     <div className="space-y-4">
