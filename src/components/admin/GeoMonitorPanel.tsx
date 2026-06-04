@@ -137,10 +137,17 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
 
   const latestByUser = useMemo(() => {
     const map = new Map<string, LocationEntry>();
-    if (Array.isArray(locations)) {
-      for (const loc of [...locations].reverse()) {
-        if (loc && loc.userId) map.set(loc.userId, loc);
+    if (!Array.isArray(locations)) return map;
+
+    try {
+      const sorted = Array.from(locations).reverse();
+      for (const loc of sorted) {
+        if (loc && typeof loc === 'object' && loc.userId) {
+          map.set(loc.userId, loc);
+        }
       }
+    } catch (e) {
+      console.warn('[Geo] Erro ao processar latestByUser:', e);
     }
     return map;
   }, [locations]);
@@ -164,14 +171,32 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
 
   const trackedToday = useMemo(() => {
     if (!Array.isArray(locations)) return 0;
-    const since = Date.now() - 86400000;
-    return new Set(locations.filter((l) => new Date(l.timestamp).getTime() > since).map((l) => l.userId)).size;
+    try {
+      const since = Date.now() - 86400000;
+      return new Set(
+        locations
+          .filter((l) => l && l.timestamp && new Date(l.timestamp).getTime() > since)
+          .map((l) => l.userId)
+      ).size;
+    } catch (e) {
+      console.warn('[Geo] Erro ao calcular trackedToday:', e);
+      return 0;
+    }
   }, [locations]);
 
   const activeNow = useMemo(() => {
     if (!Array.isArray(locations)) return 0;
-    const since = Date.now() - 10 * 60 * 1000;
-    return new Set(locations.filter((l) => new Date(l.timestamp).getTime() > since).map((l) => l.userId)).size;
+    try {
+      const since = Date.now() - 10 * 60 * 1000;
+      return new Set(
+        locations
+          .filter((l) => l && l.timestamp && new Date(l.timestamp).getTime() > since)
+          .map((l) => l.userId)
+      ).size;
+    } catch (e) {
+      console.warn('[Geo] Erro ao calcular activeNow:', e);
+      return 0;
+    }
   }, [locations]);
 
   const exportCSV = () => {
