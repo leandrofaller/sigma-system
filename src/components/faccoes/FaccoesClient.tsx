@@ -50,38 +50,44 @@ export function FaccoesClient({ mode = 'admin' }: FaccoesClientProps) {
       {/* Tabs */}
       <div className="flex-1 min-h-0 p-3 md:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
-          <TabsList className="mb-4 w-full md:w-fit overflow-x-auto md:overflow-visible flex md:inline-flex justify-start whitespace-nowrap scrollbar-none gap-1 bg-gray-100/80 dark:bg-gray-800/80 p-1 rounded-2xl h-auto">
-            <TabsTrigger value="dashboard" className="gap-2 flex-shrink-0 py-2 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm">
+        <div className="relative w-full overflow-hidden mb-4 shrink-0">
+          {/* Indicadores sutis de rolagem lateral para mobile */}
+          <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-50 dark:from-gray-950 to-transparent pointer-events-none md:hidden z-10" />
+          <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-gray-50 dark:from-gray-950 to-transparent pointer-events-none md:hidden z-10" />
+          
+          <TabsList className="w-full md:w-fit overflow-x-auto flex md:inline-flex justify-start whitespace-nowrap scrollbar-none gap-1.5 bg-gray-100/80 dark:bg-gray-800/80 p-1 rounded-2xl h-auto snap-x snap-mandatory scroll-smooth">
+            <TabsTrigger value="dashboard" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
               <BarChart2 className="w-4 h-4" />
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="apenados" className="gap-2 flex-shrink-0 py-2 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm">
+            <TabsTrigger value="apenados" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
               <Users className="w-4 h-4" />
               Apenados
             </TabsTrigger>
-            <TabsTrigger value="faccoes" className="gap-2 flex-shrink-0 py-2 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm">
+            <TabsTrigger value="faccoes" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
               <Shield className="w-4 h-4" />
               Facções
             </TabsTrigger>
-            <TabsTrigger value="advogados" className="gap-2 flex-shrink-0 py-2 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm">
+            <TabsTrigger value="advogados" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
               <Briefcase className="w-4 h-4" />
               Advogados
             </TabsTrigger>
-            <TabsTrigger value="unidades" className="gap-2 flex-shrink-0 py-2 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm">
+            <TabsTrigger value="unidades" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
               <Building2 className="w-4 h-4" />
               Unidades
             </TabsTrigger>
-            <TabsTrigger value="visitantes" className="gap-2 flex-shrink-0 py-2 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm">
+            <TabsTrigger value="visitantes" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
               <Camera className="w-4 h-4" />
               Visitantes
             </TabsTrigger>
             {showSync && (
-              <TabsTrigger value="sync" className="gap-2 flex-shrink-0 py-2 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm">
+              <TabsTrigger value="sync" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
                 <RefreshCw className="w-4 h-4" />
                 Sincronização
               </TabsTrigger>
             )}
           </TabsList>
+        </div>
 
           <TabsContent value="dashboard" className="flex-1 min-h-0 mt-0 overflow-y-auto">
             <DashboardPanel />

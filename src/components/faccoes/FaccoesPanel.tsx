@@ -101,11 +101,13 @@ function ApenadosFaccaoModal({ faccao, onClose }: { faccao: Faccao; onClose: () 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+        className="bg-white dark:bg-gray-900 rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:max-w-2xl h-[92vh] md:h-auto md:max-h-[85vh] flex flex-col transition-all duration-300"
         onClick={e => e.stopPropagation()}
       >
+        {/* Drag handle visual para mobile */}
+        <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto my-3 md:hidden shrink-0" />
         {/* Header */}
         <div className="flex items-center gap-3 p-5 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <div
