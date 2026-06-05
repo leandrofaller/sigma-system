@@ -10,7 +10,7 @@ export const authConfig: NextAuthConfig = {
   session: { strategy: 'jwt', maxAge: 8 * 60 * 60 },
   secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
@@ -18,6 +18,11 @@ export const authConfig: NextAuthConfig = {
         token.groupName = (user as any).groupName;
         token.phone = (user as any).phone;
         token.deviceAuthorized = (user as any).deviceAuthorized ?? true;
+      }
+      if (trigger === 'update' && session) {
+        if (typeof session.deviceAuthorized === 'boolean') {
+          token.deviceAuthorized = session.deviceAuthorized;
+        }
       }
       return token;
     },

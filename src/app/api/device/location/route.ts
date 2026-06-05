@@ -17,6 +17,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Coordenadas inválidas' }, { status: 400 });
   }
 
+  // Obter user-agent e verificar se é mobile
+  const ua = req.headers.get('user-agent') || '';
+  const isMobile = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
+
+  if (isMobile && !hasLocation) {
+    return NextResponse.json(
+      { error: 'A geolocalização é obrigatória para dispositivos móveis' },
+      { status: 400 }
+    );
+  }
+
   const cookieStore = await cookies();
   const token = cookieStore.get('sigma-device')?.value;
 
@@ -37,8 +48,42 @@ export async function POST(req: NextRequest) {
       longitude: hasLocation ? lng : null,
       locationAddress: hasLocation && address ? address : null,
       locationAt: hasLocation ? new Date() : null,
+      geoPermissionDenied: !hasLocation,
     },
   });
+
+  if (hasLocation) {
+    const geoData = {
+      lat,
+      lng,
+      accuracy: null,
+      address: address || null,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Atualiza geolocalização do usuário para refletir no monitoramento
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: {
+        geoStatus: 'authorized',
+        geoLocationData: geoData,
+        lastLocation: geoData,
+      },
+    });
+
+    // Insere no histórico de localizações (user_locations)
+    await prisma.userLocation.create({
+      data: {
+        userId: session.user.id,
+        lat,
+        lng,
+        accuracy: null,
+        address: address || null,
+      },
+    }).catch((err) => {
+      console.warn(`[DeviceLocation] Erro ao criar histórico de localização: ${err.message}`);
+    });
+  }
 
   return NextResponse.json({ ok: true, hasLocation });
 }

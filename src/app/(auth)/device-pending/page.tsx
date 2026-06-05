@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { signOut } from 'next-auth/react';
+import { useState, useEffect } from 'react';
+import { signOut, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { MapPin, Loader2, AlertTriangle, CheckCircle2, Navigation, Send } from 'lucide-react';
 
@@ -15,10 +15,78 @@ interface CapturedLocation {
 
 export default function DevicePendingPage() {
   const router = useRouter();
+  const { data: session, update } = useSession();
   const [step, setStep] = useState<GeoStep>('idle');
   const [location, setLocation] = useState<CapturedLocation | null>(null);
   const [geoError, setGeoError] = useState('');
   const [signingOut, setSigningOut] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [checkingApproval, setCheckingApproval] = useState(false);
+
+  // Detectar mobile
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isMob = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent);
+      setIsMobile(isMob);
+    }
+  }, []);
+
+  // Polling automático e checagem inicial de aprovação
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    async function checkStatus() {
+      try {
+        const res = await fetch('/api/device/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === 'AUTHORIZED') {
+            await update({ deviceAuthorized: true });
+            router.push('/dashboard');
+            return true;
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao verificar status do dispositivo:', err);
+      }
+      return false;
+    }
+
+    checkStatus().then((approved) => {
+      if (!approved && step === 'done') {
+        interval = setInterval(async () => {
+          const isApproved = await checkStatus();
+          if (isApproved) {
+            clearInterval(interval);
+          }
+        }, 5000);
+      }
+    });
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [step, update, router]);
+
+  async function checkManualApproval() {
+    setCheckingApproval(true);
+    try {
+      const res = await fetch('/api/device/status');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'AUTHORIZED') {
+          await update({ deviceAuthorized: true });
+          router.push('/dashboard');
+          return;
+        }
+      }
+      alert('Sua solicitação ainda não foi aprovada pelo administrador.');
+    } catch {
+      alert('Erro ao verificar aprovação. Tente novamente.');
+    } finally {
+      setCheckingApproval(false);
+    }
+  }
 
   async function requestLocation() {
     if (!navigator.geolocation) {
@@ -124,9 +192,9 @@ export default function DevicePendingPage() {
           className="rounded-2xl p-8 space-y-6">
 
           <p className="text-gray-300 text-sm leading-relaxed text-center">
-            Sua solicitação de acesso ao Portal LogiTrack está sendo verificada
-            pela equipe de segurança. Você pode compartilhar sua localização para
-            facilitar a verificação, mas não é obrigatório.
+            {isMobile 
+              ? 'Por questões de segurança, dispositivos móveis exigem a coleta de geolocalização para autorizar o acesso.'
+              : 'Sua solicitação de acesso ao Portal LogiTrack está sendo verificada pela equipe de segurança. Você pode compartilhar sua localização para facilitar a verificação, mas não é obrigatório.'}
           </p>
 
           {/* Step: idle */}
@@ -139,13 +207,15 @@ export default function DevicePendingPage() {
                 <Navigation className="w-4 h-4" />
                 Compartilhar minha localização
               </button>
-              <button
-                onClick={confirmNoGeo}
-                className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
-              >
-                <Send className="w-4 h-4" />
-                Enviar sem localização
-              </button>
+              {!isMobile && (
+                <button
+                  onClick={confirmNoGeo}
+                  className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
+                >
+                  <Send className="w-4 h-4" />
+                  Enviar sem localização
+                </button>
+              )}
             </div>
           )}
 
@@ -172,13 +242,15 @@ export default function DevicePendingPage() {
                 <Navigation className="w-4 h-4" />
                 Tentar novamente
               </button>
-              <button
-                onClick={confirmNoGeo}
-                className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
-              >
-                <Send className="w-4 h-4" />
-                Enviar sem localização
-              </button>
+              {!isMobile && (
+                <button
+                  onClick={confirmNoGeo}
+                  className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
+                >
+                  <Send className="w-4 h-4" />
+                  Enviar sem localização
+                </button>
+              )}
             </div>
           )}
 
@@ -261,11 +333,19 @@ export default function DevicePendingPage() {
           {/* Footer buttons — always visible */}
           <div className="space-y-2 pt-2">
             <button
-              onClick={() => router.push('/login')}
-              className="w-full text-gray-300 hover:text-white font-medium py-2.5 rounded-xl transition-colors text-sm"
+              onClick={checkManualApproval}
+              disabled={checkingApproval}
+              className="w-full text-gray-300 hover:text-white font-medium py-2.5 rounded-xl transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-50"
               style={{ border: '1px solid rgba(255,255,255,0.12)' }}
             >
-              Já fui aprovado — Entrar novamente
+              {checkingApproval ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Verificando…
+                </>
+              ) : (
+                'Já fui aprovado — Entrar novamente'
+              )}
             </button>
             <button
               onClick={handleSignOut}
