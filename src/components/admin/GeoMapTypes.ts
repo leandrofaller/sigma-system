@@ -20,8 +20,23 @@ export const TILE_LAYERS = {
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   },
+  googleSatellite: {
+    label: 'Google Híbrido (Satélite)',
+    url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    attribution: '© Google Maps',
+  },
+  googleSatellitePure: {
+    label: 'Google Satélite (Limpo)',
+    url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    attribution: '© Google Maps',
+  },
+  googleTerrain: {
+    label: 'Google Terreno (Físico)',
+    url: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+    attribution: '© Google Maps',
+  },
   satellite: {
-    label: 'Satélite (Esri)',
+    label: 'Esri (Satélite)',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: '© <a href="https://www.esri.com">Esri</a>, Maxar, GeoEye, Earthstar Geographics',
   },
