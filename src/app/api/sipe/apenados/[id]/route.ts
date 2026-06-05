@@ -5,7 +5,6 @@ import { prisma } from '@/lib/db'
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  if ((session.user as any).role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Acesso restrito ao Superadmin' }, { status: 403 })
 
   const { id } = await params
 

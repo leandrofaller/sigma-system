@@ -10,11 +10,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
-  const role = (session.user as any).role
-  if (role !== 'SUPER_ADMIN' && role !== 'OPERATOR') {
-    return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
-  }
-
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q')?.trim() ?? ''
 
