@@ -98,24 +98,9 @@ export default function GeolocationPermissionPage() {
             const { latitude, longitude, accuracy } = pos.coords;
             await handleLocationSuccess(latitude, longitude, accuracy);
           },
-          async (error) => {
-            console.warn('Geolocalização nativa do navegador falhou, tentando fallback por IP. Erro:', error);
-            try {
-              const ipRes = await fetch('https://ipapi.co/json/');
-              if (ipRes.ok) {
-                const ipData = await ipRes.json();
-                if (ipData && typeof ipData.latitude === 'number' && typeof ipData.longitude === 'number') {
-                  const lat = ipData.latitude;
-                  const lng = ipData.longitude;
-                  await handleLocationSuccess(lat, lng, 5000); // 5000m de precisão para IP
-                  return;
-                }
-              }
-            } catch (ipErr) {
-              console.error('Falha no fallback de geolocalização por IP:', ipErr);
-            }
-
+          (error) => {
             setStatus('denied');
+
             let msg = 'Erro desconhecido ao obter localização';
             if (error.code === 1) {
               msg = 'Você negou a permissão. Clique no ícone de localização na barra do navegador para permitir.';
@@ -124,6 +109,7 @@ export default function GeolocationPermissionPage() {
             } else if (error.code === 3) {
               msg = 'Timeout ao obter localização (tente novamente)';
             }
+
             setError(msg);
           },
           {

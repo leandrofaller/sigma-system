@@ -156,25 +156,7 @@ export default function DevicePendingPage() {
             const { latitude: lat, longitude: lng } = pos.coords;
             await handleLocationSuccess(lat, lng);
           },
-          async (err) => {
-            console.warn('Geolocalização nativa do navegador falhou, tentando fallback por IP. Erro:', err);
-            try {
-              const ipRes = await fetch('https://ipapi.co/json/');
-              if (ipRes.ok) {
-                const ipData = await ipRes.json();
-                if (ipData && typeof ipData.latitude === 'number' && typeof ipData.longitude === 'number') {
-                  const lat = ipData.latitude;
-                  const lng = ipData.longitude;
-                  const address = `${ipData.city ?? ''}, ${ipData.region ?? ''}, ${ipData.country_name ?? ''} (Aproximado via IP)`.replace(/^,\s*/, '');
-                  setLocation({ lat, lng, address });
-                  setStep('captured');
-                  return;
-                }
-              }
-            } catch (ipErr) {
-              console.error('Falha no fallback de geolocalização por IP:', ipErr);
-            }
-
+          (err) => {
             const msgs: Record<number, string> = {
               1: 'Permissão negada. Clique no ícone de localização na barra do navegador e permita o acesso.',
               2: 'Não foi possível determinar sua localização. Verifique se o GPS está ativo ou se você tem sinal.',
