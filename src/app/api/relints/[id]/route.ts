@@ -34,8 +34,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!existing) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
 
   const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
-  if (!isAdmin && existing.authorId !== user.id) {
-    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+  if (!isAdmin) {
+    if (existing.groupId !== user.groupId) {
+      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    }
+    if (user.groupName === 'NI/AIP/JI-PARANÁ' && existing.authorId !== user.id) {
+      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    }
   }
 
   const relint = await prisma.relint.update({

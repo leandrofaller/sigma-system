@@ -26,7 +26,9 @@ export default async function EditarDebriefingPage({ params }: { params: Promise
   if (!debriefing) notFound();
 
   const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
-  const canEdit = isAdmin || debriefing.authorId === user.id || debriefing.groupId === user.groupId;
+  const canEdit = isAdmin || 
+                  debriefing.authorId === user.id || 
+                  (debriefing.groupId === user.groupId && user.groupName !== 'NI/AIP/JI-PARANÁ');
   if (!canEdit) redirect('/debriefings');
 
   const groups = await getGroups(user.role, user.groupId);

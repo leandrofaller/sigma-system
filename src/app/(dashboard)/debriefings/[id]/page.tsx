@@ -55,7 +55,10 @@ export default async function DebriefingViewPage({ params }: { params: Promise<{
     },
   };
 
-  const canEdit = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || debriefing.authorId === user.id;
+  const canEdit = user.role === 'SUPER_ADMIN' || 
+                  user.role === 'ADMIN' || 
+                  (debriefing.groupId === user.groupId && user.groupName !== 'NI/AIP/JI-PARANÁ') ||
+                  debriefing.authorId === user.id;
 
   return (
     <div className="animate-fade-in space-y-4">

@@ -13,6 +13,7 @@ interface Props {
   role: string;
   userId: string;
   userGroupId?: string | null;
+  userGroupName?: string | null;
 }
 
 const statusColors: Record<string, string> = {
@@ -26,7 +27,7 @@ const statusLabels: Record<string, string> = {
   DRAFT: 'Rascunho', PUBLISHED: 'Publicado', ARCHIVED: 'Arquivado', DELETION_REQUESTED: 'Exclusão Pendente',
 };
 
-export function DebriefingsList({ debriefings, role, userId, userGroupId }: Props) {
+export function DebriefingsList({ debriefings, role, userId, userGroupId, userGroupName }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -142,31 +143,41 @@ export function DebriefingsList({ debriefings, role, userId, userGroupId }: Prop
                         className="p-1.5 text-gray-400 hover:text-sigma-600 dark:hover:text-sigma-400 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 rounded-lg transition-colors">
                         <Eye className="w-4 h-4" />
                       </Link>
-                      {(role === 'SUPER_ADMIN' || role === 'ADMIN' || d.authorId === userId || d.groupId === userGroupId) && (
-                        <Link href={`/debriefings/${d.id}/editar`}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
-                          <Pencil className="w-4 h-4" />
-                        </Link>
-                      )}
+                      {(() => {
+                        const canModify = role === 'SUPER_ADMIN' || 
+                                          role === 'ADMIN' || 
+                                          d.authorId === userId || 
+                                          (d.groupId === userGroupId && userGroupName !== 'NI/AIP/JI-PARANÁ');
+                        return (
+                          <>
+                            {canModify && (
+                              <Link href={`/debriefings/${d.id}/editar`}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                                <Pencil className="w-4 h-4" />
+                              </Link>
+                            )}
 
-                      {(role === 'SUPER_ADMIN' || role === 'ADMIN' || d.authorId === userId || d.groupId === userGroupId) && (
-                        <button
-                          onClick={() => handleDelete(d.id, d.status)}
-                          disabled={deletingId === d.id || (d.status === 'DELETION_REQUESTED' && d.authorId === userId && role !== 'SUPER_ADMIN' && role !== 'ADMIN')}
-                          title={d.status === 'DELETION_REQUESTED' ? 'Aprovar Exclusão' : 'Excluir'}
-                          className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${
-                            d.status === 'DELETION_REQUESTED'
-                              ? 'text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40'
-                              : 'text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'
-                          }`}
-                        >
-                          {deletingId === d.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
-                      )}
+                            {canModify && (
+                              <button
+                                onClick={() => handleDelete(d.id, d.status)}
+                                disabled={deletingId === d.id || (d.status === 'DELETION_REQUESTED' && d.authorId === userId && role !== 'SUPER_ADMIN' && role !== 'ADMIN')}
+                                title={d.status === 'DELETION_REQUESTED' ? 'Aprovar Exclusão' : 'Excluir'}
+                                className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                                  d.status === 'DELETION_REQUESTED'
+                                    ? 'text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40'
+                                    : 'text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'
+                                }`}
+                              >
+                                {deletingId === d.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
                 </motion.tr>

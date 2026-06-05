@@ -48,7 +48,10 @@ export default async function RelintViewPage({ params }: { params: Promise<{ id:
     },
   };
 
-  const canEdit = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || relint.authorId === user.id;
+  const canEdit = user.role === 'SUPER_ADMIN' || 
+                  user.role === 'ADMIN' || 
+                  (relint.groupId === user.groupId && user.groupName !== 'NI/AIP/JI-PARANÁ') ||
+                  relint.authorId === user.id;
 
   return (
     <div className="animate-fade-in space-y-4">

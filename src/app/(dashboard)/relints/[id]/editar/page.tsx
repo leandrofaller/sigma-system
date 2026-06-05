@@ -29,7 +29,10 @@ export default async function EditarRelintPage({ params }: { params: Promise<{ i
   if (!relint) notFound();
 
   const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
-  if (!isAdmin && relint.authorId !== user.id && relint.groupId !== user.groupId) redirect('/relints');
+  const canEdit = isAdmin || 
+                  (relint.groupId === user.groupId && user.groupName !== 'NI/AIP/JI-PARANÁ') || 
+                  relint.authorId === user.id;
+  if (!canEdit) redirect('/relints');
 
   return (
     <div className="animate-fade-in">
