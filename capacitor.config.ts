@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.leandrofaller.sigmasystem',
-  appName: 'Sigma System',
+  appName: 'SYGMA',
   webDir: 'public',
   server: {
     // ATENÇÃO: Substitua pelo domínio real da sua VPS / Coolify no deploy de produção.
