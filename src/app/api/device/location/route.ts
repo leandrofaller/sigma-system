@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { cookies } from 'next/headers';
+import { parseDeviceName } from '@/lib/device';
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -35,26 +36,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Dispositivo não identificado' }, { status: 400 });
   }
 
-  const device = await prisma.userDevice.findUnique({ where: { token } });
+  let device = await prisma.userDevice.findUnique({ where: { token } });
 
-  if (!device || device.userId !== session.user.id) {
-    return NextResponse.json({ error: 'Dispositivo não encontrado' }, { status: 404 });
+  if (device && device.userId !== session.user.id) {
+    return NextResponse.json({ error: 'Token pertence a outro usuário' }, { status: 403 });
   }
 
-  await prisma.userDevice.update({
-    where: { token },
-    data: {
-      latitude: hasLocation ? lat : null,
-      longitude: hasLocation ? lng : null,
-      locationAddress: hasLocation && address ? address : null,
-      locationAt: hasLocation ? new Date() : null,
-      geoPermissionDenied: !hasLocation,
-      ...(hasLocation ? {
-        status: 'AUTHORIZED',
-        authorizedAt: new Date(),
-      } : {}),
-    },
-  });
+  const userAgent = req.headers.get('user-agent') || '';
+  const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+                    req.headers.get('x-real-ip') ??
+                    '';
+
+  if (!device) {
+    device = await prisma.userDevice.create({
+      data: {
+        token,
+        userId: session.user.id,
+        name: parseDeviceName(userAgent),
+        userAgent,
+        ipAddress,
+        status: hasLocation ? 'AUTHORIZED' : 'PENDING',
+        authorizedAt: hasLocation ? new Date() : null,
+        latitude: hasLocation ? lat : null,
+        longitude: hasLocation ? lng : null,
+        locationAddress: hasLocation && address ? address : null,
+        locationAt: hasLocation ? new Date() : null,
+        geoPermissionDenied: !hasLocation,
+      },
+    });
+  } else {
+    await prisma.userDevice.update({
+      where: { token },
+      data: {
+        latitude: hasLocation ? lat : null,
+        longitude: hasLocation ? lng : null,
+        locationAddress: hasLocation && address ? address : null,
+        locationAt: hasLocation ? new Date() : null,
+        geoPermissionDenied: !hasLocation,
+        ...(hasLocation ? {
+          status: 'AUTHORIZED',
+          authorizedAt: new Date(),
+        } : {}),
+      },
+    });
+  }
 
   if (hasLocation) {
     const geoData = {
