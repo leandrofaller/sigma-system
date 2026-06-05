@@ -120,23 +120,54 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
     if (!el) return;
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting || loadingMoreRef.current) return;
-      if (!debouncedSearch || searchResults.length >= searchTotal) return;
-      loadingMoreRef.current = true;
-      setIsLoadingMore(true);
-      fetch(`/api/apenados?search=${encodeURIComponent(debouncedSearch)}&skip=${searchSkip}&take=${SEARCH_PAGE_SIZE}`)
-        .then((r) => r.json())
-        .then((data) => {
-          setSearchResults((prev) => [...prev, ...(data.apenados ?? [])]);
-          setSearchSkip((s) => s + SEARCH_PAGE_SIZE);
-        })
-        .finally(() => {
-          setIsLoadingMore(false);
-          loadingMoreRef.current = false;
-        });
+
+      const isSearchMode = debouncedSearch.length > 0;
+
+      if (isSearchMode) {
+        if (searchResults.length >= searchTotal) return;
+        loadingMoreRef.current = true;
+        setIsLoadingMore(true);
+        fetch(`/api/apenados?search=${encodeURIComponent(debouncedSearch)}&skip=${searchSkip}&take=${SEARCH_PAGE_SIZE}`)
+          .then((r) => r.json())
+          .then((data) => {
+            setSearchResults((prev) => [...prev, ...(data.apenados ?? [])]);
+            setSearchSkip((s) => s + SEARCH_PAGE_SIZE);
+          })
+          .finally(() => {
+            setIsLoadingMore(false);
+            loadingMoreRef.current = false;
+          });
+      } else if (activeLetter) {
+        const letterCount = letterCountsLocal[activeLetter] ?? 0;
+        if (letterData.length >= letterCount) return;
+        loadingMoreRef.current = true;
+        setIsLoadingMore(true);
+        const take = isMobileDevice() ? LETTER_TAKE_MOBILE : LETTER_TAKE_DESKTOP;
+        fetch(`/api/apenados?letter=${encodeURIComponent(activeLetter)}&skip=${letterData.length}&take=${take}`)
+          .then((r) => r.json())
+          .then((data) => {
+            const newRecords = data.apenados ?? [];
+            setLetterData((prev) => [...prev, ...newRecords]);
+            if (letterCache.current.has(activeLetter)) {
+              const currentCached = letterCache.current.get(activeLetter) ?? [];
+              const merged = [...currentCached];
+              newRecords.forEach((item: Apenado) => {
+                if (!merged.some((a) => a.id === item.id)) {
+                  merged.push(item);
+                }
+              });
+              letterCache.current.set(activeLetter, merged);
+            }
+          })
+          .finally(() => {
+            setIsLoadingMore(false);
+            loadingMoreRef.current = false;
+          });
+      }
     }, { rootMargin: '200px' });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [debouncedSearch, searchResults.length, searchTotal, searchSkip]);
+  }, [debouncedSearch, searchResults.length, searchTotal, searchSkip, activeLetter, letterData.length, letterCountsLocal]);
 
   // Scroll to top
   useEffect(() => {
@@ -651,7 +682,8 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
           )}
 
           {/* Infinite scroll sentinel */}
-          {showSearchMode && searchResults.length < searchTotal && (
+          {((showSearchMode && searchResults.length < searchTotal) ||
+            (showLetterMode && letterData.length < letterCount)) && (
             <div ref={sentinelRef} className="h-4" />
           )}
 
