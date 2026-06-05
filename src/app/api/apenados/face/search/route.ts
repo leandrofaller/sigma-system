@@ -94,11 +94,6 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const user = session.user as any;
-  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
-  }
-
   // Threshold padrão configurável via env — 0.4 (40%) por padrão
   const envDefaultSim = Math.round(parseFloat(process.env.FACE_SIMILARITY_THRESHOLD || '0.4') * 100);
 
