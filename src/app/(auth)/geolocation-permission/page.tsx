@@ -18,64 +18,135 @@ export default function GeolocationPermissionPage() {
   const [status, setStatus] = useState<Status>('waiting');
   const [geoData, setGeoData] = useState<GeoData | null>(null);
   const [error, setError] = useState<string>('');
+  const [isMobile, setIsMobile] = useState(false);
 
-  const requestLocation = () => {
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isMob = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent);
+      setIsMobile(isMob);
+    }
+  }, []);
+
+  const requestLocation = async () => {
     setStatus('requesting');
     setError('');
 
-    if (!navigator.geolocation) {
+    try {
+      const isNative = typeof window !== 'undefined' && 
+        ((window as any).Capacitor || navigator.userAgent.includes('SYGMA-MOBILE'));
+
+      if (isNative) {
+        // Função auxiliar para aguardar o carregamento do window.Capacitor
+        const waitForCapacitor = (): Promise<void> => {
+          return new Promise((resolve, reject) => {
+            if ((window as any).Capacitor) {
+              resolve();
+              return;
+            }
+            let elapsed = 0;
+            const interval = setInterval(() => {
+              if ((window as any).Capacitor) {
+                clearInterval(interval);
+                resolve();
+              } else {
+                elapsed += 100;
+                if (elapsed >= 3000) {
+                  clearInterval(interval);
+                  reject(new Error('Tempo limite de inicialização do Capacitor excedido.'));
+                }
+              }
+            }, 100);
+          });
+        };
+
+        // Aguarda a ponte do Capacitor inicializar
+        await waitForCapacitor();
+
+        // Importa o plugin nativo dinamicamente
+        const { Geolocation } = await import('@capacitor/geolocation');
+
+        // Checar e pedir permissão de GPS nativa
+        const permission = await Geolocation.checkPermissions();
+        if (permission.location !== 'granted') {
+          const reqPerm = await Geolocation.requestPermissions();
+          if (reqPerm.location !== 'granted') {
+            setStatus('denied');
+            setError('Permissão de geolocalização negada no dispositivo. Vá nas configurações do seu celular e autorize o aplicativo.');
+            return;
+          }
+        }
+
+        // Obter coordenadas
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 20000,
+        });
+        const { latitude, longitude, accuracy } = pos.coords;
+        await handleLocationSuccess(latitude, longitude, accuracy);
+      } else {
+        // Fallback para web tradicional
+        if (!navigator.geolocation) {
+          setStatus('denied');
+          setError('Geolocalização não é suportada pelo seu navegador');
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const { latitude, longitude, accuracy } = pos.coords;
+            await handleLocationSuccess(latitude, longitude, accuracy);
+          },
+          (error) => {
+            setStatus('denied');
+
+            let msg = 'Erro desconhecido ao obter localização';
+            if (error.code === 1) {
+              msg = 'Você negou a permissão. Clique no ícone de localização na barra do navegador para permitir.';
+            } else if (error.code === 2) {
+              msg = 'Localização indisponível (verifique se o GPS está ligado)';
+            } else if (error.code === 3) {
+              msg = 'Timeout ao obter localização (tente novamente)';
+            }
+
+            setError(msg);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 30000,
+            maximumAge: 0,
+          }
+        );
+      }
+    } catch (err: any) {
+      console.error('Erro na captura de geolocalização:', err);
       setStatus('denied');
-      setError('Geolocalização não é suportada pelo seu navegador');
-      return;
+      setError(err?.message || 'Erro ao obter localização.');
+    }
+  };
+
+  const handleLocationSuccess = async (latitude: number, longitude: number, accuracy: number) => {
+    // Reverse geocoding via Nominatim
+    let address: string | null = null;
+    try {
+      const geoRes = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (geoRes.ok) {
+        const geoData = await geoRes.json();
+        address = geoData.address?.city || geoData.address?.town || geoData.address?.village ||
+                 geoData.address?.county || geoData.name || null;
+      }
+    } catch (err) {
+      console.warn('[Geo] Reverse geocoding falhou:', err);
     }
 
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
+    const data: GeoData = { lat: latitude, lng: longitude, accuracy, address };
+    setGeoData(data);
+    setStatus('captured');
 
-        // Reverse geocoding via Nominatim
-        let address: string | null = null;
-        try {
-          const geoRes = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
-            { signal: AbortSignal.timeout(5000) }
-          );
-          if (geoRes.ok) {
-            const geoData = await geoRes.json();
-            address = geoData.address?.city || geoData.address?.town || geoData.address?.village ||
-                     geoData.address?.county || geoData.name || null;
-          }
-        } catch (err) {
-          console.warn('[Geo] Reverse geocoding falhou:', err);
-        }
-
-        const data: GeoData = { lat: latitude, lng: longitude, accuracy, address };
-        setGeoData(data);
-        setStatus('captured');
-
-        // Auto-submit após 2 segundos
-        setTimeout(() => submitLocation(data), 2000);
-      },
-      (error) => {
-        setStatus('denied');
-
-        let msg = 'Erro desconhecido ao obter localização';
-        if (error.code === 1) {
-          msg = 'Você negou a permissão. Clique no ícone de localização na barra do navegador para permitir.';
-        } else if (error.code === 2) {
-          msg = 'Localização indisponível (verifique se o GPS está ligado)';
-        } else if (error.code === 3) {
-          msg = 'Timeout ao obter localização (tente novamente)';
-        }
-
-        setError(msg);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 30000,
-        maximumAge: 0,
-      }
-    );
+    // Auto-submit após 2 segundos
+    setTimeout(() => submitLocation(data), 2000);
   };
 
   const submitLocation = async (data: GeoData) => {
@@ -172,12 +243,14 @@ export default function GeolocationPermissionPage() {
                 <MapPin className="inline-block w-5 h-5 mr-2" />
                 Compartilhar Minha Localização
               </button>
-              <button
-                onClick={handleDeny}
-                className="w-full text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-medium py-2 px-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
-              >
-                Negar por enquanto
-              </button>
+              {!isMobile && (
+                <button
+                  onClick={handleDeny}
+                  className="w-full text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-medium py-2 px-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
+                >
+                  Negar por enquanto
+                </button>
+              )}
             </div>
           )}
 
