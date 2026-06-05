@@ -51,12 +51,22 @@ export async function GET(req: NextRequest) {
         notes: true,
         createdAt: true,
         photoQuality: true,
+        faceDescriptor: true,
       },
     }),
     prisma.apenado.count({ where }),
   ]);
 
-  return NextResponse.json({ apenados, total, skip, take });
+  const mappedApenados = apenados.map((a) => {
+    const { faceDescriptor, ...rest } = a;
+    return {
+      ...rest,
+      isFaceIndexed: faceDescriptor !== null && faceDescriptor !== 'NONE',
+      noFaceDetected: faceDescriptor === 'NONE',
+    };
+  });
+
+  return NextResponse.json({ apenados: mappedApenados, total, skip, take });
 }
 
 export async function POST(req: NextRequest) {

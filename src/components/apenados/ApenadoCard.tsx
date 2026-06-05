@@ -13,6 +13,8 @@ export interface Apenado {
   createdAt: Date | string;
   photoQuality?: number | null;
   _photoTs?: number;
+  isFaceIndexed?: boolean;
+  noFaceDetected?: boolean;
 }
 
 function qualityPill(q: number | null | undefined) {
@@ -21,6 +23,17 @@ function qualityPill(q: number | null | undefined) {
   if (q < 150) return { label: 'Regular', cls: 'bg-yellow-500/80 text-white' };
   if (q < 400) return { label: 'Boa', cls: 'bg-blue-500/80 text-white' };
   return { label: 'Nítida', cls: 'bg-green-500/80 text-white' };
+}
+
+function faceStatusPill(a: Apenado) {
+  if (!a.photoPath) return null;
+  if (a.isFaceIndexed) {
+    return { label: 'Facial ativo', cls: 'bg-green-600/90 text-white' };
+  }
+  if (a.noFaceDetected) {
+    return { label: 'Sem rosto', cls: 'bg-red-600/90 text-white' };
+  }
+  return { label: 'Não indexada', cls: 'bg-yellow-600/90 text-white shadow-sm' };
 }
 
 interface Props {
@@ -109,6 +122,11 @@ export function ApenadoCard({ apenado, userRole, onEdit, onDelete, onPhotoClick 
         )}
         {apenado.photoPath && (() => { const p = qualityPill(apenado.photoQuality); return p ? (
           <div className={`absolute bottom-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold leading-none pointer-events-none select-none ${p.cls}`}>
+            {p.label}
+          </div>
+        ) : null; })()}
+        {apenado.photoPath && (() => { const p = faceStatusPill(apenado); return p ? (
+          <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold leading-none pointer-events-none select-none z-10 ${p.cls}`}>
             {p.label}
           </div>
         ) : null; })()}
