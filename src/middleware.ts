@@ -12,9 +12,6 @@ const DEVICE_COOKIE = 'sigma-device';
 const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
 
 function buildRedirect(req: NextRequest, path: string): URL {
-  if (process.env.NEXTAUTH_URL) {
-    return new URL(path, process.env.NEXTAUTH_URL);
-  }
   const proto =
     req.headers.get('x-forwarded-proto')?.split(',')[0].trim() ||
     req.nextUrl.protocol.replace(':', '');
@@ -52,6 +49,19 @@ export default auth((req) => {
   const needsCookie = !existingToken;
 
   if (isApiPublicRoute) return;
+
+  // Redireciona acessos de celular na raiz '/' para login (se deslogado) ou dashboard (se logado)
+  if (nextUrl.pathname === '/') {
+    const ua = req.headers.get('user-agent') || '';
+    if (MOBILE_UA_REGEX.test(ua)) {
+      if (isLoggedIn) {
+        return NextResponse.redirect(buildRedirect(req, '/dashboard'));
+      } else {
+        const res = NextResponse.redirect(buildRedirect(req, '/login'));
+        return needsCookie ? attachDeviceCookie(res, newToken) : res;
+      }
+    }
+  }
 
   if (nextUrl.pathname.startsWith('/api/')) {
     if (!isLoggedIn) {
@@ -98,21 +108,7 @@ export default auth((req) => {
     return NextResponse.redirect(buildRedirect(req, '/dashboard'));
   }
 
-  // Redireciona /missoes para versão mobile quando acessado de celular
-  if (isLoggedIn && nextUrl.pathname === '/missoes' && nextUrl.searchParams.get('desktop') !== '1') {
-    const ua = req.headers.get('user-agent') || '';
-    if (MOBILE_UA_REGEX.test(ua)) {
-      return NextResponse.redirect(buildRedirect(req, '/missoes/mobile'));
-    }
-  }
 
-  // Redireciona /apenados para versão mobile quando acessado de celular
-  if (isLoggedIn && nextUrl.pathname === '/apenados' && nextUrl.searchParams.get('desktop') !== '1') {
-    const ua = req.headers.get('user-agent') || '';
-    if (MOBILE_UA_REGEX.test(ua)) {
-      return NextResponse.redirect(buildRedirect(req, '/apenados/mobile'));
-    }
-  }
 
   // Seta cookie de dispositivo em visitantes novos (pass-through com cookie)
   if (needsCookie) {

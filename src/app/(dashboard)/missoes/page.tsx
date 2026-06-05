@@ -1,40 +1,65 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { MissionCalendar } from '@/components/dashboard/MissionCalendar';
-
-async function getMissions() {
-  // Esconde missões canceladas do calendário (consultar via Relatório se necessário)
-  return prisma.mission.findMany({
-    where: { status: { not: 'CANCELLED' } },
-    include: {
-      user: { select: { name: true, avatar: true } },
-      group: { select: { name: true, color: true } },
-    },
-    orderBy: { startDate: 'asc' },
-  });
-}
-
-async function getGroups() {
-  return prisma.group.findMany({ where: { isActive: true } });
-}
+import { MobileMissionView } from '@/components/dashboard/MobileMissionView';
+import { headers } from 'next/headers';
 
 export default async function MissoesPage() {
   const session = await auth();
   const user = session!.user as any;
 
-  const [missions, groups] = await Promise.all([
-    getMissions(),
-    getGroups(),
-  ]);
+  // Detectar dispositivo móvel a partir do User-Agent
+  const headersList = await headers();
+  const ua = headersList.get('user-agent') || '';
+  const isMobile = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
 
-  // Convert dates to ISO strings for the client component
+  // Buscar grupos ativos
+  const groups = await prisma.group.findMany({ where: { isActive: true } });
+
+  // Buscar missões condicionalmente
+  let missions;
+  if (isMobile) {
+    missions = await prisma.mission.findMany({
+      where: { userId: user.id },
+      include: {
+        group: { select: { id: true, name: true, color: true } },
+      },
+      orderBy: { startDate: 'desc' },
+      take: 30,
+    });
+  } else {
+    missions = await prisma.mission.findMany({
+      where: { status: { not: 'CANCELLED' } },
+      include: {
+        user: { select: { name: true, avatar: true } },
+        group: { select: { name: true, color: true } },
+      },
+      orderBy: { startDate: 'asc' },
+    });
+  }
+
+  // Serializar datas
   const serializedMissions = missions.map(m => ({
     ...m,
     startDate: m.startDate.toISOString(),
-    endDate: m.endDate?.toISOString(),
+    endDate: m.endDate?.toISOString() ?? null,
     createdAt: m.createdAt.toISOString(),
     updatedAt: m.updatedAt.toISOString(),
   }));
+
+  if (isMobile) {
+    return (
+      <MobileMissionView
+        initialMissions={serializedMissions as any}
+        groups={groups}
+        currentUser={{
+          id: user.id,
+          name: user.name,
+          groupId: user.groupId,
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">

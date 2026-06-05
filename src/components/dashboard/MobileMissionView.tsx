@@ -8,7 +8,7 @@ import { parsePortugueseFloat } from '@/lib/utils';
 import {
   Plus, MapPin, Clock, CheckCircle2, X, Loader2,
   Navigation, Zap, Monitor, Pencil, AlertTriangle,
-  Calendar as CalendarIcon, Gauge, FileBarChart, Flag,
+  Calendar as CalendarIcon, Gauge, FileBarChart, Flag, Search,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -96,9 +96,27 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
     startNow: false,
   });
 
-  const inProgress = missions.filter(m => m.status === 'IN_PROGRESS');
-  const planned = missions.filter(m => m.status === 'PLANNED');
-  const recent = missions.filter(m => m.status === 'COMPLETED').slice(0, 8);
+  const [activeTab, setActiveTab] = useState<'all' | 'in_progress' | 'planned' | 'completed'>('in_progress');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const inProgressTotal = missions.filter(m => m.status === 'IN_PROGRESS').length;
+  const plannedTotal = missions.filter(m => m.status === 'PLANNED').length;
+  const completedTotal = missions.filter(m => m.status === 'COMPLETED').length;
+  const allTotal = missions.length;
+
+  const filteredMissions = missions.filter(m => {
+    const matchesSearch = 
+      m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.destination.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.participants && m.participants.some(p => p.toLowerCase().includes(searchQuery.toLowerCase())));
+      
+    if (!matchesSearch) return false;
+    
+    if (activeTab === 'in_progress') return m.status === 'IN_PROGRESS';
+    if (activeTab === 'planned') return m.status === 'PLANNED';
+    if (activeTab === 'completed') return m.status === 'COMPLETED';
+    return true; // 'all'
+  });
 
   const resetForm = () => {
     setForm({
@@ -372,105 +390,149 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          <StatBubble label="Em Curso" value={inProgress.length} />
-          <StatBubble label="Planejadas" value={planned.length} />
-          <StatBubble label="Total" value={missions.length} />
+          <StatBubble label="Em Curso" value={inProgressTotal} />
+          <StatBubble label="Planejadas" value={plannedTotal} />
+          <StatBubble label="Total" value={allTotal} />
         </div>
       </div>
 
-      <div className="px-3 sm:px-4 pt-4 space-y-5">
-        {/* Em curso (destaque) */}
-        {inProgress.length > 0 && (
-          <section>
-            <h2 className="text-xs font-bold text-subtle uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-orange-500 animate-pulse" /> Viagens em Curso
-            </h2>
-            <div className="space-y-2">
-              {inProgress.map(m => (
-                <MissionCard key={m.id} mission={m}
-                  action={
-                    <button
-                      onClick={() => { setEndingMission(m); setEndKmValue(''); }}
-                      className="bg-green-600 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1.5"
-                    >
-                      <Flag className="w-3.5 h-3.5" /> Finalizar
-                    </button>
-                  }
-                />
-              ))}
-            </div>
-          </section>
-        )}
+      <div className="px-3 sm:px-4 pt-4 space-y-4">
+        {/* Barra de Busca */}
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Buscar por título, destino ou participante..."
+            className="w-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl pl-10 pr-4 py-3 text-sm placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-sigma-500 text-title shadow-sm"
+          />
+          <Search className="w-4.5 h-4.5 text-subtle absolute left-3.5 top-1/2 -translate-y-1/2" />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-subtle p-1 hover:text-title active:scale-90"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
 
-        {/* Planejadas */}
-        {planned.length > 0 && (
-          <section>
-            <h2 className="text-xs font-bold text-subtle uppercase tracking-wider mb-2 px-1">Planejadas</h2>
-            <div className="space-y-2">
-              {planned.slice(0, 5).map(m => {
-                const reachable = isScheduledDateReached(m.startDate);
-                return (
-                  <MissionCard key={m.id} mission={m}
-                    action={
+        {/* Barra de Abas (Tabs) */}
+        <div className="flex bg-white dark:bg-gray-900 p-1 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm gap-1">
+          {[
+            { id: 'in_progress', label: 'Em Curso', count: inProgressTotal, color: 'bg-orange-500' },
+            { id: 'planned', label: 'Planejadas', count: plannedTotal, color: 'bg-sigma-600' },
+            { id: 'completed', label: 'Concluídas', count: completedTotal, color: 'bg-green-600' },
+            { id: 'all', label: 'Todas', count: allTotal, color: 'bg-gray-500' }
+          ].map(tab => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`relative flex-1 py-2 rounded-xl text-xs font-bold transition-all flex flex-col items-center justify-center min-h-[46px] ${
+                  isActive ? 'text-white' : 'text-subtle active:bg-gray-100 dark:active:bg-gray-800'
+                }`}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="activeTabIndicator"
+                    className={`absolute inset-0 rounded-xl ${tab.color}`}
+                    transition={{ type: 'spring', duration: 0.38 }}
+                  />
+                )}
+                <span className="relative z-10 font-bold">{tab.label}</span>
+                <span className={`relative z-10 text-[9px] px-1.5 py-0.2 rounded-full mt-0.5 font-bold ${
+                  isActive ? 'bg-white/25 text-white' : 'bg-gray-100 dark:bg-gray-800 text-subtle'
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Listagem com animações */}
+        <motion.div 
+          layout 
+          className="space-y-3"
+        >
+          {activeTab === 'completed' && filteredMissions.length > 0 && (
+            <div className="flex justify-end px-1 pb-1">
+              <Link href="/missoes/relatorio" className="text-xs text-sigma-600 font-bold flex items-center gap-1">
+                <FileBarChart className="w-3.5 h-3.5" /> Acessar Relatório Completo
+              </Link>
+            </div>
+          )}
+
+          <AnimatePresence mode="popLayout">
+            {filteredMissions.map((m, idx) => (
+              <motion.div
+                key={m.id}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2, delay: Math.min(idx * 0.04, 0.2) }}
+                layout
+              >
+                <MissionCard
+                  mission={m}
+                  action={
+                    m.status === 'IN_PROGRESS' ? (
+                      <button
+                        onClick={() => { setEndingMission(m); setEndKmValue(''); }}
+                        className="bg-green-600 active:scale-95 text-white text-xs font-bold px-3 py-2.5 rounded-xl shadow-md flex items-center gap-1"
+                      >
+                        <Flag className="w-3.5 h-3.5" /> Fim
+                      </button>
+                    ) : m.status === 'PLANNED' ? (
                       <div className="flex flex-col gap-1.5">
                         <button
                           onClick={() => requestStart(m)}
-                          disabled={!reachable}
-                          title={!reachable ? 'Disponível a partir do dia agendado' : 'Iniciar viagem'}
-                          className="bg-sigma-600 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-gray-400"
+                          disabled={!isScheduledDateReached(m.startDate)}
+                          className="bg-sigma-600 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md disabled:opacity-40 disabled:bg-gray-400"
                         >
-                          {reachable ? 'Iniciar' : 'Aguarde'}
+                          Iniciar
                         </button>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 justify-end">
                           <button
                             onClick={() => openEdit(m)}
-                            title="Editar agendamento"
-                            className="flex-1 bg-gray-100 dark:bg-gray-800 active:scale-95 text-body p-1.5 rounded-lg flex items-center justify-center"
+                            className="bg-gray-100 dark:bg-gray-800 text-body p-1.5 rounded-lg active:scale-95"
                           >
-                            <Pencil className="w-3 h-3" />
+                            <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => setConfirmCancelMission(m)}
-                            title="Cancelar agendamento"
-                            className="flex-1 bg-red-50 dark:bg-red-900/20 active:scale-95 text-red-500 p-1.5 rounded-lg flex items-center justify-center"
+                            className="bg-red-50 dark:bg-red-900/20 text-red-500 p-1.5 rounded-lg active:scale-95"
                           >
-                            <X className="w-3 h-3" />
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
-                    }
-                  />
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* Recentes */}
-        {recent.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-2 px-1">
-              <h2 className="text-xs font-bold text-subtle uppercase tracking-wider">Histórico Recente</h2>
-              <Link href="/missoes/relatorio" className="text-[11px] text-sigma-600 font-semibold flex items-center gap-1">
-                <FileBarChart className="w-3 h-3" /> Relatório
-              </Link>
-            </div>
-            <div className="space-y-2">
-              {recent.map(m => <MissionCard key={m.id} mission={m} />)}
-            </div>
-          </section>
-        )}
-
-        {/* Vazio */}
-        {missions.length === 0 && (
-          <div className="text-center py-16 px-4">
-            <div className="w-20 h-20 mx-auto bg-sigma-100 dark:bg-sigma-900/30 rounded-3xl flex items-center justify-center mb-4">
-              <CalendarIcon className="w-10 h-10 text-sigma-600" />
-            </div>
-            <h3 className="text-lg font-bold text-title">Nenhuma viagem ainda</h3>
-            <p className="text-sm text-subtle mt-1">Toque no botão abaixo para registrar sua primeira viagem.</p>
-          </div>
-        )}
+                    ) : undefined
+                  }
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          
+          {filteredMissions.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-12 px-4 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm"
+            >
+              <div className="w-16 h-16 mx-auto bg-sigma-50 dark:bg-sigma-900/30 rounded-2xl flex items-center justify-center mb-3">
+                <CalendarIcon className="w-8 h-8 text-sigma-600" />
+              </div>
+              <h3 className="text-sm font-bold text-title">Nenhuma viagem encontrada</h3>
+              <p className="text-xs text-subtle mt-1">
+                {searchQuery ? 'Tente ajustar os termos da busca.' : 'Não há viagens para exibir nesta categoria.'}
+              </p>
+            </motion.div>
+          )}
+        </motion.div>
       </div>
 
       {/* FAB Nova Viagem */}
@@ -924,6 +986,18 @@ function MissionCard({ mission, action }: { mission: Mission; action?: React.Rea
               </span>
             )}
           </div>
+          {mission.participants && mission.participants.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2.5 pt-2 border-t border-gray-100 dark:border-gray-800/80">
+              {mission.participants.map(p => (
+                <span
+                  key={p}
+                  className="text-[9px] bg-sigma-50 dark:bg-sigma-950/40 text-sigma-600 dark:text-sigma-400 border border-sigma-100/50 dark:border-sigma-900/30 px-2 py-0.5 rounded-full font-bold animate-fade-in"
+                >
+                  {p}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         {action && <div className="flex-shrink-0">{action}</div>}
       </div>

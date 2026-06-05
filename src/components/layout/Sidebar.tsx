@@ -75,6 +75,17 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
   // Fecha o drawer mobile quando o usuário navega
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
+  // Abre o menu móvel automaticamente se estiver no celular e na página inicial (/dashboard)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const ua = navigator.userAgent || '';
+      const isMobile = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
+      if (isMobile && pathname === '/dashboard') {
+        setMobileOpen(true);
+      }
+    }
+  }, [pathname]);
+
   // Trava o scroll do body quando o drawer mobile está aberto
   useEffect(() => {
     if (mobileOpen) {
@@ -162,14 +173,169 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
         <Menu className="w-5 h-5" />
       </button>
 
-      {/* Backdrop mobile */}
+      {/* Menu Centralizado Mobile (Exclusivo) */}
       <AnimatePresence>
         {mobileOpen && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => setMobileOpen(false)}
-            className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-          />
+          <div className="md:hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop com desfoque de fundo */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+            />
+
+            {/* Painel Centralizado */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 250 }}
+              className="relative w-full max-w-sm max-h-[80vh] bg-gray-950/95 border border-gray-800/80 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden z-10"
+            >
+              {/* Cabeçalho */}
+              <div className="flex items-center justify-between pb-3 border-b border-gray-800/80 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="relative w-8 h-8">
+                    <Image
+                      src="/logos/badge-aip.png"
+                      alt="AIP"
+                      fill
+                      sizes="32px"
+                      className="object-contain"
+                    />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-white font-bold text-sm leading-tight">SIAIP</h3>
+                    <p className="text-gray-500 text-[10px]">Menu de Navegação</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setMobileOpen(false)}
+                  className="w-7 h-7 rounded-full bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white flex items-center justify-center transition active:scale-90"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Lista de Botões do Menu Principal */}
+              <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 scrollbar-none">
+                <div className="flex flex-col gap-2">
+                  {filteredNav.map((item, idx) => {
+                    const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                    return (
+                      <motion.div
+                        key={item.href}
+                        initial={{ opacity: 0, x: -15 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.02, type: 'spring', stiffness: 200 }}
+                      >
+                        <Link
+                          href={item.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={cn(
+                            "relative flex items-center gap-3.5 p-3 rounded-xl border text-left transition-all duration-200 active:scale-[0.98] w-full group",
+                            isActive
+                              ? "bg-sigma-600/10 border-sigma-500/40 text-white font-semibold shadow-md shadow-sigma-500/5"
+                              : "bg-gray-900/40 border-gray-800/60 text-gray-400 hover:text-white hover:bg-gray-800/30 hover:border-gray-700/50 hover:translate-x-1"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-8 h-8 rounded-lg flex items-center justify-center transition-colors flex-shrink-0",
+                            isActive ? "bg-sigma-500 text-white" : "bg-gray-800 text-gray-400 group-hover:text-white"
+                          )}>
+                            <item.icon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0 pr-6">
+                            <span className="text-xs leading-snug font-medium block text-white">{item.label}</span>
+                          </div>
+                          {item.badge != null && item.badge > 0 && (
+                            <span className="absolute right-3 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">
+                              {item.badge}
+                            </span>
+                          )}
+                        </Link>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+
+                {/* Lista de Botões de Administração */}
+                {filteredAdmin.length > 0 && (
+                  <div className="space-y-2 text-left">
+                    <h4 className="text-[9px] font-semibold text-gray-600 uppercase tracking-wider px-1">
+                      Administração
+                    </h4>
+                    <div className="flex flex-col gap-2">
+                      {filteredAdmin.map((item, idx) => {
+                        const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                        return (
+                          <motion.div
+                            key={item.href}
+                            initial={{ opacity: 0, x: -15 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: (filteredNav.length + idx) * 0.02, type: 'spring', stiffness: 200 }}
+                          >
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={() => setMobileOpen(false)}
+                              className={cn(
+                                "relative flex items-center gap-3.5 p-3 rounded-xl border text-left transition-all duration-200 active:scale-[0.98] w-full group",
+                                isActive
+                                  ? "bg-sigma-600/10 border-sigma-500/40 text-white font-semibold shadow-md shadow-sigma-500/5"
+                                  : "bg-gray-900/40 border-gray-800/60 text-gray-400 hover:text-white hover:bg-gray-800/30 hover:border-gray-700/50 hover:translate-x-1"
+                              )}
+                            >
+                              <div className={cn(
+                                "w-8 h-8 rounded-lg flex items-center justify-center transition-colors flex-shrink-0",
+                                isActive ? "bg-sigma-500 text-white" : "bg-gray-800 text-gray-400 group-hover:text-white"
+                              )}>
+                                <item.icon className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0 pr-6">
+                                <span className="text-xs leading-snug font-medium block text-white">{item.label}</span>
+                              </div>
+                              {item.badge != null && item.badge > 0 && (
+                                <span className="absolute right-3 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                  {item.badge}
+                                </span>
+                              )}
+                            </Link>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Rodapé do Menu */}
+              <div className="pt-3 border-t border-gray-800/80 flex items-center gap-2 flex-shrink-0">
+                <Link
+                  href="/perfil"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex-1 flex items-center gap-2.5 p-1.5 bg-gray-900/30 border border-gray-800/80 rounded-xl text-left"
+                >
+                  <div className="w-7 h-7 bg-sigma-600/20 border border-sigma-500/20 rounded-lg flex items-center justify-center flex-shrink-0 text-sigma-400 text-[10px] font-bold">
+                    {user.name?.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-[10px] font-medium truncate">{user.name}</p>
+                    <p className="text-gray-500 text-[8px] truncate">{user.role?.replace('_', ' ')}</p>
+                  </div>
+                </Link>
+                <button
+                  onClick={async () => { await signOut({ redirect: false }); window.location.href = '/login'; }}
+                  className="w-8 h-8 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl flex items-center justify-center active:scale-95 transition"
+                  title="Sair"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
@@ -177,10 +343,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
       animate={{ width: collapsed ? 72 : 260 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
       className={cn(
-        "flex flex-col bg-gray-900 border-r border-gray-800 overflow-hidden flex-shrink-0 z-50",
-        // Mobile: off-canvas drawer
-        "fixed inset-y-0 left-0 transform transition-transform duration-300 md:relative md:translate-x-0",
-        mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        "hidden md:flex flex-col bg-gray-900 border-r border-gray-800 overflow-hidden flex-shrink-0 z-50 md:relative"
       )}
     >
       {/* Logo */}
@@ -203,13 +366,6 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
             >
               <div className="flex items-center gap-1.5">
                 <p className="text-white font-bold text-sm leading-tight">SIAIP</p>
-                <Link
-                  href="/missoes/mobile"
-                  title="Abrir versão mobile"
-                  className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-                >
-                  <Smartphone className="w-3.5 h-3.5" />
-                </Link>
               </div>
               <p className="text-gray-400 text-xs leading-tight">Sistema Integrado da Agência de Inteligência Penal</p>
             </motion.div>

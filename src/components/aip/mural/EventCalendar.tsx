@@ -35,9 +35,17 @@ export function EventCalendar({
 
         // Contar eventos por dia
         const counts: Record<string, number> = {}
-        for (const evento of data.eventos) {
-          const dia = new Date(evento.dataEvento).toISOString().split('T')[0]
-          counts[dia] = (counts[dia] || 0) + 1
+        if (data && Array.isArray(data.eventos)) {
+          for (const evento of data.eventos) {
+            if (evento.dataEvento) {
+              try {
+                const dia = new Date(evento.dataEvento).toISOString().split('T')[0]
+                counts[dia] = (counts[dia] || 0) + 1
+              } catch (e) {
+                console.error('Erro ao converter data do evento:', e)
+              }
+            }
+          }
         }
 
         setEventCounts(counts)
