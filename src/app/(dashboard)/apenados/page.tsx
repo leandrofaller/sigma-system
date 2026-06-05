@@ -3,12 +3,19 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { getApenadosDiskUsage } from '@/lib/storage';
 import { ApenadosClient } from '@/components/apenados/ApenadosClient';
+import { MobileApenadosView } from '@/components/apenados/MobileApenadosView';
+import { headers } from 'next/headers';
 
 export const metadata = { title: 'Identificação de Apenados' };
 
 export default async function ApenadosPage() {
   const session = await auth();
   if (!session) redirect('/login');
+
+  // Detectar dispositivo móvel a partir do User-Agent
+  const headersList = await headers();
+  const ua = headersList.get('user-agent') || '';
+  const isMobile = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
 
   const [total, comFoto, letterRows, diskUsage] = await Promise.all([
     prisma.apenado.count(),
@@ -29,6 +36,16 @@ export default async function ApenadosPage() {
   }
 
   const user = session.user as any;
+
+  if (isMobile) {
+    return (
+      <MobileApenadosView
+        stats={{ total, comFoto, semFoto: total - comFoto }}
+        letterCounts={letterCounts}
+        userRole={user.role}
+      />
+    );
+  }
 
   return (
     <ApenadosClient

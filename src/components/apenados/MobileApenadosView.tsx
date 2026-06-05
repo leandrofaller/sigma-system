@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, X, Plus, UserCheck, Loader2, Monitor } from 'lucide-react';
+import { Search, X, Plus, UserCheck, Loader2, Monitor, ScanFace } from 'lucide-react';
 import { ApenadoCard, type Apenado } from './ApenadoCard';
 import { PhotoLightbox } from './PhotoLightbox';
 import { ApenadoModal } from './ApenadoModal';
+import { FaceSearch } from './FaceSearch';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const PAGE_SIZE = 30;
@@ -42,6 +43,17 @@ export function MobileApenadosView({ stats: initialStats, letterCounts, userRole
   const [lightbox, setLightbox] = useState<Apenado | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Apenado | null>(null);
+  const [faceSearchOpen, setFaceSearchOpen] = useState(false);
+
+  const handleEditFromFaceSearch = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/apenados/${id}`);
+      if (!res.ok) return;
+      const apenado = await res.json();
+      setEditing(apenado);
+      setModalOpen(true);
+    } catch {}
+  }, []);
 
   // Debounce search
   useEffect(() => {
@@ -250,6 +262,27 @@ export function MobileApenadosView({ stats: initialStats, letterCounts, userRole
         className="flex-1 p-4"
         style={{ paddingBottom: 'max(5rem, calc(4rem + env(safe-area-inset-bottom)))' }}
       >
+        {/* Quick Action: Reconhecimento Facial */}
+        <div className="flex gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setFaceSearchOpen(true)}
+            className="flex-1 bg-gradient-to-r from-sigma-600 to-sigma-700 active:scale-[0.98] transition-all text-white font-bold py-3.5 px-4 rounded-2xl shadow-md flex items-center justify-center gap-2.5 text-sm"
+          >
+            <ScanFace className="w-5 h-5 text-white" />
+            Reconhecimento Facial
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => { setEditing(null); setModalOpen(true); }}
+              className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-body font-bold py-3 px-4 rounded-2xl flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all text-sm shadow-sm"
+            >
+              <Plus className="w-5 h-5 text-sigma-600" />
+              Novo
+            </button>
+          )}
+        </div>
         {/* Initial state */}
         {!showSearchMode && activeLetter === null && !isLoading && (
           <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
@@ -352,6 +385,14 @@ export function MobileApenadosView({ stats: initialStats, letterCounts, userRole
           onClose={() => { setModalOpen(false); setEditing(null); }}
           onSaved={handleSaved}
           userRole={userRole}
+        />
+      )}
+
+      {faceSearchOpen && (
+        <FaceSearch
+          onClose={() => setFaceSearchOpen(false)}
+          userRole={userRole}
+          onEditApenado={handleEditFromFaceSearch}
         />
       )}
     </div>

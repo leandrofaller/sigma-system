@@ -208,6 +208,7 @@ export default function IAPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [modelInfo, setModelInfo] = useState<{ provider: string; model: string } | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [showPromptsMobile, setShowPromptsMobile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -310,10 +311,10 @@ export default function IAPage() {
 
 
   return (
-    <div className="animate-fade-in flex h-[calc(100vh-7.5rem)] overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+    <div className="animate-fade-in flex h-[calc(100dvh-8.5rem)] md:h-[calc(100vh-7.5rem)] overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
 
       {/* ── Sidebar: prompts ───────────────────────────────── */}
-      <div className="w-56 flex-shrink-0 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 flex flex-col">
+      <div className="hidden md:flex w-56 flex-shrink-0 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 flex flex-col">
         <div className="px-4 py-3.5 border-b border-gray-100 dark:border-gray-800">
           <p className="text-xs font-bold text-subtle uppercase tracking-wider">Sugestões</p>
         </div>
@@ -341,24 +342,33 @@ export default function IAPage() {
       <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 min-w-0">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-sigma-500 to-sigma-600 rounded-xl flex items-center justify-center shadow-md shadow-sigma-500/20">
+        <div className="flex items-center justify-between px-4 md:px-5 py-3 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 bg-gradient-to-br from-sigma-500 to-sigma-600 rounded-xl flex items-center justify-center shadow-md shadow-sigma-500/20 flex-shrink-0">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
-            <div>
-              <p className="text-sm font-semibold text-title leading-none">Consulta IA</p>
-              <p className="text-xs text-subtle mt-0.5">Análise e suporte inteligente para operações</p>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-title leading-none truncate">Consulta IA</p>
+              <p className="text-[11px] text-subtle mt-1 truncate">Suporte inteligente</p>
             </div>
           </div>
-          {messages.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            {/* Botão de Sugestões Mobile */}
             <button
-              onClick={() => setMessages([])}
-              className="flex items-center gap-1.5 text-xs text-subtle hover:text-red-500 dark:hover:text-red-400 border border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 px-3 py-1.5 rounded-lg transition-colors"
+              onClick={() => setShowPromptsMobile(true)}
+              className="flex md:hidden items-center gap-1 text-[11px] font-bold text-sigma-600 dark:text-sigma-400 border border-sigma-200 dark:border-sigma-800/80 px-2.5 py-1.5 rounded-lg active:scale-95 transition-all"
             >
-              <Trash2 className="w-3.5 h-3.5" /> Limpar conversa
+              Sugestões
             </button>
-          )}
+            {messages.length > 0 && (
+              <button
+                onClick={() => setMessages([])}
+                className="flex items-center gap-1 text-[11px] text-subtle hover:text-red-500 border border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 px-2.5 py-1.5 rounded-lg transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Limpar</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Messages */}
@@ -539,6 +549,65 @@ export default function IAPage() {
           </div>
         </div>
       </div>
+
+      {/* Drawer deslizante de Sugestões Mobile */}
+      <AnimatePresence>
+        {showPromptsMobile && (
+          <div className="fixed inset-0 z-50 flex md:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPromptsMobile(false)}
+              className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl shadow-2xl flex flex-col overflow-hidden max-h-[75vh]"
+            >
+              <div className="flex justify-center pt-3 pb-2 border-b border-gray-50 dark:border-gray-800/80">
+                <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full" />
+              </div>
+              <div className="px-5 py-3 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-title uppercase tracking-wider">Sugestões de Perguntas</h3>
+                <button
+                  onClick={() => setShowPromptsMobile(false)}
+                  className="p-1.5 text-subtle hover:text-body active:scale-95"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {CATEGORIES.map((cat) => (
+                  <div key={cat.label} className="space-y-1">
+                    <div className="flex items-center gap-1.5 px-1">
+                      <div className="w-2 h-2 rounded-full" style={{ background: cat.color }} />
+                      <span className="text-[10px] font-bold text-subtle uppercase tracking-wider">{cat.label}</span>
+                    </div>
+                    <div className="space-y-1 pl-3.5">
+                      {cat.prompts.map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => {
+                            selectPrompt(p + ' ');
+                            setShowPromptsMobile(false);
+                          }}
+                          className="w-full text-left text-xs text-body hover:bg-gray-50 dark:hover:bg-gray-800/60 p-2 rounded-xl border border-gray-100 dark:border-gray-800/50 leading-relaxed active:scale-[0.99]"
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

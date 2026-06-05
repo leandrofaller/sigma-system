@@ -6,12 +6,19 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Activity, Calendar, MapPin, Users, ChevronRight, ClipboardCheck } from 'lucide-react';
 import { DeleteMissionButton } from '@/components/acompanhamento/DeleteMissionButton';
+import { headers } from 'next/headers';
+import { MobileAcompanhamentoView } from '@/components/acompanhamento/MobileAcompanhamentoView';
 
 export default async function AcompanhamentoPage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
   const user = session.user as any;
   const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+
+  // Detectar dispositivo móvel a partir do User-Agent
+  const headersList = await headers();
+  const ua = headersList.get('user-agent') || '';
+  const isMobile = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
 
   // Missões visíveis: do usuário, do mesmo grupo, ou admin vê todas
   const missions = await prisma.mission.findMany({
@@ -42,6 +49,22 @@ export default async function AcompanhamentoPage() {
       acc + l.cards.reduce((s, c) => s + c._count.comments, 0), 0);
     return { ...m, totalCards, totalComments };
   });
+
+  if (isMobile) {
+    const serializedMissions = enriched.map(m => ({
+      ...m,
+      startDate: m.startDate.toISOString(),
+      endDate: m.endDate?.toISOString() ?? null,
+      createdAt: m.createdAt.toISOString(),
+      updatedAt: m.updatedAt.toISOString(),
+    }));
+    return (
+      <MobileAcompanhamentoView
+        initialMissions={serializedMissions as any}
+        isAdmin={isAdmin}
+      />
+    );
+  }
 
   const inProgress = enriched.filter(m => m.status === 'IN_PROGRESS');
   const planned = enriched.filter(m => m.status === 'PLANNED');

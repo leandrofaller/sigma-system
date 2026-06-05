@@ -373,7 +373,7 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
       <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileInput} />
 
       {/* Sidebar */}
-      <div className="w-64 border-r border-gray-100 dark:border-gray-800 flex flex-col flex-shrink-0">
+      <div className={`w-full md:w-64 border-r border-gray-100 dark:border-gray-800 flex flex-col flex-shrink-0 ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-3 border-b border-gray-100 dark:border-gray-800">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
@@ -464,7 +464,7 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
       </div>
 
       {/* Chat area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className={`flex-1 flex flex-col min-w-0 ${activeChannel ? 'flex' : 'hidden md:flex'}`}>
         {!activeChannel ? (
           <div className="flex-1 flex flex-col items-center justify-center text-subtle">
             <Users className="w-12 h-12 text-gray-200 dark:text-gray-700 mb-3" />
@@ -473,8 +473,16 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-              <div className="w-8 h-8 icon-badge-sigma rounded-lg flex items-center justify-center">
+            <div className="flex items-center gap-2.5 px-3 md:px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+              <button
+                onClick={() => setActiveChannel(null)}
+                className="md:hidden p-2 -ml-2 text-subtle hover:text-body active:scale-95 flex items-center justify-center flex-shrink-0"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div className="w-8 h-8 icon-badge-sigma rounded-lg flex items-center justify-center flex-shrink-0">
                 {activeChannel.type === 'group' ? <Hash className="w-4 h-4" /> : <User className="w-4 h-4" />}
               </div>
               <div>
