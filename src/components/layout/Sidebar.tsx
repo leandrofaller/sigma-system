@@ -68,6 +68,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
   const [mobileOpen, setMobileOpen] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [chatChannels, setChatChannels] = useState<ChatChannel[]>([]);
+  const [isMobileDashboard, setIsMobileDashboard] = useState(false);
   const prevCountRef = useRef(0);
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
@@ -80,7 +81,9 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
     if (typeof window !== 'undefined') {
       const ua = navigator.userAgent || '';
       const isMobile = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
-      if (isMobile && pathname === '/dashboard') {
+      const isHome = isMobile && pathname === '/dashboard';
+      setIsMobileDashboard(isHome);
+      if (isHome) {
         setMobileOpen(true);
       }
     }
@@ -164,35 +167,45 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
   return (
     <>
       {/* Botão hamburger — só no mobile */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-3 left-3 z-30 w-10 h-10 bg-gray-900/90 backdrop-blur-md text-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition"
-        style={{ top: 'max(0.75rem, env(safe-area-inset-top))' }}
-        aria-label="Abrir menu"
-      >
-        <Menu className="w-5 h-5" />
-      </button>
+      {!isMobileDashboard && (
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="md:hidden fixed top-3 left-3 z-30 w-10 h-10 bg-gray-900/90 backdrop-blur-md text-white rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition"
+          style={{ top: 'max(0.75rem, env(safe-area-inset-top))' }}
+          aria-label="Abrir menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      )}
 
       {/* Menu Centralizado Mobile (Exclusivo) */}
       <AnimatePresence>
         {mobileOpen && (
-          <div className="md:hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className={cn("md:hidden fixed inset-0 z-50 flex items-center justify-center", isMobileDashboard ? "p-0" : "p-4")}>
             {/* Backdrop com desfoque de fundo */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setMobileOpen(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+              onClick={() => !isMobileDashboard && setMobileOpen(false)}
+              className={cn(
+                "absolute inset-0",
+                isMobileDashboard ? "bg-gray-950" : "bg-black/60 backdrop-blur-md"
+              )}
             />
 
             {/* Painel Centralizado */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              initial={isMobileDashboard ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              exit={isMobileDashboard ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 20 }}
               transition={{ type: 'spring', damping: 25, stiffness: 250 }}
-              className="relative w-full max-w-sm max-h-[80vh] bg-gray-950/95 border border-gray-800/80 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden z-10"
+              className={cn(
+                "relative flex flex-col overflow-hidden z-10 transition-all duration-300",
+                isMobileDashboard
+                  ? "w-full h-full max-h-[100dvh] bg-gray-950 p-6"
+                  : "w-full max-w-sm max-h-[80vh] bg-gray-950/95 border border-gray-800/80 rounded-3xl p-5 shadow-2xl"
+              )}
             >
               {/* Cabeçalho */}
               <div className="flex items-center justify-between pb-3 border-b border-gray-800/80 flex-shrink-0">
@@ -211,17 +224,19 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
                     <p className="text-gray-500 text-[10px]">Menu de Navegação</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setMobileOpen(false)}
-                  className="w-7 h-7 rounded-full bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white flex items-center justify-center transition active:scale-90"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                {!isMobileDashboard && (
+                  <button
+                    onClick={() => setMobileOpen(false)}
+                    className="w-7 h-7 rounded-full bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white flex items-center justify-center transition active:scale-90"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               {/* Lista de Botões do Menu Principal */}
               <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 scrollbar-none">
-                <div className="flex flex-col gap-2">
+                <div className={cn(isMobileDashboard ? "grid grid-cols-2 gap-3" : "flex flex-col gap-2")}>
                   {filteredNav.map((item, idx) => {
                     const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                     return (
@@ -235,23 +250,33 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
                           href={item.href}
                           onClick={() => setMobileOpen(false)}
                           className={cn(
-                            "relative flex items-center gap-3.5 p-3 rounded-xl border text-left transition-all duration-200 active:scale-[0.98] w-full group",
+                            isMobileDashboard
+                              ? "relative flex flex-col items-center justify-center p-4 rounded-2xl border text-center transition-all duration-200 active:scale-[0.98] w-full group gap-2 h-[105px]"
+                              : "relative flex items-center gap-3.5 p-3 rounded-xl border text-left transition-all duration-200 active:scale-[0.98] w-full group",
                             isActive
                               ? "bg-sigma-600/10 border-sigma-500/40 text-white font-semibold shadow-md shadow-sigma-500/5"
                               : "bg-gray-900/40 border-gray-800/60 text-gray-400 hover:text-white hover:bg-gray-800/30 hover:border-gray-700/50 hover:translate-x-1"
                           )}
                         >
                           <div className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center transition-colors flex-shrink-0",
+                            isMobileDashboard
+                              ? "w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
+                              : "w-8 h-8 rounded-lg flex items-center justify-center transition-colors flex-shrink-0",
                             isActive ? "bg-sigma-500 text-white" : "bg-gray-800 text-gray-400 group-hover:text-white"
                           )}>
-                            <item.icon className="w-4 h-4" />
+                            <item.icon className={cn(isMobileDashboard ? "w-5 h-5" : "w-4 h-4")} />
                           </div>
-                          <div className="flex-1 min-w-0 pr-6">
-                            <span className="text-xs leading-snug font-medium block text-white">{item.label}</span>
+                          <div className={isMobileDashboard ? "min-w-0" : "flex-1 min-w-0 pr-6"}>
+                            <span className={cn(
+                              "text-xs leading-snug font-medium block text-white",
+                              isMobileDashboard ? "text-center line-clamp-2 text-[11px]" : ""
+                            )}>{item.label}</span>
                           </div>
                           {item.badge != null && item.badge > 0 && (
-                            <span className="absolute right-3 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">
+                            <span className={cn(
+                              "absolute bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0",
+                              isMobileDashboard ? "top-2 right-2" : "right-3"
+                            )}>
                               {item.badge}
                             </span>
                           )}
@@ -267,7 +292,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
                     <h4 className="text-[9px] font-semibold text-gray-600 uppercase tracking-wider px-1">
                       Administração
                     </h4>
-                    <div className="flex flex-col gap-2">
+                    <div className={cn(isMobileDashboard ? "grid grid-cols-2 gap-3" : "flex flex-col gap-2")}>
                       {filteredAdmin.map((item, idx) => {
                         const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                         return (
@@ -282,23 +307,33 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
                               href={item.href}
                               onClick={() => setMobileOpen(false)}
                               className={cn(
-                                "relative flex items-center gap-3.5 p-3 rounded-xl border text-left transition-all duration-200 active:scale-[0.98] w-full group",
+                                isMobileDashboard
+                                  ? "relative flex flex-col items-center justify-center p-4 rounded-2xl border text-center transition-all duration-200 active:scale-[0.98] w-full group gap-2 h-[105px]"
+                                  : "relative flex items-center gap-3.5 p-3 rounded-xl border text-left transition-all duration-200 active:scale-[0.98] w-full group",
                                 isActive
                                   ? "bg-sigma-600/10 border-sigma-500/40 text-white font-semibold shadow-md shadow-sigma-500/5"
                                   : "bg-gray-900/40 border-gray-800/60 text-gray-400 hover:text-white hover:bg-gray-800/30 hover:border-gray-700/50 hover:translate-x-1"
                               )}
                             >
                               <div className={cn(
-                                "w-8 h-8 rounded-lg flex items-center justify-center transition-colors flex-shrink-0",
+                                isMobileDashboard
+                                  ? "w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
+                                  : "w-8 h-8 rounded-lg flex items-center justify-center transition-colors flex-shrink-0",
                                 isActive ? "bg-sigma-500 text-white" : "bg-gray-800 text-gray-400 group-hover:text-white"
                               )}>
-                                <item.icon className="w-4 h-4" />
+                                <item.icon className={cn(isMobileDashboard ? "w-5 h-5" : "w-4 h-4")} />
                               </div>
-                              <div className="flex-1 min-w-0 pr-6">
-                                <span className="text-xs leading-snug font-medium block text-white">{item.label}</span>
+                              <div className={isMobileDashboard ? "min-w-0" : "flex-1 min-w-0 pr-6"}>
+                                <span className={cn(
+                                  "text-xs leading-snug font-medium block text-white",
+                                  isMobileDashboard ? "text-center line-clamp-2 text-[11px]" : ""
+                                )}>{item.label}</span>
                               </div>
                               {item.badge != null && item.badge > 0 && (
-                                <span className="absolute right-3 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                <span className={cn(
+                                  "absolute bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0",
+                                  isMobileDashboard ? "top-2 right-2" : "right-3"
+                                )}>
                                   {item.badge}
                                 </span>
                               )}
