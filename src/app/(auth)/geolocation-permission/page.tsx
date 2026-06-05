@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { MapPin, AlertCircle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 
 type Status = 'waiting' | 'requesting' | 'captured' | 'denied' | 'submitting' | 'error' | 'success';
@@ -15,6 +16,7 @@ interface GeoData {
 
 export default function GeolocationPermissionPage() {
   const router = useRouter();
+  const { data: session, update } = useSession();
   const [status, setStatus] = useState<Status>('waiting');
   const [geoData, setGeoData] = useState<GeoData | null>(null);
   const [error, setError] = useState<string>('');
@@ -171,6 +173,8 @@ export default function GeolocationPermissionPage() {
       const result = await res.json();
       if (result.success) {
         setStatus('success');
+        // Atualizar a sessão dinâmica do NextAuth
+        await update({ geoStatus: 'authorized' });
         // Redirecionar para dashboard após 1.5s
         setTimeout(() => router.push('/dashboard'), 1500);
       } else {

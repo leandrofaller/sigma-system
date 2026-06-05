@@ -18,10 +18,14 @@ export const authConfig: NextAuthConfig = {
         token.groupName = (user as any).groupName;
         token.phone = (user as any).phone;
         token.deviceAuthorized = (user as any).deviceAuthorized ?? true;
+        token.geoStatus = (user as any).geoStatus || 'pending';
       }
       if (trigger === 'update' && session) {
         if (typeof session.deviceAuthorized === 'boolean') {
           token.deviceAuthorized = session.deviceAuthorized;
+        }
+        if (typeof session.geoStatus === 'string') {
+          token.geoStatus = session.geoStatus;
         }
       }
       return token;
@@ -34,6 +38,7 @@ export const authConfig: NextAuthConfig = {
         session.user.groupName = token.groupName as string;
         session.user.phone = token.phone as string;
         session.user.deviceAuthorized = token.deviceAuthorized as boolean;
+        session.user.geoStatus = token.geoStatus as string;
       }
       return session;
     },
