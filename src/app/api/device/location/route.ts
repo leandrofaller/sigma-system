@@ -55,8 +55,7 @@ export async function POST(req: NextRequest) {
         name: parseDeviceName(userAgent),
         userAgent,
         ipAddress,
-        status: hasLocation ? 'AUTHORIZED' : 'PENDING',
-        authorizedAt: hasLocation ? new Date() : null,
+        status: 'PENDING',
         latitude: hasLocation ? lat : null,
         longitude: hasLocation ? lng : null,
         locationAddress: hasLocation && address ? address : null,
@@ -73,10 +72,6 @@ export async function POST(req: NextRequest) {
         locationAddress: hasLocation && address ? address : null,
         locationAt: hasLocation ? new Date() : null,
         geoPermissionDenied: !hasLocation,
-        ...(hasLocation ? {
-          status: 'AUTHORIZED',
-          authorizedAt: new Date(),
-        } : {}),
       },
     });
   }
