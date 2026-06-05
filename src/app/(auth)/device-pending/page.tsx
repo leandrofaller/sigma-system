@@ -92,9 +92,36 @@ export default function DevicePendingPage() {
     setStep('requesting');
     setGeoError('');
     try {
-      const isNative = typeof window !== 'undefined' && (window as any).Capacitor;
+      const isNative = typeof window !== 'undefined' && 
+        ((window as any).Capacitor || navigator.userAgent.includes('SYGMA-MOBILE'));
 
       if (isNative) {
+        // Função auxiliar para aguardar o carregamento do window.Capacitor
+        const waitForCapacitor = (): Promise<void> => {
+          return new Promise((resolve, reject) => {
+            if ((window as any).Capacitor) {
+              resolve();
+              return;
+            }
+            let elapsed = 0;
+            const interval = setInterval(() => {
+              if ((window as any).Capacitor) {
+                clearInterval(interval);
+                resolve();
+              } else {
+                elapsed += 100;
+                if (elapsed >= 3000) {
+                  clearInterval(interval);
+                  reject(new Error('Tempo limite de inicialização do Capacitor excedido.'));
+                }
+              }
+            }, 100);
+          });
+        };
+
+        // Aguarda a inicialização do bridge do Capacitor
+        await waitForCapacitor();
+
         // Importa dinamicamente para evitar problemas de build no SSR do Next.js
         const { Geolocation } = await import('@capacitor/geolocation');
 
@@ -143,7 +170,7 @@ export default function DevicePendingPage() {
       }
     } catch (err: any) {
       console.error('Erro na captura da geolocalização:', err);
-      setGeoError(err?.message || 'Erro ao capturar localização.');
+      setGeoError(err?.message || 'Erro ao obter localização.');
       setStep('geo-denied');
     }
   }

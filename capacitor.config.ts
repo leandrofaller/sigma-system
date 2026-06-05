@@ -10,6 +10,12 @@ const config: CapacitorConfig = {
     // Para testar localmente no emulador rodando 'npm run dev', você pode colocar 'http://10.0.2.2:3000' (IP do localhost visto pelo emulador Android)
     url: 'https://rastreio.owlnet.cloud',
     cleartext: true
+  },
+  android: {
+    appendUserAgent: 'SYGMA-MOBILE'
+  },
+  ios: {
+    appendUserAgent: 'SYGMA-MOBILE'
   }
 };
 

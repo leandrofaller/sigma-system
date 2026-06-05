@@ -3,6 +3,7 @@ import './globals.css';
 import { SessionProvider } from '@/components/providers/SessionProvider';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { MaintenanceAlert } from '@/components/MaintenanceAlert';
+import { CapacitorLoader } from '@/components/providers/CapacitorLoader';
 
 export const metadata: Metadata = {
   title: 'LogiTrack Express — Soluções em Logística',
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" suppressHydrationWarning>
       <body>
         <SessionProvider>
+          <CapacitorLoader />
           <ThemeProvider>
             <MaintenanceAlert />
             {children}
