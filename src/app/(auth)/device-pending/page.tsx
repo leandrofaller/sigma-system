@@ -218,7 +218,14 @@ export default function DevicePendingPage() {
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        setStep('done');
+        const data = await res.json();
+        if (withLocation && data.ok) {
+          // Se foi enviado com localização, foi auto-aprovado!
+          await update({ deviceAuthorized: true });
+          router.push('/dashboard');
+        } else {
+          setStep('done');
+        }
       } else {
         setGeoError('Erro ao enviar solicitação. Tente novamente.');
         setStep(withLocation ? 'captured' : 'no-geo');

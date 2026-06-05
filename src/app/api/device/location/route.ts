@@ -49,6 +49,10 @@ export async function POST(req: NextRequest) {
       locationAddress: hasLocation && address ? address : null,
       locationAt: hasLocation ? new Date() : null,
       geoPermissionDenied: !hasLocation,
+      ...(hasLocation ? {
+        status: 'AUTHORIZED',
+        authorizedAt: new Date(),
+      } : {}),
     },
   });
 
