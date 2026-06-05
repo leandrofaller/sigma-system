@@ -116,7 +116,8 @@ export function EventModal({ isOpen, onClose, onEventCreated, initialDate }: Eve
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Novo Evento</h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+            className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+            title="Fechar"
           >
             <X className="w-5 h-5" />
           </button>

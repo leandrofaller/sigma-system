@@ -120,7 +120,13 @@ function AdvogadoModal({
                 </div>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500">✕</button>
+            <button 
+              onClick={onClose} 
+              className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+              title="Fechar"
+            >
+              ✕
+            </button>
           </div>
         </div>
 

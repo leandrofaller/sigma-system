@@ -269,13 +269,13 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex gap-4 items-center">
+            <div className="flex gap-4 items-start">
               {/* Foto grande */}
               <ApenadoFoto
                 id={apenado.id}
                 nome={apenado.nome}
                 photoPath={apenado.photoPath || apenado.apenado?.photoPath}
-                className={`w-28 h-28 rounded-2xl text-4xl ${
+                className={`w-28 h-28 rounded-2xl text-4xl shrink-0 ${
                   (apenado.photoPath || apenado.apenado?.photoPath) ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all' : ''
                 }`}
                 fallbackText={apenado.nome.charAt(0)}
@@ -288,29 +288,40 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
                 }}
               />
 
-              <div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{apenado.nome}</h2>
-                {apenado.nomeOutro && <p className="text-sm text-gray-500 mt-1">Também: {apenado.nomeOutro}</p>}
-                {apenado.alcunhas.length > 0 && (
-                  <p className="text-sm text-gray-500 mt-0.5">Alcunha: {apenado.alcunhas.map(a => `"${a.alcunha}"`).join(', ')}</p>
-                )}
+              <div className="space-y-3">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{apenado.nome}</h2>
+                    {apenado.faccao && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold text-white shrink-0" style={{ backgroundColor: apenado.faccao.cor || '#ef4444' }}>
+                        {apenado.faccao.sigla || apenado.faccao.nome}
+                      </span>
+                    )}
+                  </div>
+                  {apenado.nomeOutro && <p className="text-sm text-gray-500 mt-1">Também: {apenado.nomeOutro}</p>}
+                  {apenado.alcunhas.length > 0 && (
+                    <p className="text-sm text-gray-500 mt-0.5">Alcunha: {apenado.alcunhas.map(a => `"${a.alcunha}"`).join(', ')}</p>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleCadastrarEmAIP}
+                  disabled={cadastrandoEmAIP}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 rounded-xl disabled:opacity-50 transition-all active:scale-95 shadow-sm shadow-purple-500/10"
+                >
+                  {cadastrandoEmAIP ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
+                  Cadastrar em AIP
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {apenado.faccao && (
-                <span className="px-3 py-1 rounded-full text-sm font-bold text-white" style={{ backgroundColor: apenado.faccao.cor || '#ef4444' }}>
-                  {apenado.faccao.nome}
-                </span>
-              )}
-              <button
-                onClick={handleCadastrarEmAIP}
-                disabled={cadastrandoEmAIP}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50 transition-colors"
+            <div className="flex items-center">
+              <button 
+                onClick={onClose} 
+                className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+                title="Fechar"
               >
-                {cadastrandoEmAIP ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
-                Cadastrar em AIP
+                ✕
               </button>
-              <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500">✕</button>
             </div>
           </div>
         </div>
@@ -598,11 +609,12 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
               {zoomedPhotoTitle || apenado.nome}
             </div>
             <button
-              className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white p-2 rounded-full transition-colors backdrop-blur-sm"
+              className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white p-2 rounded-full transition-colors backdrop-blur-sm"
               onClick={(e) => {
                 e.stopPropagation()
                 setZoomedPhotoUrl(null)
               }}
+              title="Fechar"
             >
               ✕
             </button>

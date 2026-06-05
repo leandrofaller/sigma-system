@@ -465,7 +465,13 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                   </button>
                 </>
               ) : null}
-              <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500">✕</button>
+              <button 
+                onClick={onClose} 
+                className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+                title="Fechar"
+              >
+                ✕
+              </button>
             </div>
           </div>
         </div>
@@ -1009,11 +1015,12 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
               {zoomedPhotoTitle || apenado.nome}
             </div>
             <button
-              className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white p-2 rounded-full transition-colors backdrop-blur-sm text-lg"
+              className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white p-2 rounded-full transition-colors backdrop-blur-sm text-lg"
               onClick={(e) => {
                 e.stopPropagation()
                 setZoomedPhotoUrl(null)
               }}
+              title="Fechar"
             >
               ✕
             </button>
@@ -1037,11 +1044,12 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
               {zoomedAnexoNome}
             </div>
             <button
-              className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white p-2 rounded-full transition-colors backdrop-blur-sm text-lg"
+              className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white p-2 rounded-full transition-colors backdrop-blur-sm text-lg"
               onClick={(e) => {
                 e.stopPropagation()
                 setZoomedAnexoUrl(null)
               }}
+              title="Fechar"
             >
               ✕
             </button>
@@ -1323,7 +1331,13 @@ function AIFichaLayoutModal({ layout, onClose, onSave }: {
             <Settings className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             <h2 className="text-lg font-bold text-gray-900 dark:text-white font-semibold">Configurar Layout da Ficha</h2>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-500">✕</button>
+          <button 
+            onClick={onClose} 
+            className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+            title="Fechar"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Content */}

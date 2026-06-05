@@ -254,7 +254,8 @@ export function PhotoLightbox({ apenado, all, onClose, onNavigate, onEditApenado
           </span>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            className="w-7 h-7 rounded-lg bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors"
+            title="Fechar"
           >
             <X className="w-4 h-4 text-white" />
           </button>

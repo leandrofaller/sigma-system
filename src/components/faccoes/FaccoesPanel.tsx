@@ -118,7 +118,11 @@ function ApenadosFaccaoModal({ faccao, onClose }: { faccao: Faccao; onClose: () 
             <h2 className="text-base font-bold text-gray-900 dark:text-white truncate">{faccao.nome}</h2>
             <p className="text-xs text-gray-500">{total} apenado{total !== 1 ? 's' : ''} vinculado{total !== 1 ? 's' : ''}</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500 shrink-0">
+          <button 
+            onClick={onClose} 
+            className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 shrink-0"
+            title="Fechar"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -262,7 +266,13 @@ function NovaFaccaoModal({ onClose, onCreated }: { onClose: () => void; onCreate
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">Nova Facção</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500">✕</button>
+          <button 
+            onClick={onClose} 
+            className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+            title="Fechar"
+          >
+            ✕
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
