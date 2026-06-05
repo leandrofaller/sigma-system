@@ -89,51 +89,89 @@ export default function DevicePendingPage() {
   }
 
   async function requestLocation() {
-    if (!navigator.geolocation) {
-      setGeoError('Seu navegador não suporta geolocalização.');
-      setStep('geo-denied');
-      return;
-    }
     setStep('requesting');
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        try {
-          // Tentar obter endereço com timeout de 5 segundos
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
+    setGeoError('');
+    try {
+      const isNative = typeof window !== 'undefined' && (window as any).Capacitor;
 
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-            {
-              headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' },
-              signal: controller.signal
-            }
-          );
-          clearTimeout(timeoutId);
+      if (isNative) {
+        // Importa dinamicamente para evitar problemas de build no SSR do Next.js
+        const { Geolocation } = await import('@capacitor/geolocation');
 
-          if (res.ok) {
-            const data = await res.json();
-            if (data.display_name) address = data.display_name;
+        // Checar e pedir permissão nativa de GPS
+        const permission = await Geolocation.checkPermissions();
+        if (permission.location !== 'granted') {
+          const reqPerm = await Geolocation.requestPermissions();
+          if (reqPerm.location !== 'granted') {
+            setGeoError('Permissão de geolocalização negada no dispositivo. Vá nas configurações do seu celular e autorize o aplicativo.');
+            setStep('geo-denied');
+            return;
           }
-        } catch {
-          // Falha silenciosa: mantém coordenadas como endereço
         }
-        setLocation({ lat, lng, address });
-        setStep('captured');
-      },
-      (err) => {
-        const msgs: Record<number, string> = {
-          1: 'Permissão negada. Clique no ícone de localização na barra do navegador e permita o acesso.',
-          2: 'Não foi possível determinar sua localização. Verifique se o GPS está ativo ou se você tem sinal.',
-          3: 'A solicitação expirou (45 segundos). O GPS pode estar desativado ou sem sinal. Tente novamente.',
-        };
-        setGeoError(msgs[err.code] ?? 'Erro ao obter localização.');
-        setStep('geo-denied');
-      },
-      { timeout: 45000, maximumAge: 0, enableHighAccuracy: true }
-    );
+
+        // Obter coordenadas nativas
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 20000,
+        });
+        const { latitude: lat, longitude: lng } = pos.coords;
+        await handleLocationSuccess(lat, lng);
+      } else {
+        // Fallback para web tradicional
+        if (!navigator.geolocation) {
+          setGeoError('Seu navegador não suporta geolocalização.');
+          setStep('geo-denied');
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const { latitude: lat, longitude: lng } = pos.coords;
+            await handleLocationSuccess(lat, lng);
+          },
+          (err) => {
+            const msgs: Record<number, string> = {
+              1: 'Permissão negada. Clique no ícone de localização na barra do navegador e permita o acesso.',
+              2: 'Não foi possível determinar sua localização. Verifique se o GPS está ativo ou se você tem sinal.',
+              3: 'A solicitação expirou. O GPS pode estar desativado ou sem sinal. Tente novamente.',
+            };
+            setGeoError(msgs[err.code] ?? 'Erro ao obter localização.');
+            setStep('geo-denied');
+          },
+          { timeout: 45000, maximumAge: 0, enableHighAccuracy: true }
+        );
+      }
+    } catch (err: any) {
+      console.error('Erro na captura da geolocalização:', err);
+      setGeoError(err?.message || 'Erro ao capturar localização.');
+      setStep('geo-denied');
+    }
+  }
+
+  async function handleLocationSuccess(lat: number, lng: number) {
+    let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        {
+          headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' },
+          signal: controller.signal
+        }
+      );
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.display_name) address = data.display_name;
+      }
+    } catch {
+      // mantém coordenadas como endereço
+    }
+    setLocation({ lat, lng, address });
+    setStep('captured');
   }
 
   function confirmNoGeo() {
