@@ -1,6 +1,5 @@
 import { prisma } from './db';
 import { runAdvancedIndexBatch } from './advanced-face-batch';
-import { getApenadosDir } from './storage';
 import { invalidateAdvancedFaceCache } from './advanced-face-cache';
 import { pgvectorAdvancedAvailable, upsertVectorAdvanced } from './pgvector';
 
