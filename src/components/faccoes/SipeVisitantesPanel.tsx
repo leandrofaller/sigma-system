@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, User, X, RefreshCw, ChevronLeft, ChevronRight, Shield } from 'lucide-react'
+import { Search, User, X, RefreshCw, ChevronLeft, ChevronRight, Shield, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { ApenadoModal, type ApenadoImportado } from './ApenadosImportados'
 
 interface Visitante {
   id: string
@@ -16,7 +17,15 @@ interface Visitante {
   apenado: { id: string; nome: string; photoPath?: string | null }
 }
 
-function FotoVisitante({ visitanteId, nome }: { visitanteId: string | null; nome: string | null }) {
+function FotoVisitante({
+  visitanteId,
+  nome,
+  onClick
+}: {
+  visitanteId: string | null
+  nome: string | null
+  onClick?: () => void
+}) {
   const [erro, setErro] = useState(false)
   const iniciais = (nome ?? '?')
     .split(' ')
@@ -38,8 +47,11 @@ function FotoVisitante({ visitanteId, nome }: { visitanteId: string | null; nome
     <img
       src={`/api/sipe/visitantes/${visitanteId}/foto`}
       alt={nome ?? 'Visitante'}
-      className="w-14 h-14 rounded-full object-cover shrink-0 bg-gray-100 dark:bg-gray-700"
+      className={`w-14 h-14 rounded-full object-cover shrink-0 bg-gray-100 dark:bg-gray-700 ${
+        onClick ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all' : ''
+      }`}
       onError={() => setErro(true)}
+      onClick={onClick}
     />
   )
 }
@@ -51,6 +63,27 @@ export function SipeVisitantesPanel() {
   const [filtered, setFiltered] = useState<Visitante[]>([])
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Visitante | null>(null)
+  const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
+  const [zoomedPhotoTitle, setZoomedPhotoTitle] = useState<string>('')
+  const [selectedApenado, setSelectedApenado] = useState<ApenadoImportado | null>(null)
+  const [loadingApenado, setLoadingApenado] = useState(false)
+
+  const handleOpenApenado = async (apenadoId: string) => {
+    setLoadingApenado(true)
+    try {
+      const res = await fetch(`/api/sipe/apenados/${apenadoId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSelectedApenado(data)
+      } else {
+        toast.error('Erro ao buscar detalhes do apenado')
+      }
+    } catch {
+      toast.error('Erro de conexão ao buscar apenado')
+    } finally {
+      setLoadingApenado(false)
+    }
+  }
 
   const LIMIT = 20
 
@@ -205,7 +238,16 @@ export function SipeVisitantesPanel() {
           >
             {/* Header */}
             <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center gap-4">
-              <FotoVisitante visitanteId={selected.visitanteId} nome={selected.nomeVisitante} />
+              <FotoVisitante
+                visitanteId={selected.visitanteId}
+                nome={selected.nomeVisitante}
+                onClick={() => {
+                  if (selected.visitanteId) {
+                    setZoomedPhotoUrl(`/api/sipe/visitantes/${selected.visitanteId}/foto`)
+                    setZoomedPhotoTitle(selected.nomeVisitante ?? 'Foto do Visitante')
+                  }
+                }}
+              />
               <div className="flex-1">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                   {selected.nomeVisitante ?? 'Visitante sem nome'}
@@ -257,24 +299,81 @@ export function SipeVisitantesPanel() {
                     <img
                       src={`/api/sipe/apenados/${selected.apenado.id}/foto`}
                       alt={selected.apenado.nome}
-                      className="w-10 h-10 rounded-lg object-cover shrink-0"
+                      className="w-10 h-10 rounded-lg object-cover shrink-0 cursor-zoom-in hover:opacity-90 active:scale-95 transition-all"
+                      onClick={() => {
+                        setZoomedPhotoUrl(`/api/sipe/apenados/${selected.apenado.id}/foto`)
+                        setZoomedPhotoTitle(selected.apenado.nome)
+                      }}
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none'
                       }}
                     />
                   ) : null}
                   <div
-                    className="w-10 h-10 rounded-lg bg-gray-300 dark:bg-gray-600 flex items-center justify-center shrink-0"
+                    className="w-10 h-10 rounded-lg bg-gray-300 dark:bg-gray-600 flex items-center justify-center shrink-0 cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
                     style={{ display: selected.apenado.photoPath ? 'none' : 'flex' }}
+                    onClick={() => handleOpenApenado(selected.apenado.id)}
                   >
                     <span className="text-xs font-bold text-white">
                       {selected.apenado.nome.charAt(0).toUpperCase()}
                     </span>
                   </div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{selected.apenado.nome}</p>
+                  <button
+                    onClick={() => handleOpenApenado(selected.apenado.id)}
+                    className="text-sm font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-left hover:underline truncate"
+                  >
+                    {selected.apenado.nome}
+                  </button>
                 </div>
               </section>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox para zoom da imagem */}
+      {zoomedPhotoUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md cursor-zoom-out p-4"
+          onClick={() => setZoomedPhotoUrl(null)}
+        >
+          <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
+            <img
+              src={zoomedPhotoUrl}
+              alt={zoomedPhotoTitle}
+              className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl border border-gray-800"
+            />
+            <div className="bg-black/60 text-white px-4 py-2 rounded-full text-sm font-semibold backdrop-blur-sm">
+              {zoomedPhotoTitle}
+            </div>
+            <button
+              className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white p-2 rounded-full transition-colors backdrop-blur-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                setZoomedPhotoUrl(null)
+              }}
+              title="Fechar"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal da ficha do Apenado */}
+      {selectedApenado && (
+        <ApenadoModal
+          apenado={selectedApenado}
+          onClose={() => setSelectedApenado(null)}
+        />
+      )}
+
+      {/* Indicador de carregamento da ficha do apenado */}
+      {loadingApenado && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-xl flex items-center gap-3">
+            <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
+            <span className="text-sm font-medium text-gray-900 dark:text-white">Buscando ficha do apenado...</span>
           </div>
         </div>
       )}
