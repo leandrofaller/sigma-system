@@ -26,13 +26,31 @@ COPY --from=deps /app/node_modules/sharp/package.json ./sharp_pkg.json
 RUN SHARP_VER=$(node -p "require('./sharp_pkg.json').version") && \
     npm install --ignore-scripts=false --omit=dev "sharp@${SHARP_VER}"
 
+# Stage 2c: Compilação das dependências do Python
+FROM node:20-slim AS python_builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-venv python3-dev build-essential cmake \
+    && rm -rf /var/lib/apt/lists/*
+ARG PIP_CACHE_BUST=2026-05-20a
+RUN --mount=type=cache,target=/root/.cache/pip \
+    echo "cache-bust: ${PIP_CACHE_BUST}" && \
+    python3 -m venv /opt/arcface-venv && \
+    /opt/arcface-venv/bin/pip install --upgrade pip && \
+    /opt/arcface-venv/bin/pip install \
+        "numpy<2" \
+        insightface==0.7.3 \
+        "onnxruntime==1.16.3" \
+        opencv-python-headless \
+        pytesseract \
+        Pillow
+
 # Stage 3: Runner — Debian slim com Python/InsightFace (glibc, compativel com wheels Python)
 FROM node:20-slim AS runner
 
 # Ferramentas gerais + dependências de sistema do Chromium headless (Playwright)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl gosu postgresql-client zip \
-    python3 python3-venv python3-dev build-essential cmake \
+    python3 python3-venv \
     libglib2.0-0 tesseract-ocr tesseract-ocr-por \
     libgbm1 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
     libcups2 libdbus-1-3 libdrm2 libxcomposite1 libxdamage1 \
@@ -48,21 +66,8 @@ RUN groupadd --system --gid 1001 nodejs && \
     useradd --system --uid 1001 --gid nodejs nextjs && \
     mkdir -p /home/nextjs && chown 1001:1001 /home/nextjs
 
-# ARG force-invalida cache do registry (muda o valor para rebustar)
-ARG PIP_CACHE_BUST=2026-05-20a
-# numpy<2: onnxruntime 1.16.3 foi compilado com numpy 1.x, incompativel com numpy 2.x
-RUN --mount=type=cache,target=/root/.cache/pip \
-    echo "cache-bust: ${PIP_CACHE_BUST}" && \
-    python3 -m venv /opt/arcface-venv && \
-    /opt/arcface-venv/bin/pip install --upgrade pip && \
-    /opt/arcface-venv/bin/pip install \
-        "numpy<2" \
-        insightface==0.7.3 \
-        "onnxruntime==1.16.3" \
-        opencv-python-headless \
-        pytesseract \
-        Pillow && \
-    HOME=/tmp /opt/arcface-venv/bin/python3 -c "import numpy,onnxruntime,insightface; print('numpy',numpy.__version__,'onnxruntime',onnxruntime.__version__,'insightface',insightface.__version__)"
+# Copia o ambiente virtual Python já compilado do builder
+COPY --from=python_builder /opt/arcface-venv /opt/arcface-venv
 
 # Diretorio de modelos ja com dono nextjs (pode gravar no primeiro uso se download falhar aqui)
 RUN mkdir -p /opt/arcface-models && chown 1001:1001 /opt/arcface-models
