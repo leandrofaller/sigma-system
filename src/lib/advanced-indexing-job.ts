@@ -2,8 +2,11 @@ import { prisma } from './db';
 import { runAdvancedIndexBatch } from './advanced-face-batch';
 import { invalidateAdvancedFaceCache } from './advanced-face-cache';
 import { pgvectorAdvancedAvailable, upsertVectorAdvanced } from './pgvector';
+import { getApenadosDir } from './storage';
 
 const BATCH_SIZE = 100;
+const DELAY_BETWEEN_BATCHES_MS = 2000; // 2 segundos de pausa entre lotes para aliviar CPU na VPS
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const MAX_DURATION_MS = 170 * 60 * 1000; // 170 minutos
 
 export const FACE_NONE = 'NONE';
@@ -142,6 +145,9 @@ async function runLoop(): Promise<void> {
 
     processed += ids.length;
     state.progress = { current: processed, total: totalWithPhoto, faces, skipped, errors, startTime };
+
+    // Evita sobrecarga de CPU na VPS entre lotes de processamento
+    await delay(DELAY_BETWEEN_BATCHES_MS);
   }
 
   state.isRunning = false;

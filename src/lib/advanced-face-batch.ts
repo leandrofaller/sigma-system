@@ -36,6 +36,12 @@ export function runAdvancedIndexBatch(ids: string[], uploadsDir: string): Promis
         ORT_LOGGING_LEVEL: '3',
         PYTHONWARNINGS: 'ignore',
         TQDM_DISABLE: '1',
+        OMP_NUM_THREADS: '1',
+        MKL_NUM_THREADS: '1',
+        OPENBLAS_NUM_THREADS: '1',
+        VECLIB_MAXIMUM_THREADS: '1',
+        NUMEXPR_NUM_THREADS: '1',
+        ONNXRUNTIME_NUM_THREADS: '1',
       };
       const proc = spawn(cmd, ['-u', scriptPath], { shell: true, stdio: ['pipe', 'pipe', 'pipe'], env });
 
