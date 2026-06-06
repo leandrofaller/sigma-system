@@ -105,7 +105,7 @@ RUN mkdir -p ./node_modules/.bin && \
     ln -sf ../prisma/build/index.js ./node_modules/.bin/prisma
 
 COPY --from=builder /app/start.sh ./start.sh
-RUN chmod +x start.sh
+RUN chmod +x start.sh && chown -R 1001:1001 /app
 
 # Caminho fixo para uploads
 ENV UPLOAD_DIR=/app/uploads
