@@ -5,6 +5,7 @@ import { useIndexing } from '@/contexts/IndexingContext';
 import {
   X, ScanFace, Upload, Loader2, AlertTriangle, RefreshCw,
   Database, Search, CheckCircle, Trash2, Users, ZoomIn, ZoomOut, Pencil,
+  ShieldAlert, Activity, Clock, Percent, ShieldCheck, History, Info
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ interface IndexStatus {
   remaining: number;
 }
 
-type Tab = 'search' | 'index';
+type Tab = 'search' | 'index' | 'advanced';
 type SearchState = 'ready' | 'analyzing' | 'results' | 'no-face' | 'error';
 
 const BATCH_SIZE = 30;   // IDs por requisição de indexação
@@ -241,10 +242,60 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [minSimilarity, setMinSimilarity] = useState(30);
   const [faceDisplayHeight, setFaceDisplayHeight] = useState(380);
 
+  // IA Facial Avançada States
+  const [advSearchState, setAdvSearchState] = useState<'ready' | 'analyzing' | 'results' | 'error' | 'spoof' | 'low-quality'>('ready');
+  const [advQueryURL, setAdvQueryURL] = useState<string | null>(null);
+  const [advQueryFile, setAdvQueryFile] = useState<File | null>(null);
+  const [advResult, setAdvResult] = useState<any | null>(null);
+  const [advErrorMsg, setAdvErrorMsg] = useState('');
+  const [advLivenessScore, setAdvLivenessScore] = useState<number | null>(null);
+  const [advQuality, setAdvQuality] = useState<any | null>(null);
+  const [advSelectedFaceIdx, setAdvSelectedFaceIdx] = useState(0);
+  const [advMinSimilarity, setAdvMinSimilarity] = useState(55); // Inicial recomendado 55%
+  const [dashboard, setDashboard] = useState<any | null>(null);
+  const [advIndexStatus, setAdvIndexStatus] = useState<any | null>(null);
+  const [isAdvIndexing, setIsAdvIndexing] = useState(false);
+  const [advIndexProgress, setAdvIndexProgress] = useState<any>({ current: 0, total: 0, faces: 0, skipped: 0, errors: 0 });
+
   // Index
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const { isIndexing, progress: indexProgress, indexError, startIndexing, stopIndexing } = useIndexing();
+
+  const fetchDashboard = useCallback(async () => {
+    try { setDashboard(await (await fetch('/api/apenados/face/advanced-dashboard')).json()); } catch {}
+  }, []);
+
+  const fetchAdvStatus = useCallback(async () => {
+    try {
+      const data = await (await fetch('/api/apenados/face/advanced-status')).json();
+      setAdvIndexStatus(data);
+      if (data.job) {
+        setIsAdvIndexing(data.job.isRunning);
+        setAdvIndexProgress(data.job.progress);
+      }
+    } catch {}
+  }, []);
+
+  // Polling para o job de indexação avançada
+  useEffect(() => {
+    fetchDashboard();
+    fetchAdvStatus();
+  }, [fetchDashboard, fetchAdvStatus]);
+
+  useEffect(() => {
+    let interval: any = null;
+    if (isAdvIndexing) {
+      interval = setInterval(() => {
+        fetchAdvStatus();
+        fetchDashboard();
+      }, 2000);
+    } else {
+      fetchDashboard();
+      fetchAdvStatus();
+    }
+    return () => { if (interval) clearInterval(interval); };
+  }, [isAdvIndexing, fetchAdvStatus, fetchDashboard]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -342,6 +393,107 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     setAnalyzeMsg('Analisando rosto no servidor...');
   };
 
+  // ── IA Facial Avançada ────────────────────────────────────────────────────
+  const analyzeImageAdvanced = useCallback(async (file: File, minSim: number) => {
+    setAdvSearchState('analyzing');
+    setAdvErrorMsg('');
+    try {
+      const form = new FormData();
+      form.append('image', file);
+      form.append('topN', '20');
+      form.append('minSimilarity', String(minSim));
+      form.append('compare', 'true'); // ativa comparação com ArcFace
+
+      const res = await fetch('/api/apenados/face/advanced-search', { method: 'POST', body: form });
+      const text = await res.text();
+      let data: any = null;
+      try { data = JSON.parse(text); } catch {
+        throw new Error(`Erro na API: ${text.slice(0, 120)}`);
+      }
+
+      if (res.status === 422) {
+        if (data.livenessBlocked) {
+          setAdvLivenessScore(data.liveness_score);
+          setAdvQuality(data.quality);
+          setAdvSearchState('spoof');
+          fetchDashboard();
+          return;
+        }
+        if (data.qualityRejected) {
+          setAdvQuality(data.quality);
+          setAdvLivenessScore(data.liveness_score);
+          setAdvSearchState('low-quality');
+          fetchDashboard();
+          return;
+        }
+      }
+
+      if (!res.ok) throw new Error(data?.error || `Erro ${res.status}`);
+
+      if (!data!.faces || data!.faces.length === 0) {
+        setAdvResult(data!);
+        setAdvSearchState('ready'); // no face detectado
+        return;
+      }
+
+      setAdvResult(data!);
+      setAdvLivenessScore(data.faces[0].liveness_score);
+      setAdvQuality(data.faces[0].quality);
+      setAdvSelectedFaceIdx(data!.faces[0].index);
+      setAdvSearchState('results');
+      fetchDashboard();
+    } catch (err: any) {
+      setAdvErrorMsg(err.message || 'Erro no processamento da busca facial avançada.');
+      setAdvSearchState('error');
+    }
+  }, [fetchDashboard]);
+
+  const handleAdvFile = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    const url = URL.createObjectURL(file);
+    setAdvQueryURL(url);
+    setAdvQueryFile(file);
+    setAdvResult(null);
+    setAdvErrorMsg('');
+    analyzeImageAdvanced(file, advMinSimilarity);
+  }, [analyzeImageAdvanced, advMinSimilarity]);
+
+  const reanalyzeAdvanced = useCallback(() => {
+    if (advQueryFile) analyzeImageAdvanced(advQueryFile, advMinSimilarity);
+  }, [advQueryFile, analyzeImageAdvanced, advMinSimilarity]);
+
+  const resetAdvanced = () => {
+    setAdvSearchState('ready');
+    setAdvQueryURL(null);
+    setAdvQueryFile(null);
+    setAdvResult(null);
+    setAdvErrorMsg('');
+  };
+
+  const startAdvIndexing = async () => {
+    try {
+      await fetch('/api/apenados/face/advanced-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start' })
+      });
+      setIsAdvIndexing(true);
+      fetchAdvStatus();
+    } catch {}
+  };
+
+  const stopAdvIndexing = async () => {
+    try {
+      await fetch('/api/apenados/face/advanced-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stop' })
+      });
+      setIsAdvIndexing(false);
+      fetchAdvStatus();
+    } catch {}
+  };
+
   const clearIndex = async () => {
     setShowClearConfirm(false);
     try {
@@ -391,18 +543,20 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
         </div>
 
         {/* Tabs */}
-        {isAdmin && (
-          <div className="flex border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
-            {([['search', Search, 'Buscar por Rosto'], ['index', Database, 'Indexar Banco']] as const).map(([key, Icon, label]) => (
-              <button key={key} onClick={() => setTab(key)}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  tab === key ? 'border-sigma-600 text-sigma-600 dark:text-sigma-400' : 'border-transparent text-subtle hover:text-body'
-                }`}>
-                <Icon className="w-4 h-4" /> {label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+          {([
+            ['search', Search, 'Busca Clássica (ArcFace)'],
+            ['advanced', ScanFace, 'IA Facial (Avançado)'],
+            ...(isAdmin ? [['index', Database, 'Indexar ArcFace'] as const] : [])
+          ] as const).map(([key, Icon, label]) => (
+            <button key={key} onClick={() => setTab(key)}
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === key ? 'border-sigma-600 text-sigma-600 dark:text-sigma-400' : 'border-transparent text-subtle hover:text-body'
+              }`}>
+              <Icon className="w-4 h-4" /> {label}
+            </button>
+          ))}
+        </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
 
@@ -593,6 +747,389 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                 </>
               )}
             </>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              ABA: IA FACIAL (AVANÇADO)
+          ════════════════════════════════════════════════════════════════════ */}
+          {tab === 'advanced' && (
+            <div className="space-y-6">
+              {/* Dashboard Grid */}
+              {dashboard && (
+                <div className="grid grid-cols-5 gap-3">
+                  {[
+                    { label: 'Pessoas Cadastradas', value: dashboard.totalApenados, icon: Users, color: 'from-blue-500/10 to-indigo-500/10 text-blue-600 dark:text-blue-400' },
+                    { label: 'Embeddings IA', value: dashboard.totalEmbeddings, icon: ScanFace, color: 'from-green-500/10 to-emerald-500/10 text-green-600 dark:text-green-400' },
+                    { label: 'Tempo Médio Busca', value: `${dashboard.avgSearchTimeMs}ms`, icon: Clock, color: 'from-purple-500/10 to-fuchsia-500/10 text-purple-600 dark:text-purple-400' },
+                    { label: 'Precisão Estimada', value: `${dashboard.precisionRate}%`, icon: Percent, color: 'from-amber-500/10 to-orange-500/10 text-amber-600 dark:text-amber-400' },
+                    { label: 'Tentativas Spoof Bloqueadas', value: dashboard.livenessBlockedCount, icon: ShieldAlert, color: dashboard.livenessBlockedCount > 0 ? 'from-red-500/10 to-rose-500/10 text-red-600 dark:text-red-400' : 'from-gray-500/10 to-slate-500/10 text-subtle' },
+                  ].map((card) => {
+                    const Icon = card.icon;
+                    return (
+                      <div key={card.label} className={`rounded-xl p-3 border border-gray-100 dark:border-gray-800 bg-gradient-to-br ${card.color} flex flex-col justify-between h-20 transition-all hover:scale-[1.02] shadow-sm`}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-semibold tracking-wide uppercase truncate w-3/4">{card.label}</span>
+                          <Icon className="w-3.5 h-3.5 opacity-70" />
+                        </div>
+                        <p className="text-lg font-black tracking-tight mt-1">{card.value.toLocaleString('pt-BR')}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Área de Busca e Captura */}
+              <div className="border border-gray-100 dark:border-gray-800 rounded-2xl p-5 bg-gray-50/30 dark:bg-gray-900/10 space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+                  <h3 className="text-sm font-bold text-title flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-sigma-600" /> Teste de Reconhecimento de Última Geração
+                  </h3>
+                  <span className="text-xs text-subtle">SCRFD · Alinhamento · Vivacidade · Qualidade</span>
+                </div>
+
+                {advSearchState === 'ready' && (
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(e) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files[0]; if (f) handleAdvFile(f); }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all ${
+                      isDragging
+                        ? 'border-sigma-400 bg-sigma-50 dark:bg-sigma-900/20'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-sigma-300 hover:bg-sigma-50/50 dark:hover:bg-sigma-900/10'
+                    }`}
+                  >
+                    <Upload className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-title">Arraste uma foto ou clique para testar na IA Avançada</p>
+                    <p className="text-xs text-subtle mt-0.5">Analisa automaticamente contra falsificação e baixa qualidade</p>
+                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAdvFile(f); }} />
+                  </div>
+                )}
+
+                {advSearchState === 'analyzing' && (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                    <Loader2 className="w-8 h-8 text-sigma-600 animate-spin" />
+                    <p className="text-sm font-semibold text-title">Executando Pipeline de IA Facial Avançada...</p>
+                    <p className="text-[10px] text-subtle">Extraindo landmarks, calculando vivacidade e qualidade 3D...</p>
+                  </div>
+                )}
+
+                {advSearchState === 'error' && (
+                  <div className="flex flex-col items-center justify-center py-8 gap-3 text-center">
+                    <AlertTriangle className="w-10 h-10 text-red-500" />
+                    <div>
+                      <p className="text-sm font-semibold text-title">Erro na análise da IA Facial</p>
+                      <p className="text-xs text-red-500 mt-1 max-w-sm">{advErrorMsg}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={reanalyzeAdvanced} className="flex items-center gap-1.5 text-xs font-semibold text-sigma-600 hover:text-sigma-700">
+                        <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+                      </button>
+                      <button onClick={resetAdvanced} className="flex items-center gap-1.5 text-xs font-semibold text-subtle hover:text-body">
+                        <Upload className="w-3.5 h-3.5" /> Nova foto
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Regra 6: Alerta de Anti-Spoofing (Falsificação detectada) */}
+                {advSearchState === 'spoof' && (
+                  <div className="flex flex-col items-center justify-center py-8 gap-4 text-center">
+                    <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center text-red-600">
+                      <ShieldAlert className="w-7 h-7 animate-pulse" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-base font-black text-red-600 dark:text-red-400">Falha na validação</p>
+                      <p className="text-sm font-bold text-title">Possível tentativa de apresentação artificial da face.</p>
+                      <p className="text-xs text-subtle max-w-md mt-1">
+                        A heurística de anti-spoofing detectou texturas típicas de tela ou papel impresso (Vivacidade: {advLivenessScore !== null ? Math.round(advLivenessScore * 100) : 0}%).
+                      </p>
+                    </div>
+                    <button onClick={resetAdvanced} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold text-xs transition-colors">
+                      Carregar outra foto
+                    </button>
+                  </div>
+                )}
+
+                {/* Regra 7: Alerta de Qualidade de Imagem Rejeitada */}
+                {advSearchState === 'low-quality' && advQuality && (
+                  <div className="flex flex-col items-center justify-center py-6 gap-4 text-center">
+                    <div className="w-12 h-12 rounded-full bg-yellow-100 dark:bg-yellow-950/40 flex items-center justify-center text-yellow-600">
+                      <AlertTriangle className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-base font-black text-yellow-600 dark:text-yellow-400">A imagem possui baixa qualidade.</p>
+                      <p className="text-sm font-bold text-title">Solicite nova captura.</p>
+                      <p className="text-xs text-subtle">
+                        A pontuação de qualidade geral foi {advQuality.score}% (Recomendado: ≥ 45%).
+                      </p>
+                    </div>
+
+                    {/* Detalhes de Qualidade */}
+                    <div className="grid grid-cols-4 gap-2 w-full max-w-lg mt-1">
+                      {[
+                        { label: 'Nitidez (Blur)', value: advQuality.blur_score, threshold: 40 },
+                        { label: 'Iluminação', value: advQuality.brightness_score, threshold: 40 },
+                        { label: 'Contraste', value: advQuality.contrast_score, threshold: 40 },
+                        { label: 'Pose (Centralizado)', value: advQuality.pose_score, threshold: 50 }
+                      ].map((q) => (
+                        <div key={q.label} className="bg-white dark:bg-gray-800 rounded-lg p-2 border border-gray-100 dark:border-gray-700 text-left">
+                          <p className="text-[10px] text-subtle truncate">{q.label}</p>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <span className={`text-xs font-bold ${q.value >= q.threshold ? 'text-green-600' : 'text-red-500'}`}>{q.value}%</span>
+                            <span className="text-[8px] text-subtle">limite {q.threshold}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button onClick={resetAdvanced} className="bg-sigma-600 hover:bg-sigma-700 text-white px-4 py-2 rounded-xl font-bold text-xs transition-colors">
+                      Tentar captura novamente
+                    </button>
+                  </div>
+                )}
+
+                {/* Exibição dos resultados avançados e comparativo */}
+                {advSearchState === 'results' && advResult && (
+                  <div className="space-y-5">
+                    {/* Visualização de BBoxes */}
+                    {advQueryURL && advResult.faces?.[0] && (
+                      <FaceCanvas
+                        imageUrl={advQueryURL}
+                        faces={advResult.faces}
+                        selectedIdx={advSelectedFaceIdx}
+                        imageWidth={advResult.imageWidth}
+                        imageHeight={advResult.imageHeight}
+                        onSelectFace={setAdvSelectedFaceIdx}
+                        displayHeight={280}
+                      />
+                    )}
+
+                    {/* Regra 11: Painel Comparativo Lado a Lado (ArcFace vs IA Facial) */}
+                    <div className="grid grid-cols-2 gap-4 border-y border-gray-100 dark:border-gray-800 py-4">
+                      {/* Coluna ArcFace */}
+                      <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-gray-50/40 dark:bg-gray-800/20 space-y-3 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full translate-x-8 -translate-y-8" />
+                        <h4 className="font-extrabold text-xs text-blue-600 uppercase tracking-wide">Mecanismo Clássico (ArcFace)</h4>
+                        
+                        <div className="space-y-2 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-subtle">Status:</span>
+                            <span className="font-bold text-green-600 flex items-center gap-1">✓ Funcionando</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-subtle">Melhor Similaridade:</span>
+                            <span className="font-extrabold text-title">
+                              {advResult.arcFaceComparison ? `${advResult.faces[0]?.matches?.[0]?.similarity ?? 0}%` : '--'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-subtle">Tempo de Resposta:</span>
+                            <span className="font-semibold text-title">
+                              {advResult.arcFaceComparison ? `${advResult.arcFaceComparison.durationMs} ms` : '--'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Coluna IA Facial Avançado */}
+                      <div className="rounded-xl border border-green-200 dark:border-green-800 p-4 bg-green-50/20 dark:bg-green-950/10 space-y-3 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/5 rounded-full translate-x-8 -translate-y-8" />
+                        <h4 className="font-extrabold text-xs text-green-600 uppercase tracking-wide">Evolução IA Facial (Avançado)</h4>
+                        
+                        <div className="space-y-2 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-subtle">Status:</span>
+                            <span className="font-bold text-green-600 flex items-center gap-1">✓ Funcionando</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-subtle">Precisão / Similaridade:</span>
+                            <span className="font-extrabold text-green-600">
+                              {advResult.faces[0]?.matches?.[0]?.similarity ?? 0}%
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-subtle">Confiança Vivacidade:</span>
+                            <span className="font-semibold text-title flex items-center gap-1">
+                              <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
+                              {advLivenessScore !== null ? `${Math.round(advLivenessScore * 100)}%` : '--'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-subtle">Qualidade Geral:</span>
+                            <span className="font-semibold text-title">
+                              {advQuality ? `${advQuality.score}%` : '--'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-subtle">Tempo de Resposta:</span>
+                            <span className="font-semibold text-green-600">{advResult.executionTimeMs} ms</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Controles do Comparativo */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                        <label className="text-xs text-subtle font-medium">Similaridade mínima:</label>
+                        <input type="range" min={0} max={90} value={advMinSimilarity}
+                          onChange={(e) => setAdvMinSimilarity(Number(e.target.value))}
+                          className="flex-1 accent-sigma-600" />
+                        <span className="text-xs font-bold text-sigma-600 w-8 text-right">{advMinSimilarity}%</span>
+                      </div>
+                      <button onClick={reanalyzeAdvanced} className="flex items-center gap-1.5 text-xs font-medium border border-sigma-200 dark:border-sigma-800 text-sigma-600 px-3 py-1.5 rounded-lg hover:bg-sigma-50 transition-colors">
+                        <RefreshCw className="w-3 h-3" /> Reaplicar filtro
+                      </button>
+                      <button onClick={resetAdvanced} className="flex items-center gap-1.5 text-xs font-medium border border-gray-200 dark:border-gray-700 text-subtle px-3 py-1.5 rounded-lg hover:text-body transition-colors">
+                        <Upload className="w-3 h-3" /> Nova foto
+                      </button>
+                    </div>
+
+                    {/* Resultados dos Matches */}
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-bold text-title uppercase tracking-wide border-b border-gray-100 dark:border-gray-800 pb-1">
+                        Pessoas Correspondentes ({advResult.faces[0]?.matches?.length ?? 0})
+                      </h4>
+                      {advResult.faces[0]?.matches?.length === 0 ? (
+                        <p className="text-xs text-subtle py-4 text-center">Nenhuma correspondência facial encontrada com similaridade ≥ {advMinSimilarity}%</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {advResult.faces[0]?.matches.map((m: any, i: number) => (
+                            <MatchCard key={m.id} match={m} rank={i + 1} onEdit={onEditApenado} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Histórico Recente de Reconhecimento */}
+              {dashboard?.recentHistory && dashboard.recentHistory.length > 0 && (
+                <div className="border border-gray-100 dark:border-gray-800 rounded-2xl p-4 bg-white dark:bg-gray-900 space-y-3 shadow-sm">
+                  <h3 className="text-xs font-bold text-title uppercase tracking-wider flex items-center gap-2 border-b border-gray-50 dark:border-gray-800 pb-2">
+                    <History className="w-4 h-4 text-subtle" /> Histórico Recente de Verificações Avançadas
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-100 dark:border-gray-800 text-subtle font-medium">
+                          <th className="py-2">Data/Hora</th>
+                          <th className="py-2">Status Validação</th>
+                          <th className="py-2">Melhor Match</th>
+                          <th className="py-2">Qualidade</th>
+                          <th className="py-2">Vivacidade</th>
+                          <th className="py-2 text-right">Tempo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dashboard.recentHistory.map((item: any, idx: number) => {
+                          const date = new Date(item.createdAt).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit' });
+                          return (
+                            <tr key={idx} className="border-b border-gray-50 dark:border-gray-850 hover:bg-gray-50/50 dark:hover:bg-gray-800/10">
+                              <td className="py-2.5 text-subtle">{date}</td>
+                              <td className="py-2.5 font-semibold">
+                                {item.livenessBlocked ? (
+                                  <span className="text-red-500">⚠ Spoof Bloqueado</span>
+                                ) : item.qualityRejected ? (
+                                  <span className="text-yellow-600 dark:text-yellow-400">⚡ Baixa Qualidade</span>
+                                ) : (
+                                  <span className="text-green-600">✓ Aprovado</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 font-bold text-title">{item.success && item.highestSimilarity ? `${item.highestSimilarity}%` : '--'}</td>
+                              <td className="py-2.5 text-subtle">{item.qualityScore}%</td>
+                              <td className="py-2.5 text-subtle">{Math.round(item.livenessScore * 100)}%</td>
+                              <td className="py-2.5 text-right font-medium text-title">{item.executionTimeMs} ms</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Status do Job de Migração Avançada */}
+              {advIndexStatus && (
+                <div className="border border-gray-100 dark:border-gray-800 rounded-2xl p-4 bg-white dark:bg-gray-900 space-y-4 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-gray-50 dark:border-gray-800 pb-2">
+                    <div>
+                      <h4 className="text-xs font-bold text-title uppercase tracking-wide">Indexador da IA Facial (Migração Automática)</h4>
+                      <p className="text-[10px] text-subtle mt-0.5">Calcula embeddings avançados para a base de fotos existente</p>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAdvIndexing ? 'bg-green-100 text-green-700 animate-pulse' : 'bg-gray-100 text-subtle'}`}>
+                      {isAdvIndexing ? 'Indexando em background' : 'Parado'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label: 'Total Fotos', value: advIndexStatus.withPhoto },
+                      { label: 'Embeddings IA', value: advIndexStatus.indexed, color: 'text-green-600' },
+                      { label: 'Sem Rosto', value: advIndexStatus.noFace },
+                      { label: 'Pendentes', value: advIndexStatus.remaining, color: advIndexStatus.remaining > 0 ? 'text-yellow-600' : 'text-green-600' }
+                    ].map((c) => (
+                      <div key={c.label} className="bg-gray-50/50 dark:bg-gray-800/10 rounded-xl p-3 border border-gray-100 dark:border-gray-800 text-center">
+                        <p className={`text-lg font-black ${c.color || 'text-title'}`}>{c.value.toLocaleString('pt-BR')}</p>
+                        <p className="text-[10px] text-subtle mt-0.5 font-medium">{c.label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Barra de progresso do job avançado */}
+                  {(isAdvIndexing || (advIndexProgress && advIndexProgress.current > 0)) && (
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs">
+                        <span className="font-semibold text-title">
+                          {advIndexProgress.current.toLocaleString('pt-BR')} / {advIndexProgress.total.toLocaleString('pt-BR')} fotos processadas
+                        </span>
+                        {isAdvIndexing && advIndexProgress.current > 0 && (
+                          <span className="text-subtle">
+                            {(() => {
+                              const elapsed = (Date.now() - advIndexProgress.startTime) / 1000;
+                              const rate = advIndexProgress.current / elapsed;
+                              const remainingSecs = (advIndexProgress.total - advIndexProgress.current) / rate;
+                              return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(remainingSecs)}`;
+                            })()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-green-500 to-emerald-600 transition-all duration-300 rounded-full"
+                          style={{ width: advIndexProgress.total > 0 ? `${(advIndexProgress.current / advIndexProgress.total) * 100}%` : '0%' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    {!isAdvIndexing ? (
+                      <button
+                        onClick={startAdvIndexing}
+                        disabled={advIndexStatus.remaining === 0}
+                        className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-bold text-xs transition-colors disabled:opacity-50"
+                      >
+                        <ScanFace className="w-3.5 h-3.5" /> Iniciar Migração Completa
+                      </button>
+                    ) : (
+                      <button
+                        onClick={stopAdvIndexing}
+                        className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold text-xs transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" /> Parar Migração
+                      </button>
+                    )}
+                    <button onClick={fetchAdvStatus} className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 text-subtle px-4 py-2 rounded-xl font-bold text-xs hover:text-body transition-colors">
+                      <RefreshCw className="w-3.5 h-3.5" /> Atualizar Status
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* ═══════════════════════════════════════════════════════════════════

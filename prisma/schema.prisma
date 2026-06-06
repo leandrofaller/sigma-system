@@ -465,6 +465,10 @@ model Apenado {
   notes          String?  @db.Text
   faceDescriptor String?  @db.Text
   detScore       Float?
+  faceDescriptorAdvanced String?  @db.Text
+  advancedDetScore       Float?
+  advancedQualityScore   Float?
+  advancedLivenessScore  Float?
   ocrText        String?  @db.Text
   ocrName        String?
   createdAt   DateTime @default(now())

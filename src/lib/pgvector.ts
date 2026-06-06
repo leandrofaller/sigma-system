@@ -8,6 +8,7 @@ import { prisma } from './db';
 
 // Cache da disponibilidade — evita checar o banco a cada request
 let _available: boolean | null = null;
+let _availableAdvanced: boolean | null = null;
 
 /** Verifica se pgvector está instalado E a coluna faceVector existe. */
 export async function pgvectorAvailable(): Promise<boolean> {
@@ -27,9 +28,28 @@ export async function pgvectorAvailable(): Promise<boolean> {
   return _available;
 }
 
+/** Verifica se a coluna faceVectorAdvanced existe. */
+export async function pgvectorAdvancedAvailable(): Promise<boolean> {
+  if (_availableAdvanced !== null) return _availableAdvanced;
+  try {
+    const rows = await prisma.$queryRaw<[{ ext: bigint; col: bigint }]>`
+      SELECT
+        (SELECT COUNT(*) FROM pg_extension WHERE extname = 'vector') AS ext,
+        (SELECT COUNT(*) FROM information_schema.columns
+          WHERE table_name = 'apenados' AND column_name = 'faceVectorAdvanced') AS col
+    `;
+    const r = rows[0];
+    _availableAdvanced = Number(r.ext) > 0 && Number(r.col) > 0;
+  } catch {
+    _availableAdvanced = false;
+  }
+  return _availableAdvanced;
+}
+
 /** Reseta o cache de disponibilidade (útil após initPgVector). */
 export function resetPgVectorStatus(): void {
   _available = null;
+  _availableAdvanced = null;
 }
 
 /** Retorna estatísticas do índice vetorial. */
@@ -73,14 +93,24 @@ export async function initPgVector(): Promise<{ ok: boolean; error?: string }> {
     await prisma.$executeRawUnsafe(
       `ALTER TABLE apenados ADD COLUMN IF NOT EXISTS "faceVector" vector(512)`,
     );
-    // HNSW: m=32 (conectividade alta), ef_construction=128 (índice mais denso → melhor recall)
-    // Valores anteriores eram m=16/ef=64 — rebuild necessário para aplicar
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS apenados_face_hnsw_idx
       ON apenados USING hnsw ("faceVector" vector_cosine_ops)
       WITH (m = 32, ef_construction = 128)
     `);
+
+    // Inicializa suporte avançado
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE apenados ADD COLUMN IF NOT EXISTS "faceVectorAdvanced" vector(512)`,
+    );
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS apenados_face_advanced_hnsw_idx
+      ON apenados USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
+      WITH (m = 32, ef_construction = 128)
+    `);
+
     _available = true;
+    _availableAdvanced = true;
     return { ok: true };
   } catch (err: any) {
     return { ok: false, error: err?.message ?? String(err) };
@@ -147,6 +177,18 @@ export async function upsertVector(id: string, embedding: number[]): Promise<voi
   try {
     await prisma.$executeRawUnsafe(
       `UPDATE apenados SET "faceVector" = $1::vector WHERE id = $2`,
+      vec,
+      id,
+    );
+  } catch {}
+}
+
+/** Salva embedding da IA Facial em faceVectorAdvanced. */
+export async function upsertVectorAdvanced(id: string, embedding: number[]): Promise<void> {
+  const vec = `[${embedding.join(',')}]`;
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE apenados SET "faceVectorAdvanced" = $1::vector WHERE id = $2`,
       vec,
       id,
     );
@@ -222,4 +264,69 @@ export async function searchByVector(
   } catch {
     return [];
   }
+}
+
+/** Busca apenados com faceVectorAdvanced mais próximo ao embedding fornecido. */
+export async function searchByVectorAdvanced(
+  embedding: number[],
+  threshold: number,
+  topN: number,
+  excludeId?: string,
+): Promise<VectorMatch[]> {
+  const vec = `[${embedding.join(',')}]`;
+  const maxDist = 1 - threshold;
+
+  try {
+    let rows: Array<{ id: string; sim: number }>;
+
+    if (excludeId) {
+      rows = await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('SET LOCAL hnsw.ef_search = 100');
+        return tx.$queryRawUnsafe<Array<{ id: string; sim: number }>>(
+          `SELECT id, (1 - ("faceVectorAdvanced" <=> $1::vector)) AS sim
+           FROM apenados
+           WHERE "faceVectorAdvanced" IS NOT NULL
+             AND "photoPath" IS NOT NULL
+             AND id != $2
+             AND ("faceVectorAdvanced" <=> $1::vector) <= $3
+           ORDER BY "faceVectorAdvanced" <=> $1::vector ASC
+           LIMIT $4`,
+          vec,
+          excludeId,
+          maxDist,
+          topN,
+        );
+      });
+    } else {
+      rows = await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('SET LOCAL hnsw.ef_search = 100');
+        return tx.$queryRawUnsafe<Array<{ id: string; sim: number }>>(
+          `SELECT id, (1 - ("faceVectorAdvanced" <=> $1::vector)) AS sim
+           FROM apenados
+           WHERE "faceVectorAdvanced" IS NOT NULL
+             AND "photoPath" IS NOT NULL
+             AND ("faceVectorAdvanced" <=> $1::vector) <= $2
+           ORDER BY "faceVectorAdvanced" <=> $1::vector ASC
+           LIMIT $3`,
+          vec,
+          maxDist,
+          topN,
+        );
+      });
+    }
+
+    return rows.map((r) => ({ id: r.id, similarity: r.sim }));
+  } catch {
+    return [];
+  }
+}
+
+/** Remove o faceVectorAdvanced de um apenado. */
+export async function clearVectorAdvanced(id: string): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE apenados SET "faceVectorAdvanced" = NULL WHERE id = $1`,
+      id,
+    );
+  } catch {}
 }

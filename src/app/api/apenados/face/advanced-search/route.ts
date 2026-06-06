@@ -1,0 +1,373 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { spawn } from 'child_process';
+import { join } from 'path';
+import { writeFile, unlink } from 'fs/promises';
+import { tmpdir } from 'os';
+import { randomUUID } from 'crypto';
+import { warmAdvancedFaceCache, awaitAdvancedFaceCache, getAdvancedCacheStatus } from '@/lib/advanced-face-cache';
+import { pgvectorAdvancedAvailable, searchByVectorAdvanced } from '@/lib/pgvector';
+import { createAuditLog } from '@/lib/audit';
+
+export const maxDuration = 60;
+
+interface QualityInfo {
+  score: number;
+  blur_score: number;
+  brightness_score: number;
+  contrast_score: number;
+  pose_score: number;
+  is_valid: boolean;
+  details: {
+    laplacian_variance: number;
+    mean_luminance: number;
+    std_luminance: number;
+    roll_angle: number;
+    yaw_ratio: number;
+    pitch_ratio: number;
+  };
+}
+
+interface AdvancedFace {
+  index: number;
+  det_score: number;
+  bbox: number[];
+  kps: number[][];
+  embedding: number[];
+  liveness_score: number;
+  quality: QualityInfo;
+}
+
+interface AdvancedAnalyzeResult {
+  faces: AdvancedFace[];
+  imageWidth: number;
+  imageHeight: number;
+  faiss_enabled: boolean;
+  error?: string;
+}
+
+// Interfaces do ArcFace original para comparação
+interface ArcFaceResult {
+  faces: Array<{
+    index: number;
+    det_score: number;
+    bbox: number[];
+    embedding: number[];
+    liveness_score?: number | null;
+  }>;
+  error?: string;
+}
+
+function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyzeResult; duration: number }> {
+  const startTime = Date.now();
+  return new Promise((resolve, reject) => {
+    const scriptPath = join(process.cwd(), 'scripts', 'advanced_face_analyze.py');
+    const envPython = process.env.ARCFACE_PYTHON;
+    const candidates = envPython ? [envPython] : ['python3', 'python', 'py'];
+    let idx = 0;
+    const errors: string[] = [];
+
+    function tryNext() {
+      if (idx >= candidates.length) {
+        reject(new Error(`Python não encontrado para o pipeline avançado.`));
+        return;
+      }
+      const cmd = candidates[idx++];
+      const env = {
+        ...process.env,
+        MPLCONFIGDIR: '/tmp/.matplotlib',
+        MPLBACKEND: 'Agg',
+        HOME: '/tmp',
+        ORT_LOGGING_LEVEL: '3',
+        PYTHONWARNINGS: 'ignore',
+        TQDM_DISABLE: '1',
+      };
+      const proc = spawn(cmd, ['-u', scriptPath, imagePath], { shell: true, env });
+      let stdout = '';
+      let stderr = '';
+
+      proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+      proc.on('close', (code) => {
+        const trimmed = stdout.trim();
+        const duration = Date.now() - startTime;
+        if (trimmed) {
+          for (const line of trimmed.split('\n').filter(Boolean).reverse()) {
+            try {
+              const parsed = JSON.parse(line) as AdvancedAnalyzeResult;
+              if (parsed.error) { reject(new Error(parsed.error)); return; }
+              if (code === 0) { resolve({ result: parsed, duration }); return; }
+              break;
+            } catch {}
+          }
+        }
+        if (code !== 0) {
+          errors.push(`[${cmd}] ${stderr.trim()}`);
+          tryNext();
+        } else {
+          reject(new Error('Resposta inválida do script avançado.'));
+        }
+      });
+
+      proc.on('error', () => tryNext());
+    }
+
+    tryNext();
+  });
+}
+
+function runArcFaceAnalyze(imagePath: string): Promise<{ result: ArcFaceResult; duration: number }> {
+  const startTime = Date.now();
+  return new Promise((resolve, reject) => {
+    const scriptPath = join(process.cwd(), 'scripts', 'arcface_analyze.py');
+    const envPython = process.env.ARCFACE_PYTHON;
+    const candidates = envPython ? [envPython] : ['python3', 'python', 'py'];
+    let idx = 0;
+
+    function tryNext() {
+      if (idx >= candidates.length) {
+        reject(new Error(`Python não encontrado para o ArcFace.`));
+        return;
+      }
+      const cmd = candidates[idx++];
+      const env = {
+        ...process.env,
+        MPLCONFIGDIR: '/tmp/.matplotlib',
+        MPLBACKEND: 'Agg',
+        HOME: '/tmp',
+        ORT_LOGGING_LEVEL: '3',
+        PYTHONWARNINGS: 'ignore',
+        TQDM_DISABLE: '1',
+      };
+      const proc = spawn(cmd, ['-u', scriptPath, imagePath], { shell: true, env });
+      let stdout = '';
+      let stderr = '';
+
+      proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+      proc.on('close', (code) => {
+        const trimmed = stdout.trim();
+        const duration = Date.now() - startTime;
+        if (trimmed) {
+          for (const line of trimmed.split('\n').filter(Boolean).reverse()) {
+            try {
+              const parsed = JSON.parse(line) as ArcFaceResult;
+              if (parsed.error) { reject(new Error(parsed.error)); return; }
+              if (code === 0) { resolve({ result: parsed, duration }); return; }
+              break;
+            } catch {}
+          }
+        }
+        tryNext();
+      });
+
+      proc.on('error', () => tryNext());
+    }
+
+    tryNext();
+  });
+}
+
+function toPercent(sim: number): number {
+  return Math.max(0, Math.min(100, Math.round(sim * 100)));
+}
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+  warmAdvancedFaceCache();
+
+  const formData = await req.formData();
+  const file = formData.get('image') as File | null;
+  const topN = Math.min(50, Math.max(1, parseInt((formData.get('topN') as string) || '20', 10)));
+  const minSimilarity = parseInt((formData.get('minSimilarity') as string) || '40', 10);
+  const compareArcFace = formData.get('compare') === 'true'; // Se true, roda o ArcFace em paralelo
+
+  if (!file) return NextResponse.json({ error: 'Nenhuma imagem enviada' }, { status: 400 });
+
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const tmpPath = join(tmpdir(), `advanced_face_${randomUUID()}.${ext}`);
+
+  try {
+    await writeFile(tmpPath, Buffer.from(await file.arrayBuffer()));
+
+    const minSim01 = Math.max(0.1, Math.min(0.99, minSimilarity / 100));
+
+    // Executa análise avançada e checa disponibilidade de pgvector avançado
+    const [pvecAvail, advAnalysis, arcAnalysis] = await Promise.all([
+      pgvectorAdvancedAvailable(),
+      runAdvancedAnalyze(tmpPath),
+      compareArcFace ? runArcFaceAnalyze(tmpPath).catch(() => null) : Promise.resolve(null)
+    ]);
+
+    const { result: analysis, duration: advDuration } = advAnalysis;
+
+    if (!analysis.faces || analysis.faces.length === 0) {
+      // Registra auditoria de busca sem rosto
+      await createAuditLog({
+        userId: session.user.id,
+        action: 'FACE_ADVANCED_SEARCH',
+        details: { success: false, error: 'Nenhum rosto detectado', executionTimeMs: advDuration }
+      });
+      return NextResponse.json({
+        faces: [],
+        imageWidth: analysis.imageWidth,
+        imageHeight: analysis.imageHeight,
+        backend: pvecAvail ? 'pgvector' : 'memory',
+        executionTimeMs: advDuration
+      });
+    }
+
+    // Seleciona o rosto principal
+    const face = analysis.faces[0];
+
+    // Regra 6: Alerta e bloqueio de Anti-Spoofing (liveness_score < 0.5 por padrão)
+    const livenessThreshold = parseFloat(process.env.FACE_LIVENESS_THRESHOLD || '0.5');
+    if (face.liveness_score < livenessThreshold) {
+      await createAuditLog({
+        userId: session.user.id,
+        action: 'FACE_ADVANCED_SEARCH',
+        details: { 
+          success: false, 
+          livenessBlocked: true, 
+          livenessScore: face.liveness_score, 
+          executionTimeMs: advDuration 
+        }
+      });
+      return NextResponse.json({
+        error: 'Falha na validação: Possível tentativa de apresentação artificial da face.',
+        livenessBlocked: true,
+        liveness_score: face.liveness_score,
+        quality: face.quality
+      }, { status: 422 });
+    }
+
+    // Regra 7: Alerta de Qualidade de Imagem
+    if (!face.quality.is_valid) {
+      await createAuditLog({
+        userId: session.user.id,
+        action: 'FACE_ADVANCED_SEARCH',
+        details: { 
+          success: false, 
+          qualityRejected: true, 
+          qualityScore: face.quality.score, 
+          executionTimeMs: advDuration 
+        }
+      });
+      return NextResponse.json({
+        error: 'A imagem possui baixa qualidade. Solicite nova captura.',
+        qualityRejected: true,
+        quality: face.quality,
+        liveness_score: face.liveness_score
+      }, { status: 422 });
+    }
+
+    let matches: any[] = [];
+    const searchStartTime = Date.now();
+
+    if (pvecAvail) {
+      // Busca via pgvector
+      const hits = await searchByVectorAdvanced(face.embedding, minSim01, topN);
+      if (hits.length > 0) {
+        const records = await prisma.apenado.findMany({
+          where: { id: { in: hits.map((h) => h.id) } },
+          select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true }
+        });
+        const metaMap = new Map(records.map((r) => [r.id, r]));
+        matches = hits
+          .map(({ id, similarity }) => {
+            const meta = metaMap.get(id);
+            if (!meta) return null;
+            return { ...meta, similarity: toPercent(similarity) };
+          })
+          .filter(Boolean);
+      }
+    } else {
+      // Fallback em memória
+      const cache = await awaitAdvancedFaceCache(25_000);
+      const { ids, vecs, count } = cache;
+      const queryVec = new Float32Array(face.embedding);
+      const hits: Array<{ idx: number; similarity: number }> = [];
+
+      for (let i = 0; i < count; i++) {
+        const offset = i * 512;
+        let dot = 0;
+        for (let j = 0; j < 512; j++) dot += queryVec[j] * vecs[offset + j];
+        if (dot >= minSim01) hits.push({ idx: i, similarity: dot });
+      }
+
+      hits.sort((a, b) => b.similarity - a.similarity);
+      const topHits = hits.slice(0, topN);
+
+      if (topHits.length > 0) {
+        const records = await prisma.apenado.findMany({
+          where: { id: { in: topHits.map((h) => ids[h.idx]) } },
+          select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true }
+        });
+        const metaMap = new Map(records.map((r) => [r.id, r]));
+        matches = topHits
+          .map(({ idx, similarity }) => {
+            const meta = metaMap.get(ids[idx]);
+            if (!meta) return null;
+            return { ...meta, similarity: toPercent(similarity) };
+          })
+          .filter(Boolean);
+      }
+    }
+
+    const searchDuration = Date.now() - searchStartTime;
+    const totalDuration = advDuration + searchDuration;
+
+    // Constrói objeto comparativo
+    let comparison = null;
+    if (compareArcFace && arcAnalysis) {
+      comparison = {
+        durationMs: arcAnalysis.duration,
+        facesCount: arcAnalysis.result.faces?.length ?? 0,
+        // O ArcFace não tem liveness avançado, retorna liveness simples se existir
+        liveness_score: arcAnalysis.result.faces?.[0]?.liveness_score ?? null
+      };
+    }
+
+    // Registra auditoria com sucesso
+    const highestSimilarity = matches[0]?.similarity ?? 0;
+    await createAuditLog({
+      userId: session.user.id,
+      action: 'FACE_ADVANCED_SEARCH',
+      details: {
+        success: true,
+        executionTimeMs: totalDuration,
+        highestSimilarity,
+        matchesCount: matches.length,
+        livenessScore: face.liveness_score,
+        qualityScore: face.quality.score
+      }
+    });
+
+    return NextResponse.json({
+      faces: [{
+        index: face.index,
+        det_score: face.det_score,
+        bbox: face.bbox,
+        kps: face.kps,
+        liveness_score: face.liveness_score,
+        quality: face.quality,
+        matches
+      }],
+      imageWidth: analysis.imageWidth,
+      imageHeight: analysis.imageHeight,
+      backend: pvecAvail ? 'pgvector' : 'memory',
+      executionTimeMs: totalDuration,
+      arcFaceComparison: comparison
+    });
+
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  } finally {
+    await unlink(tmpPath).catch(() => {});
+  }
+}
