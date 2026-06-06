@@ -2,7 +2,6 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useIndexing } from '@/contexts/IndexingContext';
-import { useAdvancedIndexing } from '@/contexts/AdvancedIndexingContext';
 import {
   X, ScanFace, Upload, Loader2, AlertTriangle, RefreshCw,
   Database, Search, CheckCircle, Trash2, Users, ZoomIn, ZoomOut, Pencil,
@@ -45,7 +44,7 @@ interface IndexStatus {
   remaining: number;
 }
 
-type Tab = 'search' | 'index' | 'advanced' | 'advanced-index';
+type Tab = 'search' | 'index' | 'advanced';
 type SearchState = 'ready' | 'analyzing' | 'results' | 'no-face' | 'error';
 
 const BATCH_SIZE = 30;   // IDs por requisição de indexação
@@ -255,32 +254,13 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [advMinSimilarity, setAdvMinSimilarity] = useState(55); // Inicial recomendado 55%
   const [dashboard, setDashboard] = useState<any | null>(null);
   const [advIndexStatus, setAdvIndexStatus] = useState<any | null>(null);
-
-  // Index avançado via Contexto global (similar ao ArcFace)
-  const { 
-    isIndexing: isAdvIndexing, 
-    progress: advIndexProgress, 
-    indexError: advIndexError, 
-    startIndexing: startAdvIndexing, 
-    stopIndexing: stopAdvIndexing 
-  } = useAdvancedIndexing();
+  const [isAdvIndexing, setIsAdvIndexing] = useState(false);
+  const [advIndexProgress, setAdvIndexProgress] = useState<any>({ current: 0, total: 0, faces: 0, skipped: 0, errors: 0 });
 
   // Index
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const { isIndexing, progress: indexProgress, indexError, startIndexing, stopIndexing } = useIndexing();
-
-  // Index Avançado
-  const [showAdvClearConfirm, setShowAdvClearConfirm] = useState(false);
-  const clearAdvancedIndex = async () => {
-    setShowAdvClearConfirm(false);
-    try {
-      const res = await fetch('/api/apenados/face/advanced-clear', { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok) fetchAdvStatus();
-      else setAdvErrorMsg(data.error || 'Erro ao limpar índice avançado');
-    } catch { setAdvErrorMsg('Erro ao limpar índice avançado'); }
-  };
 
   const fetchDashboard = useCallback(async () => {
     try { setDashboard(await (await fetch('/api/apenados/face/advanced-dashboard')).json()); } catch {}
@@ -290,21 +270,31 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     try {
       const data = await (await fetch('/api/apenados/face/advanced-status')).json();
       setAdvIndexStatus(data);
+      if (data.job) {
+        setIsAdvIndexing(data.job.isRunning);
+        setAdvIndexProgress(data.job.progress);
+      }
     } catch {}
   }, []);
 
-  // Polling para os dados do dashboard e status de fotos indexadas
+  // Polling para o job de indexação avançada
   useEffect(() => {
     fetchDashboard();
     fetchAdvStatus();
   }, [fetchDashboard, fetchAdvStatus]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchAdvStatus();
+    let interval: any = null;
+    if (isAdvIndexing) {
+      interval = setInterval(() => {
+        fetchAdvStatus();
+        fetchDashboard();
+      }, 2000);
+    } else {
       fetchDashboard();
-    }, isAdvIndexing ? 2000 : 30000);
-    return () => clearInterval(interval);
+      fetchAdvStatus();
+    }
+    return () => { if (interval) clearInterval(interval); };
   }, [isAdvIndexing, fetchAdvStatus, fetchDashboard]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -480,7 +470,29 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     setAdvErrorMsg('');
   };
 
-  // Métodos de indexação avançada são consumidos globalmente via contexto useAdvancedIndexing
+  const startAdvIndexing = async () => {
+    try {
+      await fetch('/api/apenados/face/advanced-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start' })
+      });
+      setIsAdvIndexing(true);
+      fetchAdvStatus();
+    } catch {}
+  };
+
+  const stopAdvIndexing = async () => {
+    try {
+      await fetch('/api/apenados/face/advanced-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stop' })
+      });
+      setIsAdvIndexing(false);
+      fetchAdvStatus();
+    } catch {}
+  };
 
   const clearIndex = async () => {
     setShowClearConfirm(false);
@@ -535,10 +547,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
           {([
             ['search', Search, 'Busca Clássica (ArcFace)'],
             ['advanced', ScanFace, 'IA Facial (Avançado)'],
-            ...(isAdmin ? [
-              ['index', Database, 'Indexar ArcFace'] as const,
-              ['advanced-index', ShieldCheck, 'Indexar IA Facial'] as const
-            ] : [])
+            ...(isAdmin ? [['index', Database, 'Indexar ArcFace'] as const] : [])
           ] as const).map(([key, Icon, label]) => (
             <button key={key} onClick={() => setTab(key)}
               className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -1043,122 +1052,83 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                 </div>
               )}
 
-            </div>
-          )}
-
-          {/* ═══════════════════════════════════════════════════════════════════
-              ABA: INDEXAR IA FACIAL (AVANÇADO)
-          ════════════════════════════════════════════════════════════════════ */}
-          {tab === 'advanced-index' && (
-            <div className="space-y-5">
-              {/* Contadores */}
+              {/* Status do Job de Migração Avançada */}
               {advIndexStatus && (
-                <div className="grid grid-cols-4 gap-3">
-                  {[
-                    { label: 'Com foto', value: advIndexStatus.withPhoto, color: 'text-sigma-600' },
-                    { label: 'Indexadas (IA)', value: advIndexStatus.indexed, color: 'text-green-600 dark:text-green-400' },
-                    { label: 'Sem rosto', value: advIndexStatus.noFace ?? 0, color: 'text-gray-500 dark:text-gray-400' },
-                    { label: 'Pendentes', value: advIndexStatus.remaining, color: advIndexStatus.remaining > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="card p-4 text-center">
-                      <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString('pt-BR')}</p>
-                      <p className="text-xs text-subtle mt-1">{label}</p>
+                <div className="border border-gray-100 dark:border-gray-800 rounded-2xl p-4 bg-white dark:bg-gray-900 space-y-4 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-gray-50 dark:border-gray-800 pb-2">
+                    <div>
+                      <h4 className="text-xs font-bold text-title uppercase tracking-wide">Indexador da IA Facial (Migração Automática)</h4>
+                      <p className="text-[10px] text-subtle mt-0.5">Calcula embeddings avançados para a base de fotos existente</p>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {advIndexError && (
-                <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-400">
-                  {advIndexError}
-                </div>
-              )}
-
-              {/* Progresso */}
-              {(isAdvIndexing || (advIndexProgress && advIndexProgress.current > 0)) && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-title">
-                      {advIndexProgress.current.toLocaleString('pt-BR')} / {advIndexProgress.total.toLocaleString('pt-BR')} fotos processadas
-                    </div>
-                    {isAdvIndexing && advIndexProgress.current > 0 && (
-                      <div className="text-xs text-subtle">
-                        {(() => {
-                          const elapsed = (Date.now() - advIndexProgress.startTime) / 1000;
-                          const rate = advIndexProgress.current / elapsed;
-                          const remainingSecs = (advIndexProgress.total - advIndexProgress.current) / rate;
-                          return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(remainingSecs)}`;
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                  <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-green-500 to-emerald-600 transition-all duration-300 rounded-full"
-                      style={{ width: advIndexProgress.total > 0 ? `${(advIndexProgress.current / advIndexProgress.total) * 100}%` : '0%' }}
-                    />
-                  </div>
-                  <div className="flex gap-4 text-xs text-subtle">
-                    <span className="text-green-600 dark:text-green-400 font-medium">
-                      {advIndexProgress.faces.toLocaleString('pt-BR')} rostos detectados
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAdvIndexing ? 'bg-green-100 text-green-700 animate-pulse' : 'bg-gray-100 text-subtle'}`}>
+                      {isAdvIndexing ? 'Indexando em background' : 'Parado'}
                     </span>
-                    <span>{advIndexProgress.skipped.toLocaleString('pt-BR')} sem rosto</span>
-                    {advIndexProgress.errors > 0 && (
-                      <span className="text-red-500">{advIndexProgress.errors.toLocaleString('pt-BR')} erros</span>
-                    )}
                   </div>
-                  {!isAdvIndexing && advIndexProgress.current >= advIndexProgress.total && advIndexProgress.total > 0 && (
-                    <p className="text-sm text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5">
-                      <CheckCircle className="w-4 h-4" /> Indexação avançada concluída!
-                    </p>
+
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label: 'Total Fotos', value: advIndexStatus.withPhoto },
+                      { label: 'Embeddings IA', value: advIndexStatus.indexed, color: 'text-green-600' },
+                      { label: 'Sem Rosto', value: advIndexStatus.noFace },
+                      { label: 'Pendentes', value: advIndexStatus.remaining, color: advIndexStatus.remaining > 0 ? 'text-yellow-600' : 'text-green-600' }
+                    ].map((c) => (
+                      <div key={c.label} className="bg-gray-50/50 dark:bg-gray-800/10 rounded-xl p-3 border border-gray-100 dark:border-gray-800 text-center">
+                        <p className={`text-lg font-black ${c.color || 'text-title'}`}>{c.value.toLocaleString('pt-BR')}</p>
+                        <p className="text-[10px] text-subtle mt-0.5 font-medium">{c.label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Barra de progresso do job avançado */}
+                  {(isAdvIndexing || (advIndexProgress && advIndexProgress.current > 0)) && (
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs">
+                        <span className="font-semibold text-title">
+                          {advIndexProgress.current.toLocaleString('pt-BR')} / {advIndexProgress.total.toLocaleString('pt-BR')} fotos processadas
+                        </span>
+                        {isAdvIndexing && advIndexProgress.current > 0 && (
+                          <span className="text-subtle">
+                            {(() => {
+                              const elapsed = (Date.now() - advIndexProgress.startTime) / 1000;
+                              const rate = advIndexProgress.current / elapsed;
+                              const remainingSecs = (advIndexProgress.total - advIndexProgress.current) / rate;
+                              return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(remainingSecs)}`;
+                            })()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-green-500 to-emerald-600 transition-all duration-300 rounded-full"
+                          style={{ width: advIndexProgress.total > 0 ? `${(advIndexProgress.current / advIndexProgress.total) * 100}%` : '0%' }}
+                        />
+                      </div>
+                    </div>
                   )}
-                </div>
-              )}
 
-              {/* Info */}
-              <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm space-y-1">
-                <p className="font-semibold text-blue-800 dark:text-blue-300">Como funciona o Reconhecimento Avançado (IA Facial):</p>
-                <ul className="list-disc pl-4 space-y-1 text-xs text-blue-700 dark:text-blue-400">
-                  <li>O pipeline avançado processa cada foto usando SCRFD, Landmark Face Alignment e MobileFaceNet (512 dims).</li>
-                  <li>Executa também testes de qualidade (nitidez, pose, iluminação) e vivacidade (anti-spoofing).</li>
-                  <li>A migração é silenciosa e incremental, mas você pode controlar ou acompanhar nesta tela.</li>
-                  <li>Usa pgvector com índice HNSW de alta performance para a busca aproximada no banco de dados.</li>
-                </ul>
-              </div>
-
-              <div className="flex gap-3 flex-wrap">
-                {!isAdvIndexing ? (
-                  <>
-                    <button
-                      onClick={startAdvIndexing}
-                      disabled={(advIndexStatus?.remaining ?? 1) === 0}
-                      className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
-                    >
-                      <ScanFace className="w-4 h-4" />
-                      {(advIndexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação completa'}
-                    </button>
-                    <button onClick={fetchAdvStatus}
-                      className="flex items-center gap-2 text-sm font-medium text-sigma-600 hover:text-sigma-700 border border-sigma-200 dark:border-sigma-800 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 px-4 py-2.5 rounded-xl transition-colors">
-                      <RefreshCw className="w-4 h-4" /> Atualizar
-                    </button>
-                    {isSuperAdmin && (
+                  <div className="flex gap-2">
+                    {!isAdvIndexing ? (
                       <button
-                        onClick={() => setShowAdvClearConfirm(true)}
-                        className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                        onClick={startAdvIndexing}
+                        disabled={advIndexStatus.remaining === 0}
+                        className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-bold text-xs transition-colors disabled:opacity-50"
                       >
-                        <Trash2 className="w-4 h-4" /> Limpar índice avançado
+                        <ScanFace className="w-3.5 h-3.5" /> Iniciar Migração Completa
+                      </button>
+                    ) : (
+                      <button
+                        onClick={stopAdvIndexing}
+                        className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold text-xs transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" /> Parar Migração
                       </button>
                     )}
-                  </>
-                ) : (
-                  <button
-                    onClick={stopAdvIndexing}
-                    className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
-                  >
-                    <X className="w-4 h-4" /> Parar indexação
-                  </button>
-                )}
-              </div>
+                    <button onClick={fetchAdvStatus} className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 text-subtle px-4 py-2 rounded-xl font-bold text-xs hover:text-body transition-colors">
+                      <RefreshCw className="w-3.5 h-3.5" /> Atualizar Status
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1300,32 +1270,6 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
               <button onClick={clearIndex}
                 className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors">
                 Limpar índice
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirm advanced clear modal */}
-      {showAdvClearConfirm && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-red-200 dark:border-red-800 p-6 max-w-sm w-full space-y-4">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0" />
-              <p className="font-bold text-title">Limpar índice facial avançado?</p>
-            </div>
-            <p className="text-sm text-subtle">
-              Todos os embeddings e validações avançadas (SCRFD/Quality/Liveness) serão removidos do banco de dados.
-              A indexação avançada precisará ser refeita do zero.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowAdvClearConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-subtle hover:text-body border border-gray-200 dark:border-gray-700 rounded-xl transition-colors">
-                Cancelar
-              </button>
-              <button onClick={clearAdvancedIndex}
-                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors">
-                Limpar índice avançado
               </button>
             </div>
           </div>

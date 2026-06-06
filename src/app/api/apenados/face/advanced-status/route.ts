@@ -18,13 +18,6 @@ export async function GET() {
 
     const noFace = await prisma.apenado.count({ where: { faceDescriptorAdvanced: 'NONE' } });
     const jobState = getAdvancedJobState();
-    
-    // Dispara a migração/indexação automática se houver pendentes e o job não estiver rodando
-    if (remaining > 0 && !jobState.isRunning && !jobState.timedOut) {
-      startAdvancedJob();
-      jobState.isRunning = true;
-    }
-
     const pvecAvail = await pgvectorAdvancedAvailable();
 
     return NextResponse.json({
