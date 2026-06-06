@@ -120,6 +120,9 @@ export function Header({ user }: HeaderProps) {
     };
 
     requestLocation();
+    const intervalId = setInterval(() => requestLocation(), 5 * 60 * 1000); // Coleta periódica a cada 5 minutos
+
+    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
