@@ -1,6 +1,6 @@
 import { prisma } from './db';
 import { runAdvancedIndexBatch } from './advanced-face-batch';
-import { getApenadosDir } from './storage';
+import { join } from 'path';
 import { invalidateAdvancedFaceCache } from './advanced-face-cache';
 import { pgvectorAdvancedAvailable, upsertVectorAdvanced } from './pgvector';
 
@@ -55,7 +55,8 @@ export function startAdvancedJob(): void {
 }
 
 async function runLoop(): Promise<void> {
-  const uploadsDir = getApenadosDir();
+  const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
+  const uploadsDir = join(baseDir, 'apenados');
 
   // Limpa embeddings órfãos
   await prisma.apenado.updateMany({
