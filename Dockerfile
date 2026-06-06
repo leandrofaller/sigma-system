@@ -51,7 +51,8 @@ RUN groupadd --system --gid 1001 nodejs && \
 # ARG force-invalida cache do registry (muda o valor para rebustar)
 ARG PIP_CACHE_BUST=2026-05-20a
 # numpy<2: onnxruntime 1.16.3 foi compilado com numpy 1.x, incompativel com numpy 2.x
-RUN echo "cache-bust: ${PIP_CACHE_BUST}" && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    echo "cache-bust: ${PIP_CACHE_BUST}" && \
     python3 -m venv /opt/arcface-venv && \
     /opt/arcface-venv/bin/pip install --upgrade pip && \
     /opt/arcface-venv/bin/pip install \
