@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     echo "cache-bust: ${PIP_CACHE_BUST}" && \
     python3 -m venv /opt/arcface-venv && \
     /opt/arcface-venv/bin/pip install --upgrade pip && \
-    /opt/arcface-venv/bin/pip install \
+    /opt/arcface-venv/bin/pip install --prefer-binary \
         "numpy<2" \
         insightface==0.7.3 \
         "onnxruntime==1.16.3" \
