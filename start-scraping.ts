@@ -22,9 +22,11 @@ async function main() {
     console.log(`   Status: RUNNING`)
     
     // Iniciar scraping em background
-    startSipeSync(job.id, 'GLOBAL').catch(err => {
+    try {
+      startSipeSync(job.id, 'GLOBAL')
+    } catch (err: any) {
       console.error(`❌ Erro no scraping:`, err.message)
-    })
+    }
     
     console.log(`\n⏳ Scraping iniciado! Acompanhe em tempo real:`)
     console.log(`   - Abra a dashboard e vá para "Sincronização SIPE"`)

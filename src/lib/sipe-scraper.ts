@@ -3358,9 +3358,7 @@ export async function scrapeCnaOabDetails(
   }
 
   // 2. Criar uma nova página no contexto do browser para não interferir na sessão do SIPE
-  const cnaPage = await page.context().newPage({
-    userAgent: getRandomUserAgent()
-  })
+  const cnaPage = await page.context().newPage()
 
   const delays = generateRandomDelays()
 

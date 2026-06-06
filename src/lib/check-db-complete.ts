@@ -40,37 +40,31 @@ async function checkDatabase() {
     const total_apenados = await prisma.sipeApenadoImportado.count()
     console.log(`\n3️⃣ Total de apenados importados: ${total_apenados}`)
 
-    // 4. Apenados com faccaoSipeId preenchido
-    const com_facacao_sipe_id = await prisma.sipeApenadoImportado.findMany({
-      where: { faccaoSipeId: { not: null, not: 0 } },
-      select: { id: true, nome: true, faccaoSipeId: true }
+    // 4. Verificar unidades prisionais a partir dos apenados
+    const unidadesRaw = await prisma.sipeApenadoImportado.groupBy({
+      by: ['unidade'],
+      _count: {
+        _all: true
+      },
+      where: {
+        unidade: { not: null }
+      }
     })
-    console.log(`\n4️⃣ Apenados com faccaoSipeId preenchido: ${com_facacao_sipe_id.length}`)
-    if (com_facacao_sipe_id.length > 0) {
-      for (const a of com_facacao_sipe_id.slice(0, 10)) {
-        console.log(`   ✓ ID SIPE: ${a.faccaoSipeId} → ${a.nome?.substring(0, 40)}`)
-      }
+    console.log(`\n4️⃣ Unidades prisionais distintas nos apenados: ${unidadesRaw.length}`)
+    for (const u of unidadesRaw.slice(0, 5)) {
+      console.log(`   ✓ ${u.unidade} (${u._count._all} apenados)`)
     }
 
-    // 5. Verificar unidades prisionais
-    const unidades = await prisma.sipePrisaoUnidade.findMany()
-    console.log(`\n5️⃣ Unidades prisionais: ${unidades.length}`)
-    if (unidades.length > 0) {
-      for (const u of unidades.slice(0, 5)) {
-        console.log(`   ✓ ${u.nome} (ID: ${u.unidadeId})`)
-      }
-    }
-
-    // 6. Últimas sincronizações
+    // 5. Últimas sincronizações
     const jobs = await prisma.sipeSyncJob.findMany({
       orderBy: { createdAt: 'desc' },
       take: 3,
-      select: { id: true, status: true, createdAt: true, totalApenados: true }
+      select: { id: true, status: true, createdAt: true, total: true, processado: true }
     })
-    console.log(`\n6️⃣ Últimas sincronizações:`)
+    console.log(`\n5️⃣ Últimas sincronizações:`)
     for (const job of jobs) {
-      const statusEmoji = job.status === 'completed' ? '✅' : job.status === 'pending' ? '⏳' : '❌'
-      console.log(`   ${statusEmoji} ${job.createdAt.toLocaleString()} - ${job.totalApenados} apenados`)
+      const statusEmoji = job.status === 'COMPLETED' || job.status === 'completed' ? '✅' : job.status === 'PENDING' || job.status === 'pending' ? '⏳' : '❌'
+      console.log(`   ${statusEmoji} ${job.createdAt.toLocaleString()} - Total: ${job.total ?? '?'}, Processados: ${job.processado}`)
     }
 
     console.log('\n═════════════════════════════════════════════════════════════\n')

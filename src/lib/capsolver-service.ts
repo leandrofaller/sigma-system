@@ -18,6 +18,7 @@ interface CapsolverTask {
 interface CapsolverResponse {
   errorId: number
   errorCode?: string
+  errorDescription?: string
   taskId?: string
   solution?: {
     gRecaptchaResponse?: string

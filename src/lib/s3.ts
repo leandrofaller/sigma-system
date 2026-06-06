@@ -1,5 +1,4 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
-import { fromEnv } from '@aws-sdk/credential-providers'
 import sharp from 'sharp'
 import crypto from 'crypto'
 
@@ -84,10 +83,11 @@ export async function uploadAnexoS3(
       const metadata = await imagem.metadata()
 
       if (metadata.width && metadata.height && (metadata.width > 2000 || metadata.height > 2000)) {
-        compactadoBuffer = await imagem
+        const tempBuf = await imagem
           .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
           .webp({ quality: 80 })
           .toBuffer()
+        compactadoBuffer = Buffer.from(tempBuf)
         tipoMimeProcessado = 'image/webp'
       }
     } catch (erro) {

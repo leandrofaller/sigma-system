@@ -10,17 +10,7 @@ const GeoMap = dynamic(() => import('./GeoMap'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-full text-subtle text-sm">Carregando mapa...</div>
-  ),
-  onError: (error) => {
-    console.error('Erro ao carregar mapa:', error);
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-subtle text-sm p-6">
-        <AlertCircle className="w-8 h-8 text-amber-500 mb-2" />
-        <p>Erro ao carregar o mapa</p>
-        <p className="text-xs mt-1 text-center">Por favor, recarregue a página ou tente novamente</p>
-      </div>
-    );
-  }
+  )
 });
 
 interface UserSummary {

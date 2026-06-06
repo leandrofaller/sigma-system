@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       const firecrawlUrl = process.env.FIRECRAWL_BASE_URL || 'http://localhost:3002'
       const response = await fetch(`${firecrawlUrl}/health`, {
         method: 'GET',
-        timeout: 5000
+        signal: AbortSignal.timeout(5000)
       })
       if (!response.ok) {
         return NextResponse.json(
