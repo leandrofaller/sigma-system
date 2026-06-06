@@ -4300,6 +4300,36 @@ export async function scrapeHistorico(
   }
 }
 
+function parseDateSafely(dateStr: string | null | undefined): Date | null {
+  if (!dateStr) return null
+  const cleanStr = dateStr.trim()
+  if (!cleanStr) return null
+
+  // 1. Formato brasileiro: DD/MM/YYYY (com ou sem HH:mm:ss)
+  const brMatch = cleanStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/)
+  if (brMatch) {
+    const day = parseInt(brMatch[1], 10)
+    const month = parseInt(brMatch[2], 10) - 1
+    const year = parseInt(brMatch[3], 10)
+    const hour = brMatch[4] ? parseInt(brMatch[4], 10) : 0
+    const minute = brMatch[5] ? parseInt(brMatch[5], 10) : 0
+    const second = brMatch[6] ? parseInt(brMatch[6], 10) : 0
+
+    const date = new Date(year, month, day, hour, minute, second)
+    if (!isNaN(date.getTime())) {
+      return date
+    }
+  }
+
+  // 2. Fallback: parser nativo do JS
+  const parsed = new Date(cleanStr)
+  if (!isNaN(parsed.getTime())) {
+    return parsed
+  }
+
+  return null
+}
+
 async function scrapeDocumentos(
   page: Page,
   sipeId: number,
@@ -4329,6 +4359,8 @@ async function scrapeDocumentos(
       const idString = `${apenadoId}-${nome}-${data}`
       const hashId = createHash('md5').update(idString).digest('hex')
 
+      const parsedDataAnexo = parseDateSafely(data)
+
       await prisma.sipeDocumento.upsert({
         where: { id: hashId },
         create: {
@@ -4336,12 +4368,12 @@ async function scrapeDocumentos(
           apenadoId,
           nome,
           tipo,
-          dataAnexo: data ? new Date(data) : undefined,
+          dataAnexo: parsedDataAnexo,
           urlDownload,
         },
         update: {
           tipo,
-          dataAnexo: data ? new Date(data) : undefined,
+          dataAnexo: parsedDataAnexo,
           urlDownload,
         },
       })
