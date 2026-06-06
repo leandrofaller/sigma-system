@@ -19,6 +19,9 @@ const nextConfig = {
   },
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
+  experimental: {
+    webpackBuildWorker: false,
+  },
   serverExternalPackages: ['@prisma/client', 'bcryptjs', 'sharp', '@react-pdf/renderer'],
   images: {
     remotePatterns: [
