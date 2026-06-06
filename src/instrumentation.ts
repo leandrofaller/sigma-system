@@ -31,11 +31,6 @@ export async function register() {
         (migrated > 0 ? ` (+${migrated} migrados agora)` : '') +
         ` | índice HNSW: ${stats.indexExists ? 'ativo' : 'ausente'}`,
     );
-    // Inicia a migração e geração automática de novos embeddings avançados em background
-    const { startAdvancedJob } = await import('@/lib/advanced-indexing-job');
-    startAdvancedJob();
-
-    console.log('[IA Facial] ✓ Inicialização e migração em background iniciadas.');
   } catch (err) {
     // Nunca deixa o boot falhar — pgvector é opcional
     console.warn('[pgvector] Erro no boot, fallback em memória ativo:', err);
