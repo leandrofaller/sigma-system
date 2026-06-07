@@ -93,6 +93,13 @@ def analyze_quality(img, bbox, kps):
     if crop.size == 0 or crop.shape[0] < 20 or crop.shape[1] < 20:
         return {"score": 0, "blur": 0, "brightness": 0, "contrast": 0, "pose": 0, "is_valid": False}
 
+    # Limita tamanho máximo do crop para evitar lentidão em imagens gigantes
+    h_crop, w_crop = crop.shape[:2]
+    max_size = 512
+    if h_crop > max_size or w_crop > max_size:
+        scale = max_size / max(h_crop, w_crop)
+        crop = cv2.resize(crop, (0, 0), fx=scale, fy=scale)
+
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
 
     # 1. Nitidez/Blur (Variância do Laplaciano)
@@ -167,6 +174,9 @@ def analyze_liveness(img, face):
         crop = img[y1:y2, x1:x2]
         if crop.size == 0 or crop.shape[0] < 20 or crop.shape[1] < 20:
             return 0.0
+
+        # Redimensiona crop para 256x256 para acelerar dramaticamente cálculo de FFT 2D e Sobel 2D
+        crop = cv2.resize(crop, (256, 256))
 
         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
         
