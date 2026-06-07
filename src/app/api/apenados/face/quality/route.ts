@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   }
 
   const sp = req.nextUrl.searchParams;
-  const tab = (sp.get('tab') || 'lowscore') as 'lowscore' | 'blurry' | 'pending';
+  const tab = (sp.get('tab') || 'lowscore') as 'lowscore' | 'blurry' | 'pending' | 'noface';
   const skip = Math.max(0, parseInt(sp.get('skip') || '0', 10));
   const take = Math.min(TAKE_MAX, Math.max(1, parseInt(sp.get('take') || '50', 10)));
 
@@ -61,6 +61,12 @@ export async function GET(req: NextRequest) {
     const where = { faceDescriptor: { startsWith: '[' }, photoQuality: { lt: 50 } };
     [records, tabTotal] = await Promise.all([
       prisma.apenado.findMany({ where, select, skip, take, orderBy: { photoQuality: 'asc' } }),
+      prisma.apenado.count({ where }),
+    ]);
+  } else if (tab === 'noface') {
+    const where = { faceDescriptor: 'NONE', photoPath: { not: null } };
+    [records, tabTotal] = await Promise.all([
+      prisma.apenado.findMany({ where, select, skip, take, orderBy: { photoQuality: 'desc' } }),
       prisma.apenado.count({ where }),
     ]);
   } else {

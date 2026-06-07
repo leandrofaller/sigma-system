@@ -11,7 +11,6 @@ import { ImportarPastaModal } from './ImportarPastaModal';
 import { PhotoLightbox } from './PhotoLightbox';
 import { DuplicateChecker } from './DuplicateChecker';
 import { FaceSearch } from './FaceSearch';
-import { NoFaceReviewer } from './NoFaceReviewer';
 import { FaceQualityDashboard } from './FaceQualityDashboard';
 import { ApenadoGroupsModal } from './ApenadoGroupsModal';
 
@@ -70,8 +69,8 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
   const [importOpen, setImportOpen] = useState(false);
   const [dupCheckerOpen, setDupCheckerOpen] = useState(false);
   const [faceSearchOpen, setFaceSearchOpen] = useState(false);
-  const [noFaceOpen, setNoFaceOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
+  const [qualityTab, setQualityTab] = useState<'lowscore' | 'blurry' | 'pending' | 'noface'>('lowscore');
   const [exporting, setExporting] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [lightbox, setLightbox] = useState<Apenado | null>(null);
@@ -410,15 +409,15 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
               )}
               {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
                 <button
-                  onClick={() => setNoFaceOpen(true)}
+                  onClick={() => { setQualityTab('noface'); setQualityOpen(true); }}
                   className="flex items-center gap-2 text-sm font-medium text-orange-200 border border-orange-300/40 hover:bg-orange-300/10 px-4 py-2 rounded-xl transition-all"
                 >
-                  <FileImage className="w-4 h-4" /> Fotos Duplicadas
+                  <FileImage className="w-4 h-4" /> Sem Rosto
                 </button>
               )}
               {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
                 <button
-                  onClick={() => setQualityOpen(true)}
+                  onClick={() => { setQualityTab('lowscore'); setQualityOpen(true); }}
                   className="flex items-center gap-2 text-sm font-medium text-blue-200 border border-blue-300/40 hover:bg-blue-300/10 px-4 py-2 rounded-xl transition-all"
                 >
                   <Activity className="w-4 h-4" /> Qualidade Facial
@@ -737,9 +736,10 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
       )}
 
 
-      {noFaceOpen && (
-        <NoFaceReviewer
-          onClose={() => setNoFaceOpen(false)}
+      {qualityOpen && (
+        <FaceQualityDashboard
+          defaultTab={qualityTab}
+          onClose={() => setQualityOpen(false)}
           onPhotosRemoved={(ids) => {
             // Clear photoPath for affected records in all caches
             for (const [letter, items] of letterCache.current.entries()) {
@@ -753,10 +753,6 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
             setStatsLocal((prev) => ({ ...prev, comFoto: Math.max(0, prev.comFoto - ids.length), semFoto: prev.semFoto + ids.length }));
           }}
         />
-      )}
-
-      {qualityOpen && (
-        <FaceQualityDashboard onClose={() => setQualityOpen(false)} />
       )}
 
       {bulkModal && (
