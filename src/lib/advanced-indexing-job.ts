@@ -138,6 +138,19 @@ async function runLoop(): Promise<void> {
         );
         skipped++;
       } else {
+        // Grava no banco que o processamento falhou/é inválido (marcando como FACE_NONE)
+        // para evitar loop infinito em registros com erro que continuariam null.
+        updates.push(
+          prisma.apenado.update({
+            where: { id: r.id },
+            data: { 
+              faceDescriptorAdvanced: FACE_NONE,
+              advancedDetScore: null,
+              advancedQualityScore: null,
+              advancedLivenessScore: null
+            },
+          }),
+        );
         errors++;
       }
     }
