@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { getApenadosDir } from '@/lib/storage';
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) {
+  const { searchParams } = new URL(req.url);
+  const secret = searchParams.get('secret');
+
+  // Proteção simples por token de URL
+  if (secret !== 'owlnet_debug_123') {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
 
-  // Pega o parâmetro opcional de id do apenado, ou busca o primeiro do banco que tenha foto
-  const { searchParams } = new URL(req.url);
   const targetId = searchParams.get('id');
 
   try {
