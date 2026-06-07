@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, X, Plus, UserCheck, Loader2, Monitor, ScanFace } from 'lucide-react';
+import { Search, X, Plus, UserCheck, Loader2, Monitor, ScanFace, Activity, FileImage } from 'lucide-react';
 import { ApenadoCard, type Apenado } from './ApenadoCard';
 import { PhotoLightbox } from './PhotoLightbox';
 import { ApenadoModal } from './ApenadoModal';
 import { FaceSearch } from './FaceSearch';
+import { FaceQualityDashboard } from './FaceQualityDashboard';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const PAGE_SIZE = 30;
@@ -44,6 +45,8 @@ export function MobileApenadosView({ stats: initialStats, letterCounts, userRole
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Apenado | null>(null);
   const [faceSearchOpen, setFaceSearchOpen] = useState(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const [qualityTab, setQualityTab] = useState<'lowscore' | 'blurry' | 'pending' | 'noface'>('lowscore');
 
   const handleEditFromFaceSearch = useCallback(async (id: string) => {
     try {
@@ -289,24 +292,54 @@ export function MobileApenadosView({ stats: initialStats, letterCounts, userRole
         className="flex-1 p-4"
         style={{ paddingBottom: 'max(5rem, calc(4rem + env(safe-area-inset-bottom)))' }}
       >
-        {/* Quick Action: Reconhecimento Facial */}
-        <div className="flex gap-2 mb-4">
+        {/* Ações Rápidas - Carrossel Horizontal Moderno */}
+        <div 
+          className="flex gap-2.5 overflow-x-auto pb-3 mb-4 -mx-4 px-4 scrollbar-none"
+          style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+        >
+          {/* Reconhecimento Facial */}
           <button
             type="button"
             onClick={() => setFaceSearchOpen(true)}
-            className="flex-1 bg-gradient-to-r from-sigma-600 to-sigma-700 active:scale-[0.98] transition-all text-white font-bold py-3.5 px-4 rounded-2xl shadow-md flex items-center justify-center gap-2.5 text-sm"
+            className="flex-shrink-0 flex items-center gap-2 bg-gradient-to-r from-sigma-600 to-sigma-700 active:scale-[0.97] transition-all text-white font-bold px-4 py-3 rounded-2xl shadow-md text-xs"
           >
-            <ScanFace className="w-5 h-5 text-white" />
-            Reconhecimento Facial
+            <ScanFace className="w-4.5 h-4.5 text-white" />
+            Reconhecimento
           </button>
+
+          {/* Novo Apenado */}
           {isAdmin && (
             <button
               type="button"
               onClick={() => { setEditing(null); setModalOpen(true); }}
-              className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-body font-bold py-3 px-4 rounded-2xl flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all text-sm shadow-sm"
+              className="flex-shrink-0 flex items-center gap-1.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-body font-bold px-4 py-3 rounded-2xl active:scale-[0.97] transition-all text-xs shadow-sm"
             >
-              <Plus className="w-5 h-5 text-sigma-600" />
-              Novo
+              <Plus className="w-4.5 h-4.5 text-sigma-600" />
+              Novo Registro
+            </button>
+          )}
+
+          {/* Sem Rosto */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => { setQualityTab('noface'); setQualityOpen(true); }}
+              className="flex-shrink-0 flex items-center gap-1.5 bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30 text-orange-700 dark:text-orange-300 font-bold px-4 py-3 rounded-2xl active:scale-[0.97] transition-all text-xs shadow-sm"
+            >
+              <FileImage className="w-4.5 h-4.5 text-orange-500" />
+              Sem Rosto
+            </button>
+          )}
+
+          {/* Qualidade Facial */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => { setQualityTab('lowscore'); setQualityOpen(true); }}
+              className="flex-shrink-0 flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 text-blue-700 dark:text-blue-300 font-bold px-4 py-3 rounded-2xl active:scale-[0.97] transition-all text-xs shadow-sm"
+            >
+              <Activity className="w-4.5 h-4.5 text-blue-500" />
+              Qualidade Facial
             </button>
           )}
         </div>
@@ -346,7 +379,7 @@ export function MobileApenadosView({ stats: initialStats, letterCounts, userRole
         {/* Empty letter */}
         {!showSearchMode && !isLoading && activeLetter !== null && letterData.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-title font-semibold">Nenhum registro para "{activeLetter}"</p>
+            <p className="text-title font-semibold">Nenhum registro para &quot;{activeLetter}&quot;</p>
           </div>
         )}
 
@@ -421,6 +454,25 @@ export function MobileApenadosView({ stats: initialStats, letterCounts, userRole
           onClose={() => setFaceSearchOpen(false)}
           userRole={userRole}
           onEditApenado={handleEditFromFaceSearch}
+        />
+      )}
+
+      {qualityOpen && (
+        <FaceQualityDashboard
+          defaultTab={qualityTab}
+          onClose={() => setQualityOpen(false)}
+          onPhotosRemoved={(ids) => {
+            // Clear photoPath for affected records in all caches
+            for (const [letter, items] of letterCache.current.entries()) {
+              const updated = items.map((a) => ids.includes(a.id) ? { ...a, photoPath: null } : a);
+              if (updated.some((_, i) => items[i].photoPath !== updated[i].photoPath)) {
+                letterCache.current.set(letter, updated);
+              }
+            }
+            setLetterData((prev) => prev.map((a) => ids.includes(a.id) ? { ...a, photoPath: null } : a));
+            setSearchResults((prev) => prev.map((a) => ids.includes(a.id) ? { ...a, photoPath: null } : a));
+            setStatsLocal((prev) => ({ ...prev, comFoto: Math.max(0, prev.comFoto - ids.length), semFoto: prev.semFoto + ids.length }));
+          }}
         />
       )}
     </div>
