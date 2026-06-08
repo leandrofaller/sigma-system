@@ -227,6 +227,8 @@ export function AparelhosClient() {
   // Modais
   const [modalImportOpen, setModalImportOpen] = useState(false)
   const [modalCadOpen, setModalCadOpen] = useState(false)
+  const [modalPrintOpen, setModalPrintOpen] = useState(false)
+  const [printFilterType, setPrintFilterType] = useState<'all' | 'celulares' | 'smartwatches' | 'chips'>('all')
   const [printing, setPrinting] = useState(false)
 
   // Estado do Upload
@@ -503,7 +505,16 @@ export function AparelhosClient() {
       const res = await fetch(`/api/aparelhos?${params.toString()}`)
       if (!res.ok) throw new Error('Erro ao buscar dados para impressão')
       const json = await res.json()
-      const dataToPrint: Aparelho[] = json.data || []
+      let dataToPrint: Aparelho[] = json.data || []
+
+      // Filtrar de acordo com a seleção de printFilterType
+      if (printFilterType === 'celulares') {
+        dataToPrint = dataToPrint.filter(item => item.marca && item.marca.trim() !== '')
+      } else if (printFilterType === 'smartwatches') {
+        dataToPrint = dataToPrint.filter(item => item.smartwatch && item.smartwatch.trim() !== '')
+      } else if (printFilterType === 'chips') {
+        dataToPrint = dataToPrint.filter(item => item.chip && item.chip.trim() !== '' && (!item.marca || item.marca.trim() === ''))
+      }
 
       // 2. Converter logos para DataURI para exibição robusta e off-line na página de impressão
       const toDataUri = async (url: string): Promise<string | null> => {
@@ -527,6 +538,18 @@ export function AparelhosClient() {
 
       // 3. Montar descrição dos filtros para o cabeçalho do relatório
       const filtrosDesc: string[] = []
+
+      // Adicionar descrição do tipo de filtro selecionado
+      if (printFilterType === 'celulares') {
+        filtrosDesc.push('Tipo: Celulares')
+      } else if (printFilterType === 'smartwatches') {
+        filtrosDesc.push('Tipo: Smartwatches/Smartbands')
+      } else if (printFilterType === 'chips') {
+        filtrosDesc.push('Tipo: Chips Avulsos')
+      } else {
+        filtrosDesc.push('Tipo: Todos os registros')
+      }
+
       if (search) filtrosDesc.push(`Busca: "${search}"`)
       if (unidade) filtrosDesc.push(`Unidade: ${unidade}`)
       if (municipio) filtrosDesc.push(`Município: ${municipio}`)
@@ -539,17 +562,34 @@ export function AparelhosClient() {
       const filtrosTexto = filtrosDesc.length > 0 ? filtrosDesc.join(' | ') : 'Nenhum filtro aplicado (Lista Completa)'
 
       // 4. Montar a tabela de itens em HTML
-      const rowsHtml = dataToPrint.map(item => `
-        <tr>
-          <td><strong>${item.marca || 'Celular Genérico'}</strong>${item.smartwatch ? '<br/><span style="font-size:7pt;color:#1e40af;font-weight:bold;text-transform:uppercase;">+ Relógio</span>' : ''}</td>
-          <td>${item.unidadePrisional}</td>
-          <td>${item.celaPavilhao || item.unidadeExterna || item.localExterno || 'Não Consta'}</td>
-          <td style="font-family: monospace;">${item.processoSei || '—'}</td>
-          <td>${formatDate(item.dataArrecadacao)}</td>
-          <td>${item.chip ? `<span style="background:#e8f5e9;color:#2e7d32;padding:2px 6px;border-radius:4px;font-size:8pt;font-weight:bold;">${item.chip}</span>` : '—'}</td>
-          <td>${item.responsavel}</td>
-        </tr>
-      `).join('')
+      const rowsHtml = dataToPrint.map(item => {
+        // Rótulo principal inteligente do item
+        let displayMarca = 'Celular Genérico'
+        if (item.marca && item.marca.trim() !== '') {
+          displayMarca = item.marca
+        } else if (item.smartwatch && item.smartwatch.trim() !== '') {
+          displayMarca = 'Smartwatch Avulso'
+        } else if (item.chip && item.chip.trim() !== '') {
+          displayMarca = 'Chip Avulso'
+        }
+
+        // Sub-rótulo de smartwatch
+        const watchSubLabel = item.smartwatch && item.marca
+          ? '<br/><span style="font-size:7pt;color:#1e40af;font-weight:bold;text-transform:uppercase;">+ Relógio</span>'
+          : ''
+
+        return `
+          <tr>
+            <td><strong>${displayMarca}</strong>${watchSubLabel}</td>
+            <td>${item.unidadePrisional}</td>
+            <td>${item.celaPavilhao || item.unidadeExterna || item.localExterno || 'Não Consta'}</td>
+            <td style="font-family: monospace;">${item.processoSei || '—'}</td>
+            <td>${formatDate(item.dataArrecadacao)}</td>
+            <td>${item.chip ? `<span style="background:#e8f5e9;color:#2e7d32;padding:2px 6px;border-radius:4px;font-size:8pt;font-weight:bold;">${item.chip}</span>` : '—'}</td>
+            <td>${item.responsavel}</td>
+          </tr>
+        `
+      }).join('')
 
       const printHtml = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -634,6 +674,11 @@ export function AparelhosClient() {
     </tbody>
   </table>
 
+  <!-- Totalizador ao fim do relatório -->
+  <div style="margin-top: 15px; margin-bottom: 15px; text-align: right; font-size: 10.5pt; font-weight: bold; border-top: 2px solid #000; padding-top: 8px;">
+    Total de registros gerados neste relatório: ${dataToPrint.length}
+  </div>
+
   <!-- Rodapé -->
   <div class="footer">
     <span>SIGMA System — Relatório de Controle de Celulares</span>
@@ -687,7 +732,7 @@ export function AparelhosClient() {
           
           <div className="flex items-center gap-3">
             <button
-              onClick={handlePrint}
+              onClick={() => setModalPrintOpen(true)}
               disabled={printing}
               className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-750 dark:text-gray-100 border border-gray-200 dark:border-gray-700 active:scale-95 text-gray-800 rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
             >
@@ -1579,6 +1624,106 @@ export function AparelhosClient() {
               </form>
             </motion.div>
 
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Opções de Impressão */}
+      <AnimatePresence>
+        {modalPrintOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setModalPrintOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            {/* Conteúdo */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-6 shadow-2xl z-10 text-xs"
+            >
+              
+              <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-2">
+                  <Printer className="w-5 h-5 text-sigma-600 dark:text-sigma-400" />
+                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">Opções de Impressão</h3>
+                </div>
+                <button
+                  onClick={() => setModalPrintOpen(false)}
+                  className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="pt-4 space-y-4">
+                <p className="text-gray-500 dark:text-gray-400 font-medium">
+                  Selecione quais registros deseja incluir no relatório gerado:
+                </p>
+
+                {/* Opções de Filtro */}
+                <div className="space-y-2.5">
+                  {[
+                    { id: 'all', label: 'Todos os registros', desc: 'Inclui celulares, smartwatches/smartbands e chips avulsos.' },
+                    { id: 'celulares', label: 'Somente celulares', desc: 'Inclui apenas registros que possuem marca de aparelho celular.' },
+                    { id: 'smartwatches', label: 'Somente Smartwatches / Smartbands', desc: 'Inclui apenas relógios e pulseiras inteligentes.' },
+                    { id: 'chips', label: 'Somente chips avulsos', desc: 'Inclui apenas chips avulsos cadastrados (sem aparelho celular associado).' }
+                  ].map(option => (
+                    <label
+                      key={option.id}
+                      className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                        printFilterType === option.id
+                          ? 'border-sigma-500 bg-sigma-50/30 dark:bg-sigma-950/10'
+                          : 'border-gray-200 dark:border-gray-750 bg-gray-50/30 dark:bg-gray-950/5 hover:border-gray-300 dark:hover:border-gray-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="printFilter"
+                        value={option.id}
+                        checked={printFilterType === option.id}
+                        onChange={() => setPrintFilterType(option.id as any)}
+                        className="mt-0.5 w-4 h-4 text-sigma-600 focus:ring-sigma-500 border-gray-300 accent-sigma-600 cursor-pointer"
+                      />
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-bold text-gray-800 dark:text-gray-200">{option.label}</span>
+                        <span className="text-[10px] text-gray-450 dark:text-gray-400 leading-normal">{option.desc}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+
+                {/* Botões */}
+                <div className="flex justify-end gap-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => setModalPrintOpen(false)}
+                    className="px-4 py-2 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-850 text-gray-500 dark:text-gray-400 rounded-xl font-bold transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalPrintOpen(false)
+                      handlePrint()
+                    }}
+                    className="px-5 py-2 bg-sigma-600 hover:bg-sigma-550 text-white rounded-xl font-bold transition-all flex items-center gap-1.5 shadow-md shadow-sigma-600/10 active:scale-95"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Gerar Relatório
+                  </button>
+                </div>
+              </div>
+
+            </motion.div>
           </div>
         )}
       </AnimatePresence>
