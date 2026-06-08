@@ -260,6 +260,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   // Index
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showAdvancedClearConfirm, setShowAdvancedClearConfirm] = useState(false);
   const { isIndexing, progress: indexProgress, indexError, startIndexing, stopIndexing } = useIndexing();
 
   const fetchDashboard = useCallback(async () => {
@@ -502,6 +503,24 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
       if (res.ok) fetchStatus();
       else setErrorMsg(data.error || 'Erro ao limpar índice');
     } catch { setErrorMsg('Erro ao limpar índice'); }
+  };
+
+  const clearAdvancedIndex = async () => {
+    setShowAdvancedClearConfirm(false);
+    try {
+      const res = await fetch('/api/apenados/face/advanced-clear', { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) {
+        fetchAdvStatus();
+        fetchDashboard();
+      } else {
+        setAdvErrorMsg(data.error || 'Erro ao reiniciar indexação avançada');
+        setAdvSearchState('error');
+      }
+    } catch {
+      setAdvErrorMsg('Erro ao reiniciar indexação avançada');
+      setAdvSearchState('error');
+    }
   };
 
   const etaSeconds = (() => {
@@ -1126,6 +1145,14 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                     <button onClick={fetchAdvStatus} className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 text-subtle px-4 py-2 rounded-xl font-bold text-xs hover:text-body transition-colors">
                       <RefreshCw className="w-3.5 h-3.5" /> Atualizar Status
                     </button>
+                    {isSuperAdmin && !isAdvIndexing && (
+                      <button
+                        onClick={() => setShowAdvancedClearConfirm(true)}
+                        className="flex items-center gap-1.5 text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2 rounded-xl font-bold text-xs transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Limpar Progresso
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -1270,6 +1297,32 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
               <button onClick={clearIndex}
                 className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors">
                 Limpar índice
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm advanced clear modal */}
+      {showAdvancedClearConfirm && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-red-200 dark:border-red-800 p-6 max-w-sm w-full space-y-4">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0" />
+              <p className="font-bold text-title">Reiniciar indexação IA Facial?</p>
+            </div>
+            <p className="text-sm text-subtle">
+              Todos os embeddings da IA Facial Avançada e os scores de liveness/qualidade serão removidos.
+              O processo de migração precisará ser executado do zero.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowAdvancedClearConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-subtle hover:text-body border border-gray-200 dark:border-gray-700 rounded-xl transition-colors">
+                Cancelar
+              </button>
+              <button onClick={clearAdvancedIndex}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors">
+                Reiniciar
               </button>
             </div>
           </div>
