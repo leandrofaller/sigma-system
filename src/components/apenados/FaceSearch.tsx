@@ -262,6 +262,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [noFacePage, setNoFacePage] = useState(1);
   const [noFaceData, setNoFaceData] = useState<any | null>(null);
   const [noFaceLoading, setNoFaceLoading] = useState(false);
+  const [selectedNoFaceIds, setSelectedNoFaceIds] = useState<string[]>([]);
 
   // Index
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
@@ -315,6 +316,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   }, []);
 
   useEffect(() => {
+    setSelectedNoFaceIds([]);
     if (tab === 'no-face') {
       fetchNoFaceData(noFaceType, noFacePage);
     }
@@ -541,6 +543,38 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
       }
     } catch {
       setAdvErrorMsg('Erro ao reiniciar indexação avançada');
+      setAdvSearchState('error');
+    }
+  };
+
+  const handleReindex = async (targetId?: string) => {
+    try {
+      const body: any = { type: noFaceType };
+      if (targetId) {
+        body.id = targetId;
+      } else if (selectedNoFaceIds.length > 0) {
+        body.ids = selectedNoFaceIds;
+      }
+
+      const res = await fetch('/api/apenados/face/reindex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setSelectedNoFaceIds([]);
+        fetchNoFaceData(noFaceType, noFacePage);
+        fetchAdvStatus();
+        fetchDashboard();
+        fetchStatus();
+      } else {
+        setAdvErrorMsg(data.error || 'Erro ao reindexar registros');
+        setAdvSearchState('error');
+      }
+    } catch {
+      setAdvErrorMsg('Erro ao reindexar registros');
       setAdvSearchState('error');
     }
   };
@@ -1337,6 +1371,62 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                 </div>
               </div>
 
+              {noFaceData?.records && noFaceData.records.length > 0 && (
+                <div className="flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/10 border border-gray-100 dark:border-gray-850 rounded-xl p-3 flex-wrap gap-2 text-xs">
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 font-medium text-title cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300 dark:border-gray-755 text-sigma-600 accent-sigma-600 cursor-pointer w-4 h-4"
+                        checked={
+                          noFaceData.records.length > 0 &&
+                          noFaceData.records.every((r: any) => selectedNoFaceIds.includes(r.id))
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const pageIds = noFaceData.records.map((r: any) => r.id);
+                            setSelectedNoFaceIds((prev) => {
+                              const union = new Set([...prev, ...pageIds]);
+                              return Array.from(union);
+                            });
+                          } else {
+                            const pageIds = noFaceData.records.map((r: any) => r.id);
+                            setSelectedNoFaceIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+                          }
+                        }}
+                      />
+                      Selecionar Todos da Página
+                    </label>
+                    {selectedNoFaceIds.length > 0 && (
+                      <span className="text-subtle">
+                        <strong>{selectedNoFaceIds.length}</strong> selecionado{selectedNoFaceIds.length > 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    {selectedNoFaceIds.length > 0 && (
+                      <button
+                        onClick={() => handleReindex()}
+                        className="flex items-center gap-1.5 bg-sigma-600 hover:bg-sigma-700 text-white px-3 py-1.5 rounded-lg font-bold transition-colors"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Reindexar Selecionados ({selectedNoFaceIds.length})
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (confirm('Deseja mesmo reindexar TODOS os registros marcados como sem rosto no banco de dados?')) {
+                          handleReindex();
+                        }
+                      }}
+                      className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 text-subtle px-3 py-1.5 rounded-lg font-bold hover:text-body transition-colors"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Reindexar Todos
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {noFaceLoading ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
                   <Loader2 className="w-8 h-8 text-sigma-600 animate-spin" />
@@ -1345,32 +1435,67 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
               ) : noFaceData?.records && noFaceData.records.length > 0 ? (
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {noFaceData.records.map((r: any) => (
-                      <div key={r.id} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/20 p-3 flex flex-col justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-700 flex-shrink-0">
-                            {r.photoPath ? (
-                              <img src={`/api/apenados/${r.id}/foto`} alt={r.name} loading="lazy" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center"><ScanFace className="w-5 h-5 text-gray-400" /></div>
-                            )}
+                    {noFaceData.records.map((r: any) => {
+                      const isSelected = selectedNoFaceIds.includes(r.id);
+                      return (
+                        <div
+                          key={r.id}
+                          className={`rounded-xl border p-3 flex flex-col justify-between gap-3 relative transition-all ${
+                            isSelected
+                              ? 'border-sigma-500 bg-sigma-50/20 dark:bg-sigma-900/10'
+                              : 'border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/20'
+                          }`}
+                        >
+                          {/* Checkbox de seleção */}
+                          <div className="absolute top-2 right-2 z-10">
+                            <input
+                              type="checkbox"
+                              className="rounded border-gray-300 dark:border-gray-755 text-sigma-600 accent-sigma-600 cursor-pointer w-4 h-4"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedNoFaceIds((prev) => [...prev, r.id]);
+                                } else {
+                                  setSelectedNoFaceIds((prev) => prev.filter((id) => id !== r.id));
+                                }
+                              }}
+                            />
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-title truncate" title={r.name}>{r.name}</p>
-                            <p className="text-[10px] text-subtle truncate">{r.matricula || 'Sem matrícula'}</p>
-                            <p className="text-[10px] text-subtle truncate">{r.unidade || 'Sem unidade'}</p>
+
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-205 dark:bg-gray-700 flex-shrink-0">
+                              {r.photoPath ? (
+                                <img src={`/api/apenados/${r.id}/foto`} alt={r.name} loading="lazy" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center"><ScanFace className="w-5 h-5 text-gray-400" /></div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1 pr-4">
+                              <p className="text-xs font-bold text-title truncate" title={r.name}>{r.name}</p>
+                              <p className="text-[10px] text-subtle truncate">{r.matricula || 'Sem matrícula'}</p>
+                              <p className="text-[10px] text-subtle truncate">{r.unidade || 'Sem unidade'}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            {onEditApenado && (
+                              <button
+                                onClick={() => onEditApenado(r.id)}
+                                className="flex-1 py-1.5 rounded-lg border border-red-200 dark:border-red-800 text-red-600 hover:text-red-700 bg-white dark:bg-gray-950 text-[10px] font-bold transition-colors hover:bg-red-50/30 flex items-center justify-center gap-1"
+                              >
+                                <Pencil className="w-3 h-3" /> Editar
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleReindex(r.id)}
+                              className="flex-1 py-1.5 rounded-lg border border-sigma-200 dark:border-sigma-850 text-sigma-600 hover:text-sigma-700 bg-white dark:bg-gray-950 text-[10px] font-bold transition-colors hover:bg-sigma-50/30 flex items-center justify-center gap-1"
+                            >
+                              <RefreshCw className="w-3 h-3" /> Reindexar
+                            </button>
                           </div>
                         </div>
-                        {onEditApenado && (
-                          <button
-                            onClick={() => onEditApenado(r.id)}
-                            className="w-full py-1.5 rounded-lg border border-red-200 dark:border-red-800 text-red-600 hover:text-red-700 bg-white dark:bg-gray-950 text-[10px] font-bold transition-colors hover:bg-red-50/30 flex items-center justify-center gap-1"
-                          >
-                            <Pencil className="w-3 h-3" /> Editar / Remover Foto
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Controles de Paginação */}
