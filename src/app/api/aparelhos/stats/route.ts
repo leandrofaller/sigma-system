@@ -119,21 +119,21 @@ export async function GET(req: NextRequest) {
       prisma.aparelhoApreendido.count({
         where: {
           ...where,
-          smartwatch: { notIn: [null, ''] }
+          smartwatch: { not: null, notIn: [''] }
         }
       }),
       // 7. Contagem de Aparelhos com CHIP
       prisma.aparelhoApreendido.count({
         where: {
           ...where,
-          chip: { notIn: [null, ''] }
+          chip: { not: null, notIn: [''] }
         }
       }),
       // 8. Locais: Interno (Cela/Pavilhão)
       prisma.aparelhoApreendido.count({
         where: {
           ...where,
-          celaPavilhao: { notIn: [null, ''] }
+          celaPavilhao: { not: null, notIn: [''] }
         }
       }),
       // 9. Locais: Externo (Setor Externo ou Local Externo)
@@ -141,8 +141,8 @@ export async function GET(req: NextRequest) {
         where: {
           ...where,
           OR: [
-            { unidadeExterna: { notIn: [null, ''] } },
-            { localExterno: { notIn: [null, ''] } }
+            { unidadeExterna: { not: null, notIn: [''] } },
+            { localExterno: { not: null, notIn: [''] } }
           ]
         }
       }),
