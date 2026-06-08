@@ -1128,3 +1128,29 @@ model DeleteApprovalRequest {
   @@map("event_deletion_requests")
 }
 
+model AparelhoApreendido {
+  id                 String    @id @default(cuid())
+  timestamp          DateTime  // Carimbo de data/hora (quando o formulário foi preenchido)
+  responsavel        String    // Responsável pelo registro
+  dataArrecadacao    DateTime? // Data da Arrecadação/Apreensão.
+  dataRecebimento    DateTime? // Data de Recebimento do Aparelho.
+  municipio          String    // Município da Arrecadação.
+  unidadePrisional   String    // Unidade Prisional
+  celaPavilhao       String?   // Cela/Pavilhão
+  unidadeExterna     String?   // SETOR / UNIDADE EXTERNA AO PRISIONAL
+  localExterno       String?   // LOCAL EXTERNO A UNIDADE
+  processoSei        String?   // Processo SEI
+  marca              String?   // Marca do Aparelho Celular
+  smartwatch         String?   // SmartWatch / SmartBand
+  chip               String?   // CHIP / Sem aparelho
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([unidadePrisional])
+  @@index([municipio])
+  @@index([processoSei])
+  @@index([marca])
+  @@map("aparelhos_apreendidos")
+}
+
+

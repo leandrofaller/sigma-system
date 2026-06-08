@@ -36,6 +36,7 @@ const navItems: NavItem[] = [
   { label: 'Identificação de Apenados', href: '/apenados', icon: UserCheck },
   { label: 'Apenados & Facções', href: '/faccoes', icon: Shield, roles: ['SUPER_ADMIN'] },
   { label: 'SIAIP', href: '/siaip', icon: Database },
+  { label: 'Celulares Recebidos', href: '/aparelhos', icon: Smartphone },
   { label: 'AIP', href: '/aip', icon: Brain, roles: ['SUPER_ADMIN', 'OPERATOR'] },
 ];
 
