@@ -41,6 +41,7 @@ def analyze_pose(kps):
     Retorna dicionário com scores normalizados (0.0 a 1.0) e ângulos estimados.
     """
     import numpy as np
+    kps = np.array(kps)
     
     # 1. Roll (Inclinação no plano 2D)
     dx = kps[1][0] - kps[0][0]
