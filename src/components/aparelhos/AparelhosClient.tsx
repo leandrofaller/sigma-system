@@ -776,7 +776,7 @@ export function AparelhosClient() {
                   <div className="flex-1 overflow-x-auto">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
-                        <tr className="bg-gray-50/70 dark:bg-gray-850/50 border-b border-gray-100 dark:border-gray-800 text-gray-400 font-bold uppercase tracking-wider">
+                        <tr className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-bold uppercase tracking-wider">
                           <th className="py-3 px-4">Marca</th>
                           <th className="py-3 px-4">Unidade Prisional</th>
                           <th className="py-3 px-4">Cela/Local</th>
