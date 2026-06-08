@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { stopAdvancedJob } from '@/lib/advanced-indexing-job';
 import { invalidateAdvancedFaceCache } from '@/lib/advanced-face-cache';
+import { pgvectorAdvancedAvailable } from '@/lib/pgvector';
 
 export async function DELETE() {
   const session = await auth();
@@ -17,8 +18,11 @@ export async function DELETE() {
     // Para o job avançado se estiver rodando
     stopAdvancedJob();
 
-    // Limpa a tabela de embeddings no pgvector (campo nativo do postgreSQL)
-    await prisma.$executeRawUnsafe('UPDATE apenados SET "faceVectorAdvanced" = NULL');
+    // Limpa a tabela de embeddings no pgvector (campo nativo do postgreSQL) se a coluna existir
+    const pvecAvail = await pgvectorAdvancedAvailable();
+    if (pvecAvail) {
+      await prisma.$executeRawUnsafe('UPDATE apenados SET "faceVectorAdvanced" = NULL');
+    }
 
     // Reseta os campos mapeados no banco via Prisma
     const result = await prisma.apenado.updateMany({
