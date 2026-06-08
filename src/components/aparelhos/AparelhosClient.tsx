@@ -52,6 +52,7 @@ interface Stats {
 interface DashboardStats {
   total: number
   celularesCount: number
+  chipsAvulsosCount: number
   unidades: { name: string; count: number }[]
   marcas: { name: string; count: number }[]
   municipios: { name: string; count: number }[]
@@ -865,7 +866,8 @@ export function AparelhosClient() {
           <div className="space-y-6">
             
             {/* Grid de KPIs do Dashboard */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Grid de KPIs do Dashboard */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               
               {/* Card 1: Total de Registros */}
               <div className="relative overflow-hidden p-5 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent border border-blue-500/15 dark:bg-gray-900 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md hover:border-blue-500/30 transition-all">
@@ -912,11 +914,36 @@ export function AparelhosClient() {
                 </div>
               </div>
 
-              {/* Card 2: Aparelhos com CHIP */}
+              {/* Card 3: Chips Avulsos */}
+              <div className="relative overflow-hidden p-5 bg-gradient-to-br from-violet-500/10 via-transparent to-transparent border border-violet-500/15 dark:bg-gray-900 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md hover:border-violet-500/30 transition-all">
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block">
+                    Chips Avulsos
+                  </span>
+                  {loadingDbStats ? (
+                    <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+                  ) : (
+                    <div className="flex items-baseline gap-1.5">
+                      <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+                        {dbStats?.chipsAvulsosCount || 0}
+                      </h3>
+                      <span className="text-xs font-bold text-violet-600 dark:text-violet-400">
+                        ({dbStats?.total ? Math.round(((dbStats.chipsAvulsosCount || 0) / dbStats.total) * 100) : 0}%)
+                      </span>
+                    </div>
+                  )}
+                  <span className="text-[10px] text-gray-500 block">Apreendidos sem aparelho</span>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <Radio className="w-6 h-6" />
+                </div>
+              </div>
+
+              {/* Card 4: Chips Totais */}
               <div className="relative overflow-hidden p-5 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent border border-emerald-500/15 dark:bg-gray-900 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md hover:border-emerald-500/30 transition-all">
                 <div className="space-y-1">
                   <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block">
-                    Aparelhos com CHIP
+                    Chips Totais
                   </span>
                   {loadingDbStats ? (
                     <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
@@ -937,11 +964,11 @@ export function AparelhosClient() {
                 </div>
               </div>
 
-              {/* Card 3: Smartwatches / bands */}
+              {/* Card 5: Smartwatches / bands */}
               <div className="relative overflow-hidden p-5 bg-gradient-to-br from-amber-500/10 via-transparent to-transparent border border-amber-500/15 dark:bg-gray-900 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md hover:border-amber-500/30 transition-all">
                 <div className="space-y-1">
                   <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block">
-                    Smartwatches Apreendidos
+                    Smartwatches
                   </span>
                   {loadingDbStats ? (
                     <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
@@ -950,14 +977,14 @@ export function AparelhosClient() {
                       {dbStats?.smartwatchesCount || 0}
                     </h3>
                   )}
-                  <span className="text-[10px] text-gray-500 block">Relógios inteligentes vinculados</span>
+                  <span className="text-[10px] text-gray-500 block">Relógios inteligentes</span>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                   <Cpu className="w-6 h-6" />
                 </div>
               </div>
 
-              {/* Card 4: Unidade mais afetada */}
+              {/* Card 6: Unidade mais afetada */}
               <div className="relative overflow-hidden p-5 bg-gradient-to-br from-red-500/10 via-transparent to-transparent border border-red-500/15 dark:bg-gray-900 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md hover:border-red-500/30 transition-all">
                 <div className="space-y-1 min-w-0">
                   <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block">
@@ -971,7 +998,7 @@ export function AparelhosClient() {
                     </h3>
                   )}
                   <span className="text-[10px] text-gray-500 block">
-                    {dbStats?.unidades?.[0]?.count ? `${dbStats.unidades[0].count} apreensões registradas` : 'Sem registros'}
+                    {dbStats?.unidades?.[0]?.count ? `${dbStats.unidades[0].count} apreensões` : 'Sem registros'}
                   </span>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">

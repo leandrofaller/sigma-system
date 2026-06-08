@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
       internoCount,
       externoCount,
       celularesCount,
+      chipsAvulsosCount,
       allDates
     ] = await Promise.all([
       // 2. Top 10 Unidades Prisionais
@@ -154,7 +155,18 @@ export async function GET(req: NextRequest) {
           marca: { not: null, notIn: [''] }
         }
       }),
-      // 11. Busca de datas para construir a linha do tempo no Node
+      // 11. Contagem de Chips Avulsos (onde chip está preenchido mas marca celular está vazia/nula)
+      prisma.aparelhoApreendido.count({
+        where: {
+          ...where,
+          chip: { not: null, notIn: [''] },
+          OR: [
+            { marca: null },
+            { marca: '' }
+          ]
+        }
+      }),
+      // 12. Busca de datas para construir a linha do tempo no Node
       prisma.aparelhoApreendido.findMany({
         select: { dataArrecadacao: true },
         where: {
@@ -231,6 +243,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       total,
       celularesCount,
+      chipsAvulsosCount,
       unidades: unidadesStats.map(u => ({ name: u.unidadePrisional || 'Não Informada', count: u._count.unidadePrisional })),
       marcas: marcasStats.map(m => ({ name: m.marca || 'Outras/NI', count: m._count.marca })),
       municipios: municipiosStats.map(m => ({ name: m.municipio || 'Não Informado', count: m._count.municipio })),
