@@ -64,8 +64,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [total, aparelhos] = await Promise.all([
+    const [total, totalCelulares, aparelhos] = await Promise.all([
       prisma.aparelhoApreendido.count({ where }),
+      prisma.aparelhoApreendido.count({
+        where: {
+          ...where,
+          marca: { not: null, notIn: [''] }
+        }
+      }),
       prisma.aparelhoApreendido.findMany({
         where,
         orderBy: { dataArrecadacao: 'desc' },
@@ -97,6 +103,7 @@ export async function GET(req: NextRequest) {
       data: aparelhos,
       pagination: {
         total,
+        totalCelulares,
         page,
         limit,
         totalPages: Math.ceil(total / limit),

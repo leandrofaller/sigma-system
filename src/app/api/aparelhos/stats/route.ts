@@ -82,6 +82,7 @@ export async function GET(req: NextRequest) {
       chipCount,
       internoCount,
       externoCount,
+      celularesCount,
       allDates
     ] = await Promise.all([
       // 2. Top 10 Unidades Prisionais
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
       // 3. Top 10 Marcas
       prisma.aparelhoApreendido.groupBy({
         by: ['marca'],
-        where: { ...where, marca: { notIn: [null, ''] } },
+        where: { ...where, marca: { not: null, notIn: [''] } },
         _count: { marca: true },
         orderBy: { _count: { marca: 'desc' } },
         take: 10,
@@ -146,7 +147,14 @@ export async function GET(req: NextRequest) {
           ]
         }
       }),
-      // 10. Busca de datas para construir a linha do tempo no Node
+      // 10. Contagem de Aparelhos Celulares (onde marca não é nula/vazia)
+      prisma.aparelhoApreendido.count({
+        where: {
+          ...where,
+          marca: { not: null, notIn: [''] }
+        }
+      }),
+      // 11. Busca de datas para construir a linha do tempo no Node
       prisma.aparelhoApreendido.findMany({
         select: { dataArrecadacao: true },
         where: {
@@ -222,6 +230,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       total,
+      celularesCount,
       unidades: unidadesStats.map(u => ({ name: u.unidadePrisional || 'Não Informada', count: u._count.unidadePrisional })),
       marcas: marcasStats.map(m => ({ name: m.marca || 'Outras/NI', count: m._count.marca })),
       municipios: municipiosStats.map(m => ({ name: m.municipio || 'Não Informado', count: m._count.municipio })),

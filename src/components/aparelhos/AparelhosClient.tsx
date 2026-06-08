@@ -33,6 +33,7 @@ interface Aparelho {
 
 interface Pagination {
   total: number
+  totalCelulares: number
   page: number
   limit: number
   totalPages: number
@@ -50,6 +51,7 @@ interface Stats {
 
 interface DashboardStats {
   total: number
+  celularesCount: number
   unidades: { name: string; count: number }[]
   marcas: { name: string; count: number }[]
   municipios: { name: string; count: number }[]
@@ -60,6 +62,139 @@ interface DashboardStats {
   locais: { interno: number; externo: number; naoConsta: number }
 }
 
+const RESPONSAVEIS_OPCOES = [
+  'VALTEIR SOARES DA SILVA',
+  'RAFAEL CHAGAS SENA',
+  'JOSÉ DOS SANTOS SIQUEIRA',
+  'LEANDRO PINHO FALLER',
+  'JEFFERSON DE BRITO ROCHA',
+  'STAUNSTON ROCHA MENDES',
+  'SIDNEI TEODORO SEBASTIÃO',
+  'GEAN PEREIRA ACRISIO',
+  'JORDANIO PINHEIRO BATISTA'
+]
+
+const MUNICIPIOS_OPCOES = [
+  'PORTO VELHO',
+  'ALVORADA DO OESTE',
+  'ALTA FLORESTA',
+  'ARIQUEMES',
+  'BURITIS',
+  'CACOAL',
+  'CEREJEIRAS',
+  'COLORADO DO OESTE',
+  'COSTA MARQUES',
+  'GUAJARÁ MIRIM',
+  'JARU',
+  'JI-PARANÁ',
+  'MACHADINHO DO OESTE',
+  'NOVA MAMORÉ',
+  'OURO PRETO',
+  'PIMENTA BUENO',
+  'PRESIDENTE MÉDICE',
+  'ROLIM DE MOURA',
+  'SÃO MIGUEL DO GUAPORÉ',
+  'SÃO FRANCISCO DO GUAPORÉ',
+  'VILHENA'
+]
+
+const UNIDADES_OPCOES = [
+  'PENITENCIÁRIA ESTADUAL EDIVAN MARIANO ROSENDO - (PANDA)',
+  'PENITENCIÁRIA ESTADUAL MILTON SOARES DE CARVALHO (470)',
+  'PENITENCIÁRIA ESTADUAL JORGE THIAGO AGUIAR AFONSO',
+  'PENITENCIÁRIA ESTADUAL ARUANA',
+  'PENITENCIÁRIA DE MÉDIO PORTE - (ANTIGO ÊNIO)',
+  'CENTRO DE DETENÇÃO PROVISÓRIO DE PORTO VELHO (ANTIGO URSO)',
+  'CENTRO DE RESSOCIALIZAÇÃO SUELY MARIA MENDONÇA (PENFEN e PEPFEM UNIFICADAS)',
+  'CENTRO DE RESSOCIALIZAÇÃO VALE DO GUAPORÉ (CRVG)',
+  'COLÔNIA AGRÍCOLA PENAL ÊNIO DOS SANTOS PINHEIRO - (CAPEP)',
+  'UNIDADE DE INTERNAÇÃO MASCULINA MEDIDAS DE SEGURANÇA',
+  'UNIDADE DE MONITORAMENTO ELETRÔNICO - UMESP (CAPITAL)',
+  'UNIDADE SEMIABERTO E ABERTO FEMININO E ALBERGUE MASCULINO - USAFAM',
+  'PENITENCIÁRIA REGIONAL DE NOVA MAMORÉ',
+  'CASA DE DETENÇÃO DE GUAJARÁ MIRIM',
+  'CASA DE PRISÃO ALBERGUE FEMININO DE GUAJARÁ MIRIM',
+  'UNIDADE SEMIABERTO E ABERTO MASCULINO DE GUAJARÁ MIRIM',
+  'CENTRO DE RESSOCIALIZAÇÃO DE ARIQUEMES',
+  'CASA DO ALBERGADO E PRESÍDIO FEMININO DE ARIQUEMES',
+  'CENTRO DE RESSOCIALIZAÇÃO JONAS FERRETI',
+  'CENTRO DE RESSOCIALIZAÇÃO DE MACHADINHO DO OESTE',
+  'CENTRO REGIONAL DE RESSOCIALIZAÇÃO AUGUSTO S.KEMPE',
+  'CASA DE PRISÃO ALBERGUE DE JARU E SEMIABERTO',
+  'CASA DE DETENÇÃO DE OURO PRETO',
+  'CASA DE DETENÇÃO DE JI-PARANÁ',
+  'UNIDADE DE MONITORAMENTO DE JI-PARANÁ',
+  'PRESÍDIO SEMIABERTO DE JI-PARANÁ',
+  'PENITENCIÁRIA REGIONAL DR. AGENOR MARTINS DE CARVALHO',
+  'CADEIA PÚBLICA DE PRESIDENTE MÉDICI',
+  'CENTRO DE RESSOCIALIZAÇÃO YOHAN FLÁVIO VASSOLER',
+  'CADEIA PÚBLICA DE SÃO MIGUEL DO GUAPORÉ',
+  'CADEIA PÚBLICA DE SÃO FRANCISCO DO GUAPORÉ',
+  'CADEIA PÚBLICA DE COSTA MARQUES',
+  'CASA DE DETENÇÃO DE CACOAL',
+  'CASA DE PRISÃO ALBERGUE MASCULINO DE CACOAL - MONITORAMENTO',
+  'CASA DE DETENÇÃO DE ROLIM DE MOURA',
+  'UNIDADE ABERTO E SEMIABERTO DE ROLIM DE MOURA - MONITORAMENTO',
+  'PENITENCIÁRIA REGIONAL DE ROLIM DE MOURA',
+  'CASA DE DETENÇÃO DE PIMENTA BUENO',
+  'CADEIA PÚBLICA DE ALTA FLORESTA',
+  'CASA DE DETENÇÃO DE VILHENA',
+  'COLÔNIA PENAL, MONITORAMENTO E PRESÍDIO FEMININO DE VILHENA',
+  'CENTRO DE RESSOCIALIZAÇÃO CONE SUL',
+  'CADEIA PÚBLICA DE COLORADO DO OESTE',
+  'CADEIA PÚBLICA DE CEREJEIRAS',
+  'SISTEMA SOCIOEDUCATIVO',
+  'OUTRO (DETALHAR)'
+]
+
+const LOCAIS_EXTERNOS_OPCOES = [
+  'RUA AO LADO DA UNIDADE',
+  'RUA PROXIMA A UNIDADE',
+  'ENTRE UNIDADES DISTINTAS',
+  'APENADOS DE CONVENIOS',
+  'MONITORADO',
+  'OUTROS'
+]
+
+const CHIPS_OPCOES = [
+  'Claro',
+  'Vivo',
+  'Tim',
+  'OI',
+  'Outros'
+]
+
+const MARCAS_OPCOES = [
+  'LG',
+  'Motorola',
+  'Samsung',
+  'Semp Toshiba',
+  'Sony Ericsson',
+  'Venko',
+  'Iphone',
+  'Xiaomi',
+  'Multilaser',
+  'Mini L8Star',
+  'Mini Smartphone',
+  'NOKIA',
+  'Poco',
+  'Positivo',
+  'Redmi',
+  'Realme',
+  'Satelital (conexão via satelite)',
+  'HUAWEI',
+  'Asus',
+  'Blue',
+  'Outros'
+]
+
+const SMARTWATCHES_OPCOES = [
+  'Apple',
+  'Samsung',
+  'Xiaomi',
+  'GENERICOS'
+]
+
 export function AparelhosClient() {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
@@ -67,7 +202,7 @@ export function AparelhosClient() {
   // Estados principais
   const [activeTab, setActiveTab] = useState<'list' | 'dashboard'>('list')
   const [aparelhos, setAparelhos] = useState<Aparelho[]>([])
-  const [pagination, setPagination] = useState<Pagination>({ total: 0, page: 1, limit: 15, totalPages: 1 })
+  const [pagination, setPagination] = useState<Pagination>({ total: 0, totalCelulares: 0, page: 1, limit: 15, totalPages: 1 })
   const [stats, setStats] = useState<Stats>({ marcas: [], unidades: [] })
   const [loading, setLoading] = useState(true)
 
@@ -118,6 +253,8 @@ export function AparelhosClient() {
   const [cadSaving, setCadSaving] = useState(false)
   const [cadError, setCadError] = useState<string | null>(null)
   const [cadSuccess, setCadSuccess] = useState(false)
+  const [isOutroUnidade, setIsOutroUnidade] = useState(false)
+  const [outroUnidadeTexto, setOutroUnidadeTexto] = useState('')
 
   // Carregar dados da API
   const fetchAparelhos = useCallback(async (pageTarget = 1) => {
@@ -287,10 +424,21 @@ export function AparelhosClient() {
     setCadSuccess(false)
 
     try {
+      const finalUnidade = isOutroUnidade ? outroUnidadeTexto.trim().toUpperCase() : cadForm.unidadePrisional
+
+      if (!cadForm.responsavel || !cadForm.municipio || !finalUnidade) {
+        throw new Error('Responsável, Município e Unidade Prisional são obrigatórios.')
+      }
+
+      const payload = {
+        ...cadForm,
+        unidadePrisional: finalUnidade,
+      }
+
       const res = await fetch('/api/aparelhos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cadForm),
+        body: JSON.stringify(payload),
       })
 
       const json = await res.json()
@@ -314,6 +462,8 @@ export function AparelhosClient() {
         dataArrecadacao: '',
         dataRecebimento: '',
       })
+      setIsOutroUnidade(false)
+      setOutroUnidadeTexto('')
 
       setTimeout(() => {
         setModalCadOpen(false)
@@ -494,22 +644,42 @@ export function AparelhosClient() {
         {activeTab === 'list' && (
           <>
             {/* Painel de Estatísticas com Visual Rico */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               
-              {/* Card 1: Total */}
+              {/* Card 1: Total de Registros */}
+              <div className="relative overflow-hidden p-5 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent border border-blue-500/10 dark:bg-gray-900 rounded-2xl shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1">
+                    Total de Registros
+                  </span>
+                  {loading ? (
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                  ) : (
+                    <span className="text-3xl font-black tracking-tight text-blue-600 dark:text-blue-400">
+                      {pagination.total}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-gray-400 block mt-1">Registros consolidados no sistema</span>
+                </div>
+                <div className="p-3 bg-blue-500/15 text-blue-600 dark:text-blue-400 rounded-xl">
+                  <FileText className="w-8 h-8" />
+                </div>
+              </div>
+
+              {/* Card 2: Aparelhos Celulares */}
               <div className="relative overflow-hidden p-5 bg-gradient-to-br from-sigma-600/10 via-transparent to-transparent border border-sigma-500/10 dark:bg-gray-900 rounded-2xl shadow-sm flex items-center justify-between">
                 <div>
                   <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1">
-                    Total de Aparelhos
+                    Aparelhos Celulares
                   </span>
                   {loading ? (
                     <Loader2 className="w-8 h-8 animate-spin text-sigma-500" />
                   ) : (
                     <span className="text-3xl font-black tracking-tight text-sigma-600 dark:text-sigma-400">
-                      {pagination.total}
+                      {pagination.totalCelulares}
                     </span>
                   )}
-                  <span className="text-[10px] text-gray-400 block mt-1">Registros consolidados no sistema</span>
+                  <span className="text-[10px] text-gray-400 block mt-1">Celulares apreendidos (com marca)</span>
                 </div>
                 <div className="p-3 bg-sigma-600/15 text-sigma-600 dark:text-sigma-400 rounded-xl">
                   <Smartphone className="w-8 h-8" />
@@ -695,22 +865,47 @@ export function AparelhosClient() {
           <div className="space-y-6">
             
             {/* Grid de KPIs do Dashboard */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               
-              {/* Card 1: Total Geral */}
-              <div className="relative overflow-hidden p-5 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent border border-indigo-500/15 dark:bg-gray-900 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md hover:border-indigo-500/30 transition-all">
+              {/* Card 1: Total de Registros */}
+              <div className="relative overflow-hidden p-5 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent border border-blue-500/15 dark:bg-gray-900 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md hover:border-blue-500/30 transition-all">
                 <div className="space-y-1">
                   <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block">
-                    Total de Aparelhos
+                    Total de Registros
                   </span>
                   {loadingDbStats ? (
-                    <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
                   ) : (
                     <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
                       {dbStats?.total || 0}
                     </h3>
                   )}
-                  <span className="text-[10px] text-gray-500 block">Total arrecadado/apreendido</span>
+                  <span className="text-[10px] text-gray-500 block">Total de linhas no banco</span>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <FileText className="w-6 h-6" />
+                </div>
+              </div>
+
+              {/* Card 2: Aparelhos Celulares */}
+              <div className="relative overflow-hidden p-5 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent border border-indigo-500/15 dark:bg-gray-900 rounded-2xl shadow-sm flex items-center justify-between group hover:shadow-md hover:border-indigo-500/30 transition-all">
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 block">
+                    Aparelhos Celulares
+                  </span>
+                  {loadingDbStats ? (
+                    <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                  ) : (
+                    <div className="flex items-baseline gap-1.5">
+                      <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+                        {dbStats?.celularesCount || 0}
+                      </h3>
+                      <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                        ({dbStats?.total ? Math.round(((dbStats.celularesCount || 0) / dbStats.total) * 100) : 0}%)
+                      </span>
+                    </div>
+                  )}
+                  <span className="text-[10px] text-gray-500 block">Celulares apreendidos (com marca)</span>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                   <Smartphone className="w-6 h-6" />
@@ -1207,22 +1402,23 @@ export function AparelhosClient() {
               </div>
 
               <form onSubmit={handleCadSubmit} className="pt-4 space-y-4">
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  
                   {/* Responsável */}
                   <div>
                     <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
                       Responsável pelo Registro *
                     </label>
-                    <input
-                      type="text"
+                    <select
                       required
-                      placeholder="Nome do operador"
                       value={cadForm.responsavel}
                       onChange={e => setCadForm({ ...cadForm, responsavel: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
-                    />
+                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                    >
+                      <option value="">Selecione o Responsável</option>
+                      {RESPONSAVEIS_OPCOES.map(resp => (
+                        <option key={resp} value={resp}>{resp}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Município */}
@@ -1230,29 +1426,64 @@ export function AparelhosClient() {
                     <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
                       Município da Apreensão *
                     </label>
-                    <input
-                      type="text"
+                    <select
                       required
-                      placeholder="Ex: PORTO VELHO"
                       value={cadForm.municipio}
                       onChange={e => setCadForm({ ...cadForm, municipio: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
-                    />
+                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                    >
+                      <option value="">Selecione o Município</option>
+                      {MUNICIPIOS_OPCOES.map(mun => (
+                        <option key={mun} value={mun}>{mun}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Unidade Prisional */}
-                  <div className="md:col-span-2">
-                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="block text-gray-400 font-bold mb-0.5 uppercase tracking-wider text-[9px]">
                       Unidade Prisional *
                     </label>
-                    <input
-                      type="text"
+                    <select
                       required
-                      placeholder="Selecione ou digite o presídio"
-                      value={cadForm.unidadePrisional}
-                      onChange={e => setCadForm({ ...cadForm, unidadePrisional: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
-                    />
+                      value={isOutroUnidade ? 'OUTRO (DETALHAR)' : cadForm.unidadePrisional}
+                      onChange={e => {
+                        const val = e.target.value
+                        if (val === 'OUTRO (DETALHAR)') {
+                          setIsOutroUnidade(true)
+                          setCadForm(prev => ({ ...prev, unidadePrisional: '' }))
+                        } else {
+                          setIsOutroUnidade(false)
+                          setCadForm(prev => ({ ...prev, unidadePrisional: val }))
+                        }
+                      }}
+                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                    >
+                      <option value="">Selecione a Unidade Prisional</option>
+                      {UNIDADES_OPCOES.map(uni => (
+                        <option key={uni} value={uni}>{uni}</option>
+                      ))}
+                    </select>
+
+                    {isOutroUnidade && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-1"
+                      >
+                        <label className="block text-gray-400 font-bold uppercase tracking-wider text-[9px]">
+                          Especifique a Unidade Prisional *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Digite o nome completo da Unidade Prisional"
+                          value={outroUnidadeTexto}
+                          onChange={e => setOutroUnidadeTexto(e.target.value)}
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                        />
+                      </motion.div>
+                    )}
                   </div>
 
                   {/* Cela/Pavilhão */}
@@ -1288,27 +1519,49 @@ export function AparelhosClient() {
                     <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
                       Marca do Celular
                     </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Samsung, Motorola"
-                      value={cadForm.marca}
+                    <select
+                      value={cadForm.marca || ''}
                       onChange={e => setCadForm({ ...cadForm, marca: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
-                    />
+                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                    >
+                      <option value="">Sem celular / Não se aplica</option>
+                      {MARCAS_OPCOES.map(marcaOpt => (
+                        <option key={marcaOpt} value={marcaOpt}>{marcaOpt}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Smartwatch / Smartband */}
                   <div>
-                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
+                    <label className="block text-gray-400 font-bold mb-1.5 uppercase tracking-wider text-[9px]">
                       SmartWatch / SmartBand
                     </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Xiaomi, Apple"
-                      value={cadForm.smartwatch}
-                      onChange={e => setCadForm({ ...cadForm, smartwatch: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
-                    />
+                    <div className="grid grid-cols-2 gap-2 bg-gray-50/50 dark:bg-gray-850/50 p-2 border border-gray-200 dark:border-gray-750 rounded-xl">
+                      <label className="flex items-center gap-1.5 cursor-pointer py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                        <input
+                          type="radio"
+                          name="smartwatch"
+                          value=""
+                          checked={!cadForm.smartwatch}
+                          onChange={() => setCadForm({ ...cadForm, smartwatch: '' })}
+                          className="w-3.5 h-3.5 text-sigma-600 focus:ring-sigma-500 border-gray-300 accent-sigma-600"
+                        />
+                        Não se aplica
+                      </label>
+                      {SMARTWATCHES_OPCOES.map(opt => (
+                        <label key={opt} className="flex items-center gap-1.5 cursor-pointer py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                          <input
+                            type="radio"
+                            name="smartwatch"
+                            value={opt}
+                            checked={cadForm.smartwatch === opt}
+                            onChange={() => setCadForm({ ...cadForm, smartwatch: opt })}
+                            className="w-3.5 h-3.5 text-sigma-600 focus:ring-sigma-500 border-gray-300 accent-sigma-600"
+                          />
+                          {opt}
+                        </label>
+                      ))}
+                    </div>
                   </div>
 
                   {/* CHIP / Operadora */}
@@ -1316,13 +1569,16 @@ export function AparelhosClient() {
                     <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
                       CHIP / Operadora
                     </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Claro, Vivo, Tim"
-                      value={cadForm.chip}
+                    <select
+                      value={cadForm.chip || ''}
                       onChange={e => setCadForm({ ...cadForm, chip: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
-                    />
+                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                    >
+                      <option value="">Sem CHIP / Não se aplica</option>
+                      {CHIPS_OPCOES.map(chipOpt => (
+                        <option key={chipOpt} value={chipOpt}>{chipOpt}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Setor Externo */}
@@ -1340,17 +1596,36 @@ export function AparelhosClient() {
                   </div>
 
                   {/* Local Externo */}
-                  <div>
-                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
-                      Local Externo
+                  <div className="md:col-span-2">
+                    <label className="block text-gray-400 font-bold mb-1.5 uppercase tracking-wider text-[9px]">
+                      Local Externo à Unidade
                     </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Próximo à muralha"
-                      value={cadForm.localExterno}
-                      onChange={e => setCadForm({ ...cadForm, localExterno: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
-                    />
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-gray-50/50 dark:bg-gray-850/50 p-3.5 border border-gray-200 dark:border-gray-750 rounded-xl">
+                      <label className="flex items-center gap-1.5 cursor-pointer py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                        <input
+                          type="radio"
+                          name="localExterno"
+                          value=""
+                          checked={!cadForm.localExterno}
+                          onChange={() => setCadForm({ ...cadForm, localExterno: '' })}
+                          className="w-3.5 h-3.5 text-sigma-600 focus:ring-sigma-500 border-gray-300 accent-sigma-600"
+                        />
+                        Não se aplica / Nenhum
+                      </label>
+                      {LOCAIS_EXTERNOS_OPCOES.map(opt => (
+                        <label key={opt} className="flex items-center gap-1.5 cursor-pointer py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                          <input
+                            type="radio"
+                            name="localExterno"
+                            value={opt}
+                            checked={cadForm.localExterno === opt}
+                            onChange={() => setCadForm({ ...cadForm, localExterno: opt })}
+                            className="w-3.5 h-3.5 text-sigma-600 focus:ring-sigma-500 border-gray-300 accent-sigma-600"
+                          />
+                          {opt}
+                        </label>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Datas */}
