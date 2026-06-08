@@ -300,4 +300,14 @@
     size: A4 portrait;
     margin: 0;
   }
+
+/* Correção de legibilidade para dropdowns (option) em ambos os temas */
+select option {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+}
+
+.dark select option {
+  background-color: #1f2937 !important;
+  color: #f3f4f6 !important;
 }
