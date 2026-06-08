@@ -57,14 +57,20 @@ function parseDate(dateStr: string): Date | null {
 
   if (isNaN(day) || isNaN(month) || isNaN(year)) return null
 
-  // Sanitização de anos bizarros, ex: 0222, 222
+  // Sanitização de anos bizarros, ex: 0222, 222, 0219, 0218, 22, 23, 24
   if (year < 1000) {
-    if (year === 222 || year === 22 || year === 202) {
-      year = 2022
-    } else if (year === 23 || year === 203) {
-      year = 2023
-    } else if (year === 24 || year === 204) {
-      year = 2024
+    if (year < 100) {
+      year += 2000
+    } else if (year >= 200 && year < 300) {
+      if (year === 202) {
+        year = 2022
+      } else if (year === 203) {
+        year = 2023
+      } else if (year === 204) {
+        year = 2024
+      } else {
+        year = 2000 + (year - 200) // Ex: 219 -> 2019, 218 -> 2018
+      }
     } else {
       year = new Date().getFullYear()
     }
