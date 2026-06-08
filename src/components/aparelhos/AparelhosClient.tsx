@@ -1643,7 +1643,7 @@ export function AparelhosClient() {
 
                   <div>
                     <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
-                      Data Recebimento na GIP
+                      Data Recebimento na AIP
                     </label>
                     <input
                       type="date"
