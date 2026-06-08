@@ -6,7 +6,7 @@ import {
   Smartphone, Search, Plus, Upload, Filter, Loader2, X, 
   Calendar, MapPin, Building2, User, FileText, CheckCircle, 
   AlertTriangle, ChevronLeft, ChevronRight, BarChart2, ShieldAlert, Cpu, Radio,
-  TrendingUp, PieChart as PieIcon, Wifi
+  TrendingUp, PieChart as PieIcon, Wifi, Printer
 } from 'lucide-react'
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -227,6 +227,7 @@ export function AparelhosClient() {
   // Modais
   const [modalImportOpen, setModalImportOpen] = useState(false)
   const [modalCadOpen, setModalCadOpen] = useState(false)
+  const [printing, setPrinting] = useState(false)
 
   // Estado do Upload
   const [uploadFile, setUploadFile] = useState<File | null>(null)
@@ -485,6 +486,185 @@ export function AparelhosClient() {
     return date.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
   }
 
+  // Função para carregar todos os dados filtrados e gerar o relatório para impressão / PDF
+  const handlePrint = async () => {
+    setPrinting(true)
+    try {
+      // 1. Montar a URL com os filtros atuais, sem paginação (limite de 10000 para trazer todos)
+      const params = new URLSearchParams()
+      params.append('limit', '10000')
+      if (search) params.append('search', search)
+      if (unidade) params.append('unidade', unidade)
+      if (municipio) params.append('municipio', municipio)
+      if (marca) params.append('marca', marca)
+      if (dataInicio) params.append('dataInicio', dataInicio)
+      if (dataFim) params.append('dataFim', dataFim)
+
+      const res = await fetch(`/api/aparelhos?${params.toString()}`)
+      if (!res.ok) throw new Error('Erro ao buscar dados para impressão')
+      const json = await res.json()
+      const dataToPrint: Aparelho[] = json.data || []
+
+      // 2. Converter logos para DataURI para exibição robusta e off-line na página de impressão
+      const toDataUri = async (url: string): Promise<string | null> => {
+        try {
+          const r = await fetch(url)
+          if (!r.ok) return null
+          const blob = await r.blob()
+          return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+          })
+        } catch {
+          return null
+        }
+      }
+
+      const sejusLogo = await toDataUri('/logos/badge-sejus.png') || '/logos/badge-sejus.png'
+      const policiaLogo = await toDataUri('/logos/badge-policia-penal.png') || '/logos/badge-policia-penal.png'
+
+      // 3. Montar descrição dos filtros para o cabeçalho do relatório
+      const filtrosDesc: string[] = []
+      if (search) filtrosDesc.push(`Busca: "${search}"`)
+      if (unidade) filtrosDesc.push(`Unidade: ${unidade}`)
+      if (municipio) filtrosDesc.push(`Município: ${municipio}`)
+      if (marca) filtrosDesc.push(`Marca: ${marca}`)
+      if (dataInicio || dataFim) {
+        const di = dataInicio ? dataInicio.split('-').reverse().join('/') : ''
+        const df = dataFim ? dataFim.split('-').reverse().join('/') : ''
+        filtrosDesc.push(`Período: ${di || 'Início'} até ${df || 'Fim'}`)
+      }
+      const filtrosTexto = filtrosDesc.length > 0 ? filtrosDesc.join(' | ') : 'Nenhum filtro aplicado (Lista Completa)'
+
+      // 4. Montar a tabela de itens em HTML
+      const rowsHtml = dataToPrint.map(item => `
+        <tr>
+          <td><strong>${item.marca || 'Celular Genérico'}</strong>${item.smartwatch ? '<br/><span style="font-size:7pt;color:#1e40af;font-weight:bold;text-transform:uppercase;">+ Relógio</span>' : ''}</td>
+          <td>${item.unidadePrisional}</td>
+          <td>${item.celaPavilhao || item.unidadeExterna || item.localExterno || 'Não Consta'}</td>
+          <td style="font-family: monospace;">${item.processoSei || '—'}</td>
+          <td>${formatDate(item.dataArrecadacao)}</td>
+          <td>${item.chip ? `<span style="background:#e8f5e9;color:#2e7d32;padding:2px 6px;border-radius:4px;font-size:8pt;font-weight:bold;">${item.chip}</span>` : '—'}</td>
+          <td>${item.responsavel}</td>
+        </tr>
+      `).join('')
+
+      const printHtml = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Relatório - Controle de Celulares Recebidos</title>
+<style>
+  @page { size: A4 landscape; margin: 1.2cm 1.5cm 1.2cm 1.5cm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.4;
+    color: #000;
+    background: white;
+    padding: 0;
+    margin: 0;
+  }
+  .header-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+  .header-table td { border: none; padding: 0; vertical-align: middle; }
+  .logo-container { width: 70px; text-align: center; }
+  .logo-img { height: 65px; width: auto; object-fit: contain; }
+  .title-container { text-align: center; }
+  .title-sejus { font-size: 9.5pt; font-weight: bold; margin: 0 0 2px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .title-aip { font-size: 9.5pt; font-weight: bold; margin: 0 0 2px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .title-pp { font-size: 9.5pt; font-weight: bold; margin: 0 0 2px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .title-main { font-size: 13.5pt; font-weight: 900; margin: 6px 0 0; text-transform: uppercase; color: #111; letter-spacing: 0.02em; }
+  
+  .divider { border: none; border-top: 2.5px solid #000; margin: 10px 0; }
+  .info-bar { font-size: 8pt; color: #333; margin-bottom: 15px; background: #f3f4f6; padding: 6px 12px; border-radius: 6px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  
+  table.data-table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+  table.data-table th, table.data-table td { border: 1px solid #777; padding: 6px 8px; text-align: left; vertical-align: middle; }
+  table.data-table th { background: #f1f5f9; font-weight: bold; font-size: 9pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  table.data-table tr:nth-child(even) { background: #f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  
+  .footer { margin-top: 25px; border-top: 1px solid #aaa; padding-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 8pt; color: #444; }
+</style>
+</head>
+<body>
+  <!-- Cabeçalho Oficial -->
+  <table class="header-table">
+    <tr>
+      <td class="logo-container">
+        <img class="logo-img" src="${sejusLogo}" alt="SEJUS" onerror="this.style.display='none';" />
+      </td>
+      <td class="title-container">
+        <div class="title-sejus">Secretaria de Estado da Justiça de Rondônia</div>
+        <div class="title-aip">Agência de Inteligência Penal - AIP</div>
+        <div class="title-pp">Polícia Penal de Rondônia</div>
+        <div class="title-main">Controle de Celulares Recebidos</div>
+      </td>
+      <td class="logo-container" style="text-align: right;">
+        <img class="logo-img" src="${policiaLogo}" alt="Polícia Penal" onerror="this.style.display='none';" />
+      </td>
+    </tr>
+  </table>
+
+  <div class="divider"></div>
+
+  <!-- Barra de Filtros e Meta -->
+  <div class="info-bar">
+    <strong>Filtros Aplicados:</strong> ${filtrosTexto}<br/>
+    <strong>Total de Registros:</strong> ${dataToPrint.length} | <strong>Gerado em:</strong> ${new Date().toLocaleString('pt-BR')}
+  </div>
+
+  <!-- Tabela Principal -->
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width: 14%;">Marca</th>
+        <th style="width: 25%;">Unidade Prisional</th>
+        <th style="width: 20%;">Cela/Local</th>
+        <th style="width: 15%;">Processo SEI</th>
+        <th style="width: 9%;">Apreensão</th>
+        <th style="width: 8%;">Chip</th>
+        <th style="width: 9%;">Responsável</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml || '<tr><td colspan="7" style="text-align:center;">Nenhum dispositivo encontrado.</td></tr>'}
+    </tbody>
+  </table>
+
+  <!-- Rodapé -->
+  <div class="footer">
+    <span>SIGMA System — Relatório de Controle de Celulares</span>
+    <span>Gerado por Analista da GIP/AIP</span>
+  </div>
+
+  <script>
+    window.onload = function() {
+      window.print();
+      setTimeout(function() {
+        window.close();
+      }, 500);
+    }
+  </script>
+</body>
+</html>`
+
+      const win = window.open('', '_blank', 'width=1100,height=750')
+      if (!win) {
+        alert('Por favor, permita pop-ups para gerar o relatório de impressão.')
+        return
+      }
+      win.document.write(printHtml)
+      win.document.close()
+    } catch (err: any) {
+      alert('Erro ao gerar relatório: ' + err.message)
+    } finally {
+      setPrinting(false)
+    }
+  }
+
   return (
     <div className="flex flex-col h-full min-h-0 bg-gray-50 dark:bg-gray-950 text-gray-800 dark:text-gray-200">
       
@@ -506,6 +686,18 @@ export function AparelhosClient() {
           </div>
           
           <div className="flex items-center gap-3">
+            <button
+              onClick={handlePrint}
+              disabled={printing}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-750 dark:text-gray-100 border border-gray-200 dark:border-gray-700 active:scale-95 text-gray-800 rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
+            >
+              {printing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Printer className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+              )}
+              Imprimir / PDF
+            </button>
             <button
               onClick={() => setModalImportOpen(true)}
               className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 active:scale-95 text-white dark:bg-gray-700 dark:hover:bg-gray-600 rounded-xl text-xs font-bold transition-all shadow-sm border border-gray-700/30"
