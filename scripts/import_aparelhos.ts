@@ -75,7 +75,8 @@ function parseDate(dateStr: string): Date | null {
     seconds = parseInt(timeParts[2] || '0', 10)
   }
 
-  const date = new Date(year, month, day, hours, minutes, seconds)
+  // Cria a data usando Date.UTC para garantir fidedignidade com o fuso UTC e evitar deslocamentos
+  const date = new Date(Date.UTC(year, month, day, hours, minutes, seconds))
   return isNaN(date.getTime()) ? null : date
 }
 

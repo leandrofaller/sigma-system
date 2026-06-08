@@ -119,6 +119,32 @@ export async function GET(req: NextRequest) {
   }
 }
 
+function parseFormDate(dateStr: string | null | undefined): Date | null {
+  if (!dateStr || dateStr.trim() === '') return null
+  const cleanStr = dateStr.trim()
+  
+  // Se for YYYY-MM-DD
+  const parts = cleanStr.split('-')
+  if (parts.length === 3 && parts[0].length === 4) {
+    const year = parseInt(parts[0], 10)
+    const month = parseInt(parts[1], 10) - 1
+    const day = parseInt(parts[2], 10)
+    return new Date(Date.UTC(year, month, day))
+  }
+  
+  // Se for DD/MM/YYYY
+  const partsSlash = cleanStr.split('/')
+  if (partsSlash.length === 3) {
+    const day = parseInt(partsSlash[0], 10)
+    const month = parseInt(partsSlash[1], 10) - 1
+    const year = parseInt(partsSlash[2], 10)
+    return new Date(Date.UTC(year, month, day))
+  }
+  
+  const t = Date.parse(cleanStr)
+  return isNaN(t) ? null : new Date(t)
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
@@ -149,10 +175,10 @@ export async function POST(req: NextRequest) {
 
     const aparelho = await prisma.aparelhoApreendido.create({
       data: {
-        timestamp: timestamp ? new Date(timestamp) : new Date(),
+        timestamp: timestamp ? parseFormDate(timestamp) || new Date() : new Date(),
         responsavel,
-        dataArrecadacao: dataArrecadacao ? new Date(dataArrecadacao) : null,
-        dataRecebimento: dataRecebimento ? new Date(dataRecebimento) : null,
+        dataArrecadacao: parseFormDate(dataArrecadacao),
+        dataRecebimento: parseFormDate(dataRecebimento),
         municipio,
         unidadePrisional,
         celaPavilhao,
