@@ -300,6 +300,7 @@
     size: A4 portrait;
     margin: 0;
   }
+}
 
 /* Correção de legibilidade para dropdowns (option) em ambos os temas */
 select option {
