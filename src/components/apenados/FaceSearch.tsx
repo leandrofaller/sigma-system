@@ -44,7 +44,7 @@ interface IndexStatus {
   remaining: number;
 }
 
-type Tab = 'search' | 'index' | 'advanced';
+type Tab = 'search' | 'index' | 'advanced' | 'no-face';
 type SearchState = 'ready' | 'analyzing' | 'results' | 'no-face' | 'error';
 
 const BATCH_SIZE = 30;   // IDs por requisição de indexação
@@ -257,6 +257,12 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [isAdvIndexing, setIsAdvIndexing] = useState(false);
   const [advIndexProgress, setAdvIndexProgress] = useState<any>({ current: 0, total: 0, faces: 0, skipped: 0, errors: 0 });
 
+  // Sem Rosto
+  const [noFaceType, setNoFaceType] = useState<'advanced' | 'classic'>('advanced');
+  const [noFacePage, setNoFacePage] = useState(1);
+  const [noFaceData, setNoFaceData] = useState<any | null>(null);
+  const [noFaceLoading, setNoFaceLoading] = useState(false);
+
   // Index
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -297,6 +303,22 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     }
     return () => { if (interval) clearInterval(interval); };
   }, [isAdvIndexing, fetchAdvStatus, fetchDashboard]);
+
+  const fetchNoFaceData = useCallback(async (type: 'classic' | 'advanced', page: number) => {
+    setNoFaceLoading(true);
+    try {
+      const res = await fetch(`/api/apenados/face/no-face?type=${type}&page=${page}&limit=12`);
+      const data = await res.json();
+      if (res.ok) setNoFaceData(data);
+    } catch {}
+    setNoFaceLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'no-face') {
+      fetchNoFaceData(noFaceType, noFacePage);
+    }
+  }, [tab, noFaceType, noFacePage, fetchNoFaceData]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -566,7 +588,10 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
           {([
             ['search', Search, 'Busca Clássica (ArcFace)'],
             ['advanced', ScanFace, 'IA Facial (Avançado)'],
-            ...(isAdmin ? [['index', Database, 'Indexar ArcFace'] as const] : [])
+            ...(isAdmin ? [
+              ['index', Database, 'Indexar ArcFace'] as const,
+              ['no-face', AlertTriangle, 'Sem Rosto'] as const
+            ] : [])
           ] as const).map(([key, Icon, label]) => (
             <button key={key} onClick={() => setTab(key)}
               className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -1272,6 +1297,116 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                   </button>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              ABA: SEM ROSTO
+          ════════════════════════════════════════════════════════════════════ */}
+          {tab === 'no-face' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3 flex-wrap gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-title flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-orange-500" /> Revisão de Fotos Sem Rosto Detectado
+                  </h3>
+                  <p className="text-[10px] text-subtle mt-0.5">Fotos que foram processadas mas nenhum rosto foi detectado</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setNoFaceType('advanced'); setNoFacePage(1); }}
+                    className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+                      noFaceType === 'advanced'
+                        ? 'bg-sigma-600 text-white'
+                        : 'bg-gray-100 dark:bg-gray-800 text-subtle hover:text-body'
+                    }`}
+                  >
+                    IA Avançada
+                  </button>
+                  <button
+                    onClick={() => { setNoFaceType('classic'); setNoFacePage(1); }}
+                    className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+                      noFaceType === 'classic'
+                        ? 'bg-sigma-600 text-white'
+                        : 'bg-gray-100 dark:bg-gray-800 text-subtle hover:text-body'
+                    }`}
+                  >
+                    IA Clássica
+                  </button>
+                </div>
+              </div>
+
+              {noFaceLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Loader2 className="w-8 h-8 text-sigma-600 animate-spin" />
+                  <p className="text-sm font-semibold text-title">Carregando registros...</p>
+                </div>
+              ) : noFaceData?.records && noFaceData.records.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {noFaceData.records.map((r: any) => (
+                      <div key={r.id} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/20 p-3 flex flex-col justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-700 flex-shrink-0">
+                            {r.photoPath ? (
+                              <img src={`/api/apenados/${r.id}/foto`} alt={r.name} loading="lazy" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center"><ScanFace className="w-5 h-5 text-gray-400" /></div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-title truncate" title={r.name}>{r.name}</p>
+                            <p className="text-[10px] text-subtle truncate">{r.matricula || 'Sem matrícula'}</p>
+                            <p className="text-[10px] text-subtle truncate">{r.unidade || 'Sem unidade'}</p>
+                          </div>
+                        </div>
+                        {onEditApenado && (
+                          <button
+                            onClick={() => onEditApenado(r.id)}
+                            className="w-full py-1.5 rounded-lg border border-red-200 dark:border-red-800 text-red-600 hover:text-red-700 bg-white dark:bg-gray-950 text-[10px] font-bold transition-colors hover:bg-red-50/30 flex items-center justify-center gap-1"
+                          >
+                            <Pencil className="w-3 h-3" /> Editar / Remover Foto
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Controles de Paginação */}
+                  {noFaceData.pagination && noFaceData.pagination.totalPages > 1 && (
+                    <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-800 pt-3 text-xs">
+                      <span className="text-subtle">
+                        Página <strong>{noFaceData.pagination.page}</strong> de <strong>{noFaceData.pagination.totalPages}</strong> ({noFaceData.pagination.total} registros)
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          disabled={noFacePage === 1}
+                          onClick={() => setNoFacePage(p => Math.max(1, p - 1))}
+                          className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                        >
+                          Anterior
+                        </button>
+                        <button
+                          disabled={noFacePage >= noFaceData.pagination.totalPages}
+                          onClick={() => setNoFacePage(p => p + 1)}
+                          className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                        >
+                          Próximo
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                  <CheckCircle className="w-10 h-10 text-green-500" />
+                  <div>
+                    <p className="text-sm font-semibold text-title">Nenhum registro encontrado</p>
+                    <p className="text-xs text-subtle mt-0.5">Todas as fotos analisadas possuem rostos detectáveis!</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
