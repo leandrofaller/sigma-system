@@ -101,35 +101,61 @@ function AdvogadoModal({
   onClose: () => void
   onApenadoClick: (id: string) => void
 }) {
+  const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-start gap-4 flex-1 min-w-0">
               {advogado.photoPath ? (
                 <img
                   src={getPhotoUrl(advogado.photoPath)}
                   alt={advogado.nome}
-                  className="w-14 h-14 rounded-xl object-cover shrink-0 border border-gray-200 dark:border-gray-600 shadow-sm"
+                  onClick={() => setZoomedPhotoUrl(getPhotoUrl(advogado.photoPath!))}
+                  className="w-24 h-32 rounded-xl object-cover shrink-0 border-2 border-gray-200 dark:border-gray-700 shadow-md cursor-zoom-in hover:opacity-90 active:scale-95 transition-all duration-200"
+                  title="Clique para ver em tamanho real"
                 />
               ) : (
-                <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center shrink-0">
-                  <Briefcase className="w-7 h-7 text-blue-600 dark:text-blue-400" />
+                <div className="w-24 h-32 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex flex-col items-center justify-center shrink-0 border-2 border-dashed border-blue-200 dark:border-blue-800">
+                  <Briefcase className="w-8 h-8 text-blue-600 dark:text-blue-400 mb-1" />
+                  <span className="text-[10px] text-blue-500 font-semibold">Sem Foto</span>
                 </div>
               )}
-              <div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">{advogado.nome}</h2>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 mt-0.5">
-                  {advogado.oab && <span>OAB {advogado.oab}</span>}
-                  {advogado.cpf && <span>CPF {advogado.cpf}</span>}
-                  {advogado.telefone && <span>Tel: {advogado.telefone}</span>}
+              <div className="flex-1 min-w-0 pt-1">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{advogado.nome}</h2>
+                <div className="flex flex-col gap-1.5 text-sm text-gray-500 dark:text-gray-400 mt-3">
+                  {advogado.oab && (
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-700 dark:text-gray-300">OAB:</span>
+                      <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-md text-xs font-semibold border border-blue-100 dark:border-blue-900/40">{advogado.oab}</span>
+                    </span>
+                  )}
+                  {advogado.cpf && (
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-700 dark:text-gray-300">CPF:</span>
+                      <span className="font-mono text-xs text-gray-700 dark:text-gray-300">{advogado.cpf}</span>
+                    </span>
+                  )}
+                  {advogado.telefone && (
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-700 dark:text-gray-300">Telefone:</span>
+                      <span className="text-gray-700 dark:text-gray-300">{advogado.telefone}</span>
+                    </span>
+                  )}
+                  {advogado.dataCadastro && (
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-700 dark:text-gray-300">Cadastrado em:</span>
+                      <span className="text-gray-700 dark:text-gray-300">{advogado.dataCadastro}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
             <button 
               onClick={onClose} 
-              className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+              className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 shrink-0"
               title="Fechar"
             >
               ✕
@@ -189,6 +215,35 @@ function AdvogadoModal({
           )}
         </div>
       </div>
+
+      {/* Lightbox para zoom da foto do advogado */}
+      {zoomedPhotoUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md cursor-zoom-out p-4"
+          onClick={() => setZoomedPhotoUrl(null)}
+        >
+          <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
+            <img
+              src={zoomedPhotoUrl}
+              alt={advogado.nome}
+              className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl border border-gray-800"
+            />
+            <div className="bg-black/60 text-white px-4 py-2 rounded-full text-sm font-semibold backdrop-blur-sm">
+              {advogado.nome} {advogado.oab ? `(OAB ${advogado.oab})` : ''}
+            </div>
+            <button
+              className="absolute top-4 right-4 bg-red-600 hover:bg-red-700 text-white p-2 rounded-full transition-colors backdrop-blur-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                setZoomedPhotoUrl(null)
+              }}
+              title="Fechar"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
