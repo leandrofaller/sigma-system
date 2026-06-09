@@ -76,9 +76,19 @@ def main():
     _real_stdout = sys.stdout
     sys.stdout = _io.StringIO()
     try:
+        import onnxruntime as ort
+        providers_env = os.getenv("ARCFACE_PROVIDERS")
+        if providers_env:
+            providers = [p.strip() for p in providers_env.split(",") if p.strip()]
+        else:
+            if ort.get_device() == "GPU" and "CUDAExecutionProvider" in ort.get_available_providers():
+                providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            else:
+                providers = ["CPUExecutionProvider"]
+
         app = FaceAnalysis(
             name="buffalo_l",
-            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+            providers=providers,
         )
         app.prepare(ctx_id=0, det_size=(640, 640))
     finally:
