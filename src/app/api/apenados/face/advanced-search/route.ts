@@ -10,7 +10,7 @@ import { warmAdvancedFaceCache, awaitAdvancedFaceCache, getAdvancedCacheStatus }
 import { pgvectorAdvancedAvailable, searchByVectorAdvanced } from '@/lib/pgvector';
 import { createAuditLog } from '@/lib/audit';
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 interface QualityInfo {
   score: number;
@@ -70,6 +70,7 @@ function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyz
     let currentProc: any = null;
     let isFinished = false;
 
+    const timeoutVal = parseInt(process.env.FACE_ANALYSIS_TIMEOUT || '90000', 10);
     const timeout = setTimeout(() => {
       if (isFinished) return;
       isFinished = true;
@@ -78,8 +79,8 @@ function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyz
           currentProc.kill('SIGKILL');
         } catch {}
       }
-      reject(new Error('Tempo limite de análise facial avançada excedido (Timeout de 30s).'));
-    }, 30000);
+      reject(new Error(`Tempo limite de análise facial avançada excedido (Timeout de ${timeoutVal / 1000}s).`));
+    }, timeoutVal);
 
     function tryNext() {
       if (isFinished) return;
@@ -162,6 +163,7 @@ function runArcFaceAnalyze(imagePath: string): Promise<{ result: ArcFaceResult; 
     let currentProc: any = null;
     let isFinished = false;
 
+    const timeoutVal = parseInt(process.env.FACE_ANALYSIS_TIMEOUT || '90000', 10);
     const timeout = setTimeout(() => {
       if (isFinished) return;
       isFinished = true;
@@ -170,8 +172,8 @@ function runArcFaceAnalyze(imagePath: string): Promise<{ result: ArcFaceResult; 
           currentProc.kill('SIGKILL');
         } catch {}
       }
-      reject(new Error('Tempo limite de análise ArcFace excedido (Timeout de 30s).'));
-    }, 30000);
+      reject(new Error(`Tempo limite de análise ArcFace excedido (Timeout de ${timeoutVal / 1000}s).`));
+    }, timeoutVal);
 
     function tryNext() {
       if (isFinished) return;
