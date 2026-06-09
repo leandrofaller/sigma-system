@@ -3128,7 +3128,7 @@ async function downloadSipeImage(page: Page, photoSrc: string): Promise<Buffer |
   return null;
 }
 
-async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string): Promise<void> {
+export async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string): Promise<void> {
   await page.goto(`${SIPE_URL}/advogados/${sipeId}/detalhaclientes`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('body', { timeout: 10_000 })
   
@@ -3259,7 +3259,7 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
         situacao: situacao
       };
     }).filter(function(ap) {
-      return ap.nome && (ap.sipeIdText || ap.href);
+      return ap.nome && ap.nome.trim().length > 0;
     });
   })()`) as any[];
 
@@ -3341,11 +3341,21 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
       })
     }
 
-    // 3. Fallback: Se não encontramos por sipeId, tenta buscar por Nome exato
+    // 3. Fallback: Se não encontramos por sipeId, tenta buscar por Nome exato e Data de Nascimento
     if (!apenado && ap.nome) {
-      apenado = await prisma.sipeApenadoImportado.findFirst({
-        where: { nome: ap.nome }
-      })
+      if (ap.dataNascimento) {
+        apenado = await prisma.sipeApenadoImportado.findFirst({
+          where: {
+            nome: ap.nome,
+            dataNascimento: ap.dataNascimento
+          }
+        })
+      }
+      if (!apenado) {
+        apenado = await prisma.sipeApenadoImportado.findFirst({
+          where: { nome: ap.nome }
+        })
+      }
     }
 
     // --- Integração com Identificação de Apenados (tabela Apenado local) ---
