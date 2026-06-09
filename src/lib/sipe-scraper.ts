@@ -3083,40 +3083,40 @@ async function downloadSipeImage(page: Page, photoSrc: string): Promise<Buffer |
   } else {
     try {
       const absoluteUrl = new URL(cleanPhotoSrc, page.url()).href;
-      base64Data = await page.evaluate(async (url) => {
+      base64Data = await page.evaluate(`(async function(url) {
         try {
-          const res = await fetch(url);
+          var res = await fetch(url);
           if (!res.ok) return null;
-          const blob = await res.blob();
-          return new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
+          var blob = await res.blob();
+          return new Promise(function(resolve) {
+            var reader = new FileReader();
+            reader.onloadend = function() { resolve(reader.result); };
             reader.readAsDataURL(blob);
           });
-        } catch {
+        } catch(e) {
           return null;
         }
-      }, absoluteUrl);
+      })("${absoluteUrl.replace(/"/g, '\\"')}")`) as string | null;
     } catch {}
 
     // Fallback para imagem original com marca d'água se a limpa falhar
     if (!base64Data && cleanPhotoSrc !== photoSrc) {
       try {
         const absoluteUrlFallback = new URL(photoSrc, page.url()).href;
-        base64Data = await page.evaluate(async (url) => {
+        base64Data = await page.evaluate(`(async function(url) {
           try {
-            const res = await fetch(url);
+            var res = await fetch(url);
             if (!res.ok) return null;
-            const blob = await res.blob();
-            return new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
+            var blob = await res.blob();
+            return new Promise(function(resolve) {
+              var reader = new FileReader();
+              reader.onloadend = function() { resolve(reader.result); };
               reader.readAsDataURL(blob);
             });
-          } catch {
+          } catch(e) {
             return null;
           }
-        }, absoluteUrlFallback);
+        })("${absoluteUrlFallback.replace(/"/g, '\\"')}")`) as string | null;
       } catch {}
     }
   }
@@ -3133,15 +3133,22 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
   await page.waitForSelector('body', { timeout: 10_000 })
   
   // Extração inteligente de dados estruturados do advogado a partir da tabela de perfil
-  const dadosAdv = await page.evaluate(() => {
-    const rows = Array.from(document.querySelectorAll('.profile-user-info-striped .profile-info-row'));
-    const getVal = (name: string) => {
-      const row = rows.find(r => (r.querySelector('.profile-info-name')?.textContent ?? '').toLowerCase().includes(name.toLowerCase()));
-      return row ? (row.querySelector('.profile-info-value')?.textContent ?? '').trim() : '';
+  const dadosAdv = await page.evaluate(`(function() {
+    var rows = Array.from(document.querySelectorAll('.profile-user-info-striped .profile-info-row'));
+    var getVal = function(name) {
+      var row = rows.find(function(r) {
+        var nameEl = r.querySelector('.profile-info-name');
+        return nameEl && nameEl.textContent.toLowerCase().indexOf(name.toLowerCase()) !== -1;
+      });
+      if (row) {
+        var valEl = row.querySelector('.profile-info-value');
+        return valEl ? valEl.textContent.trim() : '';
+      }
+      return '';
     };
 
-    const img = document.querySelector('.profile-picture img') as HTMLImageElement | null;
-    const fotoSrc = img ? img.src : null;
+    var img = document.querySelector('.profile-picture img');
+    var fotoSrc = img ? img.src : null;
 
     return {
       nome: getVal('Nome do Advogado'),
@@ -3150,9 +3157,9 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
       endereco: getVal('Endereço'),
       telefone: getVal('Telefone de Contato'),
       dataCadastro: getVal('Data de Cadastro'),
-      fotoSrc
+      fotoSrc: fotoSrc
     };
-  });
+  })()`) as any;
 
   if (!dadosAdv.nome) return;
 
@@ -3210,47 +3217,51 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
   });
 
   // Extração estruturada de apenados atendidos a partir do DOM (incluindo foto e situação do vínculo)
-  const apenadosAtendidos = await page.evaluate(() => {
-    const tabelas = Array.from(document.querySelectorAll('table#simple-table'))
-    return tabelas.map(tabela => {
-      const ddElements = Array.from(tabela.querySelectorAll('dd'))
-      const dtElements = Array.from(tabela.querySelectorAll('dt'))
+  const apenadosAtendidos = await page.evaluate(`(function() {
+    var tabelas = Array.from(document.querySelectorAll('table#simple-table'));
+    return tabelas.map(function(tabela) {
+      var ddElements = Array.from(tabela.querySelectorAll('dd'));
+      var dtElements = Array.from(tabela.querySelectorAll('dt'));
       
-      const getValByDt = (label: string) => {
-        const index = dtElements.findIndex(dt => (dt.textContent ?? '').toLowerCase().includes(label.toLowerCase()))
-        return index >= 0 && ddElements[index] ? (ddElements[index].textContent ?? '').trim() : ''
-      }
+      var getValByDt = function(label) {
+        var index = dtElements.findIndex(function(dt) {
+          return (dt.textContent || '').toLowerCase().indexOf(label.toLowerCase()) !== -1;
+        });
+        return index >= 0 && ddElements[index] ? (ddElements[index].textContent || '').trim() : '';
+      };
 
-      const getHrefByDt = (label: string) => {
-        const index = dtElements.findIndex(dt => (dt.textContent ?? '').toLowerCase().includes(label.toLowerCase()))
+      var getHrefByDt = function(label) {
+        var index = dtElements.findIndex(function(dt) {
+          return (dt.textContent || '').toLowerCase().indexOf(label.toLowerCase()) !== -1;
+        });
         if (index >= 0 && ddElements[index]) {
-          const a = ddElements[index].querySelector('a')
-          return a ? a.getAttribute('href') : null
+          var a = ddElements[index].querySelector('a');
+          return a ? a.getAttribute('href') : null;
         }
-        return null
-      }
+        return null;
+      };
 
-      // Foto do Apenado
-      const img = tabela.querySelector('td img') as HTMLImageElement | null;
-      const fotoSrc = img ? img.src : null;
+      var img = tabela.querySelector('td img');
+      var fotoSrc = img ? img.src : null;
 
-      // Situação do Vínculo
-      const labelSpan = tabela.querySelector('td .profile-contact-links span.label');
-      const situacao = labelSpan ? (labelSpan.textContent ?? '').trim().toUpperCase() : 'ATIVA';
+      var labelSpan = tabela.querySelector('td .profile-contact-links span.label');
+      var situacao = labelSpan ? (labelSpan.textContent || '').trim().toUpperCase() : 'ATIVA';
 
       return {
         nome: getValByDt('Nome Apenado'),
-        sipeIdText: getValByDt('Cpf'), // O rótulo "Cpf" pode conter na verdade o SIPE ID ou o CPF do apenado
-        href: getHrefByDt('Nome Apenado'), // Tenta extrair o link do nome, onde geralmente está o SIPE ID correto
+        sipeIdText: getValByDt('Cpf'),
+        href: getHrefByDt('Nome Apenado'),
         dataNascimento: getValByDt('Data Nascimento'),
         unidade: getValByDt('Unidade Prisional'),
         cela: getValByDt('Cela'),
         tempoPena: getValByDt('Tempo de Pena'),
-        fotoSrc,
-        situacao
-      }
-    }).filter(ap => ap.nome && (ap.sipeIdText || ap.href))
-  })
+        fotoSrc: fotoSrc,
+        situacao: situacao
+      };
+    }).filter(function(ap) {
+      return ap.nome && (ap.sipeIdText || ap.href);
+    });
+  })()`) as any[];
 
   for (const ap of apenadosAtendidos) {
     let apenadoSipeId: number | null = null

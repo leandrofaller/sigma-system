@@ -30,6 +30,13 @@ interface Advogado {
   vinculos: VinculoApenado[]
 }
 
+const getPhotoUrl = (path: string) => {
+  if (path.startsWith('uploads/')) {
+    return `/api/${path}`;
+  }
+  return `/api/uploads/${path}`;
+};
+
 function AdvogadoCard({ advogado, onClick }: { advogado: Advogado; onClick: () => void }) {
   const faccoesDosClientes = [...new Map(
     advogado.vinculos
@@ -45,7 +52,7 @@ function AdvogadoCard({ advogado, onClick }: { advogado: Advogado; onClick: () =
       <div className="flex items-start gap-3">
         {advogado.photoPath ? (
           <img
-            src={`/api/uploads/${advogado.photoPath}`}
+            src={getPhotoUrl(advogado.photoPath)}
             alt={advogado.nome}
             className="w-10 h-10 rounded-xl object-cover shrink-0 border border-gray-100 dark:border-gray-700/50"
           />
@@ -102,7 +109,7 @@ function AdvogadoModal({
             <div className="flex items-center gap-3">
               {advogado.photoPath ? (
                 <img
-                  src={`/api/uploads/${advogado.photoPath}`}
+                  src={getPhotoUrl(advogado.photoPath)}
                   alt={advogado.nome}
                   className="w-14 h-14 rounded-xl object-cover shrink-0 border border-gray-200 dark:border-gray-600 shadow-sm"
                 />
