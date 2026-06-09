@@ -67,10 +67,26 @@ function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyz
     const candidates = envPython ? [envPython] : ['python3', 'python', 'py'];
     let idx = 0;
     const errors: string[] = [];
+    let currentProc: any = null;
+    let isFinished = false;
+
+    const timeout = setTimeout(() => {
+      if (isFinished) return;
+      isFinished = true;
+      if (currentProc) {
+        try {
+          currentProc.kill('SIGKILL');
+        } catch {}
+      }
+      reject(new Error('Tempo limite de análise facial avançada excedido (Timeout de 30s).'));
+    }, 30000);
 
     function tryNext() {
+      if (isFinished) return;
       if (idx >= candidates.length) {
-        reject(new Error(`Python não encontrado para o pipeline avançado.`));
+        clearTimeout(timeout);
+        isFinished = true;
+        reject(new Error(`Python não encontrado para o pipeline avançado. Erros: ${errors.join(', ')}`));
         return;
       }
       const cmd = candidates[idx++];
@@ -84,6 +100,7 @@ function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyz
         TQDM_DISABLE: '1',
       };
       const proc = spawn(cmd, ['-u', scriptPath, imagePath], { shell: true, env });
+      currentProc = proc;
       let stdout = '';
       let stderr = '';
 
@@ -91,14 +108,25 @@ function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyz
       proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
 
       proc.on('close', (code) => {
+        if (isFinished) return;
         const trimmed = stdout.trim();
         const duration = Date.now() - startTime;
         if (trimmed) {
           for (const line of trimmed.split('\n').filter(Boolean).reverse()) {
             try {
               const parsed = JSON.parse(line) as AdvancedAnalyzeResult;
-              if (parsed.error) { reject(new Error(parsed.error)); return; }
-              if (code === 0) { resolve({ result: parsed, duration }); return; }
+              if (parsed.error) {
+                clearTimeout(timeout);
+                isFinished = true;
+                reject(new Error(parsed.error));
+                return;
+              }
+              if (code === 0) {
+                clearTimeout(timeout);
+                isFinished = true;
+                resolve({ result: parsed, duration });
+                return;
+              }
               break;
             } catch {}
           }
@@ -107,11 +135,16 @@ function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyz
           errors.push(`[${cmd}] ${stderr.trim()}`);
           tryNext();
         } else {
+          clearTimeout(timeout);
+          isFinished = true;
           reject(new Error('Resposta inválida do script avançado.'));
         }
       });
 
-      proc.on('error', () => tryNext());
+      proc.on('error', () => {
+        if (isFinished) return;
+        tryNext();
+      });
     }
 
     tryNext();
@@ -125,10 +158,27 @@ function runArcFaceAnalyze(imagePath: string): Promise<{ result: ArcFaceResult; 
     const envPython = process.env.ARCFACE_PYTHON;
     const candidates = envPython ? [envPython] : ['python3', 'python', 'py'];
     let idx = 0;
+    const errors: string[] = [];
+    let currentProc: any = null;
+    let isFinished = false;
+
+    const timeout = setTimeout(() => {
+      if (isFinished) return;
+      isFinished = true;
+      if (currentProc) {
+        try {
+          currentProc.kill('SIGKILL');
+        } catch {}
+      }
+      reject(new Error('Tempo limite de análise ArcFace excedido (Timeout de 30s).'));
+    }, 30000);
 
     function tryNext() {
+      if (isFinished) return;
       if (idx >= candidates.length) {
-        reject(new Error(`Python não encontrado para o ArcFace.`));
+        clearTimeout(timeout);
+        isFinished = true;
+        reject(new Error(`Python não encontrado para o ArcFace. Erros: ${errors.join(', ')}`));
         return;
       }
       const cmd = candidates[idx++];
@@ -142,6 +192,7 @@ function runArcFaceAnalyze(imagePath: string): Promise<{ result: ArcFaceResult; 
         TQDM_DISABLE: '1',
       };
       const proc = spawn(cmd, ['-u', scriptPath, imagePath], { shell: true, env });
+      currentProc = proc;
       let stdout = '';
       let stderr = '';
 
@@ -149,22 +200,37 @@ function runArcFaceAnalyze(imagePath: string): Promise<{ result: ArcFaceResult; 
       proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
 
       proc.on('close', (code) => {
+        if (isFinished) return;
         const trimmed = stdout.trim();
         const duration = Date.now() - startTime;
         if (trimmed) {
           for (const line of trimmed.split('\n').filter(Boolean).reverse()) {
             try {
               const parsed = JSON.parse(line) as ArcFaceResult;
-              if (parsed.error) { reject(new Error(parsed.error)); return; }
-              if (code === 0) { resolve({ result: parsed, duration }); return; }
+              if (parsed.error) {
+                clearTimeout(timeout);
+                isFinished = true;
+                reject(new Error(parsed.error));
+                return;
+              }
+              if (code === 0) {
+                clearTimeout(timeout);
+                isFinished = true;
+                resolve({ result: parsed, duration });
+                return;
+              }
               break;
             } catch {}
           }
         }
+        errors.push(`[${cmd}] ${stderr.trim()}`);
         tryNext();
       });
 
-      proc.on('error', () => tryNext());
+      proc.on('error', () => {
+        if (isFinished) return;
+        tryNext();
+      });
     }
 
     tryNext();
@@ -197,12 +263,11 @@ export async function POST(req: NextRequest) {
 
     const minSim01 = Math.max(0.1, Math.min(0.99, minSimilarity / 100));
 
-    // Executa análise avançada e checa disponibilidade de pgvector avançado
-    const [pvecAvail, advAnalysis, arcAnalysis] = await Promise.all([
-      pgvectorAdvancedAvailable(),
-      runAdvancedAnalyze(tmpPath),
-      compareArcFace ? runArcFaceAnalyze(tmpPath).catch(() => null) : Promise.resolve(null)
-    ]);
+    const pvecAvail = await pgvectorAdvancedAvailable();
+    
+    // Executa as análises faciais sequencialmente para evitar picos de CPU/RAM na VPS (evita erros OOM / Gateway Timeout)
+    const advAnalysis = await runAdvancedAnalyze(tmpPath);
+    const arcAnalysis = compareArcFace ? await runArcFaceAnalyze(tmpPath).catch(() => null) : null;
 
     const { result: analysis, duration: advDuration } = advAnalysis;
 
