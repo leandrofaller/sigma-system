@@ -3209,15 +3209,6 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
     },
   });
 
-  // Scraping adicional da OAB Nacional via CNA
-  if (oab) {
-    try {
-      await scrapeCnaOabDetails(page, adv.id, oab, jobId);
-    } catch (cnaErr) {
-      console.error(`[CNA OAB] Falha ao obter dados CNA para o advogado ${nome} (OAB ${oab}):`, cnaErr);
-    }
-  }
-
   // Extração estruturada de apenados atendidos a partir do DOM (incluindo foto e situação do vínculo)
   const apenadosAtendidos = await page.evaluate(() => {
     const tabelas = Array.from(document.querySelectorAll('table#simple-table'))

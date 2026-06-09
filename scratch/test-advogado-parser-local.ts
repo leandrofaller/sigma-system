@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 async function main() {
-  console.log('Iniciando teste do parser DOM de advogados...');
+  console.log('Iniciando teste do parser DOM de advogados (corrigido com IIFE)...');
 
   const htmlPath = join(__dirname, 'advogado-detalhe.html');
   const htmlContent = readFileSync(htmlPath, 'utf8');
@@ -16,15 +16,15 @@ async function main() {
 
   console.log('HTML carregado. Rodando o parser do advogado...');
 
-  // Executa o mesmo evaluate da nossa implementação
-  const dadosAdv = await page.evaluate(() => {
+  // Executa o evaluate usando IIFE (Immediately Invoked Function Expression)
+  const dadosAdv = await page.evaluate(`(() => {
     const rows = Array.from(document.querySelectorAll('.profile-user-info-striped .profile-info-row'));
-    const getVal = (name: string) => {
+    const getVal = (name) => {
       const row = rows.find(r => (r.querySelector('.profile-info-name')?.textContent ?? '').toLowerCase().includes(name.toLowerCase()));
       return row ? (row.querySelector('.profile-info-value')?.textContent ?? '').trim() : '';
     };
 
-    const img = document.querySelector('.profile-picture img') as HTMLImageElement | null;
+    const img = document.querySelector('.profile-picture img');
     const fotoSrc = img ? img.src : null;
 
     return {
@@ -36,7 +36,7 @@ async function main() {
       dataCadastro: getVal('Data de Cadastro'),
       fotoSrc
     };
-  });
+  })()`) as any;
 
   console.log('\n--- Dados do Advogado Extraídos ---');
   console.log(JSON.stringify(dadosAdv, null, 2));
@@ -62,28 +62,28 @@ async function main() {
 
   console.log('\nRodando o parser dos apenados atendidos...');
 
-  const apenadosAtendidos = await page.evaluate(() => {
-    const tabelas = Array.from(document.querySelectorAll('table#simple-table'))
+  const apenadosAtendidos = await page.evaluate(`(() => {
+    const tabelas = Array.from(document.querySelectorAll('table#simple-table'));
     return tabelas.map(tabela => {
-      const ddElements = Array.from(tabela.querySelectorAll('dd'))
-      const dtElements = Array.from(tabela.querySelectorAll('dt'))
+      const ddElements = Array.from(tabela.querySelectorAll('dd'));
+      const dtElements = Array.from(tabela.querySelectorAll('dt'));
       
-      const getValByDt = (label: string) => {
-        const index = dtElements.findIndex(dt => (dt.textContent ?? '').toLowerCase().includes(label.toLowerCase()))
-        return index >= 0 && ddElements[index] ? (ddElements[index].textContent ?? '').trim() : ''
-      }
+      const getValByDt = (label) => {
+        const index = dtElements.findIndex(dt => (dt.textContent ?? '').toLowerCase().includes(label.toLowerCase()));
+        return index >= 0 && ddElements[index] ? (ddElements[index].textContent ?? '').trim() : '';
+      };
 
-      const getHrefByDt = (label: string) => {
-        const index = dtElements.findIndex(dt => (dt.textContent ?? '').toLowerCase().includes(label.toLowerCase()))
+      const getHrefByDt = (label) => {
+        const index = dtElements.findIndex(dt => (dt.textContent ?? '').toLowerCase().includes(label.toLowerCase()));
         if (index >= 0 && ddElements[index]) {
-          const a = ddElements[index].querySelector('a')
-          return a ? a.getAttribute('href') : null
+          const a = ddElements[index].querySelector('a');
+          return a ? a.getAttribute('href') : null;
         }
-        return null
-      }
+        return null;
+      };
 
       // Foto do Apenado
-      const img = tabela.querySelector('td img') as HTMLImageElement | null;
+      const img = tabela.querySelector('td img');
       const fotoSrc = img ? img.src : null;
 
       // Situação do Vínculo
@@ -100,12 +100,12 @@ async function main() {
         tempoPena: getValByDt('Tempo de Pena'),
         fotoSrc,
         situacao
-      }
-    }).filter(ap => ap.nome && (ap.sipeIdText || ap.href))
-  });
+      };
+    }).filter(ap => ap.nome && (ap.sipeIdText || ap.href));
+  })()`) as any[];
 
   console.log(`\n--- ${apenadosAtendidos.length} Apenados Atendidos Extraídos ---`);
-  console.log(JSON.stringify(apenadosAtendidos.slice(0, 3), null, 2)); // Mostra os 3 primeiros para não encher a tela
+  console.log(JSON.stringify(apenadosAtendidos.slice(0, 3), null, 2));
 
   // Validações básicas de apenados
   if (apenadosAtendidos.length > 0) {
