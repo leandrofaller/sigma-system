@@ -70,6 +70,9 @@ function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyz
     let currentProc: any = null;
     let isFinished = false;
 
+    let lastStdout = '';
+    let lastStderr = '';
+
     const timeoutVal = parseInt(process.env.FACE_ANALYSIS_TIMEOUT || '90000', 10);
     const timeout = setTimeout(() => {
       if (isFinished) return;
@@ -79,6 +82,7 @@ function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyz
           currentProc.kill('SIGKILL');
         } catch {}
       }
+      console.error(`[AdvancedAnalyze Timeout] Ultimo stdout: ${lastStdout}\nUltimo stderr: ${lastStderr}`);
       reject(new Error(`Tempo limite de análise facial avançada excedido (Timeout de ${timeoutVal / 1000}s).`));
     }, timeoutVal);
 
@@ -105,8 +109,8 @@ function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyz
       let stdout = '';
       let stderr = '';
 
-      proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
-      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+      proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); lastStdout = stdout; });
+      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); lastStderr = stderr; });
 
       proc.on('close', (code) => {
         if (isFinished) return;
@@ -163,6 +167,9 @@ function runArcFaceAnalyze(imagePath: string): Promise<{ result: ArcFaceResult; 
     let currentProc: any = null;
     let isFinished = false;
 
+    let lastStdout = '';
+    let lastStderr = '';
+
     const timeoutVal = parseInt(process.env.FACE_ANALYSIS_TIMEOUT || '90000', 10);
     const timeout = setTimeout(() => {
       if (isFinished) return;
@@ -172,6 +179,7 @@ function runArcFaceAnalyze(imagePath: string): Promise<{ result: ArcFaceResult; 
           currentProc.kill('SIGKILL');
         } catch {}
       }
+      console.error(`[ArcFaceAnalyze Timeout] Ultimo stdout: ${lastStdout}\nUltimo stderr: ${lastStderr}`);
       reject(new Error(`Tempo limite de análise ArcFace excedido (Timeout de ${timeoutVal / 1000}s).`));
     }, timeoutVal);
 
@@ -198,8 +206,8 @@ function runArcFaceAnalyze(imagePath: string): Promise<{ result: ArcFaceResult; 
       let stdout = '';
       let stderr = '';
 
-      proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
-      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+      proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); lastStdout = stdout; });
+      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); lastStderr = stderr; });
 
       proc.on('close', (code) => {
         if (isFinished) return;
