@@ -3074,35 +3074,151 @@ async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]>
   return linksIds
 }
 
+async function downloadSipeImage(page: Page, photoSrc: string): Promise<Buffer | null> {
+  const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '');
+  let base64Data: string | null = null;
+  
+  if (cleanPhotoSrc.startsWith('data:image/')) {
+    base64Data = cleanPhotoSrc;
+  } else {
+    try {
+      const absoluteUrl = new URL(cleanPhotoSrc, page.url()).href;
+      base64Data = await page.evaluate(async (url) => {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return null;
+          const blob = await res.blob();
+          return new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        } catch {
+          return null;
+        }
+      }, absoluteUrl);
+    } catch {}
+
+    // Fallback para imagem original com marca d'água se a limpa falhar
+    if (!base64Data && cleanPhotoSrc !== photoSrc) {
+      try {
+        const absoluteUrlFallback = new URL(photoSrc, page.url()).href;
+        base64Data = await page.evaluate(async (url) => {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) return null;
+            const blob = await res.blob();
+            return new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+          } catch {
+            return null;
+          }
+        }, absoluteUrlFallback);
+      } catch {}
+    }
+  }
+
+  if (base64Data && base64Data.includes(',')) {
+    const base64Content = base64Data.split(',')[1];
+    return Buffer.from(base64Content, 'base64');
+  }
+  return null;
+}
+
 async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string): Promise<void> {
   await page.goto(`${SIPE_URL}/advogados/${sipeId}/detalhaclientes`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('body', { timeout: 10_000 })
-  const text = await page.innerText('body')
+  
+  // Extração inteligente de dados estruturados do advogado a partir da tabela de perfil
+  const dadosAdv = await page.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll('.profile-user-info-striped .profile-info-row'));
+    const getVal = (name: string) => {
+      const row = rows.find(r => (r.querySelector('.profile-info-name')?.textContent ?? '').toLowerCase().includes(name.toLowerCase()));
+      return row ? (row.querySelector('.profile-info-value')?.textContent ?? '').trim() : '';
+    };
 
-  const nome = text.match(/Nome do Advogado\s+([^\n]+)/)?.[1]?.trim()
-  const oab = text.match(/OAB\s+([^\n]+)/)?.[1]?.trim()
-  const cpf = text.match(/CPF\s+([0-9./-]+)/)?.[1]?.trim()
-  const telefone = text.match(/Telefone de Contato\s+([^\n]+)/)?.[1]?.trim()
-  const dataCadastro = text.match(/Data de Cadastro\s+([^\n]+)/)?.[1]?.trim()
+    const img = document.querySelector('.profile-picture img') as HTMLImageElement | null;
+    const fotoSrc = img ? img.src : null;
 
-  if (!nome) return
+    return {
+      nome: getVal('Nome do Advogado'),
+      oab: getVal('OAB'),
+      cpf: getVal('CPF'),
+      endereco: getVal('Endereço'),
+      telefone: getVal('Telefone de Contato'),
+      dataCadastro: getVal('Data de Cadastro'),
+      fotoSrc
+    };
+  });
+
+  if (!dadosAdv.nome) return;
+
+  const { nome, oab, cpf, endereco, telefone, dataCadastro, fotoSrc } = dadosAdv;
+
+  // Processamento e download da foto do advogado (se houver)
+  let localPhotoPath: string | null = null;
+  if (fotoSrc && !fotoSrc.includes('semfoto') && !fotoSrc.includes('sem_foto') && !fotoSrc.includes('default')) {
+    try {
+      const imageBuffer = await downloadSipeImage(page, fotoSrc);
+      if (imageBuffer) {
+        const webpBuffer = await sharp(imageBuffer)
+          .resize(300, 400, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 85 })
+          .toBuffer();
+
+        const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
+        const advDir = join(baseDir, 'advogados');
+        const { mkdir, writeFile } = await import('fs/promises');
+        await mkdir(advDir, { recursive: true });
+
+        const filename = `advogado-${sipeId}.webp`;
+        const destPath = join(advDir, filename);
+        await writeFile(destPath, webpBuffer);
+
+        localPhotoPath = `uploads/advogados/${filename}`;
+        if (jobId) log(jobId, `[SIPE ADVOGADO] Foto do advogado #${sipeId} salva: ${localPhotoPath}`);
+      }
+    } catch (photoErr) {
+      console.error(`[SIPE ADVOGADO] Erro ao baixar foto do advogado SIPE ID ${sipeId}:`, photoErr);
+    }
+  }
 
   const adv = await prisma.sipeAdvogado.upsert({
     where: { sipeId },
-    create: { sipeId, nome, oab, cpf, telefone, dataCadastro },
-    update: { nome, oab, cpf, telefone, dataCadastro },
-  })
+    create: { 
+      sipeId, 
+      nome, 
+      oab: oab || null, 
+      cpf: cpf || null, 
+      telefone: telefone || null, 
+      dataCadastro: dataCadastro || null,
+      endereco: endereco || null,
+      photoPath: localPhotoPath
+    },
+    update: { 
+      nome, 
+      oab: oab || null, 
+      cpf: cpf || null, 
+      telefone: telefone || null, 
+      dataCadastro: dataCadastro || null,
+      endereco: endereco || null,
+      ...(localPhotoPath ? { photoPath: localPhotoPath } : {})
+    },
+  });
 
   // Scraping adicional da OAB Nacional via CNA
   if (oab) {
     try {
-      await scrapeCnaOabDetails(page, adv.id, oab, jobId)
+      await scrapeCnaOabDetails(page, adv.id, oab, jobId);
     } catch (cnaErr) {
-      console.error(`[CNA OAB] Falha ao obter dados CNA para o advogado ${nome} (OAB ${oab}):`, cnaErr)
+      console.error(`[CNA OAB] Falha ao obter dados CNA para o advogado ${nome} (OAB ${oab}):`, cnaErr);
     }
   }
 
-  // Extração estruturada de apenados atendidos a partir do DOM (resolve o rótulo "Cpf" que na verdade é o SIPE ID ou CPF)
+  // Extração estruturada de apenados atendidos a partir do DOM (incluindo foto e situação do vínculo)
   const apenadosAtendidos = await page.evaluate(() => {
     const tabelas = Array.from(document.querySelectorAll('table#simple-table'))
     return tabelas.map(tabela => {
@@ -3123,6 +3239,14 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
         return null
       }
 
+      // Foto do Apenado
+      const img = tabela.querySelector('td img') as HTMLImageElement | null;
+      const fotoSrc = img ? img.src : null;
+
+      // Situação do Vínculo
+      const labelSpan = tabela.querySelector('td .profile-contact-links span.label');
+      const situacao = labelSpan ? (labelSpan.textContent ?? '').trim().toUpperCase() : 'ATIVA';
+
       return {
         nome: getValByDt('Nome Apenado'),
         sipeIdText: getValByDt('Cpf'), // O rótulo "Cpf" pode conter na verdade o SIPE ID ou o CPF do apenado
@@ -3130,7 +3254,9 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
         dataNascimento: getValByDt('Data Nascimento'),
         unidade: getValByDt('Unidade Prisional'),
         cela: getValByDt('Cela'),
-        tempoPena: getValByDt('Tempo de Pena')
+        tempoPena: getValByDt('Tempo de Pena'),
+        fotoSrc,
+        situacao
       }
     }).filter(ap => ap.nome && (ap.sipeIdText || ap.href))
   })
@@ -3155,6 +3281,53 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
       const parsed = parseInt(apenasDigitos)
       if (!isNaN(parsed) && parsed > 0 && parsed <= 2147483647) {
         apenadoSipeId = parsed
+      }
+    }
+
+    // Processamento e download da foto do apenado (se houver)
+    let apenadoPhotoPath: string | null = null;
+    let fotoApenadoAtualizada = false;
+
+    if (apenadoSipeId && apenadoSipeId > 0 && ap.fotoSrc && !ap.fotoSrc.includes('semfoto') && !ap.fotoSrc.includes('sem_foto') && !ap.fotoSrc.includes('default')) {
+      try {
+        const imageBuffer = await downloadSipeImage(page, ap.fotoSrc);
+        if (imageBuffer) {
+          const webpBuffer = await sharp(imageBuffer)
+            .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 90 })
+            .toBuffer();
+
+          const dir = getApenadosDir();
+          const { mkdir, writeFile, readFile } = await import('fs/promises');
+          await mkdir(dir, { recursive: true });
+
+          const filename = `sipe-${apenadoSipeId}.webp`;
+          const localPath = join(dir, filename);
+
+          let shouldWrite = true;
+          if (existsSync(localPath)) {
+            try {
+              const existingBuffer = await readFile(localPath);
+              const currentHash = createHash('sha256').update(webpBuffer).digest('hex');
+              const existingHash = createHash('sha256').update(existingBuffer).digest('hex');
+              if (currentHash === existingHash) {
+                shouldWrite = false;
+              }
+            } catch {}
+          }
+
+          if (shouldWrite) {
+            await writeFile(localPath, webpBuffer);
+            fotoApenadoAtualizada = true;
+          }
+
+          apenadoPhotoPath = `uploads/apenados/${filename}`;
+          if (jobId && shouldWrite) {
+            log(jobId, `[SIPE ADVOGADO] Foto do apenado SIPE ID #${apenadoSipeId} salva/atualizada: ${apenadoPhotoPath}`);
+          }
+        }
+      } catch (imgErr) {
+        console.error(`[SIPE ADVOGADO] Erro ao baixar foto do apenado SIPE ID ${apenadoSipeId}:`, imgErr);
       }
     }
 
@@ -3184,19 +3357,35 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
         data: {
           name: nomeApenadoUpper,
           unidade: ap.unidade || null,
-          photoPath: null
+          photoPath: apenadoPhotoPath || null
         }
       });
     } else {
+      const updateDataLocal: any = {};
       if (!localApenado.unidade && ap.unidade) {
+        updateDataLocal.unidade = ap.unidade;
+      }
+      if (apenadoPhotoPath && (fotoApenadoAtualizada || !localApenado.photoPath)) {
+        updateDataLocal.photoPath = apenadoPhotoPath;
+        
+        // Reseta hashes para forçar re-indexação facial no job em background apenas se a foto mudou
+        if (fotoApenadoAtualizada) {
+          updateDataLocal.photoHash = null;
+          updateDataLocal.photoQuality = null;
+          updateDataLocal.photoHashSha = null;
+          updateDataLocal.faceDescriptor = null;
+          updateDataLocal.detScore = null;
+        }
+      }
+      if (Object.keys(updateDataLocal).length > 0) {
         localApenado = await prisma.apenado.update({
           where: { id: localApenado.id },
-          data: { unidade: ap.unidade }
+          data: updateDataLocal
         });
       }
     }
 
-    // 4. Se não encontramos o apenado, criamos um registro stub parcial
+    // 4. Se não encontramos o apenado importado, criamos um registro stub parcial
     if (!apenado) {
       // Se não temos um sipeId válido para criar o registro (ex: CPF maior que 2147483647),
       // geramos um ID fictício negativo e único para manter integridade no banco
@@ -3220,13 +3409,13 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
           cela: ap.cela || null,
           tempoPena: ap.tempoPena || null,
           cpf: cpfLimpo && cpfLimpo.length === 11 ? cpfLimpo : null,
-          photoPath: localApenado.photoPath, // Copia a foto do apenado local se existir
+          photoPath: apenadoPhotoPath || localApenado.photoPath || null, // Copia a foto
           apenadoLocalId: localApenado.id, // Vincula à identificação local
           ultimaSyncAt: new Date()
         }
       })
     } else {
-      // Se ele já existe, atualiza informações básicas de cela e unidade se estiverem nulas/vazias
+      // Se ele já existe, atualiza informações básicas
       const updateData: any = {}
       if (!apenado.unidade && ap.unidade) updateData.unidade = ap.unidade
       if (!apenado.cela && ap.cela) updateData.cela = ap.cela
@@ -3236,8 +3425,11 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
       if (!apenado.apenadoLocalId) {
         updateData.apenadoLocalId = localApenado.id
       }
-      if (!apenado.photoPath && localApenado.photoPath) {
-        updateData.photoPath = localApenado.photoPath
+      
+      if (apenadoPhotoPath && (fotoApenadoAtualizada || !apenado.photoPath)) {
+        updateData.photoPath = apenadoPhotoPath;
+      } else if (!apenado.photoPath && localApenado.photoPath) {
+        updateData.photoPath = localApenado.photoPath;
       }
 
       const cpfLimpo = ap.sipeIdText ? ap.sipeIdText.replace(/\D/g, '') : ''
@@ -3253,7 +3445,9 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
       }
     }
 
-    // Cria ou ativa o vínculo de atendimento com o advogado
+    // Cria ou atualiza o vínculo de atendimento com o advogado (definindo ativo conforme a situação no SIPE)
+    const ehAtivo = ap.situacao === 'ATIVA';
+
     await prisma.sipeVinculoAdvogado.upsert({
       where: {
         apenadoId_advogadoId: {
@@ -3264,10 +3458,10 @@ async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string)
       create: {
         apenadoId: apenado.id,
         advogadoId: adv.id,
-        ativo: true
+        ativo: ehAtivo
       },
       update: {
-        ativo: true
+        ativo: ehAtivo
       }
     })
   }
