@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Briefcase, Users, Phone, Shield } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Briefcase, Users, Phone, Shield, Camera } from 'lucide-react'
 import { toast } from 'sonner'
 import { ApenadoModal } from './ApenadosImportados'
 
@@ -96,12 +96,45 @@ function AdvogadoModal({
   advogado,
   onClose,
   onApenadoClick,
+  onPhotoUpdate,
 }: {
   advogado: Advogado
   onClose: () => void
   onApenadoClick: (id: string) => void
+  onPhotoUpdate?: (photoPath: string) => void
 }) {
   const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const res = await fetch(`/api/sipe/advogados/${advogado.id}/foto`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+      if (res.ok) {
+        toast.success('Foto atualizada com sucesso!')
+        if (onPhotoUpdate) {
+          onPhotoUpdate(data.photoPath)
+        }
+      } else {
+        toast.error(data.error || 'Erro ao atualizar foto')
+      }
+    } catch {
+      toast.error('Erro de conexão ao enviar imagem')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -109,20 +142,35 @@ function AdvogadoModal({
         <div className="p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-4 flex-1 min-w-0">
-              {advogado.photoPath ? (
-                <img
-                  src={getPhotoUrl(advogado.photoPath)}
-                  alt={advogado.nome}
-                  onClick={() => setZoomedPhotoUrl(getPhotoUrl(advogado.photoPath!))}
-                  className="w-24 h-32 rounded-xl object-cover shrink-0 border-2 border-gray-200 dark:border-gray-700 shadow-md cursor-zoom-in hover:opacity-90 active:scale-95 transition-all duration-200"
-                  title="Clique para ver em tamanho real"
-                />
-              ) : (
-                <div className="w-24 h-32 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex flex-col items-center justify-center shrink-0 border-2 border-dashed border-blue-200 dark:border-blue-800">
-                  <Briefcase className="w-8 h-8 text-blue-600 dark:text-blue-400 mb-1" />
-                  <span className="text-[10px] text-blue-500 font-semibold">Sem Foto</span>
-                </div>
-              )}
+              <div className="flex flex-col items-center gap-2 shrink-0">
+                {advogado.photoPath ? (
+                  <img
+                    src={getPhotoUrl(advogado.photoPath)}
+                    alt={advogado.nome}
+                    onClick={() => setZoomedPhotoUrl(getPhotoUrl(advogado.photoPath!))}
+                    className="w-24 h-32 rounded-xl object-cover border-2 border-gray-200 dark:border-gray-700 shadow-md cursor-zoom-in hover:opacity-90 active:scale-95 transition-all duration-200"
+                    title="Clique para ver em tamanho real"
+                  />
+                ) : (
+                  <div className="w-24 h-32 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex flex-col items-center justify-center border-2 border-dashed border-blue-200 dark:border-blue-800">
+                    <Briefcase className="w-8 h-8 text-blue-600 dark:text-blue-400 mb-1" />
+                    <span className="text-[10px] text-blue-500 font-semibold">Sem Foto</span>
+                  </div>
+                )}
+                
+                <label className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-100 dark:border-blue-900/30 cursor-pointer transition-colors mt-1">
+                  <Camera className="w-3 h-3" />
+                  {advogado.photoPath ? 'Alterar Foto' : 'Anexar Foto'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    disabled={uploading}
+                  />
+                </label>
+                {uploading && <span className="text-[9px] text-gray-500 animate-pulse">Enviando...</span>}
+              </div>
               <div className="flex-1 min-w-0 pt-1">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{advogado.nome}</h2>
                 <div className="flex flex-col gap-1.5 text-sm text-gray-500 dark:text-gray-400 mt-3">
@@ -258,6 +306,13 @@ export function AdvogadosImportados() {
   const [selected, setSelected] = useState<Advogado | null>(null)
   const [selectedApenado, setSelectedApenado] = useState<any | null>(null)
   const [loadingApenado, setLoadingApenado] = useState(false)
+
+  const handlePhotoUpdate = (advogadoId: string, newPhotoPath: string) => {
+    setAdvogados(prev => prev.map(a => a.id === advogadoId ? { ...a, photoPath: newPhotoPath } : a))
+    if (selected && selected.id === advogadoId) {
+      setSelected(prev => prev ? { ...prev, photoPath: newPhotoPath } : null)
+    }
+  }
 
   const handleApenadoClick = async (apenadoId: string) => {
     setLoadingApenado(true)
@@ -421,6 +476,7 @@ export function AdvogadosImportados() {
           advogado={selected}
           onClose={() => setSelected(null)}
           onApenadoClick={handleApenadoClick}
+          onPhotoUpdate={(newPath) => handlePhotoUpdate(selected.id, newPath)}
         />
       )}
 

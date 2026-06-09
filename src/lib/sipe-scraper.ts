@@ -3165,9 +3165,16 @@ export async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: 
 
   const { nome, oab, cpf, endereco, telefone, dataCadastro, fotoSrc } = dadosAdv;
 
-  // Processamento e download da foto do advogado (se houver)
+  // Verifica se o advogado já tem foto manual no banco local para evitar sobrescrever
+  const advogadoExistente = await prisma.sipeAdvogado.findUnique({
+    where: { sipeId },
+    select: { photoPath: true }
+  });
+  const temFotoManual = advogadoExistente?.photoPath?.includes('-manual.webp');
+
+  // Processamento e download da foto do advogado (se houver e não for manual)
   let localPhotoPath: string | null = null;
-  if (fotoSrc && !fotoSrc.includes('semfoto') && !fotoSrc.includes('sem_foto') && !fotoSrc.includes('default')) {
+  if (!temFotoManual && fotoSrc && !fotoSrc.includes('semfoto') && !fotoSrc.includes('sem_foto') && !fotoSrc.includes('default')) {
     try {
       const imageBuffer = await downloadSipeImage(page, fotoSrc);
       if (imageBuffer) {
