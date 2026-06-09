@@ -74,7 +74,7 @@ RUN mkdir -p /opt/arcface-models && chown 1001:1001 /opt/arcface-models
 
 # Pre-baixa modelo buffalo_l (~326 MB) no build para evitar download na primeira requisicao
 COPY scripts/download_model.py /tmp/download_model.py
-RUN HOME=/tmp MPLCONFIGDIR=/tmp/.matplotlib MPLBACKEND=Agg \
+RUN HOME=/tmp MPLCONFIGDIR=/tmp/.matplotlib MPLBACKEND=Agg ARCFACE_PROVIDERS=CPUExecutionProvider \
     gosu nextjs /opt/arcface-venv/bin/python3 -u /tmp/download_model.py || \
     echo "AVISO: modelo sera baixado na primeira requisicao"
 RUN rm -f /tmp/download_model.py
