@@ -13,6 +13,7 @@ interface ApenadoResumido {
   cpf: string | null
   regime: string | null
   unidade: string | null
+  cela: string | null
   faccao: Faccao | null
   alcunhas: Alcunha[]
 }
@@ -741,6 +742,7 @@ export function AdvogadosImportados() {
           )}
         </div>
       </div>
+    </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
