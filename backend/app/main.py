@@ -1,5 +1,6 @@
 import os
 import logging
+import base64
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.responses import JSONResponse
@@ -135,3 +136,85 @@ def ficha_completa(
     client = get_client(cookie)
     details = client.ficha_completa(termo)
     return details.dict()
+
+@app.get("/sipe/proxy")
+def sipe_proxy(
+    path: str = Query(..., description="Caminho relativo da rota do SIPE a ser requisitado"),
+    cookie: Optional[str] = Header(None, alias="Cookie")
+):
+    """
+    Proxy de requisição GET ao SIPE real para contornar o WAF (F5 BIG-IP).
+    Retorna JSON com o HTML ou a imagem convertida em base64.
+    """
+    client = get_client(cookie)
+    try:
+        # Executa a requisição síncrona com curl_cffi
+        response = client._request("GET", path)
+        content_type = response.headers.get("content-type", "")
+        
+        # Se for imagem ou binário
+        if "image" in content_type or "octet-stream" in content_type or path.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")):
+            encoded = base64.b64encode(response.content).decode("utf-8")
+            return {
+                "content_type": content_type,
+                "is_binary": True,
+                "data": f"data:{content_type};base64,{encoded}"
+            }
+        else:
+            # Retorna o HTML bruto
+            return {
+                "content_type": content_type,
+                "is_binary": False,
+                "html": response.text
+            }
+            
+    except SIPEAuthError as e:
+        logger.error(f"Erro de autenticação no proxy para o path {path}: {str(e)}")
+        raise HTTPException(status_code=401, detail=str(e))
+    except SIPENotFoundError as e:
+        logger.info(f"Registro não encontrado no proxy para o path {path}: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erro no proxy para o path {path}: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Erro de comunicação com o SIPE: {str(e)}")
+
+@app.get("/sipe/diagnose")
+
+def diagnose():
+    """
+    Rota de diagnóstico para validar se os cookies foram lidos e injetados
+    com sucesso no cliente HTTP do SDK.
+    """
+    client = get_client()
+    cookie_header = client.session.headers.get("Cookie", "")
+
+    
+    cookies = {}
+    if cookie_header:
+        pairs = cookie_header.split(";")
+        for pair in pairs:
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                cookies[k.strip()] = v.strip()
+                
+    laravel = cookies.get("laravel_session_sipe")
+    xsrf = cookies.get("XSRF-TOKEN")
+    ts0104 = cookies.get("TS01045542")
+    ts017b = cookies.get("TS017bbc36")
+    ts019f = cookies.get("TS019f2d14")
+    
+    return {
+        "laravel_session_exists": laravel is not None and len(laravel) > 0,
+        "laravel_session_length": len(laravel) if laravel else 0,
+        "laravel_session_preview": f"{laravel[:6]}...{laravel[-6:]}" if laravel and len(laravel) > 12 else None,
+        "xsrf_token_exists": xsrf is not None and len(xsrf) > 0,
+        "xsrf_token_length": len(xsrf) if xsrf else 0,
+        "xsrf_token_preview": f"{xsrf[:6]}...{xsrf[-6:]}" if xsrf and len(xsrf) > 12 else None,
+        "ts01045542_exists": ts0104 is not None and len(ts0104) > 0,
+        "ts017bbc36_exists": ts017b is not None and len(ts017b) > 0,
+        "ts019f2d14_exists": ts019f is not None and len(ts019f) > 0,
+        "total_cookies_loaded": len(cookies),
+        "base_url": base_url,
+    }
+
+

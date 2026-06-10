@@ -36,6 +36,43 @@ const SIPE_SENHA = process.env.SIPE_SENHA ?? ''
 const SIPE_PERFIL = process.env.SIPE_PERFIL ?? '2'   // Master
 const SIPE_UNIDADE = process.env.SIPE_UNIDADE ?? '3'  // CDPPVH
 
+const SIPE_SCRAPER_ENGINE = process.env.SIPE_SCRAPER_ENGINE ?? 'playwright'
+const SIPE_PYTHON_API_URL = process.env.SIPE_PYTHON_API_URL ?? 'http://localhost:8000'
+
+/**
+ * Tenta obter o HTML ou Imagem do SIPE através do Proxy Python FastAPI (curl_cffi).
+ * Caso a chamada falhe ou o motor de scraping não seja "python-sdk", retorna null (para ativar o fallback).
+ */
+async function fetchSipeViaProxy(path: string): Promise<{ html?: string; data?: string; is_binary: boolean } | null> {
+  if (SIPE_SCRAPER_ENGINE !== 'python-sdk') {
+    return null
+  }
+  
+  try {
+    const cleanPath = path.startsWith('/') ? path : `/${path}`
+    const url = `${SIPE_PYTHON_API_URL}/sipe/proxy?path=${encodeURIComponent(cleanPath)}`
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      },
+      signal: AbortSignal.timeout(15000)
+    })
+    
+    if (!res.ok) {
+      console.warn(`[PYTHON PROXY] ⚠️ Chamada falhou com status ${res.status} para o path: ${path}. Ativando fallback para Playwright.`)
+      return null
+    }
+    
+    const data = await res.json()
+    return data
+  } catch (err: any) {
+    console.warn(`[PYTHON PROXY] ⚠️ Erro de rede na API Python para o path ${path}: ${err.message || err}. Ativando fallback para Playwright.`)
+    return null
+  }
+}
+
+
 /** ms without a heartbeat before a job is considered crashed */
 const CRASH_TIMEOUT_MS = 10 * 60 * 1000 // 10 min
 
@@ -1626,20 +1663,26 @@ async function scrapeApenadoFicha(
 ): Promise<void> {
   if (useSearch) {
     // ── Busca cross-unit: contorna restrição de unidade da sessão ──
-    await page.goto(
-      `${SIPE_URL}/apenados/index?escolha=nomeapenado&parametro=${sipeId}`,
-      { waitUntil: 'domcontentloaded', timeout: 45_000 }
-    )
+    const searchPath = `/apenados/index?escolha=nomeapenado&parametro=${sipeId}`
+    const proxyData = await fetchSipeViaProxy(searchPath)
+    
+    if (proxyData && !proxyData.is_binary && proxyData.html) {
+      await page.setContent(proxyData.html)
+    } else {
+      await page.goto(`${SIPE_URL}${searchPath}`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+    }
 
-    // Verificar sessão expirada
-    const searchUrl = page.url()
-    if (
-      searchUrl.includes('/login') ||
-      searchUrl.includes('/selectRole') ||
-      searchUrl === `${SIPE_URL}/` ||
-      searchUrl === `${SIPE_URL}`
-    ) {
-      throw new Error('SESSAO_EXPIRADA')
+    if (!proxyData) {
+      // Verificar sessão expirada
+      const searchUrl = page.url()
+      if (
+        searchUrl.includes('/login') ||
+        searchUrl.includes('/selectRole') ||
+        searchUrl === `${SIPE_URL}/` ||
+        searchUrl === `${SIPE_URL}`
+      ) {
+        throw new Error('SESSAO_EXPIRADA')
+      }
     }
 
     // Localizar link do apenado na tabela de resultados
@@ -1666,52 +1709,73 @@ async function scrapeApenadoFicha(
     }
 
     // Navegar para o link encontrado (chega na /editar via fluxo legítimo de busca)
-    const editResponse = await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45_000 })
-
-    const editUrl = page.url()
-    if (editUrl.includes('/login') || editUrl.includes('/selectRole')) {
-      throw new Error('SESSAO_EXPIRADA')
+    const cleanLinkPath = link.replace(SIPE_URL, '')
+    const editProxyData = await fetchSipeViaProxy(cleanLinkPath)
+    let editStatus: number | undefined
+    
+    if (editProxyData && !editProxyData.is_binary && editProxyData.html) {
+      await page.setContent(editProxyData.html)
+      editStatus = 200
+    } else {
+      const editResponse = await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+      editStatus = editResponse?.status()
+      
+      const editUrl = page.url()
+      if (editUrl.includes('/login') || editUrl.includes('/selectRole')) {
+        throw new Error('SESSAO_EXPIRADA')
+      }
     }
 
-    const editStatus = editResponse?.status()
     if (editStatus && (editStatus === 404 || editStatus === 403 || editStatus === 500)) {
       throw new Error('APENADO_NAO_ENCONTRADO')
     }
   } else {
     // ── Fluxo original: acesso direto por URL ──
-    const response = await page.goto(`${SIPE_URL}/apenados/${sipeId}/editar`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 45_000,
-    })
-
-    // Detect session expiration / redirect to login page
-    const currentUrl = page.url()
-    if (
-      currentUrl.includes('/login') ||
-      currentUrl === `${SIPE_URL}/` ||
-      currentUrl === `${SIPE_URL}` ||
-      currentUrl.includes('/selectRole')
-    ) {
-      throw new Error('SESSAO_EXPIRADA')
+    const editPath = `/apenados/${sipeId}/editar`
+    const proxyData = await fetchSipeViaProxy(editPath)
+    let status: number | undefined
+    
+    if (proxyData && !proxyData.is_binary && proxyData.html) {
+      await page.setContent(proxyData.html)
+      status = 200
+    } else {
+      const response = await page.goto(`${SIPE_URL}${editPath}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 45_000,
+      })
+      status = response?.status()
+      
+      // Detect session expiration / redirect to login page
+      const currentUrl = page.url()
+      if (
+        currentUrl.includes('/login') ||
+        currentUrl === `${SIPE_URL}/` ||
+        currentUrl === `${SIPE_URL}` ||
+        currentUrl.includes('/selectRole')
+      ) {
+        throw new Error('SESSAO_EXPIRADA')
+      }
     }
 
     // Detect HTTP errors
-    const status = response?.status()
     if (status && (status === 404 || status === 403 || status === 500)) {
       throw new Error('APENADO_NAO_ENCONTRADO')
     }
 
-    // Fast check for not found errors in body text
-    const bodyText = await page.innerText('body').catch(() => '')
-    if (
-      bodyText.includes('não encontrado') ||
-      bodyText.includes('Não foi possível encontrar') ||
-      bodyText.includes('Registro não encontrado') ||
-      bodyText.includes('404')
-    ) {
-      throw new Error('APENADO_NAO_ENCONTRADO')
+    // Fast check for not found errors in body text (only if not loaded via proxy)
+    if (!proxyData) {
+      const bodyText = await page.innerText('body').catch(() => '')
+      if (
+        bodyText.includes('não encontrado') ||
+        bodyText.includes('Não foi possível encontrar') ||
+        bodyText.includes('Registro não encontrado') ||
+        bodyText.includes('404')
+      ) {
+        throw new Error('APENADO_NAO_ENCONTRADO')
+      }
     }
   }
+
 
   await page.waitForSelector('[name="nomeapenado"]', { timeout: 30_000 })
 
@@ -1888,25 +1952,13 @@ async function scrapeApenadoFicha(
       if (cleanPhotoSrc.startsWith('data:image/')) {
         base64Data = cleanPhotoSrc;
       } else {
-        const absoluteUrl = new URL(cleanPhotoSrc, page.url()).href;
-        base64Data = await page.evaluate(async (url) => {
-          try {
-            const res = await fetch(url);
-            if (!res.ok) return null;
-            const blob = await res.blob();
-            return new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(blob);
-            });
-          } catch {
-            return null;
-          }
-        }, absoluteUrl);
-
-        // Fallback: se falhou ao obter a foto original limpa (ex: 404), tenta obter a foto original (com proteção/marca d'água)
-        if (!base64Data && cleanPhotoSrc !== photoSrc) {
-          const absoluteUrlFallback = new URL(photoSrc, page.url()).href;
+        // Tenta baixar a foto via proxy Python
+        const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '');
+        const proxyPhoto = await fetchSipeViaProxy(photoPathRelative);
+        if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
+          base64Data = proxyPhoto.data;
+        } else {
+          const absoluteUrl = new URL(cleanPhotoSrc, page.url()).href;
           base64Data = await page.evaluate(async (url) => {
             try {
               const res = await fetch(url);
@@ -1920,9 +1972,35 @@ async function scrapeApenadoFicha(
             } catch {
               return null;
             }
-          }, absoluteUrlFallback);
+          }, absoluteUrl);
+        }
+
+        // Fallback: se falhou ao obter a foto original limpa (ex: 404), tenta obter a foto original (com proteção/marca d'água)
+        if (!base64Data && cleanPhotoSrc !== photoSrc) {
+          const fallbackPathRelative = photoSrc.replace(SIPE_URL, '');
+          const fallbackProxyPhoto = await fetchSipeViaProxy(fallbackPathRelative);
+          if (fallbackProxyPhoto && fallbackProxyPhoto.is_binary && fallbackProxyPhoto.data) {
+            base64Data = fallbackProxyPhoto.data;
+          } else {
+            const absoluteUrlFallback = new URL(photoSrc, page.url()).href;
+            base64Data = await page.evaluate(async (url) => {
+              try {
+                const res = await fetch(url);
+                if (!res.ok) return null;
+                const blob = await res.blob();
+                return new Promise<string>((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result as string);
+                  reader.readAsDataURL(blob);
+                });
+              } catch {
+                return null;
+              }
+            }, absoluteUrlFallback);
+          }
         }
       }
+
 
       if (base64Data && base64Data.includes(',')) {
         const base64Content = base64Data.split(',')[1];
@@ -2247,24 +2325,12 @@ async function saveAndLinkComplementaryPhoto(
       return;
     }
 
-    let base64Data = await page.evaluate(async (url) => {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const blob = await res.blob();
-        return new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-        });
-      } catch {
-        return null;
-      }
-    }, absoluteUrl);
-
-    // Fallback: se falhou ao obter a foto original limpa (ex: 404), tenta com a URL original (com proteção/marca d'água)
-    if (!base64Data && cleanSrc !== src) {
-      const absoluteUrlFallback = new URL(src, page.url()).href;
+    let base64Data: string | null = null;
+    const cleanPath = cleanSrc.replace(SIPE_URL, '');
+    const proxyPhoto = await fetchSipeViaProxy(cleanPath);
+    if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
+      base64Data = proxyPhoto.data;
+    } else {
       base64Data = await page.evaluate(async (url) => {
         try {
           const res = await fetch(url);
@@ -2278,8 +2344,34 @@ async function saveAndLinkComplementaryPhoto(
         } catch {
           return null;
         }
-      }, absoluteUrlFallback);
+      }, absoluteUrl);
     }
+
+    // Fallback: se falhou ao obter a foto original limpa (ex: 404), tenta com a URL original (com proteção/marca d'água)
+    if (!base64Data && cleanSrc !== src) {
+      const fallbackPath = src.replace(SIPE_URL, '');
+      const proxyFallbackPhoto = await fetchSipeViaProxy(fallbackPath);
+      if (proxyFallbackPhoto && proxyFallbackPhoto.is_binary && proxyFallbackPhoto.data) {
+        base64Data = proxyFallbackPhoto.data;
+      } else {
+        const absoluteUrlFallback = new URL(src, page.url()).href;
+        base64Data = await page.evaluate(async (url) => {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) return null;
+            const blob = await res.blob();
+            return new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+          } catch {
+            return null;
+          }
+        }, absoluteUrlFallback);
+      }
+    }
+
 
     if (base64Data && base64Data.includes(',')) {
       const base64Content = base64Data.split(',')[1];
@@ -2319,11 +2411,22 @@ async function scrapeFotosComplementares(
   ];
   for (const url of rotas) {
     try {
-      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 8000 });
-      const status = response?.status();
+      const path = url.replace(SIPE_URL, '')
+      const proxyData = await fetchSipeViaProxy(path)
+      let status: number | undefined
+      
+      if (proxyData && !proxyData.is_binary && proxyData.html) {
+        await page.setContent(proxyData.html)
+        status = 200
+      } else {
+        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 8000 });
+        status = response?.status();
+      }
+      
       if (status && (status === 404 || status === 403 || status === 500)) {
         continue;
       }
+
       
       const currentUrl = page.url();
       if (
@@ -2367,7 +2470,14 @@ async function scrapeProcessos(
   apenadoId: string
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/incluirProcessos`, { waitUntil: 'domcontentloaded' })
+    const path = `/apenados/${sipeId}/incluirProcessos`
+
+    const proxyData = await fetchSipeViaProxy(path)
+    if (proxyData && !proxyData.is_binary && proxyData.html) {
+      await page.setContent(proxyData.html)
+    } else {
+      await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded' })
+    }
     await page.waitForSelector('body', { timeout: 10_000 })
 
     // Tenta extrair de forma estruturada via DOM (Tabelas)
@@ -2535,11 +2645,22 @@ async function scrapeVisitantes(
   const url = `${SIPE_URL}/autorizacoes/${sipeId}/mostrar`
 
   try {
-    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15_000 })
-    const status = response?.status()
+    const path = `/autorizacoes/${sipeId}/mostrar`
+    const proxyData = await fetchSipeViaProxy(path)
+    let status: number | undefined
+    
+    if (proxyData && !proxyData.is_binary && proxyData.html) {
+      await page.setContent(proxyData.html)
+      status = 200
+    } else {
+      const response = await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+      status = response?.status()
+    }
+    
     if (status && (status === 404 || status === 403 || status === 500 || status === 405)) {
       return
     }
+
 
     const bodyText = await page.innerText('body').catch(() => '')
     if (bodyText.includes('404') || bodyText.includes('não encontrado') || bodyText.includes('Não autorizado') || bodyText.includes('Method Not Allowed')) {
@@ -2825,8 +2946,15 @@ async function scrapeAlcunhas(
   apenadoId: string
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/alcunhas`, { waitUntil: 'domcontentloaded' })
+    const path = `/apenados/${sipeId}/alcunhas`
+    const proxyData = await fetchSipeViaProxy(path)
+    if (proxyData && !proxyData.is_binary && proxyData.html) {
+      await page.setContent(proxyData.html)
+    } else {
+      await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded' })
+    }
     await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
+
     const rows = await page.$$('table tbody tr')
     for (const row of rows) {
       const cells = await row.$$('td')
@@ -4177,22 +4305,36 @@ async function scrapeEndereço(
   apenadoId: string,
 ): Promise<void> {
   try {
-    const targetUrl = `${SIPE_URL}/apenados/${sipeId}/enderecos`
-    const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+    const path = `/apenados/${sipeId}/enderecos`
+    const proxyData = await fetchSipeViaProxy(path)
+    let status: number | undefined
     
-    // Proteção contra redirecionamentos (ex: login expirado, falta de permissão ou apenado não existente)
-    const currentUrl = page.url()
-    if (
-      currentUrl.includes('/login') ||
-      currentUrl === `${SIPE_URL}/` ||
-      currentUrl === `${SIPE_URL}` ||
-      currentUrl.includes('/selectRole') ||
-      currentUrl.includes('/home') ||
-      (response && (response.status() === 404 || response.status() === 403 || response.status() === 500))
-    ) {
-      console.warn(`[scrapeEndereço] Acesso recusado ou redirecionado para ${currentUrl} ao tentar acessar o apenado ${sipeId}`)
+    if (proxyData && !proxyData.is_binary && proxyData.html) {
+      await page.setContent(proxyData.html)
+      status = 200
+    } else {
+      const response = await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+      status = response?.status()
+      
+      // Proteção contra redirecionamentos (ex: login expirado, falta de permissão ou apenado não existente)
+      const currentUrl = page.url()
+      if (
+        currentUrl.includes('/login') ||
+        currentUrl === `${SIPE_URL}/` ||
+        currentUrl === `${SIPE_URL}` ||
+        currentUrl.includes('/selectRole') ||
+        currentUrl.includes('/home')
+      ) {
+        console.warn(`[scrapeEndereço] Acesso recusado ou redirecionado para ${currentUrl} ao tentar acessar o apenado ${sipeId}`)
+        return
+      }
+    }
+
+    if (status && (status === 404 || status === 403 || status === 500)) {
+      console.warn(`[scrapeEndereço] Acesso recusado com status ${status} ao tentar acessar o apenado ${sipeId}`)
       return
     }
+
 
     // Espera especificamente pelo formulário de inclusão ou pela tabela de cadastrados.
     // Removemos o ", body" para evitar que o Playwright prossiga antes da página carregar de fato.
@@ -4311,8 +4453,15 @@ export async function scrapeHistorico(
 ): Promise<void> {
   // 1. Coleta e salva as mudanças de cela existentes
   try {
-    await page.goto(`${SIPE_URL}/apenados/${sipeId}/mudarcela`, { waitUntil: 'domcontentloaded' })
+    const path = `/apenados/${sipeId}/mudarcela`
+    const proxyData = await fetchSipeViaProxy(path)
+    if (proxyData && !proxyData.is_binary && proxyData.html) {
+      await page.setContent(proxyData.html)
+    } else {
+      await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded' })
+    }
     await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
+
 
     const rows = await page.$$('table tbody tr')
     for (const row of rows) {
@@ -4549,8 +4698,15 @@ async function scrapeDocumentos(
   apenadoId: string,
 ): Promise<void> {
   try {
-    await page.goto(`${SIPE_URL}/anexos/${sipeId}/index`, { waitUntil: 'domcontentloaded' })
+    const path = `/anexos/${sipeId}/index`
+    const proxyData = await fetchSipeViaProxy(path)
+    if (proxyData && !proxyData.is_binary && proxyData.html) {
+      await page.setContent(proxyData.html)
+    } else {
+      await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded' })
+    }
     await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
+
 
     const rows = await page.$$('table tbody tr')
     for (const row of rows) {
@@ -4623,11 +4779,22 @@ async function scrapeAdvogadosDoApenado(
 
   for (const url of rotasCandidatas) {
     try {
-      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 })
-      const status = response?.status()
+      const path = url.replace(SIPE_URL, '')
+      const proxyData = await fetchSipeViaProxy(path)
+      let status: number | undefined
+      
+      if (proxyData && !proxyData.is_binary && proxyData.html) {
+        await page.setContent(proxyData.html)
+        status = 200
+      } else {
+        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 })
+        status = response?.status()
+      }
+      
       if (status && (status === 404 || status === 403 || status === 500)) {
         continue
       }
+
 
       const bodyText = await page.innerText('body').catch(() => '')
       if (bodyText.includes('404') || bodyText.includes('não encontrado') || bodyText.includes('Não autorizado')) {

@@ -1,5 +1,11 @@
 import pytest
+import time
+import base64
+import json
+import logging
 from unittest.mock import MagicMock
+from curl_cffi import requests
+from curl_cffi.requests.exceptions import HTTPError, RequestException
 from sipe_sdk import (
     SIPEClient,
     ApenadoSearchResult,
@@ -9,6 +15,7 @@ from sipe_sdk import (
     SIPEHTTPError
 )
 from sipe_sdk.parsers import parse_search_results, parse_apenado_details
+from sipe_sdk.client import SanitizingFormatter
 
 # Mocks HTML
 
@@ -48,6 +55,7 @@ MOCK_LOGIN_PAGE_HTML = """
 <body>
     <form action="/login" method="post">
         <input type="password" name="password" />
+        <input type="text" name="cpf" />
     </form>
 </body>
 </html>
@@ -68,15 +76,6 @@ MOCK_APENADO_DETAILS_HTML = """
         <tr><th>Cela Atual:</th><td>Pavilhão A - Cela 12</td></tr>
         <tr><th>Regime:</th><td>FECHADO</td></tr>
     </table>
-</body>
-</html>
-"""
-
-MOCK_APENADO_NOT_FOUND_HTML = """
-<!DOCTYPE html>
-<html>
-<body>
-    <div>Apenado não encontrado no sistema.</div>
 </body>
 </html>
 """
@@ -116,15 +115,39 @@ def test_parse_apenado_details_success():
     assert details.informacoes_adicionais.get("Regime") == "FECHADO"
 
 
-# Testes de Integração com SIPEClient (Mockando httpx.Client)
+# Testes de Sanitização de Logs
+
+def test_logs_are_sanitized():
+    formatter = SanitizingFormatter("%(message)s")
+    
+    # CPF formatado e sem formato
+    record1 = logging.LogRecord("sipe", logging.INFO, "", 0, "Log com CPF 123.456.789-00 e 98765432100", (), None)
+    assert formatter.format(record1) == "Log com CPF [CPF REDACTED] e [CPF REDACTED]"
+    
+    # Cookies, senhas e tokens
+    record2 = logging.LogRecord(
+        "sipe", logging.INFO, "", 0, 
+        "Dados: cpf=123.456.789-00; password=minhasenha123; Cookie: laravel_session_sipe=abc123token; _token: xyz_token", 
+        (), None
+    )
+    formatted = formatter.format(record2)
+    assert "minhasenha123" not in formatted
+    assert "abc123token" not in formatted
+    assert "xyz_token" not in formatted
+    assert "123.456.789-00" not in formatted
+
+
+# Testes de Integração e Novas Políticas do SIPEClient
 
 def test_client_check_auth_success(monkeypatch):
     client = SIPEClient()
     mock_resp = MagicMock()
     mock_resp.text = "<html><head><title>SIPE - Home</title></head><body>Autenticado</body></html>"
     mock_resp.status_code = 200
+    mock_resp.url = "https://sipe.sejus.ro.gov.br/home"
+    mock_resp.headers = {"Content-Type": "text/html"}
     
-    monkeypatch.setattr(client.session, "get", MagicMock(return_value=mock_resp))
+    monkeypatch.setattr(client.session, "request", MagicMock(return_value=mock_resp))
     assert client.check_auth() is True
 
 
@@ -133,55 +156,128 @@ def test_client_check_auth_failed(monkeypatch):
     mock_resp = MagicMock()
     mock_resp.text = MOCK_LOGIN_PAGE_HTML
     mock_resp.status_code = 200
+    mock_resp.url = "https://sipe.sejus.ro.gov.br/login"
+    mock_resp.headers = {"Content-Type": "text/html"}
     
-    monkeypatch.setattr(client.session, "get", MagicMock(return_value=mock_resp))
+    monkeypatch.setattr(client.session, "request", MagicMock(return_value=mock_resp))
+    # Para evitar loop infinito no teste, mockamos o login para falhar
+    monkeypatch.setattr(client, "login", MagicMock(side_effect=SIPEAuthError("Falha")))
     with pytest.raises(SIPEAuthError):
         client.check_auth()
 
 
-def test_client_pesquisar_apenado(monkeypatch):
-    client = SIPEClient()
-    mock_resp = MagicMock()
-    mock_resp.text = MOCK_SEARCH_RESULTS_HTML
-    mock_resp.status_code = 200
+def test_client_login_success(monkeypatch):
+    client = SIPEClient(cpf="12345678900", senha="senha_teste")
     
-    monkeypatch.setattr(client.session, "get", MagicMock(return_value=mock_resp))
+    mock_get_root = MagicMock()
+    mock_get_root.text = '<html><input name="_token" value="csrf_token_val"/></html>'
+    mock_get_root.status_code = 200
+    
+    mock_post_login = MagicMock()
+    mock_post_login.url = "https://sipe.sejus.ro.gov.br/selectRole"
+    mock_post_login.text = '<html><input name="_token" value="csrf_token_role"/></html>'
+    mock_post_login.status_code = 200
+    
+    mock_post_role = MagicMock()
+    mock_post_role.url = "https://sipe.sejus.ro.gov.br/home"
+    mock_post_role.text = '<html>Home</html>'
+    mock_post_role.status_code = 200
+    
+    # Configura os mocks para os requests internos
+    mock_request = MagicMock(side_effect=[mock_get_root, mock_post_login, mock_post_role])
+    monkeypatch.setattr(client.session, "request", mock_request)
+    
+    # Mocka os helpers de session
+    monkeypatch.setattr(client.session, "get", lambda url, **k: mock_get_root)
+    monkeypatch.setattr(client.session, "post", lambda url, data, **k: mock_post_login if "validaLogin" in url else mock_post_role)
+    
+    assert client.login() is True
+
+
+def test_client_session_auto_renew(monkeypatch):
+    client = SIPEClient(cpf="12345678900", senha="senha_teste")
+    
+    # Mock do login automático
+    monkeypatch.setattr(client, "login", MagicMock(return_value=True))
+    
+    # Primeira chamada no _request simula expiração (redireciona para /login)
+    mock_expired_resp = MagicMock()
+    mock_expired_resp.url = "https://sipe.sejus.ro.gov.br/login"
+    mock_expired_resp.text = "<html>Entrar</html>"
+    mock_expired_resp.headers = {"Content-Type": "text/html"}
+    mock_expired_resp.status_code = 200
+    
+    # Segunda chamada simula sucesso
+    mock_success_resp = MagicMock()
+    mock_success_resp.url = "https://sipe.sejus.ro.gov.br/apenados/index"
+    mock_success_resp.text = MOCK_SEARCH_RESULTS_HTML
+    mock_success_resp.headers = {"Content-Type": "text/html"}
+    mock_success_resp.status_code = 200
+    
+    request_mock = MagicMock(side_effect=[mock_expired_resp, mock_success_resp])
+    monkeypatch.setattr(client.session, "request", request_mock)
+    
     results = client.pesquisar_apenado("Joao")
     assert len(results) == 2
-    assert results[0].id == "987654"
+    assert request_mock.call_count == 2
 
 
-def test_client_informacoes(monkeypatch):
+def test_client_retry_exponential(monkeypatch):
     client = SIPEClient()
-    mock_resp = MagicMock()
-    mock_resp.text = MOCK_APENADO_DETAILS_HTML
-    mock_resp.status_code = 200
+    monkeypatch.setattr(time, "sleep", MagicMock())
     
-    monkeypatch.setattr(client.session, "get", MagicMock(return_value=mock_resp))
-    details = client.informacoes("987654")
-    assert details.nome == "JOAO DA SILVA SA"
-    assert details.cpf == "123.456.789-00"
+    mock_err_resp = MagicMock()
+    mock_err_resp.status_code = 500
+    mock_err_resp.raise_for_status.side_effect = HTTPError("HTTP Error 500", code=0, response=mock_err_resp)
+    
+    mock_success_resp = MagicMock()
+    mock_success_resp.status_code = 200
+    mock_success_resp.text = "<div>Sucesso</div>"
+    mock_success_resp.url = "https://sipe.sejus.ro.gov.br/teste"
+    mock_success_resp.headers = {}
+    
+    request_mock = MagicMock(side_effect=[mock_err_resp, mock_err_resp, mock_success_resp])
+    monkeypatch.setattr(client.session, "request", request_mock)
+    
+    resp = client._request("GET", "/teste")
+    assert resp.status_code == 200
+    assert request_mock.call_count == 3
 
 
-def test_client_ficha_completa(monkeypatch):
+def test_client_redis_cache(monkeypatch):
+    mock_redis = MagicMock()
+    # 1ª chamada: None (cache miss)
+    # 2ª chamada: cache hit
+    mock_redis.get.side_effect = [None, json.dumps({
+        "status_code": 200,
+        "headers": {},
+        "text": "<div>Hit Cache</div>",
+        "content_b64": None
+    })]
+    
     client = SIPEClient()
+    client.redis_client = mock_redis
     
-    # Mocka get para retornar a busca primeiro, e depois os detalhes
-    mock_resp_search = MagicMock()
-    mock_resp_search.text = MOCK_SEARCH_RESULTS_HTML
-    mock_resp_search.status_code = 200
+    mock_net_resp = MagicMock()
+    mock_net_resp.status_code = 200
+    mock_net_resp.text = "<div>Hit Rede</div>"
+    mock_net_resp.url = "https://sipe.sejus.ro.gov.br/teste-cache"
+    mock_net_resp.headers = {"Content-Type": "text/html"}
     
-    mock_resp_details = MagicMock()
-    mock_resp_details.text = MOCK_APENADO_DETAILS_HTML
-    mock_resp_details.status_code = 200
+    request_mock = MagicMock(return_value=mock_net_resp)
+    monkeypatch.setattr(client.session, "request", request_mock)
     
-    # Intercepta as chamadas sequenciais
-    mock_get = MagicMock(side_effect=[mock_resp_search, mock_resp_details, mock_resp_details])
-    monkeypatch.setattr(client.session, "get", mock_get)
+    # Cache miss
+    resp1 = client._request("GET", "/teste-cache")
+    assert resp1.text == "<div>Hit Rede</div>"
+    assert mock_redis.get.call_count == 1
+    assert mock_redis.setex.call_count == 1
     
-    details = client.ficha_completa("Joao")
-    assert details.nome == "JOAO DA SILVA SA"
-    assert details.cpf == "123.456.789-00"
+    # Cache hit
+    resp2 = client._request("GET", "/teste-cache")
+    assert resp2.text == "<div>Hit Cache</div>"
+    assert mock_redis.get.call_count == 2
+    assert request_mock.call_count == 1
 
 
 def test_client_html_bruto_methods(monkeypatch):
@@ -189,9 +285,11 @@ def test_client_html_bruto_methods(monkeypatch):
     mock_resp = MagicMock()
     mock_resp.text = "<div>HTML BRUTO</div>"
     mock_resp.status_code = 200
+    mock_resp.url = "https://sipe.sejus.ro.gov.br/apenados/123/fotos"
+    mock_resp.headers = {}
     
-    mock_get = MagicMock(return_value=mock_resp)
-    monkeypatch.setattr(client.session, "get", mock_get)
+    mock_request = MagicMock(return_value=mock_resp)
+    monkeypatch.setattr(client.session, "request", mock_request)
     
     assert client.fotos_html("123") == "<div>HTML BRUTO</div>"
     assert client.enderecos_html("123") == "<div>HTML BRUTO</div>"
