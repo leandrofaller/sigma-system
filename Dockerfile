@@ -32,10 +32,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-venv python3-dev build-essential cmake \
     && rm -rf /var/lib/apt/lists/*
 ARG PIP_CACHE_BUST=2026-05-20a
+WORKDIR /tmp/build
+COPY backend/requirements.txt ./requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     echo "cache-bust: ${PIP_CACHE_BUST}" && \
     python3 -m venv /opt/arcface-venv && \
     /opt/arcface-venv/bin/pip install --upgrade pip && \
+    /opt/arcface-venv/bin/pip install -r ./requirements.txt && \
     /opt/arcface-venv/bin/pip install --prefer-binary \
         "numpy<2" \
         insightface==0.7.3 \
@@ -87,6 +90,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/backend ./backend
 
 # Garante que o pacote completo do playwright (incluindo cli.js) está disponível
 # O standalone do Next.js rastreia apenas arquivos importados — cli.js não é importado

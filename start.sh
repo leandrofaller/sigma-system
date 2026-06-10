@@ -30,5 +30,9 @@ Promise.all([
 ]).then(() => { console.log('Colunas OK'); }).catch(e => { console.error('AVISO colunas:', e.message); }).finally(() => p.\$disconnect());
 " || echo "AVISO: script de colunas falhou (nao critico)"
 
+echo "Iniciando API Python FastAPI em background..."
+PYTHONPATH=/app/backend/app gosu nextjs /opt/arcface-venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+
 echo "Iniciando servidor..."
 exec gosu nextjs node server.js
+
