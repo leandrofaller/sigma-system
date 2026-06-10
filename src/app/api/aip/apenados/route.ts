@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { auth } from '@/lib/auth'
+import { containsNormalizedText, normalizeSearchText } from '@/lib/search'
 
 /**
  * POST /api/aip/apenados
@@ -190,40 +191,12 @@ export async function GET(request: NextRequest) {
 
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '20')))
-    const q = searchParams.get('q') || ''
-    const unidade = searchParams.get('unidade') || ''
-    const faccao = searchParams.get('faccao') || ''
-    const facaoReal = searchParams.get('facaoReal') || ''
+    const q = normalizeSearchText(searchParams.get('q'))
+    const unidade = normalizeSearchText(searchParams.get('unidade'))
+    const faccao = normalizeSearchText(searchParams.get('faccao'))
+    const facaoReal = normalizeSearchText(searchParams.get('facaoReal'))
 
-    // Montar filtros
-    const where: any = {}
-
-    if (q) {
-      where.OR = [
-        { nome: { contains: q, mode: 'insensitive' } },
-        { cpf: { contains: q, mode: 'insensitive' } }
-      ]
-    }
-
-    if (unidade) {
-      where.unidade = { contains: unidade, mode: 'insensitive' }
-    }
-
-    if (faccao) {
-      where.faccao = { contains: faccao, mode: 'insensitive' }
-    }
-
-    if (facaoReal) {
-      where.facaoRealNome = { contains: facaoReal, mode: 'insensitive' }
-    }
-
-    // Contar total
-    const total = await prisma.aIPApenado.count({ where })
-    const totalPages = Math.ceil(total / limit)
-
-    // Buscar apenados com visitantes incluídos e advogados do SIPE
-    const apenados = await prisma.aIPApenado.findMany({
-      where,
+    const filteredApenados = (await prisma.aIPApenado.findMany({
       include: {
         fotoVisitantes: true,
         sipeApenado: {
@@ -237,9 +210,29 @@ export async function GET(request: NextRequest) {
         }
       },
       orderBy: [{ cadastradoEm: 'desc' }, { nome: 'asc' }],
-      skip: (page - 1) * limit,
-      take: limit
+    })).filter((apenado) => {
+      if (q && !containsNormalizedText(apenado.nome, q) && !containsNormalizedText(apenado.cpf, q)) {
+        return false
+      }
+
+      if (unidade && !containsNormalizedText(apenado.unidade, unidade)) {
+        return false
+      }
+
+      if (faccao && !containsNormalizedText(apenado.faccao, faccao)) {
+        return false
+      }
+
+      if (facaoReal && !containsNormalizedText(apenado.facaoRealNome, facaoReal)) {
+        return false
+      }
+
+      return true
     })
+
+    const total = filteredApenados.length
+    const totalPages = Math.ceil(total / limit)
+    const apenados = filteredApenados.slice((page - 1) * limit, page * limit)
 
     return NextResponse.json({
       apenados,

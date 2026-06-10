@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Search, User, X, RefreshCw, ChevronLeft, ChevronRight, Shield } from 'lucide-react'
 import { toast } from 'sonner'
+import { containsNormalizedText } from '@/lib/search'
 
 interface Visitante {
   id: string
@@ -74,12 +75,11 @@ export function AIPVisitantesPanel() {
     if (!searchQuery.trim()) {
       setFiltered(visitantes)
     } else {
-      const lower = searchQuery.toLowerCase()
       setFiltered(
         visitantes.filter(
           (v) =>
-            v.nomeVisitante?.toLowerCase().includes(lower) ||
-            v.cpfVisitante?.includes(searchQuery)
+            containsNormalizedText(v.nomeVisitante, searchQuery) ||
+            containsNormalizedText(v.cpfVisitante, searchQuery)
         )
       )
     }

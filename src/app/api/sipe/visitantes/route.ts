@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { containsNormalizedText, normalizeSearchText } from '@/lib/search'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const q = searchParams.get('q')?.trim() ?? ''
+  const q = normalizeSearchText(searchParams.get('q'))
 
   // Buscar todos os vínculos de visitantes do SIPE
   const vinculos = await prisma.sipeVinculoVisitante.findMany({
@@ -31,11 +32,10 @@ export async function GET(request: NextRequest) {
   let resultado = vinculos
 
   if (q) {
-    const lower = q.toLowerCase()
     resultado = vinculos.filter(
       (v) =>
-        v.visitante.nome.toLowerCase().includes(lower) ||
-        v.visitante.cpf?.includes(q)
+        containsNormalizedText(v.visitante.nome, q) ||
+        containsNormalizedText(v.visitante.cpf, q)
     )
   }
 

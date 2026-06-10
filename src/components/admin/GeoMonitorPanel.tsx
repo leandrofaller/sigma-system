@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { MapPin, Users, Clock, Download, Layers, Activity, Loader2, Wifi, AlertCircle } from 'lucide-react';
 import type { LocationEntry, TileStyle } from './GeoMapTypes';
 import { TILE_LAYERS } from './GeoMapTypes';
+import { containsNormalizedText } from '@/lib/search';
 
 const GeoMap = dynamic(() => import('./GeoMap'), {
   ssr: false,
@@ -159,8 +160,8 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
     : [];
 
   const filteredUsers = usersWithLoc.filter((u) =>
-    u.name?.toLowerCase().includes(search.toLowerCase()) ||
-    u.email?.toLowerCase().includes(search.toLowerCase())
+    containsNormalizedText(u.name, search) ||
+    containsNormalizedText(u.email, search)
   );
 
   // Table shows the raw trail when a user is selected (all points, not bucketed)

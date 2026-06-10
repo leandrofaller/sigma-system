@@ -2,61 +2,33 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { createAuditLog } from '@/lib/audit'
+import { containsNormalizedText, normalizeSearchText } from '@/lib/search'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+    return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
   }
 
   const { searchParams } = new URL(req.url)
   const page = parseInt(searchParams.get('page') || '1', 10)
   const limit = parseInt(searchParams.get('limit') || '50', 10)
-  const search = searchParams.get('search') || ''
-  const unidade = searchParams.get('unidade') || ''
-  const municipio = searchParams.get('municipio') || ''
-  const marca = searchParams.get('marca') || ''
+  const search = normalizeSearchText(searchParams.get('search'))
+  const unidade = normalizeSearchText(searchParams.get('unidade'))
+  const municipio = normalizeSearchText(searchParams.get('municipio'))
+  const marca = normalizeSearchText(searchParams.get('marca'))
   const dataInicio = searchParams.get('dataInicio') || ''
   const dataFim = searchParams.get('dataFim') || ''
 
   const skip = (page - 1) * limit
-
-  // Construindo a cláusula where do Prisma
   const where: any = {}
 
-  // Busca textual genérica
-  if (search) {
-    where.OR = [
-      { responsavel: { contains: search, mode: 'insensitive' } },
-      { celaPavilhao: { contains: search, mode: 'insensitive' } },
-      { processoSei: { contains: search, mode: 'insensitive' } },
-      { marca: { contains: search, mode: 'insensitive' } },
-      { municipio: { contains: search, mode: 'insensitive' } },
-      { unidadePrisional: { contains: search, mode: 'insensitive' } },
-      { unidadeExterna: { contains: search, mode: 'insensitive' } },
-      { localExterno: { contains: search, mode: 'insensitive' } },
-    ]
-  }
-
-  // Filtros específicos
-  if (unidade) {
-    where.unidadePrisional = unidade
-  }
-  if (municipio) {
-    where.municipio = municipio
-  }
-  if (marca) {
-    where.marca = { contains: marca, mode: 'insensitive' }
-  }
-
-  // Filtros por período de arrecadação
   if (dataInicio || dataFim) {
     where.dataArrecadacao = {}
     if (dataInicio) {
       where.dataArrecadacao.gte = new Date(dataInicio)
     }
     if (dataFim) {
-      // Ajusta para o final do dia
       const dateFimObj = new Date(dataFim)
       dateFimObj.setHours(23, 59, 59, 999)
       where.dataArrecadacao.lte = dateFimObj
@@ -64,40 +36,60 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [total, totalCelulares, aparelhos] = await Promise.all([
-      prisma.aparelhoApreendido.count({ where }),
-      prisma.aparelhoApreendido.count({
-        where: {
-          ...where,
-          marca: { not: null, notIn: [''] }
-        }
-      }),
-      prisma.aparelhoApreendido.findMany({
-        where,
-        orderBy: { dataArrecadacao: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ])
+    const filteredAparelhos = (await prisma.aparelhoApreendido.findMany({
+      where,
+      orderBy: { dataArrecadacao: 'desc' },
+    })).filter((item) => {
+      if (
+        search &&
+        !containsNormalizedText(item.responsavel, search) &&
+        !containsNormalizedText(item.celaPavilhao, search) &&
+        !containsNormalizedText(item.processoSei, search) &&
+        !containsNormalizedText(item.marca, search) &&
+        !containsNormalizedText(item.municipio, search) &&
+        !containsNormalizedText(item.unidadePrisional, search) &&
+        !containsNormalizedText(item.unidadeExterna, search) &&
+        !containsNormalizedText(item.localExterno, search)
+      ) {
+        return false
+      }
 
-    // Agregações básicas para estatísticas (marcas mais comuns e locais)
-    // Feito de forma otimizada para a interface principal
-    const [marcasMaisComuns, unidadesMaisComuns] = await Promise.all([
-      prisma.aparelhoApreendido.groupBy({
-        by: ['marca'],
-        where: { marca: { not: null } },
-        _count: { marca: true },
-        orderBy: { _count: { marca: 'desc' } },
-        take: 5,
-      }),
-      prisma.aparelhoApreendido.groupBy({
-        by: ['unidadePrisional'],
-        where: { unidadePrisional: { not: '' } },
-        _count: { unidadePrisional: true },
-        orderBy: { _count: { unidadePrisional: 'desc' } },
-        take: 5,
-      }),
-    ])
+      if (unidade && !containsNormalizedText(item.unidadePrisional, unidade)) {
+        return false
+      }
+      if (municipio && !containsNormalizedText(item.municipio, municipio)) {
+        return false
+      }
+      if (marca && !containsNormalizedText(item.marca, marca)) {
+        return false
+      }
+
+      return true
+    })
+
+    const total = filteredAparelhos.length
+    const totalCelulares = filteredAparelhos.filter((item) => item.marca && item.marca.trim() !== '').length
+    const aparelhos = filteredAparelhos.slice(skip, skip + limit)
+
+    const marcasMaisComuns = Object.entries(
+      filteredAparelhos.reduce<Record<string, number>>((acc, item) => {
+        const key = item.marca?.trim() || 'Outras'
+        acc[key] = (acc[key] || 0) + 1
+        return acc
+      }, {})
+    )
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+
+    const unidadesMaisComuns = Object.entries(
+      filteredAparelhos.reduce<Record<string, number>>((acc, item) => {
+        const key = item.unidadePrisional?.trim() || 'Nao Informada'
+        acc[key] = (acc[key] || 0) + 1
+        return acc
+      }, {})
+    )
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
 
     return NextResponse.json({
       data: aparelhos,
@@ -109,8 +101,8 @@ export async function GET(req: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
       stats: {
-        marcas: marcasMaisComuns.map(m => ({ name: m.marca || 'Outras', count: m._count.marca })),
-        unidades: unidadesMaisComuns.map(u => ({ name: u.unidadePrisional, count: u._count.unidadePrisional })),
+        marcas: marcasMaisComuns.map(([name, count]) => ({ name, count })),
+        unidades: unidadesMaisComuns.map(([name, count]) => ({ name, count })),
       }
     })
   } catch (error: any) {
@@ -122,8 +114,7 @@ export async function GET(req: NextRequest) {
 function parseFormDate(dateStr: string | null | undefined): Date | null {
   if (!dateStr || dateStr.trim() === '') return null
   const cleanStr = dateStr.trim()
-  
-  // Se for YYYY-MM-DD
+
   const parts = cleanStr.split('-')
   if (parts.length === 3 && parts[0].length === 4) {
     const year = parseInt(parts[0], 10)
@@ -131,8 +122,7 @@ function parseFormDate(dateStr: string | null | undefined): Date | null {
     const day = parseInt(parts[2], 10)
     return new Date(Date.UTC(year, month, day))
   }
-  
-  // Se for DD/MM/YYYY
+
   const partsSlash = cleanStr.split('/')
   if (partsSlash.length === 3) {
     const day = parseInt(partsSlash[0], 10)
@@ -140,7 +130,7 @@ function parseFormDate(dateStr: string | null | undefined): Date | null {
     const year = parseInt(partsSlash[2], 10)
     return new Date(Date.UTC(year, month, day))
   }
-  
+
   const t = Date.parse(cleanStr)
   return isNaN(t) ? null : new Date(t)
 }
@@ -148,7 +138,7 @@ function parseFormDate(dateStr: string | null | undefined): Date | null {
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+    return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
   }
 
   try {
@@ -170,7 +160,7 @@ export async function POST(req: NextRequest) {
     } = body
 
     if (!responsavel || !municipio || !unidadePrisional) {
-      return NextResponse.json({ error: 'Campos obrigatórios ausentes' }, { status: 400 })
+      return NextResponse.json({ error: 'Campos obrigatorios ausentes' }, { status: 400 })
     }
 
     const aparelho = await prisma.aparelhoApreendido.create({
@@ -191,7 +181,6 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Log de auditoria
     await createAuditLog({
       userId: (session.user as any).id,
       action: 'CREATE_APARELHO',

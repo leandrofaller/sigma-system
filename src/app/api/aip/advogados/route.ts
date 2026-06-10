@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { containsNormalizedText, normalizeSearchText } from '@/lib/search'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const q = searchParams.get('q')?.trim() ?? ''
+  const q = normalizeSearchText(searchParams.get('q'))
 
   // Buscar todos AIP apenados com vínculos de advogados
   const apenados = await prisma.aIPApenado.findMany({
@@ -72,12 +73,11 @@ export async function GET(request: NextRequest) {
 
   // Filtro de busca
   if (q) {
-    const lower = q.toLowerCase()
     advogados = advogados.filter(
       (a) =>
-        a.nome.toLowerCase().includes(lower) ||
-        a.oab?.toLowerCase().includes(lower) ||
-        a.cpf?.includes(q)
+        containsNormalizedText(a.nome, q) ||
+        containsNormalizedText(a.oab, q) ||
+        containsNormalizedText(a.cpf, q)
     )
   }
 

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Search, Briefcase, X, Users, RefreshCw, ChevronLeft, ChevronRight, MapPin, Shield } from 'lucide-react'
 import { toast } from 'sonner'
+import { containsNormalizedText } from '@/lib/search'
 
 interface Cliente {
   id: string
@@ -70,13 +71,12 @@ export function AIPAdvogadosPanel() {
     if (!searchQuery.trim()) {
       setFiltered(advogados)
     } else {
-      const lower = searchQuery.toLowerCase()
       setFiltered(
         advogados.filter(
           (a) =>
-            a.nome.toLowerCase().includes(lower) ||
-            a.oab?.toLowerCase().includes(lower) ||
-            a.cpf?.includes(searchQuery)
+            containsNormalizedText(a.nome, searchQuery) ||
+            containsNormalizedText(a.oab, searchQuery) ||
+            containsNormalizedText(a.cpf, searchQuery)
         )
       )
     }
