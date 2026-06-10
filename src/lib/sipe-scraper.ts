@@ -44,9 +44,13 @@ const SIPE_PYTHON_API_URL = process.env.SIPE_PYTHON_API_URL ?? 'http://localhost
  * Caso a chamada falhe ou o motor de scraping não seja "python-sdk", retorna null (para ativar o fallback).
  */
 async function fetchSipeViaProxy(path: string): Promise<{ html?: string; data?: string; is_binary: boolean } | null> {
+  const engineValue = process.env.SIPE_SCRAPER_ENGINE
   if (SIPE_SCRAPER_ENGINE !== 'python-sdk') {
+    console.log(`[PYTHON PROXY] ⏭️ SDK desativado. SIPE_SCRAPER_ENGINE="${SIPE_SCRAPER_ENGINE}" (raw env: "${engineValue}"). Usando Playwright.`)
     return null
   }
+  
+  console.log(`[PYTHON PROXY] 🐍 Tentando SDK Python para: ${path}`)
   
   try {
     const cleanPath = path.startsWith('/') ? path : `/${path}`
@@ -65,6 +69,7 @@ async function fetchSipeViaProxy(path: string): Promise<{ html?: string; data?: 
     }
     
     const data = await res.json()
+    console.log(`[PYTHON PROXY] ✅ Sucesso via SDK Python para: ${path} (binary: ${data?.is_binary ?? false})`)
     return data
   } catch (err: any) {
     console.warn(`[PYTHON PROXY] ⚠️ Erro de rede na API Python para o path ${path}: ${err.message || err}. Ativando fallback para Playwright.`)
