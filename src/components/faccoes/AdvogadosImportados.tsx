@@ -463,6 +463,7 @@ export function AdvogadosImportados() {
           <div class="adv-header">
             <span class="adv-name">${adv.nome}</span>
             <span class="adv-meta">${oabStr} | ${telStr}</span>
+            <div style="clear: both;"></div>
           </div>
           ${endStr}
           <div class="clients-section">
@@ -512,23 +513,27 @@ export function AdvogadosImportados() {
               background-color: #fafafa;
             }
             .adv-header {
-              display: flex;
-              justify-content: space-between;
-              align-items: baseline;
-              border-bottom: 1px dashed #ccc;
+              border-bottom: 1px dashed #999;
               padding-bottom: 8px;
               margin-bottom: 10px;
+              width: 100%;
             }
             .adv-name {
               font-size: 14px;
               font-weight: bold;
-              color: #111;
+              color: #000000 !important;
               text-transform: uppercase;
+              display: inline-block;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
             .adv-meta {
               font-size: 11px;
-              color: #444;
-              margin-left: 15px;
+              color: #333333 !important;
+              float: right;
+              margin-top: 3px;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
             .address {
               font-size: 11px;
@@ -596,6 +601,10 @@ export function AdvogadosImportados() {
               }
               .adv-name {
                 font-size: 12px;
+                color: #000000 !important;
+              }
+              .adv-meta {
+                color: #333333 !important;
               }
             }
           </style>
