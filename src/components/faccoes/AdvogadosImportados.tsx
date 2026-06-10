@@ -317,6 +317,8 @@ export function AdvogadosImportados() {
 
   const [unidadesList, setUnidadesList] = useState<Array<{ id: string; nome: string }>>([])
   const [selectedUnidade, setSelectedUnidade] = useState<string>('')
+  const [faccoesList, setFaccoesList] = useState<Array<{ id: string; nome: string; sigla: string | null }>>([])
+  const [selectedFaccao, setSelectedFaccao] = useState<string>('')
 
   useEffect(() => {
     const fetchUnidades = async () => {
@@ -330,10 +332,22 @@ export function AdvogadosImportados() {
         console.error('Erro ao buscar unidades:', e)
       }
     }
+    const fetchFaccoes = async () => {
+      try {
+        const res = await fetch('/api/sipe/faccoes')
+        if (res.ok) {
+          const data = await res.json()
+          setFaccoesList(data || [])
+        }
+      } catch (e) {
+        console.error('Erro ao buscar facções:', e)
+      }
+    }
     fetchUnidades()
+    fetchFaccoes()
   }, [])
 
-  const generatePrintHtml = (unidadeNome: string, advs: Advogado[]): string => {
+  const generatePrintHtml = (unidadeNome: string, faccaoId: string, advs: Advogado[]): string => {
     const dataFormatada = new Date().toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
@@ -341,6 +355,14 @@ export function AdvogadosImportados() {
       hour: '2-digit',
       minute: '2-digit'
     })
+
+    const faccaoNome = faccaoId === 'qualquer'
+      ? 'Membros de Facção (Qualquer)'
+      : faccaoId
+      ? (faccoesList.find(f => f.id === faccaoId)?.sigla || faccoesList.find(f => f.id === faccaoId)?.nome || 'Facção Selecionada')
+      : 'Todas as Facções'
+
+    const unidadeNomeHeader = unidadeNome || 'Todas as Unidades'
 
     let rowsHtml = ''
     advs.forEach(adv => {
@@ -350,24 +372,26 @@ export function AdvogadosImportados() {
       
       let clientesHtml = ''
       if (adv.vinculos.length === 0) {
-        clientesHtml = '<p class="no-clients">Nenhum cliente ativo vinculado nesta unidade.</p>'
+        clientesHtml = '<p class="no-clients">Nenhum cliente ativo vinculado nos filtros aplicados.</p>'
       } else {
         clientesHtml = `
           <table class="clients-table">
             <thead>
               <tr>
-                <th style="width: 45%;">Nome do Apenado</th>
+                <th style="width: 30%;">Nome do Apenado</th>
+                <th style="width: 25%;">Unidade Prisional</th>
                 <th style="width: 15%;">Regime</th>
-                <th style="width: 20%;">Cela</th>
-                <th style="width: 20%;">Facção</th>
+                <th style="width: 15%;">Cela</th>
+                <th style="width: 15%;">Facção</th>
               </tr>
             </thead>
             <tbody>
               ${adv.vinculos.map(v => `
                 <tr>
                   <td class="client-name">${v.apenado.nome}</td>
+                  <td>${v.apenado.unidade || 'Não cadastrada'}</td>
                   <td>${v.apenado.regime || '-'}</td>
-                  <td>${v.apenado.unidade && v.apenado.cela ? `${v.apenado.cela}` : v.apenado.cela || '-'}</td>
+                  <td>${v.apenado.cela || '-'}</td>
                   <td>
                     ${v.apenado.faccao ? `
                       <span class="fac-tag" style="border-left: 3px solid ${v.apenado.faccao.cor || '#ff0000'}">
@@ -390,7 +414,7 @@ export function AdvogadosImportados() {
           </div>
           ${endStr}
           <div class="clients-section">
-            <div class="section-title">Clientes Atendidos na Unidade:</div>
+            <div class="section-title">Clientes Atendidos:</div>
             ${clientesHtml}
           </div>
         </div>
@@ -528,7 +552,8 @@ export function AdvogadosImportados() {
           <div class="header">
             <h1 class="header-title">Relatório de Advogados e Clientes Vinculados</h1>
             <p class="header-meta">
-              <strong>Unidade Prisional:</strong> ${unidadeNome} | 
+              <strong>Unidade Prisional:</strong> ${unidadeNomeHeader} | 
+              <strong>Filtro Facção:</strong> ${faccaoNome} | 
               <strong>Gerado em:</strong> ${dataFormatada} | 
               <strong>Total:</strong> ${advs.length} advogado(s)
             </p>
@@ -542,12 +567,14 @@ export function AdvogadosImportados() {
   }
 
   const handlePrintReport = async () => {
-    if (!selectedUnidade) return
+    if (!selectedUnidade && !selectedFaccao) return
     
     const printToastId = toast.loading('Gerando relatório de impressão...')
     try {
-      const params = new URLSearchParams({ limit: '1000', unidade: selectedUnidade })
+      const params = new URLSearchParams({ limit: '1000' })
       if (q) params.set('q', q)
+      if (selectedUnidade) params.set('unidade', selectedUnidade)
+      if (selectedFaccao) params.set('faccao', selectedFaccao)
 
       const res = await fetch(`/api/sipe/advogados?${params}`)
       if (!res.ok) throw new Error('Erro ao buscar advogados')
@@ -557,7 +584,7 @@ export function AdvogadosImportados() {
 
       if (advsToPrint.length === 0) {
         toast.dismiss(printToastId)
-        toast.error('Nenhum advogado encontrado para esta unidade')
+        toast.error('Nenhum advogado encontrado para os filtros selecionados')
         return
       }
 
@@ -568,7 +595,7 @@ export function AdvogadosImportados() {
         return
       }
 
-      const htmlContent = generatePrintHtml(selectedUnidade, advsToPrint)
+      const htmlContent = generatePrintHtml(selectedUnidade, selectedFaccao, advsToPrint)
       printWindow.document.write(htmlContent)
       printWindow.document.close()
       
@@ -607,6 +634,7 @@ export function AdvogadosImportados() {
     const params = new URLSearchParams({ page: String(page), limit: '24' })
     if (q) params.set('q', q)
     if (selectedUnidade) params.set('unidade', selectedUnidade)
+    if (selectedFaccao) params.set('faccao', selectedFaccao)
 
     const res = await fetch(`/api/sipe/advogados?${params}`)
     if (res.ok) {
@@ -616,7 +644,7 @@ export function AdvogadosImportados() {
       setTotalPages(data.totalPages)
     }
     setLoading(false)
-  }, [page, q, selectedUnidade])
+  }, [page, q, selectedUnidade, selectedFaccao])
 
   useEffect(() => { fetchAdvogados() }, [fetchAdvogados])
 
@@ -701,16 +729,30 @@ export function AdvogadosImportados() {
             })}
           </select>
 
+          <select
+            value={selectedFaccao}
+            onChange={e => { setSelectedFaccao(e.target.value); setPage(1) }}
+            className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent max-w-xs truncate cursor-pointer"
+          >
+            <option value="">Todas as Facções</option>
+            <option value="qualquer">Atendem Faccionados (Qualquer)</option>
+            {faccoesList.map(f => (
+              <option key={f.id} value={f.id}>
+                {f.sigla ? `${f.sigla} - ${f.nome}` : f.nome}
+              </option>
+            ))}
+          </select>
+
           <span className="text-sm text-gray-500">{total} advogado{total !== 1 ? 's' : ''}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {selectedUnidade && (
+          {(selectedUnidade || selectedFaccao) && (
             <button
               onClick={handlePrintReport}
               disabled={loading || advogados.length === 0}
               className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-semibold transition-colors shadow-sm"
-              title="Gerar relatório para impressão desta unidade"
+              title="Gerar relatório para impressão com os filtros aplicados"
             >
               <Printer className="w-4 h-4" />
               Imprimir Relatório

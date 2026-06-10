@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const q = searchParams.get('q') || ''
   const unidade = searchParams.get('unidade') || ''
+  const faccao = searchParams.get('faccao') || ''
   const page = parseInt(searchParams.get('page') || '1')
   const limit = parseInt(searchParams.get('limit') || '20')
   const skip = (page - 1) * limit
@@ -23,16 +24,26 @@ export async function GET(req: NextRequest) {
       }
     : {}
 
+  const apenadoFilter: any = {}
+
   if (unidade) {
+    apenadoFilter.unidade = {
+      contains: unidade,
+      mode: 'insensitive' as const
+    }
+  }
+
+  if (faccao === 'qualquer') {
+    apenadoFilter.faccaoId = { not: null }
+  } else if (faccao) {
+    apenadoFilter.faccaoId = faccao
+  }
+
+  if (unidade || faccao) {
     where.vinculos = {
       some: {
         ativo: true,
-        apenado: {
-          unidade: {
-            contains: unidade,
-            mode: 'insensitive' as const
-          }
-        }
+        apenado: apenadoFilter
       }
     }
   }
@@ -45,13 +56,8 @@ export async function GET(req: NextRequest) {
         vinculos: {
           where: {
             ativo: true,
-            ...(unidade ? {
-              apenado: {
-                unidade: {
-                  contains: unidade,
-                  mode: 'insensitive' as const
-                }
-              }
+            ...((unidade || faccao) ? {
+              apenado: apenadoFilter
             } : {})
           },
           include: {
