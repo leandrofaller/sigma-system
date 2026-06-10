@@ -461,8 +461,11 @@ export function AdvogadosImportados() {
       rowsHtml += `
         <div class="adv-card" style="margin-bottom: 30px; border: 1px solid #ddd; border-radius: 6px; padding: 15px; background-color: #fafafa; page-break-inside: avoid; display: block;">
           <div style="border-bottom: 1px dashed #999; padding-bottom: 8px; margin-bottom: 10px; width: 100%; display: block;">
-            <span style="font-size: 14px; font-weight: bold; color: #000000 !important; text-transform: uppercase; display: inline-block; -webkit-print-color-adjust: exact; print-color-adjust: exact;">${adv.nome}</span>
-            <span style="font-size: 11px; color: #333333 !important; float: right; margin-top: 3px; display: inline-block; -webkit-print-color-adjust: exact; print-color-adjust: exact;">${oabStr} | ${telStr}</span>
+            <span class="adv-name" style="font-size: 14px; font-weight: bold; color: #000000 !important; text-transform: uppercase; display: inline-block; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+              ${adv.nome}
+              ${adv.oab ? `<span style="font-size: 11px; color: #555555; font-weight: normal; margin-left: 8px; text-transform: none;">(OAB: ${adv.oab})</span>` : ''}
+            </span>
+            <span class="adv-meta" style="font-size: 11px; color: #333333 !important; float: right; margin-top: 3px; display: inline-block; -webkit-print-color-adjust: exact; print-color-adjust: exact;">${telStr}</span>
             <div style="clear: both;"></div>
           </div>
           ${endStr}
