@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Briefcase, Users, Phone, Shield, Camera, Printer } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Briefcase, Users, Phone, Shield, Camera, Printer, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useSession } from 'next-auth/react'
 import { ApenadoModal } from './ApenadosImportados'
 
 interface Faccao { nome: string; sigla: string | null; cor: string }
@@ -98,14 +99,49 @@ function AdvogadoModal({
   onClose,
   onApenadoClick,
   onPhotoUpdate,
+  onDeleteSuccess,
 }: {
   advogado: Advogado
   onClose: () => void
   onApenadoClick: (id: string) => void
   onPhotoUpdate?: (photoPath: string) => void
+  onDeleteSuccess?: (deletedId: string) => void
 }) {
+  const { data: session } = useSession()
+  const role = (session?.user as any)?.role
+  const canDelete = role === 'SUPER_ADMIN' || role === 'ADMIN'
+
   const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDelete = async () => {
+    if (!confirm(`Tem certeza que deseja excluir o advogado ${advogado.nome}? Esta ação removerá definitivamente todos os seus vínculos com clientes.`)) {
+      return
+    }
+
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/sipe/advogados/${advogado.id}`, {
+        method: 'DELETE'
+      })
+
+      if (res.ok) {
+        toast.success('Advogado excluído com sucesso!')
+        onClose()
+        if (onDeleteSuccess) {
+          onDeleteSuccess(advogado.id)
+        }
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'Erro ao excluir advogado')
+      }
+    } catch {
+      toast.error('Erro de conexão ao tentar excluir')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -202,13 +238,29 @@ function AdvogadoModal({
                 </div>
               </div>
             </div>
-            <button 
-              onClick={onClose} 
-              className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 shrink-0"
-              title="Fechar"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-1">
+              {canDelete && (
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 shrink-0 disabled:opacity-45"
+                  title="Excluir Advogado"
+                >
+                  {deleting ? (
+                    <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
+              )}
+              <button 
+                onClick={onClose} 
+                className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 shrink-0"
+                title="Fechar"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         </div>
 
@@ -818,6 +870,10 @@ export function AdvogadosImportados() {
           onClose={() => setSelected(null)}
           onApenadoClick={handleApenadoClick}
           onPhotoUpdate={(newPath) => handlePhotoUpdate(selected.id, newPath)}
+          onDeleteSuccess={(deletedId) => {
+            setAdvogados(prev => prev.filter(a => a.id !== deletedId))
+            setTotal(t => Math.max(0, t - 1))
+          }}
         />
       )}
 
