@@ -5,6 +5,7 @@ import { Search, ChevronLeft, ChevronRight, Shield, Building2, Users, ChevronRig
 import { ApenadoCard, ApenadoModal } from './ApenadosImportados'
 import type { ApenadoImportado } from './ApenadosImportados'
 import { UnidadesDashboard } from './UnidadesDashboard'
+import { containsNormalized } from '@/lib/search'
 
 interface Unidade {
   id: string
@@ -89,7 +90,7 @@ export function UnidadesPanel() {
 
   // Filtra unidades pelo input de busca
   const filteredUnidades = unidades.filter(u =>
-    u.nome.toLowerCase().includes(searchUnidade.toLowerCase())
+    containsNormalized(u.nome, searchUnidade)
   )
 
   return (

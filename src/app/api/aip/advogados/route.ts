@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { containsNormalized } from '@/lib/search'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,12 +73,11 @@ export async function GET(request: NextRequest) {
 
   // Filtro de busca
   if (q) {
-    const lower = q.toLowerCase()
     advogados = advogados.filter(
       (a) =>
-        a.nome.toLowerCase().includes(lower) ||
-        a.oab?.toLowerCase().includes(lower) ||
-        a.cpf?.includes(q)
+        containsNormalized(a.nome, q) ||
+        containsNormalized(a.oab, q) ||
+        containsNormalized(a.cpf, q)
     )
   }
 

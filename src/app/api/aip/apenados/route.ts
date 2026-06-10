@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { auth } from '@/lib/auth'
+import { unaccentParam } from '@/lib/search'
 
 /**
  * POST /api/aip/apenados
@@ -190,56 +191,77 @@ export async function GET(request: NextRequest) {
 
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '20')))
-    const q = searchParams.get('q') || ''
-    const unidade = searchParams.get('unidade') || ''
-    const faccao = searchParams.get('faccao') || ''
-    const facaoReal = searchParams.get('facaoReal') || ''
+    const q = unaccentParam(searchParams.get('q'))
+    const unidade = unaccentParam(searchParams.get('unidade'))
+    const faccao = unaccentParam(searchParams.get('faccao'))
+    const facaoReal = unaccentParam(searchParams.get('facaoReal'))
+    const skip = (page - 1) * limit
 
-    // Montar filtros
-    const where: any = {}
+    // Build raw SQL WHERE with immutable_unaccent
+    let whereClause = 'WHERE 1=1'
+    const params: any[] = []
+    let idx = 1
 
     if (q) {
-      where.OR = [
-        { nome: { contains: q, mode: 'insensitive' } },
-        { cpf: { contains: q, mode: 'insensitive' } }
-      ]
+      const pattern = `%${q}%`
+      whereClause += ` AND (
+        immutable_unaccent(nome) ILIKE immutable_unaccent($${idx})
+        OR COALESCE(cpf,'') ILIKE $${idx}
+      )`
+      params.push(pattern)
+      idx++
     }
 
     if (unidade) {
-      where.unidade = { contains: unidade, mode: 'insensitive' }
+      whereClause += ` AND immutable_unaccent(COALESCE(unidade,'')) ILIKE immutable_unaccent($${idx})`
+      params.push(`%${unidade}%`)
+      idx++
     }
 
     if (faccao) {
-      where.faccao = { contains: faccao, mode: 'insensitive' }
+      whereClause += ` AND immutable_unaccent(COALESCE(faccao,'')) ILIKE immutable_unaccent($${idx})`
+      params.push(`%${faccao}%`)
+      idx++
     }
 
     if (facaoReal) {
-      where.facaoRealNome = { contains: facaoReal, mode: 'insensitive' }
+      whereClause += ` AND immutable_unaccent(COALESCE("facaoRealNome",'')) ILIKE immutable_unaccent($${idx})`
+      params.push(`%${facaoReal}%`)
+      idx++
     }
 
-    // Contar total
-    const total = await prisma.aIPApenado.count({ where })
-    const totalPages = Math.ceil(total / limit)
+    // Count + paginated IDs
+    const countQuery = `SELECT COUNT(*)::int AS total FROM aip_apenados ${whereClause}`
+    const idsQuery = `SELECT id FROM aip_apenados ${whereClause} ORDER BY "cadastradoEm" DESC, nome ASC LIMIT $${idx} OFFSET $${idx + 1}`
 
-    // Buscar apenados com visitantes incluídos e advogados do SIPE
-    const apenados = await prisma.aIPApenado.findMany({
-      where,
-      include: {
-        fotoVisitantes: true,
-        sipeApenado: {
+    const [countResult, idRows] = await Promise.all([
+      prisma.$queryRawUnsafe<{ total: number }[]>(countQuery, ...params),
+      prisma.$queryRawUnsafe<{ id: string }[]>(idsQuery, ...params, limit, skip),
+    ])
+
+    const total = countResult[0]?.total ?? 0
+    const totalPages = Math.ceil(total / limit)
+    const ids = idRows.map(r => r.id)
+
+    // Fetch full records with Prisma includes
+    const apenados = ids.length > 0
+      ? await prisma.aIPApenado.findMany({
+          where: { id: { in: ids } },
           include: {
-            vinculosAdvogado: {
+            fotoVisitantes: true,
+            sipeApenado: {
               include: {
-                advogado: true
+                vinculosAdvogado: {
+                  include: {
+                    advogado: true
+                  }
+                }
               }
             }
-          }
-        }
-      },
-      orderBy: [{ cadastradoEm: 'desc' }, { nome: 'asc' }],
-      skip: (page - 1) * limit,
-      take: limit
-    })
+          },
+          orderBy: [{ cadastradoEm: 'desc' }, { nome: 'asc' }],
+        })
+      : []
 
     return NextResponse.json({
       apenados,

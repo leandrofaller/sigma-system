@@ -16,6 +16,16 @@ gosu nextjs node_modules/.bin/prisma db push --skip-generate || \
 gosu nextjs npx prisma db push --skip-generate || true
 echo "Migracoes concluidas!"
 
+echo "Habilitando extensao unaccent para buscas accent-insensitive..."
+gosu nextjs node -e "
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+Promise.all([
+  p.\$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS unaccent'),
+  p.\$executeRawUnsafe(\`CREATE OR REPLACE FUNCTION immutable_unaccent(text) RETURNS text AS \\$\\$SELECT public.unaccent('public.unaccent', \\$1)\\$\\$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT\`),
+]).then(() => { console.log('Extensao unaccent OK'); }).catch(e => { console.error('AVISO unaccent:', e.message); }).finally(() => p.\$disconnect());
+" || echo "AVISO: extensao unaccent falhou (nao critico)"
+
 echo "Garantindo colunas de auditoria (idempotente)..."
 gosu nextjs node -e "
 const { PrismaClient } = require('@prisma/client');

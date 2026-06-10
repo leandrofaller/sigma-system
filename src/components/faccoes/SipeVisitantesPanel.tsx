@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Search, User, X, RefreshCw, ChevronLeft, ChevronRight, Shield, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ApenadoModal, type ApenadoImportado } from './ApenadosImportados'
+import { containsNormalized } from '@/lib/search'
 
 interface Visitante {
   id: string
@@ -109,12 +110,11 @@ export function SipeVisitantesPanel() {
     if (!searchQuery.trim()) {
       setFiltered(visitantes)
     } else {
-      const lower = searchQuery.toLowerCase()
       setFiltered(
         visitantes.filter(
           (v) =>
-            v.nomeVisitante?.toLowerCase().includes(lower) ||
-            v.cpfVisitante?.includes(searchQuery)
+            containsNormalized(v.nomeVisitante, searchQuery) ||
+            containsNormalized(v.cpfVisitante, searchQuery)
         )
       )
     }

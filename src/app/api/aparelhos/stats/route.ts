@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { unaccentParam } from '@/lib/search'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -9,37 +10,21 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url)
-  const search = searchParams.get('search') || ''
+  const search = unaccentParam(searchParams.get('search'))
   const unidade = searchParams.get('unidade') || ''
   const municipio = searchParams.get('municipio') || ''
-  const marca = searchParams.get('marca') || ''
+  const marca = unaccentParam(searchParams.get('marca'))
   const dataInicio = searchParams.get('dataInicio') || ''
   const dataFim = searchParams.get('dataFim') || ''
 
-  // Construindo a cláusula where idêntica à listagem
+  // Build Prisma where for aggregations (non-text filters only)
   const where: any = {}
-
-  if (search) {
-    where.OR = [
-      { responsavel: { contains: search, mode: 'insensitive' } },
-      { celaPavilhao: { contains: search, mode: 'insensitive' } },
-      { processoSei: { contains: search, mode: 'insensitive' } },
-      { marca: { contains: search, mode: 'insensitive' } },
-      { municipio: { contains: search, mode: 'insensitive' } },
-      { unidadePrisional: { contains: search, mode: 'insensitive' } },
-      { unidadeExterna: { contains: search, mode: 'insensitive' } },
-      { localExterno: { contains: search, mode: 'insensitive' } },
-    ]
-  }
 
   if (unidade) {
     where.unidadePrisional = unidade
   }
   if (municipio) {
     where.municipio = municipio
-  }
-  if (marca) {
-    where.marca = { contains: marca, mode: 'insensitive' }
   }
 
   if (dataInicio || dataFim) {
@@ -54,9 +39,66 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Build raw SQL WHERE for text filters (accent-insensitive)
+  let rawWhere = 'WHERE 1=1'
+  const rawParams: any[] = []
+  let idx = 1
+
+  if (search) {
+    const pattern = `%${search}%`
+    rawWhere += ` AND (
+      immutable_unaccent(COALESCE(responsavel,'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE("celaPavilhao",'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE("processoSei",'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE(marca,'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE(municipio,'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE("unidadePrisional",'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE("unidadeExterna",'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE("localExterno",'')) ILIKE immutable_unaccent($${idx})
+    )`
+    rawParams.push(pattern)
+    idx++
+  }
+  if (marca) {
+    rawWhere += ` AND immutable_unaccent(COALESCE(marca,'')) ILIKE immutable_unaccent($${idx})`
+    rawParams.push(`%${marca}%`)
+    idx++
+  }
+  if (unidade) {
+    rawWhere += ` AND "unidadePrisional" = $${idx}`
+    rawParams.push(unidade)
+    idx++
+  }
+  if (municipio) {
+    rawWhere += ` AND municipio = $${idx}`
+    rawParams.push(municipio)
+    idx++
+  }
+  if (dataInicio) {
+    rawWhere += ` AND "dataArrecadacao" >= $${idx}`
+    rawParams.push(new Date(dataInicio))
+    idx++
+  }
+  if (dataFim) {
+    const d = new Date(dataFim); d.setHours(23,59,59,999)
+    rawWhere += ` AND "dataArrecadacao" <= $${idx}`
+    rawParams.push(d)
+    idx++
+  }
+
   try {
     // 1. Total Geral de Dispositivos com os filtros aplicados
-    const total = await prisma.aparelhoApreendido.count({ where })
+    let total: number
+    if (search || marca) {
+      // Use raw SQL for text filter counts (accent-insensitive)
+      const countResult = await prisma.$queryRawUnsafe<{ total: number }[]>(
+        `SELECT COUNT(*)::int AS total FROM aparelhos_apreendidos ${rawWhere}`,
+        ...rawParams
+      )
+      total = countResult[0]?.total ?? 0
+    } else {
+      total = await prisma.aparelhoApreendido.count({ where })
+    }
 
     if (total === 0) {
       return NextResponse.json({

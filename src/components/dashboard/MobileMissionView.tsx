@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { containsNormalized } from '@/lib/search';
 
 interface Mission {
   id: string;
@@ -106,9 +107,9 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
 
   const filteredMissions = missions.filter(m => {
     const matchesSearch = 
-      m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.destination.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (m.participants && m.participants.some(p => p.toLowerCase().includes(searchQuery.toLowerCase())));
+      containsNormalized(m.title, searchQuery) ||
+      containsNormalized(m.destination, searchQuery) ||
+      (m.participants && m.participants.some(p => containsNormalized(p, searchQuery)));
       
     if (!matchesSearch) return false;
     

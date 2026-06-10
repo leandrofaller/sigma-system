@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { containsNormalized } from '@/lib/search'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,11 +32,10 @@ export async function GET(request: NextRequest) {
   let resultado = vinculos
 
   if (q) {
-    const lower = q.toLowerCase()
     resultado = vinculos.filter(
       (v) =>
-        v.visitante.nome.toLowerCase().includes(lower) ||
-        v.visitante.cpf?.includes(q)
+        containsNormalized(v.visitante.nome, q) ||
+        containsNormalized(v.visitante.cpf, q)
     )
   }
 

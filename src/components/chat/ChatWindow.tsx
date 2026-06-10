@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Users, User, Hash, Loader2, Search, Paperclip, Download, FileText, Image as ImageIcon, Trash2, SmilePlus, Smile } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
+import { containsNormalized } from '@/lib/search';
 
 const EMOJI_LIST = ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥', '✅', '👀', '🙏', '😊', '💪', '🎉', '⚠️', '❓'];
 
@@ -343,7 +344,7 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
   };
 
   const filteredContacts = contacts.filter((c) =>
-    !search || c.name.toLowerCase().includes(search.toLowerCase())
+    !search || containsNormalized(c.name, search)
   );
 
   return (

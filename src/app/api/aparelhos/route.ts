@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { createAuditLog } from '@/lib/audit'
+import { unaccentParam } from '@/lib/search'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -12,87 +13,106 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const page = parseInt(searchParams.get('page') || '1', 10)
   const limit = parseInt(searchParams.get('limit') || '50', 10)
-  const search = searchParams.get('search') || ''
+  const search = unaccentParam(searchParams.get('search'))
   const unidade = searchParams.get('unidade') || ''
   const municipio = searchParams.get('municipio') || ''
-  const marca = searchParams.get('marca') || ''
+  const marca = unaccentParam(searchParams.get('marca'))
   const dataInicio = searchParams.get('dataInicio') || ''
   const dataFim = searchParams.get('dataFim') || ''
 
   const skip = (page - 1) * limit
 
-  // Construindo a cláusula where do Prisma
-  const where: any = {}
+  // Build raw SQL WHERE clause
+  let whereClause = 'WHERE 1=1'
+  const params: any[] = []
+  let idx = 1
 
-  // Busca textual genérica
   if (search) {
-    where.OR = [
-      { responsavel: { contains: search, mode: 'insensitive' } },
-      { celaPavilhao: { contains: search, mode: 'insensitive' } },
-      { processoSei: { contains: search, mode: 'insensitive' } },
-      { marca: { contains: search, mode: 'insensitive' } },
-      { municipio: { contains: search, mode: 'insensitive' } },
-      { unidadePrisional: { contains: search, mode: 'insensitive' } },
-      { unidadeExterna: { contains: search, mode: 'insensitive' } },
-      { localExterno: { contains: search, mode: 'insensitive' } },
-    ]
+    const pattern = `%${search}%`
+    whereClause += ` AND (
+      immutable_unaccent(COALESCE(responsavel,'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE("celaPavilhao",'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE("processoSei",'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE(marca,'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE(municipio,'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE("unidadePrisional",'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE("unidadeExterna",'')) ILIKE immutable_unaccent($${idx})
+      OR immutable_unaccent(COALESCE("localExterno",'')) ILIKE immutable_unaccent($${idx})
+    )`
+    params.push(pattern)
+    idx++
   }
 
-  // Filtros específicos
   if (unidade) {
-    where.unidadePrisional = unidade
+    whereClause += ` AND "unidadePrisional" = $${idx}`
+    params.push(unidade)
+    idx++
   }
   if (municipio) {
-    where.municipio = municipio
+    whereClause += ` AND municipio = $${idx}`
+    params.push(municipio)
+    idx++
   }
   if (marca) {
-    where.marca = { contains: marca, mode: 'insensitive' }
+    whereClause += ` AND immutable_unaccent(COALESCE(marca,'')) ILIKE immutable_unaccent($${idx})`
+    params.push(`%${marca}%`)
+    idx++
   }
 
-  // Filtros por período de arrecadação
-  if (dataInicio || dataFim) {
-    where.dataArrecadacao = {}
-    if (dataInicio) {
-      where.dataArrecadacao.gte = new Date(dataInicio)
-    }
-    if (dataFim) {
-      // Ajusta para o final do dia
-      const dateFimObj = new Date(dataFim)
-      dateFimObj.setHours(23, 59, 59, 999)
-      where.dataArrecadacao.lte = dateFimObj
-    }
+  if (dataInicio) {
+    whereClause += ` AND "dataArrecadacao" >= $${idx}`
+    params.push(new Date(dataInicio))
+    idx++
+  }
+  if (dataFim) {
+    const dateFimObj = new Date(dataFim)
+    dateFimObj.setHours(23, 59, 59, 999)
+    whereClause += ` AND "dataArrecadacao" <= $${idx}`
+    params.push(dateFimObj)
+    idx++
   }
 
   try {
-    const [total, totalCelulares, aparelhos] = await Promise.all([
-      prisma.aparelhoApreendido.count({ where }),
-      prisma.aparelhoApreendido.count({
-        where: {
-          ...where,
-          marca: { not: null, notIn: [''] }
-        }
-      }),
-      prisma.aparelhoApreendido.findMany({
-        where,
-        orderBy: { dataArrecadacao: 'desc' },
-        skip,
-        take: limit,
-      }),
+    // Count + paginated data
+    const countQuery = `SELECT COUNT(*)::int AS total FROM aparelhos_apreendidos ${whereClause}`
+    const dataQuery = `SELECT * FROM aparelhos_apreendidos ${whereClause} ORDER BY "dataArrecadacao" DESC NULLS LAST LIMIT $${idx} OFFSET $${idx + 1}`
+
+    const [countResult, aparelhos] = await Promise.all([
+      prisma.$queryRawUnsafe<{ total: number }[]>(countQuery, ...params),
+      prisma.$queryRawUnsafe<any[]>(dataQuery, ...params, limit, skip),
     ])
 
-    // Agregações básicas para estatísticas (marcas mais comuns e locais)
-    // Feito de forma otimizada para a interface principal
+    const total = countResult[0]?.total ?? 0
+
+    // Count celulares (with marca not empty)
+    const celCountQuery = `SELECT COUNT(*)::int AS total FROM aparelhos_apreendidos ${whereClause} AND marca IS NOT NULL AND marca != ''`
+    const celResult = await prisma.$queryRawUnsafe<{ total: number }[]>(celCountQuery, ...params)
+    const totalCelulares = celResult[0]?.total ?? 0
+
+    // Stats: top 5 marcas and unidades (uses Prisma groupBy with same date/exact filters)
+    const prismaWhere: any = {}
+    if (unidade) prismaWhere.unidadePrisional = unidade
+    if (municipio) prismaWhere.municipio = municipio
+    if (dataInicio || dataFim) {
+      prismaWhere.dataArrecadacao = {}
+      if (dataInicio) prismaWhere.dataArrecadacao.gte = new Date(dataInicio)
+      if (dataFim) {
+        const d = new Date(dataFim); d.setHours(23,59,59,999)
+        prismaWhere.dataArrecadacao.lte = d
+      }
+    }
+
     const [marcasMaisComuns, unidadesMaisComuns] = await Promise.all([
       prisma.aparelhoApreendido.groupBy({
         by: ['marca'],
-        where: { marca: { not: null } },
+        where: { ...prismaWhere, marca: { not: null } },
         _count: { marca: true },
         orderBy: { _count: { marca: 'desc' } },
         take: 5,
       }),
       prisma.aparelhoApreendido.groupBy({
         by: ['unidadePrisional'],
-        where: { unidadePrisional: { not: '' } },
+        where: { ...prismaWhere, unidadePrisional: { not: '' } },
         _count: { unidadePrisional: true },
         orderBy: { _count: { unidadePrisional: 'desc' } },
         take: 5,

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { unaccentParam } from '@/lib/search';
 
 const createApenadoSchema = z.object({
   name: z.string().min(1).max(200),
@@ -17,47 +17,46 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const params = req.nextUrl.searchParams;
-  const search = params.get('search')?.trim() || '';
-  const letter = params.get('letter')?.trim().toUpperCase() || '';
+  const search = unaccentParam(params.get('search'));
+  const letter = unaccentParam(params.get('letter')).toUpperCase();
   const skip = Math.max(0, parseInt(params.get('skip') || '0', 10));
   const take = Math.min(Math.max(1, parseInt(params.get('take') || '50', 10)), 1000);
 
-  let where: Prisma.ApenadoWhereInput | undefined;
+  let whereClause = '';
+  const sqlParams: any[] = [];
+
   if (search) {
-    where = {
-      OR: [
-        { name: { contains: search, mode: 'insensitive' } },
-        { matricula: { contains: search, mode: 'insensitive' } },
-        { unidade: { contains: search, mode: 'insensitive' } },
-      ],
-    };
+    const pattern = `%${search}%`;
+    whereClause = `WHERE immutable_unaccent(name) ILIKE immutable_unaccent($1)
+      OR immutable_unaccent(COALESCE(matricula,'')) ILIKE immutable_unaccent($1)
+      OR immutable_unaccent(COALESCE(unidade,'')) ILIKE immutable_unaccent($1)`;
+    sqlParams.push(pattern);
   } else if (letter) {
-    where = { name: { startsWith: letter, mode: 'insensitive' } };
+    whereClause = `WHERE immutable_unaccent(name) ILIKE immutable_unaccent($1)`;
+    sqlParams.push(`${letter}%`);
   }
 
-  const [apenados, total] = await Promise.all([
-    prisma.apenado.findMany({
-      where,
-      orderBy: { name: 'asc' },
-      skip,
-      take,
-      select: {
-        id: true,
-        name: true,
-        matricula: true,
-        unidade: true,
-        faccao: true,
-        photoPath: true,
-        notes: true,
-        createdAt: true,
-        photoQuality: true,
-        faceDescriptor: true,
-      },
-    }),
-    prisma.apenado.count({ where }),
+  const skipIdx = sqlParams.length + 1;
+  const takeIdx = sqlParams.length + 2;
+
+  const countQuery = `SELECT COUNT(*)::int AS total FROM apenados ${whereClause}`;
+  const dataQuery = `
+    SELECT id, name, matricula, unidade, faccao, "photoPath", notes, "createdAt",
+           "photoQuality", "faceDescriptor"
+    FROM apenados
+    ${whereClause}
+    ORDER BY name ASC
+    LIMIT $${takeIdx} OFFSET $${skipIdx}
+  `;
+
+  const [countResult, apenados] = await Promise.all([
+    prisma.$queryRawUnsafe<{ total: number }[]>(countQuery, ...sqlParams),
+    prisma.$queryRawUnsafe<any[]>(dataQuery, ...sqlParams, skip, take),
   ]);
 
-  const mappedApenados = apenados.map((a) => {
+  const total = countResult[0]?.total ?? 0;
+
+  const mappedApenados = apenados.map((a: any) => {
     const { faceDescriptor, ...rest } = a;
     return {
       ...rest,
