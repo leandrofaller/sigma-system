@@ -8,11 +8,12 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const q = searchParams.get('q') || ''
+  const unidade = searchParams.get('unidade') || ''
   const page = parseInt(searchParams.get('page') || '1')
   const limit = parseInt(searchParams.get('limit') || '20')
   const skip = (page - 1) * limit
 
-  const where = q
+  const where: any = q
     ? {
         OR: [
           { nome: { contains: q, mode: 'insensitive' as const } },
@@ -22,13 +23,37 @@ export async function GET(req: NextRequest) {
       }
     : {}
 
+  if (unidade) {
+    where.vinculos = {
+      some: {
+        ativo: true,
+        apenado: {
+          unidade: {
+            contains: unidade,
+            mode: 'insensitive' as const
+          }
+        }
+      }
+    }
+  }
+
   const [total, advogados] = await Promise.all([
     prisma.sipeAdvogado.count({ where }),
     prisma.sipeAdvogado.findMany({
       where,
       include: {
         vinculos: {
-          where: { ativo: true },
+          where: {
+            ativo: true,
+            ...(unidade ? {
+              apenado: {
+                unidade: {
+                  contains: unidade,
+                  mode: 'insensitive' as const
+                }
+              }
+            } : {})
+          },
           include: {
             apenado: {
               include: { faccao: true, alcunhas: true },

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Briefcase, Users, Phone, Shield, Camera } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Briefcase, Users, Phone, Shield, Camera, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { ApenadoModal } from './ApenadosImportados'
 
@@ -314,6 +314,276 @@ export function AdvogadosImportados() {
     }
   }
 
+  const [unidadesList, setUnidadesList] = useState<Array<{ id: string; nome: string }>>([])
+  const [selectedUnidade, setSelectedUnidade] = useState<string>('')
+
+  useEffect(() => {
+    const fetchUnidades = async () => {
+      try {
+        const res = await fetch('/api/sipe/unidades')
+        if (res.ok) {
+          const data = await res.json()
+          setUnidadesList(data.unidades || [])
+        }
+      } catch (e) {
+        console.error('Erro ao buscar unidades:', e)
+      }
+    }
+    fetchUnidades()
+  }, [])
+
+  const generatePrintHtml = (unidadeNome: string, advs: Advogado[]): string => {
+    const dataFormatada = new Date().toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+
+    let rowsHtml = ''
+    advs.forEach(adv => {
+      const oabStr = adv.oab ? `OAB: ${adv.oab}` : 'OAB: Não cadastrado'
+      const telStr = adv.telefone ? `Tel: ${adv.telefone}` : 'Tel: Não cadastrado'
+      const endStr = adv.endereco ? `<div class="address">Endereço: ${adv.endereco}</div>` : ''
+      
+      let clientesHtml = ''
+      if (adv.vinculos.length === 0) {
+        clientesHtml = '<p class="no-clients">Nenhum cliente ativo vinculado nesta unidade.</p>'
+      } else {
+        clientesHtml = `
+          <table class="clients-table">
+            <thead>
+              <tr>
+                <th style="width: 45%;">Nome do Apenado</th>
+                <th style="width: 15%;">Regime</th>
+                <th style="width: 20%;">Cela</th>
+                <th style="width: 20%;">Facção</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${adv.vinculos.map(v => `
+                <tr>
+                  <td class="client-name">${v.apenado.nome}</td>
+                  <td>${v.apenado.regime || '-'}</td>
+                  <td>${v.apenado.unidade && v.apenado.cela ? `${v.apenado.cela}` : v.apenado.cela || '-'}</td>
+                  <td>
+                    ${v.apenado.faccao ? `
+                      <span class="fac-tag" style="border-left: 3px solid ${v.apenado.faccao.cor || '#ff0000'}">
+                        ${v.apenado.faccao.sigla || v.apenado.faccao.nome}
+                      </span>
+                    ` : '-'}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `
+      }
+
+      rowsHtml += `
+        <div class="adv-card">
+          <div class="adv-header">
+            <span class="adv-name">${adv.nome}</span>
+            <span class="adv-meta">${oabStr} | ${telStr}</span>
+          </div>
+          ${endStr}
+          <div class="clients-section">
+            <div class="section-title">Clientes Atendidos na Unidade:</div>
+            ${clientesHtml}
+          </div>
+        </div>
+      `
+    })
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Relatório de Advogados - ${unidadeNome}</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              color: #333;
+              margin: 30px;
+              font-size: 13px;
+              line-height: 1.4;
+            }
+            .header {
+              border-bottom: 2px solid #333;
+              padding-bottom: 15px;
+              margin-bottom: 25px;
+            }
+            .header-title {
+              font-size: 18px;
+              font-weight: bold;
+              margin: 0 0 5px 0;
+              text-transform: uppercase;
+            }
+            .header-meta {
+              font-size: 12px;
+              color: #666;
+              margin: 0;
+            }
+            .adv-card {
+              margin-bottom: 30px;
+              page-break-inside: avoid;
+              border: 1px solid #ddd;
+              border-radius: 6px;
+              padding: 15px;
+              background-color: #fafafa;
+            }
+            .adv-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: baseline;
+              border-bottom: 1px dashed #ccc;
+              padding-bottom: 8px;
+              margin-bottom: 10px;
+            }
+            .adv-name {
+              font-size: 14px;
+              font-weight: bold;
+              color: #111;
+              text-transform: uppercase;
+            }
+            .adv-meta {
+              font-size: 11px;
+              color: #444;
+              margin-left: 15px;
+            }
+            .address {
+              font-size: 11px;
+              color: #555;
+              margin-bottom: 12px;
+              font-style: italic;
+            }
+            .clients-section {
+              margin-top: 10px;
+            }
+            .section-title {
+              font-size: 11px;
+              font-weight: bold;
+              color: #555;
+              margin-bottom: 6px;
+              text-transform: uppercase;
+            }
+            .clients-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 5px;
+              background-color: #fff;
+            }
+            .clients-table th, .clients-table td {
+              border: 1px solid #e0e0e0;
+              padding: 6px 10px;
+              text-align: left;
+              font-size: 11px;
+            }
+            .clients-table th {
+              background-color: #f0f0f0;
+              font-weight: bold;
+            }
+            .client-name {
+              font-weight: 600;
+            }
+            .no-clients {
+              font-size: 11px;
+              color: #777;
+              font-style: italic;
+              margin: 5px 0 0 0;
+            }
+            .fac-tag {
+              padding-left: 6px;
+              font-weight: bold;
+            }
+            @media print {
+              body {
+                margin: 15px;
+                font-size: 11px;
+              }
+              .adv-card {
+                border: none;
+                padding: 0;
+                margin-bottom: 25px;
+                background-color: transparent;
+                border-bottom: 1px solid #ccc;
+                border-radius: 0;
+                padding-bottom: 15px;
+              }
+              .clients-table th {
+                background-color: #f5f5f5 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .adv-name {
+                font-size: 12px;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1 class="header-title">Relatório de Advogados e Clientes Vinculados</h1>
+            <p class="header-meta">
+              <strong>Unidade Prisional:</strong> ${unidadeNome} | 
+              <strong>Gerado em:</strong> ${dataFormatada} | 
+              <strong>Total:</strong> ${advs.length} advogado(s)
+            </p>
+          </div>
+          <div class="content">
+            ${rowsHtml}
+          </div>
+        </body>
+      </html>
+    `
+  }
+
+  const handlePrintReport = async () => {
+    if (!selectedUnidade) return
+    
+    const printToastId = toast.loading('Gerando relatório de impressão...')
+    try {
+      const params = new URLSearchParams({ limit: '1000', unidade: selectedUnidade })
+      if (q) params.set('q', q)
+
+      const res = await fetch(`/api/sipe/advogados?${params}`)
+      if (!res.ok) throw new Error('Erro ao buscar advogados')
+      
+      const data = await res.json()
+      const advsToPrint = data.advogados as Advogado[]
+
+      if (advsToPrint.length === 0) {
+        toast.dismiss(printToastId)
+        toast.error('Nenhum advogado encontrado para esta unidade')
+        return
+      }
+
+      const printWindow = window.open('', '_blank')
+      if (!printWindow) {
+        toast.dismiss(printToastId)
+        toast.error('Bloqueador de pop-ups impediu a abertura do relatório')
+        return
+      }
+
+      const htmlContent = generatePrintHtml(selectedUnidade, advsToPrint)
+      printWindow.document.write(htmlContent)
+      printWindow.document.close()
+      
+      printWindow.focus()
+      setTimeout(() => {
+        printWindow.print()
+      }, 500)
+
+      toast.dismiss(printToastId)
+    } catch (err) {
+      console.error(err)
+      toast.dismiss(printToastId)
+      toast.error('Falha ao gerar o relatório para impressão')
+    }
+  }
+
   const handleApenadoClick = async (apenadoId: string) => {
     setLoadingApenado(true)
     try {
@@ -335,6 +605,7 @@ export function AdvogadosImportados() {
     setLoading(true)
     const params = new URLSearchParams({ page: String(page), limit: '24' })
     if (q) params.set('q', q)
+    if (selectedUnidade) params.set('unidade', selectedUnidade)
 
     const res = await fetch(`/api/sipe/advogados?${params}`)
     if (res.ok) {
@@ -344,7 +615,7 @@ export function AdvogadosImportados() {
       setTotalPages(data.totalPages)
     }
     setLoading(false)
-  }, [page, q])
+  }, [page, q, selectedUnidade])
 
   useEffect(() => { fetchAdvogados() }, [fetchAdvogados])
 
@@ -412,15 +683,45 @@ export function AdvogadosImportados() {
               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+
+          <select
+            value={selectedUnidade}
+            onChange={e => { setSelectedUnidade(e.target.value); setPage(1) }}
+            className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent max-w-xs truncate cursor-pointer"
+          >
+            <option value="">Todas as Unidades Prisionais</option>
+            {unidadesList.map(u => {
+              const nomeExibicao = u.nome.replace(/^\d+\s*-\s*/, '')
+              return (
+                <option key={u.id} value={u.nome}>
+                  {nomeExibicao}
+                </option>
+              )
+            })}
+          </select>
+
           <span className="text-sm text-gray-500">{total} advogado{total !== 1 ? 's' : ''}</span>
         </div>
 
-        <div className="flex flex-col items-end gap-1">
-          <button
-            onClick={handleSyncCna}
-            disabled={syncingCna || (isAnyJobActive && !activeCnaJob)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
-          >
+        <div className="flex flex-wrap items-center gap-3">
+          {selectedUnidade && (
+            <button
+              onClick={handlePrintReport}
+              disabled={loading || advogados.length === 0}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+              title="Gerar relatório para impressão desta unidade"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimir Relatório
+            </button>
+          )}
+
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={handleSyncCna}
+              disabled={syncingCna || (isAnyJobActive && !activeCnaJob)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+            >
             {syncingCna || activeCnaJob ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
