@@ -298,7 +298,7 @@ export function SyncPanel() {
   const [clearingType, setClearingType] = useState<string | null>(null)
   const [unidades, setUnidades] = useState<Unidade[]>(UNIDADES_FALLBACK)
   const [loadingUnidades, setLoadingUnidades] = useState(true)
-  const [selectedEngine, setSelectedEngine] = useState<'playwright' | 'firecrawl'>('playwright')
+  const [selectedEngine, setSelectedEngine] = useState<'python-sdk' | 'playwright' | 'firecrawl'>('python-sdk')
 
   const [unidadesFromSipe, setUnidadesFromSipe] = useState(false)
 
@@ -338,10 +338,10 @@ export function SyncPanel() {
     return () => clearInterval(interval)
   }, [fetchJobs])
 
-  const startSync = async (tipo: string, engine?: 'playwright' | 'firecrawl') => {
+  const startSync = async (tipo: string, engine?: 'python-sdk' | 'playwright' | 'firecrawl') => {
     setLoading(true)
     try {
-      const engineToUse = engine || (tipo === 'GLOBAL' ? selectedEngine : 'playwright')
+      const engineToUse = engine || (tipo === 'GLOBAL' ? selectedEngine : 'python-sdk')
       const res = await fetch('/api/sipe/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -353,7 +353,10 @@ export function SyncPanel() {
         return
       }
       setActiveJobId(data.jobId)
-      const engineLabel = engineToUse === 'firecrawl' ? ' (Firecrawl)' : ''
+      const engineLabel =
+        engineToUse === 'firecrawl' ? ' (Firecrawl)' :
+        engineToUse === 'python-sdk' ? ' (SDK Python)' :
+        ' (Playwright)'
       toast.info('Sincronização iniciada' + engineLabel)
       fetchJobs()
     } catch {
@@ -608,11 +611,12 @@ export function SyncPanel() {
           <div className="flex items-center gap-2">
             <select
               value={selectedEngine}
-              onChange={(e) => setSelectedEngine(e.target.value as 'playwright' | 'firecrawl')}
+              onChange={(e) => setSelectedEngine(e.target.value as 'python-sdk' | 'playwright' | 'firecrawl')}
               disabled={isActive || loading}
               title="Escolha o engine para Scraping Global"
               className="px-3 py-2 bg-white dark:bg-gray-800 border border-teal-300 dark:border-teal-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 disabled:opacity-50"
             >
+              <option value="python-sdk">🐍 SDK Python</option>
               <option value="playwright">🎭 Playwright</option>
               <option value="firecrawl">🔥 Firecrawl</option>
             </select>
@@ -629,7 +633,7 @@ export function SyncPanel() {
           </div>
 
           <button
-            onClick={() => startSync('GLOBAL_TESTE', 'playwright')}
+            onClick={() => startSync('GLOBAL_TESTE', selectedEngine)}
             disabled={isActive || loading}
             title="Testa o scraping com apenas 150 IDs - rápido para validar mudanças no código"
             className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"

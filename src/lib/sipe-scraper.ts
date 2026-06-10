@@ -36,45 +36,77 @@ const SIPE_SENHA = process.env.SIPE_SENHA ?? ''
 const SIPE_PERFIL = process.env.SIPE_PERFIL ?? '2'   // Master
 const SIPE_UNIDADE = process.env.SIPE_UNIDADE ?? '3'  // CDPPVH
 
-const SIPE_SCRAPER_ENGINE = process.env.SIPE_SCRAPER_ENGINE ?? 'playwright'
 const SIPE_PYTHON_API_URL = process.env.SIPE_PYTHON_API_URL ?? 'http://localhost:8000'
+export type SipeEngine = 'playwright' | 'firecrawl' | 'python-sdk'
+const DEFAULT_SIPE_ENGINE: SipeEngine = (process.env.SIPE_SCRAPER_ENGINE as SipeEngine) ?? 'python-sdk'
+
+type SipeProxyResponse = {
+  content_type?: string
+  is_binary: boolean
+  html?: string
+  text?: string
+  data?: string
+  json?: any
+}
 
 /**
  * Tenta obter o HTML ou Imagem do SIPE através do Proxy Python FastAPI (curl_cffi).
  * Caso a chamada falhe ou o motor de scraping não seja "python-sdk", retorna null (para ativar o fallback).
  */
-async function fetchSipeViaProxy(path: string): Promise<{ html?: string; data?: string; is_binary: boolean } | null> {
-  const engineValue = process.env.SIPE_SCRAPER_ENGINE
-  if (SIPE_SCRAPER_ENGINE !== 'python-sdk') {
-    console.log(`[PYTHON PROXY] ⏭️ SDK desativado. SIPE_SCRAPER_ENGINE="${SIPE_SCRAPER_ENGINE}" (raw env: "${engineValue}"). Usando Playwright.`)
+async function requestSipeViaProxy(options: {
+  path: string
+  method?: 'GET' | 'POST'
+  params?: Record<string, string>
+  form?: Record<string, string>
+  headers?: Record<string, string>
+  timeoutMs?: number
+}): Promise<SipeProxyResponse | null> {
+  if (globalThis.__sipeCurrentEngine !== 'python-sdk') {
     return null
   }
-  
-  console.log(`[PYTHON PROXY] 🐍 Tentando SDK Python para: ${path}`)
-  
+
   try {
-    const cleanPath = path.startsWith('/') ? path : `/${path}`
-    const url = `${SIPE_PYTHON_API_URL}/sipe/proxy?path=${encodeURIComponent(cleanPath)}`
+    const cleanPath = options.path.startsWith('/') ? options.path : `/${options.path}`
+    const method = options.method ?? 'GET'
+    const timeoutMs = options.timeoutMs ?? 15000
+    const url = method === 'GET'
+      ? `${SIPE_PYTHON_API_URL}/sipe/proxy?path=${encodeURIComponent(cleanPath)}`
+      : `${SIPE_PYTHON_API_URL}/sipe/proxy`
+
     const res = await fetch(url, {
-      method: 'GET',
+      method,
       headers: {
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
       },
-      signal: AbortSignal.timeout(15000)
+      body: method === 'POST'
+        ? JSON.stringify({
+            path: cleanPath,
+            method,
+            params: options.params,
+            form: options.form,
+            headers: options.headers,
+          })
+        : undefined,
+      signal: AbortSignal.timeout(timeoutMs),
     })
-    
+
     if (!res.ok) {
-      console.warn(`[PYTHON PROXY] ⚠️ Chamada falhou com status ${res.status} para o path: ${path}. Ativando fallback para Playwright.`)
+      console.warn(`[PYTHON PROXY] ⚠️ Chamada ${method} falhou com status ${res.status} para o path: ${cleanPath}. Ativando fallback para Playwright.`)
       return null
     }
-    
+
     const data = await res.json()
-    console.log(`[PYTHON PROXY] ✅ Sucesso via SDK Python para: ${path} (binary: ${data?.is_binary ?? false})`)
+    console.log(`[PYTHON PROXY] ✅ Sucesso via SDK Python para: ${cleanPath} (binary: ${data?.is_binary ?? false})`)
     return data
   } catch (err: any) {
-    console.warn(`[PYTHON PROXY] ⚠️ Erro de rede na API Python para o path ${path}: ${err.message || err}. Ativando fallback para Playwright.`)
+    console.warn(`[PYTHON PROXY] ⚠️ Erro de rede na API Python para o path ${options.path}: ${err.message || err}. Ativando fallback para Playwright.`)
     return null
   }
+}
+
+async function fetchSipeViaProxy(path: string): Promise<SipeProxyResponse | null> {
+  return requestSipeViaProxy({ path, method: 'GET' })
 }
 
 
@@ -101,11 +133,28 @@ declare global {
   var __sipeState: SipeSyncProgress | null
   // eslint-disable-next-line no-var
   var __sipeStopFlag: boolean
+  // eslint-disable-next-line no-var
+  var __sipeCurrentEngine: SipeEngine
+  // eslint-disable-next-line no-var
+  var __sipeFallbackUnidade: string | null
 }
 
 // Initialize once per process; no-op on hot-reloads
 if (globalThis.__sipeState === undefined) globalThis.__sipeState = null
 if (globalThis.__sipeStopFlag === undefined) globalThis.__sipeStopFlag = false
+if (globalThis.__sipeCurrentEngine === undefined) globalThis.__sipeCurrentEngine = DEFAULT_SIPE_ENGINE
+if (globalThis.__sipeFallbackUnidade === undefined) globalThis.__sipeFallbackUnidade = SIPE_UNIDADE
+
+function setCurrentSipeEngine(engine: SipeEngine, fallbackUnidade?: string | null): void {
+  globalThis.__sipeCurrentEngine = engine
+  if (fallbackUnidade) {
+    globalThis.__sipeFallbackUnidade = fallbackUnidade
+  }
+}
+
+function isPythonSdkEngine(): boolean {
+  return globalThis.__sipeCurrentEngine === 'python-sdk'
+}
 
 export function getSipeState(): SipeSyncProgress | null {
   return globalThis.__sipeState
@@ -324,6 +373,123 @@ async function login(page: Page, unidadeId: string): Promise<boolean> {
   return true
 }
 
+async function ensureFallbackLogin(page: Page): Promise<void> {
+  if ((page as any).__sipeAuthenticated === true) {
+    return
+  }
+
+  const fallbackUnidade = globalThis.__sipeFallbackUnidade || SIPE_UNIDADE
+  const ok = await login(page, fallbackUnidade)
+  if (!ok) {
+    throw new Error(`Falha no login do SIPE para fallback Playwright (unidade ${fallbackUnidade})`)
+  }
+  ;(page as any).__sipeAuthenticated = true
+}
+
+function markFallbackSessionDirty(page: Page): void {
+  ;(page as any).__sipeAuthenticated = false
+}
+
+async function gotoSipeWithFallback(
+  page: Page,
+  path: string,
+  options: Parameters<Page['goto']>[1] = { waitUntil: 'domcontentloaded' }
+) {
+  await ensureFallbackLogin(page)
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  return page.goto(`${SIPE_URL}${cleanPath}`, options)
+}
+
+function extractIdsFromHtml(html: string, entity: 'apenados' | 'advogados'): number[] {
+  const regex = entity === 'apenados'
+    ? /\/apenados\/(\d+)\/(?:selecionarOpcao|editar)/g
+    : /\/advogados\/(\d+)(?:\/|["'?])/g
+
+  const ids = new Set<number>()
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(html)) !== null) {
+    const parsed = parseInt(match[1], 10)
+    if (!isNaN(parsed) && parsed > 0) {
+      ids.add(parsed)
+    }
+  }
+
+  return [...ids].sort((a, b) => a - b)
+}
+
+function extractAjaxPathFromHtml(html: string): string | null {
+  const patterns = [
+    /ajax\s*:\s*\{\s*url\s*:\s*['"]([^'"]+)['"]/i,
+    /ajax\s*:\s*['"]([^'"]+)['"]/i,
+    /sAjaxSource\s*[:=]\s*['"]([^'"]+)['"]/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern)
+    if (match?.[1]) {
+      return match[1].replace(/\\\//g, '/')
+    }
+  }
+
+  return null
+}
+
+async function fetchPaginatedIdsViaProxy(
+  ajaxPath: string,
+  entity: 'apenados' | 'advogados'
+): Promise<number[]> {
+  const normalizedPath = ajaxPath.startsWith('http')
+    ? ajaxPath.replace(SIPE_URL, '')
+    : ajaxPath
+
+  const ids = new Set<number>()
+  const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
+  const maxIds = testMode ? 150 : Number.POSITIVE_INFINITY
+
+  let start = 0
+  const length = 500
+  let draw = 1
+
+  while (ids.size < maxIds) {
+    const proxyData = await requestSipeViaProxy({
+      path: normalizedPath,
+      method: 'POST',
+      form: {
+        draw: String(draw++),
+        start: String(start),
+        length: String(length),
+        'columns[0][data]': '0',
+        'order[0][column]': '0',
+        'order[0][dir]': 'asc',
+      },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      timeoutMs: 20000,
+    })
+
+    const rows: any[] = proxyData?.json?.data ?? proxyData?.json?.aaData ?? []
+    if (rows.length === 0) {
+      break
+    }
+
+    const chunk = extractIdsFromHtml(JSON.stringify(rows), entity)
+    for (const id of chunk) {
+      ids.add(id)
+      if (ids.size >= maxIds) break
+    }
+
+    start += length
+    const totalRecords = proxyData?.json?.recordsFiltered ?? proxyData?.json?.recordsTotal ?? rows.length
+    if (rows.length < length || start >= totalRecords) {
+      break
+    }
+  }
+
+  return [...ids]
+}
+
 // ── DB progress helpers ───────────────────────────────────────
 
 async function dbProgress(
@@ -375,9 +541,10 @@ function refreshMemory(_jobId: string, patch: Partial<SipeSyncProgress>) {
  * Start a new sync job or resume an interrupted one.
  * Runs entirely in background — returns immediately.
  */
-export function startSipeSync(jobId: string, unidadeId: string): void {
+export function startSipeSync(jobId: string, unidadeId: string, engine: SipeEngine = 'playwright'): void {
   if (globalThis.__sipeState?.status === 'RUNNING') return
 
+  setCurrentSipeEngine(engine, unidadeId)
   globalThis.__sipeStopFlag = false
   globalThis.__sipeState = {
     jobId,
@@ -416,8 +583,8 @@ export function startSipeSync(jobId: string, unidadeId: string): void {
 }
 
 /** Resume an INTERRUPTED job without re-collecting IDs */
-export function resumeSipeSync(jobId: string, unidadeId: string): void {
-  startSipeSync(jobId, unidadeId) // startSipeSync detects existing IDs in DB
+export function resumeSipeSync(jobId: string, unidadeId: string, engine: SipeEngine = 'playwright'): void {
+  startSipeSync(jobId, unidadeId, engine) // startSipeSync detects existing IDs in DB
 }
 
 /**
@@ -579,15 +746,21 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
 
   const context = await createSession()
   const page = await context.newPage()
+  markFallbackSessionDirty(page)
 
   // Tipos sem unidade específica usam a unidade padrão '3' apenas para fazer login
   const loginUnidade = (unidadeId === 'EXTRAMUROS' || unidadeId === 'GLOBAL') ? '3' : unidadeId
+  setCurrentSipeEngine(globalThis.__sipeCurrentEngine, loginUnidade)
 
   try {
-    const ok = await login(page, loginUnidade)
-    if (!ok) throw new Error('Falha no login do SIPE')
-
-    log(jobId, 'Login realizado com sucesso')
+    if (isPythonSdkEngine()) {
+      log(jobId, 'SDK Python ativado como caminho principal. Playwright ficará em modo rollback.')
+    } else {
+      const ok = await login(page, loginUnidade)
+      if (!ok) throw new Error('Falha no login do SIPE')
+      ;(page as any).__sipeAuthenticated = true
+      log(jobId, 'Login realizado com sucesso')
+    }
 
     // ── Phase 1: collect IDs (or load from checkpoint) ────────
     let ids: number[] = []
@@ -725,7 +898,9 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
           } catch (err: any) {
             if (err?.message === 'SESSAO_EXPIRADA') {
               log(jobId, 'Sessão expirada detectada. Re-autenticando no SIPE...')
+              markFallbackSessionDirty(page)
               await login(page, loginUnidade)
+              ;(page as any).__sipeAuthenticated = true
 
               if (job.tipo === 'ADVOGADOS') {
                 await scrapeAdvogadoDetalhe(page, sipeId, jobId)
@@ -831,11 +1006,18 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
   const context = await createSession()
   let page = await context.newPage()
   await setupFastPageIfNeeded(page, fast)
+  markFallbackSessionDirty(page)
 
   try {
-    const ok = await login(page, SIPE_UNIDADE)
-    if (!ok) throw new Error('Falha no login do SIPE')
-    log(jobId, 'Login realizado com sucesso')
+    setCurrentSipeEngine(globalThis.__sipeCurrentEngine, SIPE_UNIDADE)
+    if (isPythonSdkEngine()) {
+      log(jobId, 'SDK Python ativado para sincronização de unidades. Playwright ficará em rollback.')
+    } else {
+      const ok = await login(page, SIPE_UNIDADE)
+      if (!ok) throw new Error('Falha no login do SIPE')
+      ;(page as any).__sipeAuthenticated = true
+      log(jobId, 'Login realizado com sucesso')
+    }
 
     let checkpoint: {
       unidades: Array<{ id: string; nome: string; concluida: boolean; totalApenados?: number }>;
@@ -867,8 +1049,8 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
       })
     } else {
       log(jobId, 'Coletando lista completa de unidades prisionais no SIPE...')
-      await page.goto(`${SIPE_URL}/selectRole`, { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(async () => {
-        await page.goto(`${SIPE_URL}/selectRole/1`, { waitUntil: 'domcontentloaded' })
+      await gotoSipeWithFallback(page, '/selectRole', { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(async () => {
+        await gotoSipeWithFallback(page, '/selectRole/1', { waitUntil: 'domcontentloaded' })
       })
       await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 15_000 })
 
@@ -1212,6 +1394,35 @@ async function coletarIdsApenados(
   unidadeNomeEsperada?: string | null,
   globalMode = false
 ): Promise<number[]> {
+  if (isPythonSdkEngine()) {
+    const candidatePaths = globalMode
+      ? ['/apenados/index']
+      : ['/listagem/geral', `/listagem/${unidadeId}/carceragem`]
+
+    for (const path of candidatePaths) {
+      const proxyData = await fetchSipeViaProxy(path)
+      const html = proxyData?.html ?? proxyData?.text
+      if (!html) continue
+
+      const ajaxPath = extractAjaxPathFromHtml(html)
+      if (ajaxPath) {
+        const idsViaAjax = await fetchPaginatedIdsViaProxy(ajaxPath, 'apenados')
+        if (idsViaAjax.length > 0) {
+          log(jobId, `🐍 SDK Python coletou ${idsViaAjax.length} IDs via DataTables (${path})`)
+          return idsViaAjax
+        }
+      }
+
+      const idsViaHtml = extractIdsFromHtml(html, 'apenados')
+      if (idsViaHtml.length > 0) {
+        log(jobId, `🐍 SDK Python coletou ${idsViaHtml.length} IDs diretamente do HTML (${path})`)
+        return idsViaHtml
+      }
+    }
+
+    log(jobId, '⚠️ SDK Python não conseguiu coletar IDs. Ativando rollback via Playwright.')
+  }
+
   // Validação da unidade ativa no menu superior do SIPE para garantir a troca correta
   if (!globalMode && unidadeNomeEsperada) {
     try {
@@ -1231,8 +1442,8 @@ async function coletarIdsApenados(
         log(jobId, `⚠️ Unidade divergente ou não detectada! Forçando troca de papel no SIPE para ID #${unidadeId}...`)
         
         // Vai para a tela de seleção de papel
-        await page.goto(`${SIPE_URL}/selectRole/1`, { waitUntil: 'domcontentloaded' }).catch(async () => {
-          await page.goto(`${SIPE_URL}/selectRole`, { waitUntil: 'domcontentloaded' })
+        await gotoSipeWithFallback(page, '/selectRole/1', { waitUntil: 'domcontentloaded' }).catch(async () => {
+          await gotoSipeWithFallback(page, '/selectRole', { waitUntil: 'domcontentloaded' })
         })
 
         await page.locator('select').nth(0).waitFor({ state: 'attached', timeout: 10_000 })
@@ -1310,7 +1521,7 @@ async function coletarIdsApenados(
 
   if (globalMode) {
     log(jobId, `Acessando listagem global cross-unit: ${SIPE_URL}/apenados/index`)
-    await page.goto(`${SIPE_URL}/apenados/index`, {
+    await gotoSipeWithFallback(page, '/apenados/index', {
       waitUntil: 'domcontentloaded',
       timeout: 45_000,
     })
@@ -1319,7 +1530,7 @@ async function coletarIdsApenados(
     let tableFound = false
     try {
       log(jobId, `Acessando listagem geral: ${SIPE_URL}/listagem/geral`)
-      await page.goto(`${SIPE_URL}/listagem/geral`, {
+      await gotoSipeWithFallback(page, '/listagem/geral', {
         waitUntil: 'domcontentloaded',
         timeout: 20_000,
       })
@@ -1330,7 +1541,7 @@ async function coletarIdsApenados(
     }
 
     if (!tableFound) {
-      await page.goto(`${SIPE_URL}/listagem/${unidadeId}/carceragem`, {
+      await gotoSipeWithFallback(page, `/listagem/${unidadeId}/carceragem`, {
         waitUntil: 'domcontentloaded',
         timeout: 30_000,
       })
@@ -1674,7 +1885,7 @@ async function scrapeApenadoFicha(
     if (proxyData && !proxyData.is_binary && proxyData.html) {
       await page.setContent(proxyData.html)
     } else {
-      await page.goto(`${SIPE_URL}${searchPath}`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+      await gotoSipeWithFallback(page, searchPath, { waitUntil: 'domcontentloaded', timeout: 45_000 })
     }
 
     if (!proxyData) {
@@ -1722,6 +1933,7 @@ async function scrapeApenadoFicha(
       await page.setContent(editProxyData.html)
       editStatus = 200
     } else {
+      await ensureFallbackLogin(page)
       const editResponse = await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45_000 })
       editStatus = editResponse?.status()
       
@@ -1744,7 +1956,7 @@ async function scrapeApenadoFicha(
       await page.setContent(proxyData.html)
       status = 200
     } else {
-      const response = await page.goto(`${SIPE_URL}${editPath}`, {
+      const response = await gotoSipeWithFallback(page, editPath, {
         waitUntil: 'domcontentloaded',
         timeout: 45_000,
       })
@@ -2424,6 +2636,7 @@ async function scrapeFotosComplementares(
         await page.setContent(proxyData.html)
         status = 200
       } else {
+        await ensureFallbackLogin(page)
         const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 8000 });
         status = response?.status();
       }
@@ -2481,7 +2694,7 @@ async function scrapeProcessos(
     if (proxyData && !proxyData.is_binary && proxyData.html) {
       await page.setContent(proxyData.html)
     } else {
-      await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded' })
+      await gotoSipeWithFallback(page, path, { waitUntil: 'domcontentloaded' })
     }
     await page.waitForSelector('body', { timeout: 10_000 })
 
@@ -2658,7 +2871,7 @@ async function scrapeVisitantes(
       await page.setContent(proxyData.html)
       status = 200
     } else {
-      const response = await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+      const response = await gotoSipeWithFallback(page, path, { waitUntil: 'domcontentloaded', timeout: 15_000 })
       status = response?.status()
     }
     
@@ -2956,7 +3169,7 @@ async function scrapeAlcunhas(
     if (proxyData && !proxyData.is_binary && proxyData.html) {
       await page.setContent(proxyData.html)
     } else {
-      await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded' })
+      await gotoSipeWithFallback(page, path, { waitUntil: 'domcontentloaded' })
     }
     await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
 
@@ -2980,8 +3193,31 @@ async function scrapeAlcunhas(
 
 async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]> {
   log(jobId, 'Iniciando coleta de advogados na listagem do SIPE...')
+
+  if (isPythonSdkEngine()) {
+    const proxyData = await fetchSipeViaProxy('/advogados/listaradvogados')
+    const html = proxyData?.html ?? proxyData?.text
+    if (html) {
+      const ajaxPath = extractAjaxPathFromHtml(html)
+      if (ajaxPath) {
+        const idsViaAjax = await fetchPaginatedIdsViaProxy(ajaxPath, 'advogados')
+        if (idsViaAjax.length > 0) {
+          log(jobId, `🐍 SDK Python coletou ${idsViaAjax.length} IDs de advogados via DataTables`)
+          return idsViaAjax
+        }
+      }
+
+      const idsViaHtml = extractIdsFromHtml(html, 'advogados')
+      if (idsViaHtml.length > 0) {
+        log(jobId, `🐍 SDK Python coletou ${idsViaHtml.length} IDs de advogados diretamente do HTML`)
+        return idsViaHtml
+      }
+    }
+
+    log(jobId, '⚠️ SDK Python não conseguiu coletar advogados. Ativando rollback via Playwright.')
+  }
   
-  await page.goto(`${SIPE_URL}/advogados/listaradvogados`, {
+  await gotoSipeWithFallback(page, '/advogados/listaradvogados', {
     waitUntil: 'domcontentloaded',
     timeout: 20_000,
   })
@@ -3262,7 +3498,7 @@ async function downloadSipeImage(page: Page, photoSrc: string): Promise<Buffer |
 }
 
 export async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: string): Promise<void> {
-  await page.goto(`${SIPE_URL}/advogados/${sipeId}/detalhaclientes`, { waitUntil: 'domcontentloaded' })
+  await gotoSipeWithFallback(page, `/advogados/${sipeId}/detalhaclientes`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('body', { timeout: 10_000 })
   
   // Extração inteligente de dados estruturados do advogado a partir da tabela de perfil
@@ -4069,65 +4305,122 @@ export async function scrapeCnaOabDetails(
 
 // ── Facções ───────────────────────────────────────────────────
 
-export async function scrapeFaccoes(): Promise<void> {
+export async function scrapeFaccoes(jobId?: string, unidadeId = SIPE_UNIDADE, engine?: SipeEngine): Promise<void> {
+  if (engine) {
+    setCurrentSipeEngine(engine, unidadeId)
+  }
+
   const context = await createSession()
   const page = await context.newPage()
+  markFallbackSessionDirty(page)
   try {
-    await login(page, SIPE_UNIDADE)
-
     let options: { value: string; text: string }[] = []
     let extraido = false
     let erroOriginal: any = null
 
     console.log('[FACCOES] 🔍 Iniciando scrape de facções...')
 
-    // 1. Acessa /apenados/index para extrair IDs dos apenados listados na unidade
-    console.log('[FACCOES] 📄 Acessando /apenados/index...')
-    await page.goto(`${SIPE_URL}/apenados/index`, { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('tbody', { timeout: 15_000 }).catch(() => {})
+    if (isPythonSdkEngine()) {
+      const apenadoIds = await coletarIdsApenados(page, unidadeId, jobId ?? 'FACCOES', null, false)
 
-    const links = await page.$$('tbody a[href*="/selecionarOpcao"]')
-    const apenadoIds: number[] = []
+      for (let i = 0; i < apenadoIds.length; i++) {
+        const apenadoId = apenadoIds[i]
+        const progress = `[${i + 1}/${apenadoIds.length}]`
 
-    for (const link of links) {
-      const href = await link.getAttribute('href')
-      if (!href) continue
-      const m = href.match(/\/apenados\/(\d+)/)
-      if (m) {
-        const parsedId = parseInt(m[1])
-        if (!isNaN(parsedId) && parsedId > 0) {
-          apenadoIds.push(parsedId)
+        try {
+          console.log(`[FACCOES] ${progress} Tentando via SDK Python /apenados/${apenadoId}/faccao...`)
+          const proxyData = await fetchSipeViaProxy(`/apenados/${apenadoId}/faccao`)
+          const html = proxyData?.html ?? proxyData?.text
+          if (!html || html.includes('Trying to get property')) {
+            continue
+          }
+
+          await page.setContent(html)
+          const extractedOptions = await page.evaluate(() => {
+            const candidates = Array.from(document.querySelectorAll('select'))
+            for (const select of candidates) {
+              const options = Array.from(select.querySelectorAll('option'))
+                .filter((o) => o.value && o.value !== '0' && o.value !== '')
+                .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
+
+              if (options.length === 0) continue
+
+              const hasGender = options.some((opt) => {
+                const text = opt.text.toLowerCase()
+                return text.includes('masculino') || text.includes('feminino') || text.includes('não informado')
+              })
+
+              if (!hasGender) {
+                return options
+              }
+            }
+            return [] as Array<{ value: string; text: string }>
+          })
+
+          if (extractedOptions.length > 0) {
+            options = extractedOptions
+            extraido = true
+            console.log(`[FACCOES] 🐍 Lista de facções obtida via SDK com ${options.length} opções`)
+            break
+          }
+        } catch (err) {
+          erroOriginal = err
         }
       }
     }
 
-    console.log(`[FACCOES] 🔗 Encontrados ${apenadoIds.length} apenados na listagem ativa do SIPE`)
-
-    // 2. Fallback: Ler também apenados da base de dados local se a listagem na página estiver muito pequena
-    if (apenadoIds.length < 10) {
-      console.log(`[FACCOES] ⚠️ Listagem na página pequena (${apenadoIds.length} apenados). Carregando fallback do banco local...`)
-      const apenadosBanco = await prisma.sipeApenadoImportado.findMany({
-        where: { sipeId: { gt: 0 } },
-        select: { sipeId: true },
-        orderBy: { sipeId: 'desc' },
-        take: 50
-      })
-      for (const ab of apenadosBanco) {
-        if (!apenadoIds.includes(ab.sipeId)) {
-          apenadoIds.push(ab.sipeId)
-        }
-      }
-      console.log(`[FACCOES] 📊 Lista final de apenados para varredura: ${apenadoIds.length}`)
+    if (!extraido) {
+      await ensureFallbackLogin(page)
     }
 
-    // 3. Varredura: Procuramos por um apenado com facção (faccao_id > 0 na rota /editar)
-    for (let i = 0; i < apenadoIds.length; i++) {
-      const apenadoId = apenadoIds[i]
-      const progress = `[${i + 1}/${apenadoIds.length}]`
-      
-      try {
-        console.log(`[FACCOES] ${progress} Verificando perfil /editar do apenado SIPE ID #${apenadoId}...`)
-        await page.goto(`${SIPE_URL}/apenados/${apenadoId}/editar`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+    if (!extraido) {
+      // 1. Acessa /apenados/index para extrair IDs dos apenados listados na unidade
+      console.log('[FACCOES] 📄 Acessando /apenados/index...')
+      await gotoSipeWithFallback(page, '/apenados/index', { waitUntil: 'domcontentloaded' })
+      await page.waitForSelector('tbody', { timeout: 15_000 }).catch(() => {})
+
+      const links = await page.$$('tbody a[href*="/selecionarOpcao"]')
+      const apenadoIds: number[] = []
+
+      for (const link of links) {
+        const href = await link.getAttribute('href')
+        if (!href) continue
+        const m = href.match(/\/apenados\/(\d+)/)
+        if (m) {
+          const parsedId = parseInt(m[1])
+          if (!isNaN(parsedId) && parsedId > 0) {
+            apenadoIds.push(parsedId)
+          }
+        }
+      }
+
+      console.log(`[FACCOES] 🔗 Encontrados ${apenadoIds.length} apenados na listagem ativa do SIPE`)
+
+      // 2. Fallback: Ler também apenados da base de dados local se a listagem na página estiver muito pequena
+      if (apenadoIds.length < 10) {
+        console.log(`[FACCOES] ⚠️ Listagem na página pequena (${apenadoIds.length} apenados). Carregando fallback do banco local...`)
+        const apenadosBanco = await prisma.sipeApenadoImportado.findMany({
+          where: { sipeId: { gt: 0 } },
+          select: { sipeId: true },
+          orderBy: { sipeId: 'desc' },
+          take: 50
+        })
+        for (const ab of apenadosBanco) {
+          if (!apenadoIds.includes(ab.sipeId)) {
+            apenadoIds.push(ab.sipeId)
+          }
+        }
+        console.log(`[FACCOES] 📊 Lista final de apenados para varredura: ${apenadoIds.length}`)
+      }
+
+      // 3. Varredura: Procuramos por um apenado com facção (faccao_id > 0 na rota /editar)
+      for (let i = 0; i < apenadoIds.length; i++) {
+        const apenadoId = apenadoIds[i]
+        const progress = `[${i + 1}/${apenadoIds.length}]`
+
+        try {
+          console.log(`[FACCOES] ${progress} Verificando perfil /editar do apenado SIPE ID #${apenadoId}...`)
+          await gotoSipeWithFallback(page, `/apenados/${apenadoId}/editar`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
 
         const faccaoIdVal = await page.evaluate(() => {
           const el = document.querySelector('[name="faccao_id"]') as HTMLInputElement | null
@@ -4139,7 +4432,7 @@ export async function scrapeFaccoes(): Promise<void> {
         if (faccaoIdVal && faccaoIdVal !== '0' && faccaoIdVal !== '') {
           console.log(`[FACCOES] 🌟 Apenado SIPE ID #${apenadoId} possui facção vinculada! Acessando página /faccao...`)
           
-          await page.goto(`${SIPE_URL}/apenados/${apenadoId}/faccao`, { waitUntil: 'load', timeout: 20_000 })
+          await gotoSipeWithFallback(page, `/apenados/${apenadoId}/faccao`, { waitUntil: 'load', timeout: 20_000 })
           
           const htmlContent = await page.content()
           if (htmlContent.includes("Trying to get property")) {
@@ -4215,12 +4508,13 @@ export async function scrapeFaccoes(): Promise<void> {
             break // Sucesso total! Sai do loop de varredura.
           }
         }
-      } catch (err) {
-        console.log(`[FACCOES] ⚠️ Erro ao varrer apenado #${apenadoId}: ${(err as any)?.message || err}`)
-        erroOriginal = err
-      }
+        } catch (err) {
+          console.log(`[FACCOES] ⚠️ Erro ao varrer apenado #${apenadoId}: ${(err as any)?.message || err}`)
+          erroOriginal = err
+        }
 
-      await page.waitForTimeout(300)
+        await page.waitForTimeout(300)
+      }
     }
 
     if (!extraido) {
@@ -4318,7 +4612,7 @@ async function scrapeEndereço(
       await page.setContent(proxyData.html)
       status = 200
     } else {
-      const response = await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+      const response = await gotoSipeWithFallback(page, path, { waitUntil: 'domcontentloaded', timeout: 15_000 })
       status = response?.status()
       
       // Proteção contra redirecionamentos (ex: login expirado, falta de permissão ou apenado não existente)
@@ -4463,7 +4757,7 @@ export async function scrapeHistorico(
     if (proxyData && !proxyData.is_binary && proxyData.html) {
       await page.setContent(proxyData.html)
     } else {
-      await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded' })
+      await gotoSipeWithFallback(page, path, { waitUntil: 'domcontentloaded' })
     }
     await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
 
@@ -4708,7 +5002,7 @@ async function scrapeDocumentos(
     if (proxyData && !proxyData.is_binary && proxyData.html) {
       await page.setContent(proxyData.html)
     } else {
-      await page.goto(`${SIPE_URL}${path}`, { waitUntil: 'domcontentloaded' })
+      await gotoSipeWithFallback(page, path, { waitUntil: 'domcontentloaded' })
     }
     await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
 
@@ -4792,6 +5086,7 @@ async function scrapeAdvogadosDoApenado(
         await page.setContent(proxyData.html)
         status = 200
       } else {
+        await ensureFallbackLogin(page)
         const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 })
         status = response?.status()
       }
@@ -4879,27 +5174,74 @@ export async function closeBrowser(): Promise<void> {
 // ── Scraping de Unidades Prisionais ──────────────────────────
 
 export async function scrapeUnidadesPrisionais(jobId?: string): Promise<Array<{ id: string; nome: string }>> {
+  if (!jobId) {
+    setCurrentSipeEngine('python-sdk', SIPE_UNIDADE)
+  }
+
   if (jobId) {
     await dbProgress(jobId, { fase: 'Login', log: 'Iniciando sessão no SIPE para unidades...' })
   }
 
   const context = await createSession()
   const page = await context.newPage()
+  markFallbackSessionDirty(page)
 
   try {
+    if (isPythonSdkEngine()) {
+      if (jobId) {
+        await dbProgress(jobId, { fase: 'Coletando unidades', log: 'Coletando unidades via SDK Python...' })
+      }
+
+      for (const path of ['/selectRole', '/selectRole/1']) {
+        const proxyData = await fetchSipeViaProxy(path)
+        const html = proxyData?.html ?? proxyData?.text
+        if (!html) continue
+
+        await page.setContent(html)
+        const unidades = await page.evaluate(() => {
+          const selects = document.querySelectorAll('select')
+          if (selects.length < 2) return [] as Array<{ id: string; nome: string }>
+          const unitSelect = selects[1] as HTMLSelectElement
+          return Array.from(unitSelect.options)
+            .filter((o) => o.value && o.value !== '' && o.value !== '0')
+            .map((o) => ({ id: o.value, nome: (o.textContent ?? '').trim() }))
+        })
+
+        if (unidades.length > 0) {
+          if (jobId) {
+            await dbProgress(jobId, { log: `Encontradas ${unidades.length} unidades via SDK. Atualizando cache...` })
+          }
+
+          globalThis.__sipeUnidadesCache = { data: unidades, fetchedAt: Date.now() }
+          await prisma.systemConfig.upsert({
+            where: { key: 'sipe_unidades' },
+            create: {
+              key: 'sipe_unidades',
+              value: unidades,
+              description: 'Cache persistente das unidades prisionais do SIPE',
+            },
+            update: {
+              value: unidades,
+            },
+          }).catch(() => {})
+
+          return unidades
+        }
+      }
+    }
+
     if (jobId) {
       await dbProgress(jobId, { log: 'Realizando login no SIPE...' })
     }
-    // Faz login usando perfil 'Master' e unidade '3' (fallback)
-    await login(page, SIPE_UNIDADE)
+    await ensureFallbackLogin(page)
 
     if (jobId) {
       await dbProgress(jobId, { fase: 'Coletando unidades', log: 'Acessando tela de seleção de papéis...' })
     }
 
     // Navega para /selectRole para garantir que está na tela de seleção
-    await page.goto(`${SIPE_URL}/selectRole`, { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(async () => {
-      await page.goto(`${SIPE_URL}/selectRole/1`, { waitUntil: 'domcontentloaded' })
+    await gotoSipeWithFallback(page, '/selectRole', { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(async () => {
+      await gotoSipeWithFallback(page, '/selectRole/1', { waitUntil: 'domcontentloaded' })
     })
 
     await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 15_000 })

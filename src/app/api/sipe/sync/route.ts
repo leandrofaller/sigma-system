@@ -6,6 +6,7 @@ import {
   scrapeFaccoes,
   detectAndMarkCrashedJobs,
   scrapeUnidadesPrisionais,
+  type SipeEngine,
 } from '@/lib/sipe-scraper'
 import { runScrapeFirecrawl } from '@/lib/firecrawl-scraper'
 
@@ -23,10 +24,10 @@ const UNIDADES: Record<string, string> = {
 }
 
 /**
- * Start sync with specified engine (playwright or firecrawl)
+ * Start sync with specified engine
  * Runs in background — returns immediately
  */
-function startSipeSyncWithEngine(jobId: string, unidadeId: string, engine: 'playwright' | 'firecrawl'): void {
+function startSipeSyncWithEngine(jobId: string, unidadeId: string, engine: SipeEngine): void {
   if (engine === 'firecrawl') {
     // Start Firecrawl scraper in background
     runScrapeFirecrawl(jobId, unidadeId)
@@ -34,8 +35,7 @@ function startSipeSyncWithEngine(jobId: string, unidadeId: string, engine: 'play
         console.error(`[FIRECRAWL] ❌ Erro no scraping: ${err}`)
       })
   } else {
-    // Start Playwright scraper (default)
-    startSipeSync(jobId, unidadeId)
+    startSipeSync(jobId, unidadeId, engine)
   }
 }
 
@@ -63,9 +63,14 @@ export async function POST(req: NextRequest) {
     body = {}
   }
 
-  // Extract engine from body or query params (default: playwright)
+  // Extract engine from body or query params (default: python-sdk)
   const engineParam = body.engine || req.nextUrl.searchParams.get('engine')
-  const engine = (engineParam === 'firecrawl') ? 'firecrawl' : 'playwright'
+  const engine: SipeEngine =
+    engineParam === 'firecrawl'
+      ? 'firecrawl'
+      : engineParam === 'playwright'
+        ? 'playwright'
+        : 'python-sdk'
 
   // Verificar disponibilidade do Firecrawl se solicitado
   if (engine === 'firecrawl') {
@@ -160,7 +165,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    scrapeFaccoes()
+    scrapeFaccoes(job.id, unidadeId, engine)
       .then(() => {
         console.log(`[SYNC] ✅ scrapeFaccoes completado com sucesso`)
         return prisma.sipeSyncJob.update({

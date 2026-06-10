@@ -1,8 +1,8 @@
 import os
 import logging
 import base64
-from typing import Optional
-from fastapi import FastAPI, HTTPException, Query, Header
+from typing import Optional, Dict, Any
+from fastapi import FastAPI, HTTPException, Query, Header, Body
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
@@ -62,6 +62,32 @@ def get_client(cookie_header: Optional[str] = None) -> SIPEClient:
         logger.info("Cookies aplicados a partir da requisição HTTP (Header Cookie).")
         
     return client
+
+def _serialize_proxy_response(response, path: str) -> Dict[str, Any]:
+    content_type = response.headers.get("content-type", "")
+
+    if "image" in content_type or "octet-stream" in content_type or path.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")):
+        encoded = base64.b64encode(response.content).decode("utf-8")
+        return {
+            "content_type": content_type,
+            "is_binary": True,
+            "data": f"data:{content_type};base64,{encoded}"
+        }
+
+    payload: Dict[str, Any] = {
+        "content_type": content_type,
+        "is_binary": False,
+        "html": response.text,
+        "text": response.text,
+    }
+
+    if "json" in content_type:
+        try:
+            payload["json"] = response.json()
+        except ValueError:
+            pass
+
+    return payload
 
 # Exception Handlers globais
 
@@ -148,25 +174,8 @@ def sipe_proxy(
     """
     client = get_client(cookie)
     try:
-        # Executa a requisição síncrona com curl_cffi
         response = client._request("GET", path)
-        content_type = response.headers.get("content-type", "")
-        
-        # Se for imagem ou binário
-        if "image" in content_type or "octet-stream" in content_type or path.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")):
-            encoded = base64.b64encode(response.content).decode("utf-8")
-            return {
-                "content_type": content_type,
-                "is_binary": True,
-                "data": f"data:{content_type};base64,{encoded}"
-            }
-        else:
-            # Retorna o HTML bruto
-            return {
-                "content_type": content_type,
-                "is_binary": False,
-                "html": response.text
-            }
+        return _serialize_proxy_response(response, path)
             
     except SIPEAuthError as e:
         logger.error(f"Erro de autenticação no proxy para o path {path}: {str(e)}")
@@ -176,6 +185,50 @@ def sipe_proxy(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Erro no proxy para o path {path}: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Erro de comunicação com o SIPE: {str(e)}")
+
+@app.post("/sipe/proxy")
+def sipe_proxy_write(
+    payload: Dict[str, Any] = Body(...),
+    cookie: Optional[str] = Header(None, alias="Cookie")
+):
+    """
+    Proxy genérico GET/POST ao SIPE real para o modo SDK-first.
+    Permite DataTables, paginação e formulários sem depender do browser.
+    """
+    path = str(payload.get("path") or "").strip()
+    method = str(payload.get("method") or "GET").upper()
+
+    if not path:
+        raise HTTPException(status_code=400, detail="Campo 'path' é obrigatório.")
+    if method not in {"GET", "POST"}:
+        raise HTTPException(status_code=400, detail="Método não suportado. Use GET ou POST.")
+
+    client = get_client(cookie)
+
+    try:
+        req_kwargs: Dict[str, Any] = {}
+        params = payload.get("params")
+        form = payload.get("form")
+        headers = payload.get("headers")
+
+        if isinstance(params, dict) and params:
+            req_kwargs["params"] = params
+        if isinstance(form, dict) and form:
+            req_kwargs["data"] = form
+        if isinstance(headers, dict) and headers:
+            req_kwargs["headers"] = headers
+
+        response = client._request(method, path, **req_kwargs)
+        return _serialize_proxy_response(response, path)
+    except SIPEAuthError as e:
+        logger.error(f"Erro de autenticação no proxy {method} para o path {path}: {str(e)}")
+        raise HTTPException(status_code=401, detail=str(e))
+    except SIPENotFoundError as e:
+        logger.info(f"Registro não encontrado no proxy {method} para o path {path}: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erro no proxy {method} para o path {path}: {str(e)}")
         raise HTTPException(status_code=502, detail=f"Erro de comunicação com o SIPE: {str(e)}")
 
 @app.get("/sipe/diagnose")
@@ -216,5 +269,3 @@ def diagnose():
         "total_cookies_loaded": len(cookies),
         "base_url": base_url,
     }
-
-
