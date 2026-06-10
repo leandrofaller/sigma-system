@@ -567,8 +567,6 @@ export function AdvogadosImportados() {
   }
 
   const handlePrintReport = async () => {
-    if (!selectedUnidade && !selectedFaccao) return
-    
     const printToastId = toast.loading('Gerando relatório de impressão...')
     try {
       const params = new URLSearchParams({ limit: '1000' })
@@ -747,17 +745,15 @@ export function AdvogadosImportados() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {(selectedUnidade || selectedFaccao) && (
-            <button
-              onClick={handlePrintReport}
-              disabled={loading || advogados.length === 0}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-semibold transition-colors shadow-sm"
-              title="Gerar relatório para impressão com os filtros aplicados"
-            >
-              <Printer className="w-4 h-4" />
-              Imprimir Relatório
-            </button>
-          )}
+          <button
+            onClick={handlePrintReport}
+            disabled={loading || advogados.length === 0}
+            className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+            title="Gerar relatório para impressão (com ou sem filtros)"
+          >
+            <Printer className="w-4 h-4" />
+            Imprimir Relatório
+          </button>
 
           <div className="flex flex-col items-end gap-1">
             <button
