@@ -93,9 +93,10 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/node_modules/playwright ./node_modules/playwright
 COPY --from=builder /app/node_modules/playwright-core ./node_modules/playwright-core
 
-# Baixa o binário do Chromium como usuário nextjs — corresponde ao caminho em runtime:
-# /home/nextjs/.cache/ms-playwright/
-RUN HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium
+# Baixa o binário do Chromium como usuário nextjs (com retries tolerantes a instabilidades na CDN)
+RUN HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium || \
+    (echo "⚠️ Falha no download. Tentando novamente em 5 segundos..." && sleep 5 && HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium) || \
+    (echo "⚠️ Segunda falha. Tentando novamente em 10 segundos..." && sleep 10 && HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium)
 
 # Copia o Prisma client e CLI completos para o runner
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
