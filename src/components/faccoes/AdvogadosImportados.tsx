@@ -459,15 +459,15 @@ export function AdvogadosImportados() {
       }
 
       rowsHtml += `
-        <div class="adv-card">
-          <div class="adv-header">
-            <span class="adv-name">${adv.nome}</span>
-            <span class="adv-meta">${oabStr} | ${telStr}</span>
+        <div class="adv-card" style="margin-bottom: 30px; border: 1px solid #ddd; border-radius: 6px; padding: 15px; background-color: #fafafa; page-break-inside: avoid; display: block;">
+          <div style="border-bottom: 1px dashed #999; padding-bottom: 8px; margin-bottom: 10px; width: 100%; display: block;">
+            <span style="font-size: 14px; font-weight: bold; color: #000000 !important; text-transform: uppercase; display: inline-block; -webkit-print-color-adjust: exact; print-color-adjust: exact;">${adv.nome}</span>
+            <span style="font-size: 11px; color: #333333 !important; float: right; margin-top: 3px; display: inline-block; -webkit-print-color-adjust: exact; print-color-adjust: exact;">${oabStr} | ${telStr}</span>
             <div style="clear: both;"></div>
           </div>
           ${endStr}
-          <div class="clients-section">
-            <div class="section-title">Clientes Atendidos:</div>
+          <div class="clients-section" style="margin-top: 10px; display: block;">
+            <div class="section-title" style="font-size: 11px; font-weight: bold; color: #555; margin-bottom: 6px; text-transform: uppercase;">Clientes Atendidos:</div>
             ${clientesHtml}
           </div>
         </div>
@@ -584,15 +584,6 @@ export function AdvogadosImportados() {
               body {
                 margin: 15px;
                 font-size: 11px;
-              }
-              .adv-card {
-                border: none;
-                padding: 0;
-                margin-bottom: 25px;
-                background-color: transparent;
-                border-bottom: 1px solid #ccc;
-                border-radius: 0;
-                padding-bottom: 15px;
               }
               .clients-table th {
                 background-color: #f5f5f5 !important;
