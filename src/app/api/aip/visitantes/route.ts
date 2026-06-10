@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { containsNormalizedText, normalizeSearchText } from '@/lib/search'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +14,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const q = normalizeSearchText(searchParams.get('q'))
+  const q = searchParams.get('q')?.trim() ?? ''
 
   const visitantes = await prisma.aIPFotoVisitante.findMany({
     include: {
@@ -29,10 +28,11 @@ export async function GET(request: NextRequest) {
   let resultado = visitantes
 
   if (q) {
+    const lower = q.toLowerCase()
     resultado = visitantes.filter(
       (v) =>
-        containsNormalizedText(v.nomeVisitante, q) ||
-        containsNormalizedText(v.cpfVisitante, q)
+        v.nomeVisitante?.toLowerCase().includes(lower) ||
+        v.cpfVisitante?.includes(q)
     )
   }
 

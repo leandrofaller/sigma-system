@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parsePortugueseFloat } from '@/lib/utils';
-import { containsNormalizedText } from '@/lib/search';
 import {
   Plus, MapPin, Clock, CheckCircle2, X, Loader2,
   Navigation, Zap, Monitor, Pencil, AlertTriangle,
@@ -107,9 +106,9 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
 
   const filteredMissions = missions.filter(m => {
     const matchesSearch = 
-      containsNormalizedText(m.title, searchQuery) ||
-      containsNormalizedText(m.destination, searchQuery) ||
-      (m.participants && m.participants.some(p => containsNormalizedText(p, searchQuery)));
+      m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.destination.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.participants && m.participants.some(p => p.toLowerCase().includes(searchQuery.toLowerCase())));
       
     if (!matchesSearch) return false;
     

@@ -10,7 +10,6 @@ import {
   Trash2, Pencil, Check, Plus, FolderX, MoreVertical,
 } from 'lucide-react';
 import { formatDate, formatFileSize, getClassificationColor } from '@/lib/utils';
-import { containsNormalizedText } from '@/lib/search';
 
 const FOLDER_COLORS = [
   '#6172f3', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -163,7 +162,7 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
     return f.folderId === activeFolder;
   });
   const filtered = folderFiltered.filter((f) =>
-    !search || containsNormalizedText(f.title, search) || containsNormalizedText(f.source, search)
+    !search || f.title.toLowerCase().includes(search.toLowerCase()) || f.source.toLowerCase().includes(search.toLowerCase())
   );
 
   // Group by source agency

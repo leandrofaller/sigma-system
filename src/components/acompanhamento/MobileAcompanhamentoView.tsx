@@ -7,7 +7,6 @@ import { ptBR } from 'date-fns/locale';
 import { Activity, Calendar, MapPin, Users, ChevronRight, ClipboardCheck, Search, X, MessageSquare, ListTodo } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DeleteMissionButton } from './DeleteMissionButton';
-import { containsNormalizedText } from '@/lib/search';
 
 interface Mission {
   id: string;
@@ -39,8 +38,8 @@ export function MobileAcompanhamentoView({ initialMissions, isAdmin }: Props) {
 
   const filteredMissions = initialMissions.filter(m => {
     const matchesSearch =
-      containsNormalizedText(m.title, searchQuery) ||
-      containsNormalizedText(m.destination, searchQuery);
+      m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.destination.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
 

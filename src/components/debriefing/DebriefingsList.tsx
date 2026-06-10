@@ -6,7 +6,6 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { ClipboardList, Plus, Search, Eye, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { formatDate, getClassificationColor } from '@/lib/utils';
-import { containsNormalizedText } from '@/lib/search';
 import type { DebriefingWithRelations } from '@/types';
 
 interface Props {
@@ -59,9 +58,9 @@ export function DebriefingsList({ debriefings, role, userId, userGroupId, userGr
 
   const filtered = debriefings.filter((d) => {
     const matchSearch = !search ||
-      containsNormalizedText(d.subject, search) ||
-      containsNormalizedText(d.number, search) ||
-      containsNormalizedText(d.missionCode, search);
+      d.subject.toLowerCase().includes(search.toLowerCase()) ||
+      d.number.toLowerCase().includes(search.toLowerCase()) ||
+      (d.missionCode ?? '').toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filterStatus || d.status === filterStatus;
     return matchSearch && matchStatus;
   });

@@ -17,7 +17,6 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { parsePortugueseFloat } from '@/lib/utils';
-import { containsNormalizedText } from '@/lib/search';
 
 interface Mission {
   id: string;
@@ -881,7 +880,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                     />
                     <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
                       {MUNICIPIOS_RONDONIA
-                        .filter(m => containsNormalizedText(m, municipioSearch))
+                        .filter(m => m.toLowerCase().includes(municipioSearch.toLowerCase()))
                         .map(municipio => (
                           <button
                             key={municipio}

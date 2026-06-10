@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { formatDateTime } from '@/lib/utils';
-import { containsNormalizedText } from '@/lib/search';
 import { Search, Download } from 'lucide-react';
 
 interface Props {
@@ -27,9 +26,9 @@ export function AuditTable({ logs }: Props) {
 
   const filtered = logs.filter((l) =>
     !search ||
-    containsNormalizedText(l.action, search) ||
-    containsNormalizedText(l.user?.name, search) ||
-    containsNormalizedText(l.entity, search)
+    l.action.toLowerCase().includes(search.toLowerCase()) ||
+    l.user?.name?.toLowerCase().includes(search.toLowerCase()) ||
+    l.entity?.toLowerCase().includes(search.toLowerCase())
   );
 
   const exportCSV = () => {

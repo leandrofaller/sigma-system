@@ -6,7 +6,6 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { FileText, Plus, Search, Eye, Pencil, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import { formatDate, getClassificationColor } from '@/lib/utils';
-import { containsNormalizedText } from '@/lib/search';
 import type { RelintWithRelations } from '@/types';
 
 interface Props {
@@ -61,8 +60,8 @@ export function RelintsList({ relints, role, userId, userGroupId, userGroupName 
 
   const filtered = relints.filter((r) => {
     const matchSearch = !search ||
-      containsNormalizedText(r.subject, search) ||
-      containsNormalizedText(r.number, search);
+      r.subject.toLowerCase().includes(search.toLowerCase()) ||
+      r.number.toLowerCase().includes(search.toLowerCase());
     const matchStatus = !filterStatus || r.status === filterStatus;
     return matchSearch && matchStatus;
   });
