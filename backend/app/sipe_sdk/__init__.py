@@ -1,4 +1,3 @@
-from .client import SIPEClient
 from .exceptions import (
     SIPEError,
     SIPEAuthError,
@@ -6,6 +5,7 @@ from .exceptions import (
     SIPEHTTPError
 )
 from .models import ApenadoSearchResult, ApenadoDetails
+from .logging_utils import SanitizingFormatter
 
 __all__ = [
     "SIPEClient",
@@ -14,5 +14,14 @@ __all__ = [
     "SIPENotFoundError",
     "SIPEHTTPError",
     "ApenadoSearchResult",
-    "ApenadoDetails"
+    "ApenadoDetails",
+    "SanitizingFormatter",
 ]
+
+
+def __getattr__(name):
+    if name == "SIPEClient":
+        from .client import SIPEClient
+
+        return SIPEClient
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

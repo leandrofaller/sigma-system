@@ -34,15 +34,21 @@ def parse_search_results(html_content: str, base_url: str) -> List[ApenadoSearch
         match = re.search(r"/apenados/([^/]+)/selecionarOpcao", href)
         if match:
             apenado_id = match.group(1)
-            nome = link.get_text(strip=True)
-            
-            # Se o link estiver sem texto, busca na linha correspondente da tabela
+            nome = ""
+
+            # Em listagens do SIPE, o texto do link costuma ser apenas a ação.
+            parent_row = link.find_parent("tr")
+            if parent_row:
+                cells = parent_row.find_all("td")
+                action_text = link.get_text(strip=True)
+                for cell in cells:
+                    cell_text = cell.get_text(" ", strip=True)
+                    if cell_text and cell_text != action_text:
+                        nome = cell_text
+                        break
+
             if not nome:
-                parent_row = link.find_parent("tr")
-                if parent_row:
-                    cells = parent_row.find_all("td")
-                    if len(cells) > 0:
-                        nome = cells[0].get_text(strip=True)
+                nome = link.get_text(strip=True)
             
             url = f"{base_url.rstrip('/')}/apenados/{apenado_id}/selecionarOpcao"
             results.append(ApenadoSearchResult(id=apenado_id, nome=nome, url=url))
