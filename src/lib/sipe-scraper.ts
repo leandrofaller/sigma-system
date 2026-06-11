@@ -920,7 +920,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
         return
       }
 
-      const useSearch = job.tipo === 'IDS_MANUAIS' || job.tipo === 'EXTRAMUROS' || job.tipo === 'GLOBAL'
+      const useSearch = job.tipo === 'IDS_MANUAIS' || job.tipo === 'EXTRAMUROS'
 
       try {
         await withRetry(async () => {
@@ -929,7 +929,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
               await scrapeAdvogadoDetalhe(page, sipeId, jobId)
             } else {
               const apenadoCache = listagemInfoCache.get(sipeId)
-              const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? job.unidadeNome
+              const apenadoUnidadeNome = job.tipo === 'GLOBAL' ? null : (apenadoCache?.unidadeNome ?? job.unidadeNome)
               await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome, useSearch)
             }
           } catch (err: any) {
@@ -943,7 +943,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
                 await scrapeAdvogadoDetalhe(page, sipeId, jobId)
               } else {
                 const apenadoCache = listagemInfoCache.get(sipeId)
-                const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? job.unidadeNome
+                const apenadoUnidadeNome = job.tipo === 'GLOBAL' ? null : (apenadoCache?.unidadeNome ?? job.unidadeNome)
                 await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome, useSearch)
               }
             } else {
