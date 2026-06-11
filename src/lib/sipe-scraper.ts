@@ -164,6 +164,11 @@ export function getSipeState(): SipeSyncProgress | null {
 
 export function stopSipeJob(): void {
   globalThis.__sipeStopFlag = true
+  if (globalThis.__sipeState) {
+    globalThis.__sipeState.status = 'INTERRUPTED'
+    globalThis.__sipeState.ultimoLog = 'Interrompido pelo usuário'
+    globalThis.__sipeState = null
+  }
 }
 
 // ── Crash detection helper ────────────────────────────────────
@@ -177,7 +182,8 @@ export async function detectAndMarkCrashedJobs(): Promise<void> {
   // Jobs PENDING há mais de 2 minutos nunca chegaram a iniciar
   const pendingCutoff = new Date(Date.now() - 2 * 60 * 1000)
 
-  await prisma.sipeSyncJob.updateMany({
+  // Consultar se há algum job travado antes de atualizar
+  const crashedJobs = await prisma.sipeSyncJob.findMany({
     where: {
       OR: [
         // RUNNING sem heartbeat recente
@@ -195,8 +201,20 @@ export async function detectAndMarkCrashedJobs(): Promise<void> {
         },
       ],
     },
-    data: { status: 'INTERRUPTED' },
+    select: { id: true }
   })
+
+  if (crashedJobs.length > 0) {
+    await prisma.sipeSyncJob.updateMany({
+      where: { id: { in: crashedJobs.map(j => j.id) } },
+      data: { status: 'INTERRUPTED' },
+    })
+
+    // Limpa a memória global se o job ativo for detectado como crashed
+    if (globalThis.__sipeState && crashedJobs.some(j => j.id === globalThis.__sipeState?.jobId)) {
+      globalThis.__sipeState = null
+    }
+  }
 }
 
 // ── Browser pool ──────────────────────────────────────────────
@@ -1548,6 +1566,10 @@ async function coletarIdsApenados(
       // 3. Processar em lotes de 15 requisições concorrentes
       const LOTE_SIZE = 15
       for (let i = 0; i < pagesToFetch.length; i += LOTE_SIZE) {
+        if (globalThis.__sipeStopFlag) {
+          log(jobId, '🛑 Coleta global do SDK Python interrompida.')
+          break
+        }
         const lote = pagesToFetch.slice(i, i + LOTE_SIZE)
         log(jobId, `🐍 Carregando lote de páginas ${i + 2} até ${Math.min(i + 2 + lote.length - 1, pageLimit)} (concorrentes)...`)
 
@@ -1623,6 +1645,10 @@ async function coletarIdsApenados(
       const maxIds = testMode ? 150 : Infinity
 
       while (currentPath) {
+        if (globalThis.__sipeStopFlag) {
+          log(jobId, '🛑 Coleta por unidade do SDK Python interrompida.')
+          break
+        }
         log(jobId, `🐍 SDK Python carregando página ${pageNum} da listagem por unidade: ${currentPath}`)
         const html = await fetchPageWithRetry(currentPath, jobId)
         if (!html) {
@@ -2143,6 +2169,10 @@ async function coletarIdsApenados(
   const MAX_VAZIAS = 3
   let continuar = true
   while (continuar) {
+    if (globalThis.__sipeStopFlag) {
+      log(jobId, '🛑 Paginação do Playwright interrompida.')
+      break
+    }
     const botaoLocator = page
       .locator('a:has-text("Próxima"), a:has-text("Next"), li.next > a, [data-dt-idx="next"] a, a:has-text("»"), a:has-text(">>")')
       .first()

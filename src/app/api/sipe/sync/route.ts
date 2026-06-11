@@ -6,6 +6,7 @@ import {
   scrapeFaccoes,
   detectAndMarkCrashedJobs,
   scrapeUnidadesPrisionais,
+  getSipeState,
   type SipeEngine,
 } from '@/lib/sipe-scraper'
 import { runScrapeFirecrawl } from '@/lib/firecrawl-scraper'
@@ -128,12 +129,14 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Prevent duplicate active jobs ──
+  const state = getSipeState()
   const jobAtivo = await prisma.sipeSyncJob.findFirst({
     where: { status: 'RUNNING' },
   })
-  if (jobAtivo) {
+  if (jobAtivo || state?.status === 'RUNNING') {
+    const activeId = jobAtivo?.id || state?.jobId || 'unknown'
     return NextResponse.json(
-      { error: 'Já existe uma sincronização em andamento', jobId: jobAtivo.id },
+      { error: 'Já existe uma sincronização em andamento', jobId: activeId },
       { status: 409 }
     )
   }
