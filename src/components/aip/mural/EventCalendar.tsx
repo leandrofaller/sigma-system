@@ -60,17 +60,20 @@ export function EventCalendar({
   // Gerar dias do calendário
   useEffect(() => {
     const [ano, mesNum] = mes.split('-').map(Number)
-    const data = new Date(ano, mesNum - 1, 1)
-    const diasNoMes = new Date(ano, mesNum, 0).getDate()
-    const primeiraSegunda = data.getDay()
+    const data = new Date(Date.UTC(ano, mesNum - 1, 1))
+    const diasNoMes = new Date(Date.UTC(ano, mesNum, 0)).getUTCDate()
+    
+    // getUTCDay() retorna: 0 = Domingo, 1 = Segunda, etc.
+    // Como a semana no cabeçalho começa na Segunda, calculamos o offset:
+    const offset = (data.getUTCDay() + 6) % 7
 
     const diasArray: CalendarDayWithEvents[] = []
 
     // Dias vazios do mês anterior
-    for (let i = 0; i < primeiraSegunda; i++) {
+    for (let i = 0; i < offset; i++) {
       diasArray.push({
         day: 0,
-        date: new Date(),
+        date: new Date(Date.UTC(ano, mesNum - 1, 1)),
         eventsCount: 0,
         hasEvents: false,
       })
@@ -78,13 +81,13 @@ export function EventCalendar({
 
     // Dias do mês
     for (let i = 1; i <= diasNoMes; i++) {
-      const data = new Date(ano, mesNum - 1, i)
-      const diaKey = data.toISOString().split('T')[0]
+      const dataDia = new Date(Date.UTC(ano, mesNum - 1, i))
+      const diaKey = dataDia.toISOString().split('T')[0]
       const count = eventCounts[diaKey] || 0
 
       diasArray.push({
         day: i,
-        date: data,
+        date: dataDia,
         eventsCount: count,
         hasEvents: count > 0,
       })
@@ -94,15 +97,19 @@ export function EventCalendar({
   }, [mes, eventCounts])
 
   const [ano, mesNum] = mes.split('-').map(Number)
-  const mesNome = new Date(ano, mesNum - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })
+  const mesNome = new Date(Date.UTC(ano, mesNum - 1, 1)).toLocaleString('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
 
   const handlePreviousMonth = () => {
-    const data = new Date(ano, mesNum - 2)
+    const data = new Date(Date.UTC(ano, mesNum - 2, 1))
     onMesChange(data.toISOString().slice(0, 7))
   }
 
   const handleNextMonth = () => {
-    const data = new Date(ano, mesNum)
+    const data = new Date(Date.UTC(ano, mesNum, 1))
     onMesChange(data.toISOString().slice(0, 7))
   }
 

@@ -127,7 +127,7 @@ export function EventList({
           <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-medium">
             <Calendar className="w-4 h-4 text-amber-500" />
             <span>
-              Filtrado por: <strong>{new Date(diaFilter).toLocaleDateString('pt-BR')}</strong>
+              Filtrado por: <strong>{new Date(diaFilter).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</strong>
             </span>
           </div>
           <button
@@ -238,7 +238,7 @@ export function EventList({
                   {/* Metadados e Rodapé */}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800/80 text-xs text-gray-400 dark:text-gray-500">
                     <span className="font-medium text-gray-500 dark:text-gray-400">
-                      {new Date(evento.dataEvento).toLocaleDateString('pt-BR')}
+                      {new Date(evento.dataEvento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                     </span>
                     <span>•</span>
                     <span>{anexosValidos.length} anexo(s)</span>

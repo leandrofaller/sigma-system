@@ -12,7 +12,12 @@ export function MuralClient({ userRole }: { userRole: string }) {
   const [view, setView] = useState<'calendar' | 'list' | 'approvals'>('calendar')
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [mes, setMes] = useState(new Date().toISOString().slice(0, 7))
+  const [mes, setMes] = useState(() => {
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = String(now.getMonth() + 1).padStart(2, '0')
+    return `${y}-${m}`
+  })
   const [categoria, setCategoria] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   
@@ -166,7 +171,7 @@ export function MuralClient({ userRole }: { userRole: string }) {
             <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
               <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-amber-500" />
-                Ocorrências em {new Date(decisionModal.date).toLocaleDateString('pt-BR')}
+                Ocorrências em {new Date(decisionModal.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
               </h3>
               <button
                 onClick={() => setDecisionModal(null)}
