@@ -1948,6 +1948,11 @@ async function scrapeApenadoFicha(
     }
   } else {
     // ── Fluxo original: acesso direto por URL ──
+    if (globalThis.__sipeCurrentEngine === 'python-sdk') {
+      // 🔐 No SIPE (Laravel), é mandatório selecionar o apenado ativo na sessão
+      // antes de ir para a URL /editar. Caso contrário, ocorre redirect para listagem.
+      await fetchSipeViaProxy(`/apenados/${sipeId}/selecionarOpcao`).catch(() => {})
+    }
     const editPath = `/apenados/${sipeId}/editar`
     const proxyData = await fetchSipeViaProxy(editPath)
     let status: number | undefined
@@ -1956,6 +1961,12 @@ async function scrapeApenadoFicha(
       await page.setContent(proxyData.html)
       status = 200
     } else {
+      // 🔐 No SIPE (Laravel), no fallback Playwright também precisamos selecionar o apenado ativo na sessão antes do editar
+      await gotoSipeWithFallback(page, `/apenados/${sipeId}/selecionarOpcao`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 25_000,
+      }).catch(() => {})
+
       const response = await gotoSipeWithFallback(page, editPath, {
         waitUntil: 'domcontentloaded',
         timeout: 45_000,
