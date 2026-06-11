@@ -58,7 +58,7 @@ async function requestSipeViaProxy(options: {
   path: string
   method?: 'GET' | 'POST'
   params?: Record<string, string>
-  form?: Record<string, string>
+  form?: Record<string, any>
   headers?: Record<string, string>
   timeoutMs?: number
 }): Promise<SipeProxyResponse | null> {
@@ -940,8 +940,8 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
           processado: globalThis.__sipeState!.processado,
           ultimoIdProcessado: sipeId,
         })
-        // Polite delay
-        await page.waitForTimeout(300 + Math.random() * 500)
+        // Polite delay (reduzido drasticamente no modo SDK para velocidade máxima)
+        await page.waitForTimeout(isPythonSdkEngine() ? 50 : (300 + Math.random() * 500))
       } catch (err) {
         globalThis.__sipeState!.erros++
         const msg = job.tipo === 'ADVOGADOS'
@@ -1261,8 +1261,8 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
             })
           }
 
-          // 🔧 OTIMIZAÇÃO: Delay maior para governos servidores lentos (2-5s), menor no modo fast
-          const currentDelay = fast ? (500 + Math.random() * 500) : (2000 + Math.random() * 3000)
+          // 🔧 OTIMIZAÇÃO: Delay maior para governos servidores lentos (2-5s), menor no modo fast, e mínimo no modo SDK
+          const currentDelay = isPythonSdkEngine() ? 50 : (fast ? (500 + Math.random() * 500) : (2000 + Math.random() * 3000))
           await page.waitForTimeout(currentDelay)
         } catch (err) {
           const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
@@ -2048,6 +2048,15 @@ async function scrapeApenadoFicha(
   unidadeNome?: string | null,
   useSearch = false
 ): Promise<void> {
+  if (isPythonSdkEngine()) {
+    try {
+      await scrapeApenadoFichaFast(sipeId, unidadeNome, useSearch)
+      return
+    } catch (err) {
+      console.warn(`[SCRAPER FAST] ⚠️ Falha na aceleração Cheerio para o apenado #${sipeId}: ${err}. Ativando fallback via Playwright tradicional.`)
+    }
+  }
+
   if (useSearch) {
     // ── Busca cross-unit: contorna restrição de unidade da sessão ──
     const searchPath = `/apenados/index?escolha=nomeapenado&parametro=${sipeId}`
@@ -5351,6 +5360,1306 @@ export async function closeBrowser(): Promise<void> {
     await browserInstance.close()
     browserInstance = null
   }
+}
+
+// ── Funções de Aceleração com Cheerio (python-sdk-first) ──
+
+function parseApenadoFichaHtmlCheerio(html: string) {
+  const $ = cheerio.load(html)
+  
+  const val = (name: string) => $(`[name="${name}"]`).val()?.toString().trim() || null
+
+  const selVal = (name: string) => {
+    const select = $(`[name="${name}"]`)
+    if (!select.length) return null
+    const selectedOpt = select.find('option:selected')
+    if (selectedOpt.length) {
+      return selectedOpt.text().trim() || null
+    }
+    const valAttr = select.val()
+    if (valAttr) {
+      const opt = select.find(`option[value="${valAttr}"]`)
+      if (opt.length) return opt.text().trim() || null
+    }
+    return select.find('option').first().text().trim() || null
+  }
+
+  const bodyText = $('body').text() || ''
+
+  let celaFicha = null
+  const celaMatch = bodyText.match(/Cela:\s*([^\n]+)/i) || bodyText.match(/Cela\s*-\s*([^\n]+)/i)
+  if (celaMatch) {
+    celaFicha = celaMatch[1].trim()
+  }
+
+  let unidadeFicha = null
+  const unidadeMatch = bodyText.match(/Unidade:\s*([^\n]+)/i) || bodyText.match(/Estabelecimento:\s*([^\n]+)/i) || bodyText.match(/Unidade\s*Prisional:\s*([^\n]+)/i)
+  if (unidadeMatch) {
+    unidadeFicha = unidadeMatch[1].trim()
+  }
+
+  const extractLabel = (label: string): string | null => {
+    let match = bodyText.match(new RegExp(`${label}\\s*:?\\s*([^\\n]+)`, 'i'))
+    if (match) {
+      const value = match[1].trim()
+      if (value && value.length > 0 && !value.match(/^[\s•\-–—]+$/)) {
+        return value
+      }
+    }
+    match = bodyText.match(new RegExp(`${label}\\s*[\\n\\r]+\\s*([^\\n]+)`, 'i'))
+    if (match) {
+      const value = match[1].trim()
+      if (value && value.length > 0 && !value.match(/^[\s•\-–—]+$/)) {
+        return value
+      }
+    }
+    return null
+  }
+
+  const sexoValue = selVal('sexo') || extractLabel('Sexo') || extractLabel('Sexo:') || extractLabel('Gênero')
+  const etniaValue = selVal('fk_etnia') || extractLabel('Etnia')
+  const estadoCivilValue = selVal('fk_estadocivil') || extractLabel('Estado Civil')
+  const grauInstrucaoValue = selVal('fk_grauinstrucao') || extractLabel('Grau de Instrução') || extractLabel('Grau Instrução') || extractLabel('Instrução')
+  const religiaoValue = selVal('fk_religiao') || extractLabel('Religião')
+  const situacaoValue = selVal('situacao') || extractLabel('Situação') || extractLabel('Situação:') || extractLabel('Status')
+
+  const imgs: { src: string; alt: string; id: string; className: string }[] = []
+  $('img').each((_, img) => {
+    imgs.push({
+      src: $(img).attr('src') || '',
+      alt: $(img).attr('alt') || '',
+      id: $(img).attr('id') || '',
+      className: $(img).attr('class') || '',
+    })
+  })
+
+  let mainSrc: string | null = null
+  const allSrcs: string[] = []
+
+  for (const img of imgs) {
+    const src = img.src
+    const alt = img.alt.toLowerCase()
+    const id = img.id.toLowerCase()
+    const className = img.className.toLowerCase()
+    
+    if (
+      !mainSrc && (
+        id.includes('foto') || id.includes('profile') || id.includes('avatar') || id.includes('apenado') ||
+        className.includes('foto') || className.includes('profile') || className.includes('avatar') || className.includes('apenado') ||
+        alt.includes('foto') || alt.includes('profile') || alt.includes('avatar') || alt.includes('apenado') ||
+        src.includes('/foto') || src.includes('/photo') || src.includes('/imagem') || src.includes('/getFoto') || src.includes('/arquivo')
+      )
+    ) {
+      mainSrc = src
+    } else {
+      allSrcs.push(src)
+    }
+  }
+
+  const containerImg = $('.foto img, .foto-apenado img, .profile-image img, #foto img').first()
+  if (containerImg.length) {
+    mainSrc = containerImg.attr('src') || mainSrc
+  }
+
+  if (!mainSrc && imgs.length > 0) {
+    const candidates = imgs.filter(img => {
+      const src = img.src.toLowerCase()
+      return !src.includes('logo') && !src.includes('sejus') && !src.includes('governo') && !src.includes('brasao') && !src.includes('bandeira') && !src.includes('icon')
+    })
+    if (candidates.length > 0) {
+      mainSrc = candidates[0].src
+    }
+  }
+
+  return {
+    dados: {
+      nome: val('nomeapenado'),
+      nomeOutro: val('nomefalso'),
+      cpf: val('cpf'),
+      rg: val('rg'),
+      rgOrgao: val('orgaoexpedidor'),
+      dataNascimento: val('datanascimento'),
+      naturalidade: val('distrito'),
+      sexo: sexoValue,
+      etnia: etniaValue,
+      orientacaoSexual: selVal('homosexual') || extractLabel('Orientação\\s+Sexual'),
+      tipoSanguineo: selVal('tiposanguineo') || extractLabel('Tipo\\s+(?:de\\s+)?Sanguíneo'),
+      grauInstrucao: grauInstrucaoValue,
+      religiao: religiaoValue,
+      estadoCivil: estadoCivilValue,
+      nomeConjuge: val('nomeesposa'),
+      qtdFilhos: parseInt(val('qtdfilhos') || '0') || null,
+      nomeMae: val('nomemae'),
+      nomePai: val('nomepai'),
+      telefone: val('telefone'),
+      rji: val('rji'),
+      regime: val('regime'),
+      situacao: situacaoValue,
+      dataEntrada: val('dataentrada'),
+      dataPrisao: val('dataprisao'),
+      tempoPena: val('tempodepena'),
+      oficioEntrada: val('oficioentrada'),
+      presoOriundo: selVal('presooriundo'),
+      monitorado: val('monitorado') === 'SIM',
+      intramuro: val('intramuro') === 'SIM',
+      faccaoSipeId: parseInt($('[name="faccao_id"]').val()?.toString() || '0') || null,
+      celaFicha,
+      unidadeFicha,
+    },
+    imagesInfo: { mainSrc, allSrcs }
+  }
+}
+
+async function parseAndSaveAlcunhasCheerio(html: string, apenadoId: string): Promise<void> {
+  const $ = cheerio.load(html)
+  const rows = $('table tbody tr')
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const cells = $(row).find('td')
+    if (cells.length < 2) continue
+    const alcunha = $(cells[1]).text().trim()
+    if (!alcunha) continue
+    const exists = await prisma.sipeAlcunha.findFirst({
+      where: { apenadoId, alcunha },
+    })
+    if (!exists) {
+      await prisma.sipeAlcunha.create({ data: { apenadoId, alcunha } })
+    }
+  }
+}
+
+async function parseAndSaveProcessosCheerio(html: string, apenadoId: string): Promise<void> {
+  const $ = cheerio.load(html)
+  const tabelas = $('table')
+  
+  for (let t = 0; t < tabelas.length; t++) {
+    const table = tabelas[t]
+    const rows = $(table).find('tbody tr')
+    if (rows.length === 0) continue
+
+    const headers: string[] = []
+    $(table).find('thead th, thead td').each((_, h) => {
+      headers.push($(h).text().toUpperCase().trim())
+    })
+
+    const numIdx = headers.findIndex(h => h.includes('NÚMERO') || h.includes('PROCESSO') || h.includes('NUMERO'))
+    const varaIdx = headers.findIndex(h => h.includes('VARA') || h.includes('JUÍZO') || h.includes('JUIZO'))
+    const artIdx = headers.findIndex(h => h.includes('ARTIGO') || h.includes('INFRAÇÃO') || h.includes('INFRACAO') || h.includes('CAPITULAÇÃO') || h.includes('CAPITULACAO'))
+    const penaIdx = headers.findIndex(h => h.includes('PENA') || h.includes('TEMPO'))
+    const princIdx = headers.findIndex(h => h.includes('PRINCIPAL'))
+
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r]
+      const cells = $(row).find('td')
+      if (cells.length < 2) continue
+
+      let sipeProcessoId: number | null = null
+      $(row).find('a, button').each((_, el) => {
+        if (sipeProcessoId) return
+        const href = $(el).attr('href') || ''
+        const onClickText = $(el).attr('onclick') || ''
+        const actionText = href + ' ' + onClickText
+        const match = actionText.match(/\/processos\/(\d+)/) || 
+                      actionText.match(/processo_id[^\d]*(\d+)/) || 
+                      actionText.match(/\/excluirProcesso\/(\d+)/) || 
+                      actionText.match(/\/excluir\/(\d+)/)
+        if (match) {
+          sipeProcessoId = parseInt(match[1])
+        }
+      })
+
+      let numero: string | null = null
+      if (numIdx >= 0 && cells.get(numIdx)) {
+        numero = $(cells.get(numIdx)).text().trim()
+      } else {
+        numero = $(cells.get(0)).text().trim()
+      }
+
+      if (numero) {
+        numero = numero.replace(/\s+/g, ' ').trim()
+      }
+
+      let vara: string | null = null
+      if (varaIdx >= 0 && cells.get(varaIdx)) {
+        vara = $(cells.get(varaIdx)).text().trim()
+      }
+
+      let artigos: string[] = []
+      if (artIdx >= 0 && cells.get(artIdx)) {
+        const rawArt = $(cells.get(artIdx)).text().trim()
+        artigos = rawArt.split(/[,;\n]/).map(a => a.trim()).filter(Boolean)
+      }
+
+      let tempoPena: string | null = null
+      if (penaIdx >= 0 && cells.get(penaIdx)) {
+        tempoPena = $(cells.get(penaIdx)).text().trim()
+      }
+
+      let principal = false
+      if (princIdx >= 0 && cells.get(princIdx)) {
+        const checkbox = $(cells.get(princIdx)).find('input[type="checkbox"], input[type="radio"]')
+        if (checkbox.length) {
+          principal = !!checkbox.prop('checked') || checkbox.attr('checked') !== undefined
+        } else {
+          const text = $(cells.get(princIdx)).text().toUpperCase()
+          principal = text.includes('SIM') || text.includes('PRINCIPAL') || text.includes('ATIVO')
+        }
+      }
+
+      const procId = sipeProcessoId ?? Math.abs(hashCodeLocal(numero || ''))
+
+      await prisma.sipeProcesso.upsert({
+        where: { id: `${apenadoId}_${procId}` },
+        create: {
+          id: `${apenadoId}_${procId}`,
+          apenadoId,
+          sipeProcessoId,
+          numero,
+          vara,
+          artigos,
+          tempoPena,
+          principal
+        },
+        update: {
+          numero,
+          vara,
+          artigos,
+          tempoPena,
+          principal
+        }
+      })
+    }
+  }
+}
+
+async function parseAndSaveEnderecoCheerio(html: string, apenadoId: string): Promise<boolean> {
+  const $ = cheerio.load(html)
+  
+  const viewRow = $('tr[id^="view_"]').first()
+  let logradouro: string | null = null
+  let numero: string | null = null
+  let complemento: string | null = null
+  let bairro: string | null = null
+  let cidade: string | null = null
+  let uf: string | null = null
+  let cep: string | null = null
+  let existe = false
+
+  if (!viewRow.length) {
+    logradouro = $('[name="rua_endereco"]').val()?.toString().trim() || null
+    numero = $('[name="numero_endereco"]').val()?.toString().trim() || null
+    complemento = $('[name="complemento_endereco"]').val()?.toString().trim() || null
+    bairro = $('[name="bairro_endereco"]').val()?.toString().trim() || null
+
+    const estEl = $('[name="estado_id"]')
+    if (estEl.length) {
+      uf = estEl.find('option:selected').text().trim() || null
+    }
+
+    const cidEl = $('[name="cidade_id"]')
+    if (cidEl.length) {
+      cidade = cidEl.find('option:selected').text().trim() || null
+    }
+
+    cep = $('[name="cep_endereco"]').val()?.toString().trim() || 
+          $('[name="cep"]').val()?.toString().trim() || null
+          
+    existe = !!(logradouro || bairro || cidade)
+  } else {
+    const cells = viewRow.find('td')
+    const addrId = viewRow.attr('id')?.match(/\d+/)?.[0] || ''
+
+    logradouro = $(`#view_rua_endereco${addrId}`).text().trim() || null
+    numero = $(`#view_numero_endereco${addrId}`).text().trim() || null
+    complemento = $(`#view_complemento_endereco${addrId}`).text().trim() || null
+    bairro = $(`#view_bairro_endereco${addrId}`).text().trim() || null
+
+    const cidadeEstado = $(cells.get(5)).text().trim() || ''
+    if (cidadeEstado && cidadeEstado.includes('-')) {
+      const parts = cidadeEstado.split('-')
+      cidade = parts[0].trim()
+      uf = parts[1].trim()
+    } else if (cidadeEstado) {
+      cidade = cidadeEstado
+    }
+
+    cep = $('[name="cep_endereco"]').val()?.toString().trim() || null
+    existe = true
+  }
+
+  const hasForm = $('form#formulario').length > 0 || $('table').length > 0
+  if (!existe && !hasForm) {
+    return false
+  }
+
+  const ufLimpa = uf && !uf.includes('Selecione') && !uf.includes('Escolha') ? uf : null
+  const cidadeLimpa = cidade && !cidade.includes('Selecione') && !cidade.includes('Escolha') ? cidade : null
+
+  await prisma.sipeApenadoImportado.update({
+    where: { id: apenadoId },
+    data: {
+      logradouro,
+      numero,
+      complemento,
+      bairro,
+      cidade: cidadeLimpa,
+      uf: ufLimpa,
+      cep
+    }
+  })
+
+  return true
+}
+
+async function parseAndSaveMudarCelaCheerio(html: string, apenadoId: string): Promise<void> {
+  const $ = cheerio.load(html)
+  const rows = $('table tbody tr')
+  
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const cells = $(row).find('td')
+    if (cells.length < 5) continue
+
+    const dataStr = $(cells.get(1)).text().trim()
+    const motivo = $(cells.get(2)).text().trim() || ''
+    const celaDe = $(cells.get(3)).text().trim() || ''
+    const celaPara = $(cells.get(4)).text().trim() || ''
+
+    if (!dataStr) continue
+
+    let datahora: Date | null = null
+    try {
+      const parts = dataStr.split(' ')
+      const dateParts = parts[0].split('/')
+      if (dateParts.length === 3) {
+        const timeParts = parts[1] ? parts[1].split(':') : ['00', '00']
+        datahora = new Date(
+          parseInt(dateParts[2]),
+          parseInt(dateParts[1]) - 1,
+          parseInt(dateParts[0]),
+          parseInt(timeParts[0] || '00'),
+          parseInt(timeParts[1] || '00')
+        )
+      }
+    } catch {
+      datahora = new Date(dataStr)
+    }
+
+    const tipo = 'TRANSFERENCIA'
+    const descricao = `Mudança de cela. De: ${celaDe} | Para: ${celaPara} | Motivo: ${motivo}`
+
+    const idString = `${apenadoId}-${tipo}-${dataStr}-${descricao}`
+    const hashId = createHash('md5').update(idString).digest('hex')
+
+    await prisma.sipeHistorico.upsert({
+      where: { id: hashId },
+      create: {
+        id: hashId,
+        apenadoId,
+        tipo,
+        descricao,
+        datahora,
+        cela: celaPara,
+      },
+      update: {
+        descricao,
+        datahora,
+        cela: celaPara,
+      },
+    })
+  }
+}
+
+async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): Promise<void> {
+  const $ = cheerio.load(html)
+  const table = $('table').first()
+  if (!table.length) return
+
+  const rows = table.find('tbody tr, tr')
+  for (let i = 0; i < rows.length; i++) {
+    const tr = rows[i]
+    const cells = $(tr).find('td, th')
+    if (cells.length < 9) continue
+
+    const codigo = $(cells.get(0)).text().trim()
+    if (!codigo || codigo === 'Codigo' || codigo === 'Código') continue
+
+    const regime = $(cells.get(1)).text().trim()
+    const intramuro = $(cells.get(2)).text().trim()
+    const monitorado = $(cells.get(3)).text().trim()
+    const dataEntrada = $(cells.get(4)).text().trim()
+    const origem = $(cells.get(5)).text().trim()
+    const dataSaida = $(cells.get(6)).text().trim()
+    const destino = $(cells.get(7)).text().trim()
+    const motivo = $(cells.get(8)).text().trim()
+
+    const dataStr = dataEntrada !== '-----' ? dataEntrada : (dataSaida !== '-----' ? dataSaida : null)
+    let datahora: Date | null = null
+
+    if (dataStr) {
+      try {
+        const dateParts = dataStr.split('/')
+        if (dateParts.length === 3) {
+          datahora = new Date(
+            parseInt(dateParts[2]),
+            parseInt(dateParts[1]) - 1,
+            parseInt(dateParts[0]),
+            12,
+            0
+          )
+        }
+      } catch {
+        datahora = new Date(dataStr)
+      }
+    }
+
+    const tipo = 'MOVIMENTACAO'
+    const descricao = `Movimentação Geral - Código: ${codigo} | Motivo: ${motivo} | Origem: ${origem} | Destino: ${destino} | Entrada: ${dataEntrada} | Saída: ${dataSaida} | Regime: ${regime} | Intramuro: ${intramuro} | Monitorado: ${monitorado}`
+
+    const idString = `sipe-mov-${apenadoId}-${codigo}`
+    const hashId = createHash('md5').update(idString).digest('hex')
+
+    await prisma.sipeHistorico.upsert({
+      where: { id: hashId },
+      create: {
+        id: hashId,
+        apenadoId,
+        tipo,
+        descricao,
+        datahora,
+        unidade: destino !== '-----' ? destino : (origem !== '-----' ? origem : null),
+      },
+      update: {
+        descricao,
+        datahora,
+        unidade: destino !== '-----' ? destino : (origem !== '-----' ? origem : null),
+      },
+    })
+  }
+}
+
+async function parseAndSaveDocumentosCheerio(html: string, apenadoId: string, apenadoLocalId: string | null): Promise<void> {
+  const $ = cheerio.load(html)
+  const rows = $('table tbody tr')
+  
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const cells = $(row).find('td')
+    if (cells.length < 1) continue
+
+    const nome = $(cells.get(0)).text().trim() || ''
+    const tipo = $(cells.get(1)).text().trim() || 'DOCUMENTO'
+    const data = $(cells.get(2)).text().trim()
+
+    if (!nome) continue
+
+    const anchor = $(row).find('a[href*="download"], a[href*="documento"], a[href*="arquivo"]')
+    const urlDownload = anchor.length ? anchor.attr('href') || null : null
+
+    const idString = `${apenadoId}-${nome}-${data}`
+    const hashId = createHash('md5').update(idString).digest('hex')
+
+    const parsedDataAnexo = parseDateSafely(data)
+
+    await prisma.sipeDocumento.upsert({
+      where: { id: hashId },
+      create: {
+        id: hashId,
+        apenadoId,
+        nome,
+        tipo,
+        dataAnexo: parsedDataAnexo,
+        urlDownload,
+      },
+      update: {
+        tipo,
+        dataAnexo: parsedDataAnexo,
+        urlDownload,
+      },
+    })
+
+    if (urlDownload && (tipo.toUpperCase() === 'FOTO' || nome.toUpperCase().includes('FOTO') || tipo.toUpperCase().includes('IMAGEM'))) {
+      try {
+        const cleanPhotoSrc = urlDownload.replace(/_fotoUsuario/i, '')
+        const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
+        const proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
+        
+        if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
+          const base64Data = proxyPhoto.data
+          if (base64Data.includes(',')) {
+            const base64Content = base64Data.split(',')[1]
+            const imageBuffer = Buffer.from(base64Content, 'base64')
+            const webpBuffer = await sharp(imageBuffer)
+              .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+              .webp({ quality: 90 })
+              .toBuffer()
+
+            const dir = getApenadosDir()
+            const { mkdir, writeFile } = await import('fs/promises')
+            await mkdir(dir, { recursive: true })
+            
+            const fileHash = createHash('md5').update(urlDownload).digest('hex')
+            const filename = `sipe-comp-${apenadoId}-${fileHash}.webp`
+            const localPath = join(dir, filename)
+
+            await writeFile(localPath, webpBuffer)
+            const photoPath = `uploads/apenados/${filename}`
+
+            const desc = `Documento: ${nome}`
+            const exists = await prisma.sipeFotoComplementar.findFirst({
+              where: { apenadoImportadoId: apenadoId, photoPath }
+            })
+
+            if (!exists) {
+              await prisma.sipeFotoComplementar.create({
+                data: {
+                  apenadoImportadoId: apenadoId,
+                  photoPath,
+                  descricao: desc,
+                  apenadoLocalId: apenadoLocalId || undefined
+                }
+              })
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Erro ao salvar foto de documento no Cheerio:`, err)
+      }
+    }
+  }
+}
+
+async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): Promise<void> {
+  const $ = cheerio.load(html)
+  const tabelas = $('table')
+  if (!tabelas.length) return
+
+  const list: Array<{
+    visitaId: string | null
+    nome: string
+    cpf: string | null
+    parentesco: string | null
+    photoSrc: string | null
+    ativo: boolean
+  }> = []
+
+  tabelas.each((tableIdx, table) => {
+    const rows = $(table).find('tbody tr')
+    if (rows.length === 0) return
+
+    const headers: string[] = []
+    $(table).find('thead th, thead td').each((_, h) => {
+      headers.push($(h).text().toUpperCase().trim())
+    })
+
+    const nomeIdx = headers.findIndex(h => h.includes('NOME') || h.includes('VISITANTE') || h.includes('CREDENCIADO'))
+    const cpfIdx = headers.findIndex(h => h.includes('CPF'))
+    const parenIdx = headers.findIndex(h => h.includes('PARENTESCO') || h.includes('VÍNCULO') || h.includes('VINCULO') || h.includes('GRAU'))
+    const isTableAtivo = tableIdx === 0
+
+    rows.each((_, row) => {
+      const cells = $(row).find('td')
+      if (cells.length < 2) return
+
+      const img = $(row).find('img')
+      const photoSrc = img.length ? img.attr('src') || null : null
+
+      let visitaId: string | null = null
+      const firstCell = cells.get(0)
+      if (firstCell) {
+        visitaId = $(firstCell).attr('data-id') || $(firstCell).text().trim() || null
+      }
+
+      let nome = ''
+      if (nomeIdx >= 0 && cells.get(nomeIdx)) {
+        nome = $(cells.get(nomeIdx)).text().trim()
+      } else {
+        const firstColHasImg = $(cells.get(0)).find('img').length > 0
+        nome = $(cells.get(firstColHasImg ? 1 : 0)).text().trim()
+      }
+
+      if (!nome || nome.toUpperCase().includes('NENHUM') || nome.toUpperCase().includes('REGISTRO') || nome.length < 3) {
+        return
+      }
+
+      let cpf: string | null = null
+      if (cpfIdx >= 0 && cells.get(cpfIdx)) {
+        cpf = $(cells.get(cpfIdx)).text().replace(/\D/g, '')
+      } else {
+        const rowText = $(row).text() || ''
+        const cpfMatch = rowText.match(/\d{3}\.\d{3}\.\d{3}-\d{2}/)
+        if (cpfMatch) {
+          cpf = cpfMatch[0].replace(/\D/g, '')
+        }
+      }
+
+      let parentesco: string | null = null
+      if (parenIdx >= 0 && cells.get(parenIdx)) {
+        parentesco = $(cells.get(parenIdx)).text().trim()
+      }
+
+      list.push({
+        visitaId,
+        nome,
+        cpf: cpf && cpf.length === 11 ? cpf : null,
+        parentesco,
+        photoSrc,
+        ativo: isTableAtivo
+      })
+    })
+  })
+
+  const visitorDetailsPromises = list.map(async (v) => {
+    let photoSrc = v.photoSrc
+    let cpf = v.cpf
+
+    if (!photoSrc && v.visitaId) {
+      try {
+        const subPath = `/visitas/entrada/mostra/${v.visitaId}`
+        const subData = await fetchSipeViaProxy(subPath)
+        if (subData && !subData.is_binary && subData.html) {
+          const $sub = cheerio.load(subData.html)
+          
+          const rows = $sub('.profile-info-row')
+          rows.each((_, r) => {
+            const nameText = $sub(r).find('.profile-info-name').text().trim() || ''
+            if (nameText.toLowerCase().includes('cpf')) {
+              cpf = $sub(r).find('.profile-info-value').text().trim().replace(/\D/g, '') || cpf
+            }
+          })
+
+          const imgs = $sub('img')
+          let pSrc: string | null = null
+          
+          imgs.each((_, img) => {
+            if (pSrc) return
+            const src = $sub(img).attr('src') || ''
+            if (src.includes('/public/fotosVisitas/')) {
+              pSrc = src
+            }
+          })
+
+          if (!pSrc) {
+            const profileImg = $sub('.profile-picture img')
+            if (profileImg.length) {
+              const src = profileImg.attr('src') || ''
+              if (!src.includes('loading.gif')) {
+                pSrc = src
+              }
+            }
+          }
+
+          if (!pSrc) {
+            imgs.each((_, img) => {
+              if (pSrc) return
+              const src = $sub(img).attr('src') || ''
+              const s = src.toLowerCase()
+              if (!s.includes('loading.gif') && !s.includes('logo') && !s.includes('sejus') && !s.includes('governo') && !s.includes('brasao')) {
+                pSrc = src
+              }
+            })
+          }
+
+          if (pSrc) photoSrc = pSrc
+        }
+      } catch (subErr) {
+        console.error(`Erro subpágina de visitante ${v.nome}:`, subErr)
+      }
+    }
+
+    let photoPath: string | null = null
+    if (photoSrc) {
+      try {
+        const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
+        const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
+        let proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
+        
+        if (!proxyPhoto && cleanPhotoSrc !== photoSrc) {
+          const fallbackPathRelative = photoSrc.replace(SIPE_URL, '')
+          proxyPhoto = await fetchSipeViaProxy(fallbackPathRelative)
+        }
+
+        if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
+          const base64Data = proxyPhoto.data
+          if (base64Data.includes(',')) {
+            const base64Content = base64Data.split(',')[1]
+            const imageBuffer = Buffer.from(base64Content, 'base64')
+            const webpBuffer = await sharp(imageBuffer)
+              .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
+              .webp({ quality: 85 })
+              .toBuffer()
+
+            const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
+            const visitDir = join(baseDir, 'visitantes')
+            const { mkdir, writeFile } = await import('fs/promises')
+            await mkdir(visitDir, { recursive: true })
+
+            const fileKey = cpf || Math.abs(hashCodeLocal(v.nome))
+            const filename = `visitante-${fileKey}.webp`
+            const localPath = join(visitDir, filename)
+
+            await writeFile(localPath, webpBuffer)
+            photoPath = `uploads/visitantes/${filename}`
+          }
+        }
+      } catch (imgErr) {
+        console.error(`Erro baixar foto visitante ${v.nome}:`, imgErr)
+      }
+    }
+
+    let vis = null
+    if (cpf) {
+      vis = await prisma.sipeVisitante.findFirst({ where: { cpf } })
+    }
+    if (!vis) {
+      vis = await prisma.sipeVisitante.findFirst({ where: { nome: v.nome } })
+    }
+
+    const upsertData = {
+      nome: v.nome,
+      cpf: cpf && cpf.length === 11 ? cpf : null,
+      parentesco: v.parentesco,
+      ...(photoPath ? { photoPath } : {})
+    }
+
+    if (vis) {
+      vis = await prisma.sipeVisitante.update({
+        where: { id: vis.id },
+        data: upsertData
+      })
+    } else {
+      vis = await prisma.sipeVisitante.create({
+        data: upsertData
+      })
+    }
+
+    await prisma.sipeVinculoVisitante.upsert({
+      where: {
+        apenadoId_visitanteId: {
+          apenadoId,
+          visitanteId: vis.id
+        }
+      },
+      create: {
+        apenadoId,
+        visitanteId: vis.id,
+        ativo: v.ativo
+      },
+      update: {
+        ativo: v.ativo
+      }
+    })
+  })
+
+  await Promise.all(visitorDetailsPromises)
+}
+
+async function parseAndSaveAdvogadosCheerio(html: string, apenadoId: string): Promise<boolean> {
+  const $ = cheerio.load(html)
+  const linksAdvogados: Array<{ href: string; text: string }> = []
+  
+  $('a').each((_, a) => {
+    const href = $(a).attr('href') || ''
+    const text = $(a).text().trim()
+    const hasAdvLink = href.includes('/advogados/') || href.includes('/detalhaclientes') || href.includes('/advogado/')
+    if (hasAdvLink && text.length > 3) {
+      linksAdvogados.push({ href, text })
+    }
+  })
+
+  if (linksAdvogados.length === 0) {
+    return false
+  }
+
+  for (const item of linksAdvogados) {
+    const match = item.href.match(/\/advogados\/(\d+)/) || item.href.match(/\/advogado\/(\d+)/)
+    if (!match) continue
+
+    const advSipeId = parseInt(match[1])
+    if (isNaN(advSipeId) || advSipeId <= 0) continue
+
+    const nomeAdv = item.text.replace(/^(Dr\.|Dra\.|Dr|Dra|Advogado|Advogada)\s+/i, '').trim().toUpperCase()
+
+    const adv = await prisma.sipeAdvogado.upsert({
+      where: { sipeId: advSipeId },
+      create: {
+        sipeId: advSipeId,
+        nome: nomeAdv || 'ADVOGADO IMPORTADO',
+      },
+      update: {
+        nome: nomeAdv || undefined,
+      },
+    })
+
+    await prisma.sipeVinculoAdvogado.upsert({
+      where: {
+        apenadoId_advogadoId: {
+          apenadoId,
+          advogadoId: adv.id,
+        },
+      },
+      create: {
+        apenadoId,
+        advogadoId: adv.id,
+        ativo: true,
+      },
+      update: {
+        ativo: true,
+      },
+    })
+  }
+
+  return true
+}
+
+async function saveAndLinkComplementaryPhotoCheerio(
+  src: string,
+  apenadoId: string,
+  apenadoLocalId: string | null,
+  descricao: string
+): Promise<void> {
+  try {
+    const cleanPhotoSrc = src.replace(/_fotoUsuario/i, '')
+    const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
+    let proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
+    if (!proxyPhoto && cleanPhotoSrc !== src) {
+      const fallbackPathRelative = src.replace(SIPE_URL, '')
+      proxyPhoto = await fetchSipeViaProxy(fallbackPathRelative)
+    }
+
+    if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
+      const base64Data = proxyPhoto.data
+      if (base64Data.includes(',')) {
+        const base64Content = base64Data.split(',')[1]
+        const imageBuffer = Buffer.from(base64Content, 'base64')
+        const webpBuffer = await sharp(imageBuffer)
+          .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 90 })
+          .toBuffer()
+
+        const dir = getApenadosDir()
+        const { mkdir, writeFile } = await import('fs/promises')
+        await mkdir(dir, { recursive: true })
+        
+        const fileHash = createHash('md5').update(src).digest('hex')
+        const filename = `sipe-comp-${apenadoId}-${fileHash}.webp`
+        const localPath = join(dir, filename)
+
+        await writeFile(localPath, webpBuffer)
+        const photoPath = `uploads/apenados/${filename}`
+
+        const exists = await prisma.sipeFotoComplementar.findFirst({
+          where: { apenadoImportadoId: apenadoId, photoPath }
+        })
+
+        if (!exists) {
+          await prisma.sipeFotoComplementar.create({
+            data: {
+              apenadoImportadoId: apenadoId,
+              photoPath,
+              descricao,
+              apenadoLocalId: apenadoLocalId || undefined
+            }
+          })
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`Erro ao salvar foto complementar no Cheerio:`, err)
+  }
+}
+
+async function scrapeApenadoFichaFast(
+  sipeId: number,
+  unidadeNome?: string | null,
+  useSearch = false
+): Promise<void> {
+  let editHtml = ''
+  
+  if (useSearch) {
+    const searchPath = `/apenados/index?escolha=nomeapenado&parametro=${sipeId}`
+    const proxyData = await fetchSipeViaProxy(searchPath)
+    if (!proxyData || proxyData.is_binary || !proxyData.html) {
+      throw new Error('APENADO_NAO_ENCONTRADO')
+    }
+    const $ = cheerio.load(proxyData.html)
+    
+    let link: string | null = null
+    const rows = $('table tbody tr').get()
+    for (const row of rows) {
+      const text = $(row).text()
+      if (text.includes(String(sipeId))) {
+        const a = $(row).find('a[href]')
+        if (a.length) {
+          link = a.attr('href') || null
+          break
+        }
+      }
+    }
+    if (!link) {
+      const anchors = $('a[href]').get()
+      for (const a of anchors) {
+        const href = $(a).attr('href') || ''
+        if (href.includes(`/apenados/${sipeId}`)) {
+          link = href
+          break
+        }
+      }
+    }
+    if (!link) {
+      throw new Error('APENADO_NAO_ENCONTRADO')
+    }
+    
+    const cleanLinkPath = link.replace(SIPE_URL, '')
+    const editProxyData = await fetchSipeViaProxy(cleanLinkPath)
+    if (!editProxyData || editProxyData.is_binary || !editProxyData.html) {
+      throw new Error('APENADO_NAO_ENCONTRADO')
+    }
+    editHtml = editProxyData.html
+  } else {
+    await fetchSipeViaProxy(`/apenados/${sipeId}/selecionarOpcao`).catch(() => {})
+    const editPath = `/apenados/${sipeId}/editar`
+    const proxyData = await fetchSipeViaProxy(editPath)
+    if (!proxyData || proxyData.is_binary || !proxyData.html) {
+      throw new Error('APENADO_NAO_ENCONTRADO')
+    }
+    editHtml = proxyData.html
+  }
+
+  const parseResult = parseApenadoFichaHtmlCheerio(editHtml)
+  const dados = parseResult.dados
+  const imagesInfo = parseResult.imagesInfo
+  
+  if (!dados.nome) {
+    throw new Error('APENADO_NAO_ENCONTRADO')
+  }
+
+  let faccaoId: string | null = null
+  let lookupSipeId = dados.faccaoSipeId
+  if (lookupSipeId && lookupSipeId > 0) {
+    const faccao = await prisma.sipeFaccao.findUnique({
+      where: { sipeId: lookupSipeId },
+    })
+    faccaoId = faccao?.id ?? null
+  }
+
+  let photoPath: string | null = null
+  let fotoAtualizada = false
+  const photoSrc = imagesInfo.mainSrc
+  const complementaryPhotoSrcs = imagesInfo.allSrcs.filter(src => {
+    const s = src.toLowerCase()
+    return src && s !== photoSrc &&
+      !s.includes('logo') && !s.includes('sejus') && !s.includes('governo') &&
+      !s.includes('brasao') && !s.includes('bandeira') && !s.includes('icon') &&
+      !s.includes('chosen') && !s.includes('select')
+  })
+
+  if (photoSrc) {
+    const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
+    const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
+    let proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
+    if (!proxyPhoto && cleanPhotoSrc !== photoSrc) {
+      const fallbackPathRelative = photoSrc.replace(SIPE_URL, '')
+      proxyPhoto = await fetchSipeViaProxy(fallbackPathRelative)
+    }
+
+    if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
+      const base64Data = proxyPhoto.data
+      if (base64Data.includes(',')) {
+        const base64Content = base64Data.split(',')[1]
+        const imageBuffer = Buffer.from(base64Content, 'base64')
+        const webpBuffer = await sharp(imageBuffer)
+          .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 90 })
+          .toBuffer()
+
+        const dir = getApenadosDir()
+        const { mkdir, writeFile, readFile } = await import('fs/promises')
+        await mkdir(dir, { recursive: true })
+        const filename = `sipe-${sipeId}.webp`
+        const localPath = join(dir, filename)
+
+        let shouldWrite = true
+        if (existsSync(localPath)) {
+          try {
+            const existingBuffer = await readFile(localPath)
+            const currentHash = createHash('sha256').update(webpBuffer).digest('hex')
+            const existingHash = createHash('sha256').update(existingBuffer).digest('hex')
+            if (currentHash === existingHash) {
+              shouldWrite = false
+            }
+          } catch {}
+        }
+
+        if (shouldWrite) {
+          await writeFile(localPath, webpBuffer)
+          fotoAtualizada = true
+        }
+
+        photoPath = `uploads/apenados/${filename}`
+      }
+    }
+  }
+
+  const cela = listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? null
+  const unidade = unidadeNome ?? dados.unidadeFicha ?? null
+
+  const nomeApenadoUpper = (dados.nome || 'SEM NOME').trim().toUpperCase()
+  let faccaoNome: string | null = null
+  if (faccaoId) {
+    const faccaoObj = await prisma.sipeFaccao.findUnique({ where: { id: faccaoId } })
+    faccaoNome = faccaoObj?.nome ?? null
+  }
+
+  const matriculaIdentifier = dados.rji || dados.cpf || null
+  let localApenado = null
+
+  if (matriculaIdentifier) {
+    localApenado = await prisma.apenado.findFirst({
+      where: { matricula: matriculaIdentifier }
+    })
+  }
+
+  let nomeFinalApenado = nomeApenadoUpper
+
+  if (!localApenado) {
+    const apenadoExistenteMesmoNome = await prisma.apenado.findFirst({
+      where: { name: nomeApenadoUpper }
+    })
+
+    if (apenadoExistenteMesmoNome) {
+      nomeFinalApenado = `${nomeApenadoUpper} SIPE`
+      localApenado = await prisma.apenado.findFirst({
+        where: { name: nomeFinalApenado }
+      })
+    }
+  }
+
+  if (!localApenado) {
+    localApenado = await prisma.apenado.create({
+      data: {
+        name: nomeFinalApenado,
+        matricula: dados.rji || dados.cpf || null,
+        unidade: unidade || null,
+        faccao: faccaoNome || null,
+        photoPath: photoPath || null,
+      }
+    })
+  } else {
+    const updateData: any = {}
+    if (photoPath && (fotoAtualizada || !localApenado.photoPath)) {
+      updateData.photoPath = photoPath
+      if (fotoAtualizada) {
+        updateData.photoHash = null
+        updateData.photoQuality = null
+        updateData.photoHashSha = null
+        updateData.faceDescriptor = null
+        updateData.detScore = null
+      }
+    }
+    
+    if ((dados.rji || dados.cpf) && !localApenado.matricula) {
+      updateData.matricula = dados.rji || dados.cpf
+    }
+    if (!localApenado.unidade && unidade) {
+      updateData.unidade = unidade
+    }
+    if (!localApenado.faccao && faccaoNome) {
+      updateData.faccao = faccaoNome
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      localApenado = await prisma.apenado.update({
+        where: { id: localApenado.id },
+        data: updateData
+      })
+    }
+  }
+
+  const resolvedUnidade = unidade || dados.unidadeFicha || cela || undefined
+
+  const upsertData = {
+    nome: dados.nome || 'SEM NOME',
+    nomeOutro: dados.nomeOutro,
+    cpf: dados.cpf,
+    rg: dados.rg,
+    rgOrgao: dados.rgOrgao,
+    dataNascimento: dados.dataNascimento,
+    naturalidade: dados.naturalidade,
+    sexo: dados.sexo,
+    etnia: dados.etnia,
+    orientacaoSexual: dados.orientacaoSexual,
+    tipoSanguineo: dados.tipoSanguineo,
+    grauInstrucao: dados.grauInstrucao,
+    religiao: dados.religiao,
+    estadoCivil: dados.estadoCivil,
+    nomeConjuge: dados.nomeConjuge,
+    qtdFilhos: dados.qtdFilhos,
+    nomeMae: dados.nomeMae,
+    nomePai: dados.nomePai,
+    telefone: dados.telefone,
+    rji: dados.rji,
+    regime: dados.regime,
+    situacao: dados.situacao,
+    dataEntrada: dados.dataEntrada,
+    dataPrisao: dados.dataPrisao,
+    tempoPena: dados.tempoPena,
+    monitorado: dados.monitorado,
+    intramuro: dados.intramuro,
+    presoOriundo: dados.presoOriundo,
+    oficioEntrada: dados.oficioEntrada,
+    faccaoId,
+    photoPath,
+    unidade: resolvedUnidade,
+    cela: cela || undefined,
+    ultimaSyncAt: new Date(),
+  }
+
+  const apenado = await prisma.sipeApenadoImportado.upsert({
+    where: { sipeId },
+    create: { sipeId, ...upsertData },
+    update: upsertData,
+    include: { faccao: true }
+  })
+
+  try {
+    const aipSyncData = {
+      nome: apenado.nome,
+      nomeOutro: apenado.nomeOutro,
+      cpf: apenado.cpf,
+      rg: apenado.rg,
+      rgOrgao: apenado.rgOrgao,
+      dataNascimento: apenado.dataNascimento,
+      sexo: apenado.sexo,
+      etnia: apenado.etnia,
+      naturalidade: apenado.naturalidade,
+      orientacaoSexual: apenado.orientacaoSexual,
+      tipoSanguineo: apenado.tipoSanguineo,
+      grauInstrucao: apenado.grauInstrucao,
+      religiao: apenado.religiao,
+      estadoCivil: apenado.estadoCivil,
+      nomeConjuge: apenado.nomeConjuge,
+      qtdFilhos: apenado.qtdFilhos,
+      nomeMae: apenado.nomeMae,
+      nomePai: apenado.nomePai,
+      telefone: apenado.telefone,
+      rji: apenado.rji,
+      unidade: apenado.unidade,
+      cela: apenado.cela,
+      regime: apenado.regime,
+      situacao: apenado.situacao,
+      dataEntrada: apenado.dataEntrada,
+      dataPrisao: apenado.dataPrisao,
+      tempoPena: apenado.tempoPena,
+      faccao: apenado.faccao?.nome || null,
+      monitorado: apenado.monitorado,
+      intramuro: apenado.intramuro,
+      presoOriundo: apenado.presoOriundo,
+      oficioEntrada: apenado.oficioEntrada,
+      logradouro: apenado.logradouro,
+      numero: apenado.numero,
+      complemento: apenado.complemento,
+      bairro: apenado.bairro,
+      cidade: apenado.cidade,
+      uf: apenado.uf,
+      cep: apenado.cep,
+      photoPath: apenado.photoPath,
+      ultimaSincAt: new Date(),
+    }
+
+    const apenadoEmAIP = await prisma.aIPApenado.findUnique({
+      where: { sipeId }
+    })
+
+    if (apenadoEmAIP) {
+      await prisma.aIPApenado.update({
+        where: { id: apenadoEmAIP.id },
+        data: aipSyncData
+      }).catch((err) => {
+        console.error(`[AIP] Erro ao sincronizar ${sipeId}:`, err.message)
+      })
+      console.log(`[AIP] ✅ Apenado #${sipeId} atualizado em AIP (unidade="${aipSyncData.unidade}")`)
+    }
+  } catch (err) {
+    console.error(`[AIP] Erro na sincronização AIP:`, err)
+  }
+
+  const $ = cheerio.load(editHtml)
+  const csrfToken = $('meta[name="csrf-token"]').attr('content') || $('input[name="_token"]').val()?.toString()
+
+  const subPagesPromises = [
+    fetchSipeViaProxy(`/apenados/${sipeId}/incluirProcessos`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/alcunhas`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/enderecos`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/mudarcela`),
+    fetchSipeViaProxy(`/anexos/${sipeId}/index`),
+    fetchSipeViaProxy(`/autorizacoes/${sipeId}/mostrar`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/advogados`),
+  ]
+
+  let fichaGeralPromise: Promise<SipeProxyResponse | null> = Promise.resolve(null)
+  if (csrfToken) {
+    fichaGeralPromise = requestSipeViaProxy({
+      path: '/relatorios/fichaGeral',
+      method: 'POST',
+      form: {
+        _token: csrfToken,
+        apenado_id: String(sipeId),
+        'listar': ['DP', 'M']
+      },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    })
+  }
+
+  const [
+    processosData,
+    alcunhasData,
+    enderecosData,
+    mudarCelaData,
+    anexosData,
+    visitantesData,
+    advogadosData,
+    fichaGeralData
+  ] = await Promise.all([
+    ...subPagesPromises,
+    fichaGeralPromise
+  ])
+
+  const dbSavesPromises: Promise<any>[] = []
+
+  if (processosData?.html) {
+    dbSavesPromises.push(parseAndSaveProcessosCheerio(processosData.html, apenado.id))
+  }
+  if (alcunhasData?.html) {
+    dbSavesPromises.push(parseAndSaveAlcunhasCheerio(alcunhasData.html, apenado.id))
+  }
+  if (enderecosData?.html) {
+    dbSavesPromises.push(parseAndSaveEnderecoCheerio(enderecosData.html, apenado.id))
+  }
+  if (mudarCelaData?.html) {
+    dbSavesPromises.push(parseAndSaveMudarCelaCheerio(mudarCelaData.html, apenado.id))
+  }
+  if (anexosData?.html) {
+    dbSavesPromises.push(parseAndSaveDocumentosCheerio(anexosData.html, apenado.id, localApenado.id))
+  }
+  if (visitantesData?.html) {
+    dbSavesPromises.push(parseAndSaveVisitantesCheerio(visitantesData.html, apenado.id))
+  }
+  if (advogadosData?.html) {
+    dbSavesPromises.push(parseAndSaveAdvogadosCheerio(advogadosData.html, apenado.id))
+  }
+  if (fichaGeralData?.html) {
+    dbSavesPromises.push(parseAndSaveFichaGeralCheerio(fichaGeralData.html, apenado.id))
+  }
+
+  for (const src of complementaryPhotoSrcs) {
+    dbSavesPromises.push(saveAndLinkComplementaryPhotoCheerio(src, apenado.id, localApenado.id, 'Foto de Identificação'))
+  }
+
+  await Promise.all(dbSavesPromises)
+  console.log(`[SCRAPER FAST] 🚀 Apenado #${sipeId} processado inteiramente via Cheerio + Promise.all com sucesso!`)
 }
 
 // ── Scraping de Unidades Prisionais ──────────────────────────
