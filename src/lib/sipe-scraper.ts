@@ -1344,7 +1344,7 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
 
 // Cache temporário para associar dados coletados da listagem geral aos apenados
 // 🔄 OTIMIZAÇÃO: Limpeza automática a cada 50 páginas para evitar memory leak
-const listagemInfoCache = new Map<number, { cela?: string }>();
+const listagemInfoCache = new Map<number, { cela?: string; situacao?: string }>();
 
 let lastCacheClearPageCount = 0;
 
@@ -1490,24 +1490,29 @@ async function coletarIdsApenados(
       $first('table').first().each((_, table) => {
         let codigoColIndex = -1
         let celaColIndex = -1
+        let situacaoColIndex = -1
         $first(table).find('thead tr th, thead tr td').each((i, el) => {
           const text = $first(el).text().toUpperCase().trim()
           if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = i
           if (text === 'CELA') celaColIndex = i
+          if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = i
         })
         if (codigoColIndex === -1) codigoColIndex = 1
-        if (celaColIndex >= 0) {
-          $first(table).find('tbody tr').each((_, row) => {
-            const cells = $first(row).find('td, th')
-            if (cells.length > Math.max(codigoColIndex, celaColIndex)) {
-              const idVal = parseInt($first(cells[codigoColIndex]).text().trim(), 10)
-              const celaText = $first(cells[celaColIndex]).text().trim()
-              if (!isNaN(idVal) && idVal > 0 && celaText) {
-                listagemInfoCache.set(idVal, { cela: celaText })
-              }
+        $first(table).find('tbody tr').each((_, row) => {
+          const cells = $first(row).find('td, th')
+          if (cells.length > codigoColIndex) {
+            const idVal = parseInt($first(cells[codigoColIndex]).text().trim(), 10)
+            const celaText = celaColIndex >= 0 && cells.length > celaColIndex ? $first(cells[celaColIndex]).text().trim() : undefined
+            const situacaoText = situacaoColIndex >= 0 && cells.length > situacaoColIndex ? $first(cells[situacaoColIndex]).text().trim() : undefined
+            
+            if (!isNaN(idVal) && idVal > 0) {
+              const cacheData: any = {}
+              if (celaText) cacheData.cela = celaText
+              if (situacaoText) cacheData.situacao = situacaoText
+              listagemInfoCache.set(idVal, cacheData)
             }
-          })
-        }
+          }
+        })
       })
 
       // 2. Extrai maxPage
@@ -1563,29 +1568,36 @@ async function coletarIdsApenados(
             idsPagina.forEach(id => idsAcumulados.add(id))
           }
 
-          // Celas de cada página do lote
+          // Celas e situações de cada página do lote
           const $page = cheerio.load(html)
           $page('table').first().each((_, table) => {
             let codigoColIndex = -1
             let celaColIndex = -1
+            let situacaoColIndex = -1
             $page(table).find('thead tr th, thead tr td').each((c, el) => {
               const text = $page(el).text().toUpperCase().trim()
               if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
               if (text === 'CELA') celaColIndex = c
+              if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = c
             })
             if (codigoColIndex === -1) codigoColIndex = 1
-            if (celaColIndex >= 0) {
-              $page(table).find('tbody tr').each((_, row) => {
-                const cells = $page(row).find('td, th')
-                if (cells.length > Math.max(codigoColIndex, celaColIndex)) {
-                  const idVal = parseInt($page(cells[codigoColIndex]).text().trim(), 10)
-                  const celaText = $page(cells[celaColIndex]).text().trim()
-                  if (!isNaN(idVal) && idVal > 0 && celaText) {
-                    listagemInfoCache.set(idVal, { cela: celaText })
-                  }
+            $page(table).find('tbody tr').each((_, row) => {
+              const cells = $page(row).find('td, th')
+              if (cells.length > codigoColIndex) {
+                const idVal = parseInt($page(cells[codigoColIndex]).text().trim(), 10)
+                const celaText = celaColIndex >= 0 && cells.length > celaColIndex ? $page(cells[celaColIndex]).text().trim() : undefined
+                const situacaoText = situacaoColIndex >= 0 && cells.length > situacaoColIndex ? $page(cells[situacaoColIndex]).text().trim() : undefined
+                
+                if (!isNaN(idVal) && idVal > 0) {
+                  const cacheData: any = {}
+                  if (celaText) cacheData.cela = celaText
+                  if (situacaoText) cacheData.situacao = situacaoText
+                  
+                  const existing = listagemInfoCache.get(idVal) || {}
+                  listagemInfoCache.set(idVal, { ...existing, ...cacheData })
                 }
-              })
-            }
+              }
+            })
           })
         }
 
@@ -1633,24 +1645,31 @@ async function coletarIdsApenados(
         $page('table').first().each((_, table) => {
           let codigoColIndex = -1
           let celaColIndex = -1
+          let situacaoColIndex = -1
           $page(table).find('thead tr th, thead tr td').each((c, el) => {
             const text = $page(el).text().toUpperCase().trim()
             if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
             if (text === 'CELA') celaColIndex = c
+            if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = c
           })
           if (codigoColIndex === -1) codigoColIndex = 1
-          if (celaColIndex >= 0) {
-            $page(table).find('tbody tr').each((_, row) => {
-              const cells = $page(row).find('td, th')
-              if (cells.length > Math.max(codigoColIndex, celaColIndex)) {
-                const idVal = parseInt($page(cells[codigoColIndex]).text().trim(), 10)
-                const celaText = $page(cells[celaColIndex]).text().trim()
-                if (!isNaN(idVal) && idVal > 0 && celaText) {
-                  listagemInfoCache.set(idVal, { cela: celaText })
-                }
+          $page(table).find('tbody tr').each((_, row) => {
+            const cells = $page(row).find('td, th')
+            if (cells.length > codigoColIndex) {
+              const idVal = parseInt($page(cells[codigoColIndex]).text().trim(), 10)
+              const celaText = celaColIndex >= 0 && cells.length > celaColIndex ? $page(cells[celaColIndex]).text().trim() : undefined
+              const situacaoText = situacaoColIndex >= 0 && cells.length > situacaoColIndex ? $page(cells[situacaoColIndex]).text().trim() : undefined
+              
+              if (!isNaN(idVal) && idVal > 0) {
+                const cacheData: any = {}
+                if (celaText) cacheData.cela = celaText
+                if (situacaoText) cacheData.situacao = situacaoText
+                
+                const existing = listagemInfoCache.get(idVal) || {}
+                listagemInfoCache.set(idVal, { ...existing, ...cacheData })
               }
-            })
-          }
+            }
+          })
         })
 
         if (testMode && idsAcumulados.length >= maxIds) {
@@ -2037,9 +2056,23 @@ async function coletarIdsApenados(
     } catch { return -1 }
   }).catch(() => -1)
 
+  // Descobre dinamicamente qual coluna se refere à situação do apenado
+  const situacaoColIndex = await page.evaluate(() => {
+    try {
+      const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
+      return headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO'
+      })
+    } catch { return -1 }
+  }).catch(() => -1)
+
   log(jobId, `🔍 Identificada coluna de IDs na posição (0-index): ${codigoColIndex}`)
   if (celaColIndex >= 0) {
     log(jobId, `🔍 Identificada coluna de CELA na posição (0-index): ${celaColIndex}`)
+  }
+  if (situacaoColIndex >= 0) {
+    log(jobId, `🔍 Identificada coluna de SITUAÇÃO na posição (0-index): ${situacaoColIndex}`)
   }
 
   const ids = new Set<number>()
@@ -2058,12 +2091,21 @@ async function coletarIdsApenados(
 
       ids.add(id)
 
+      const cacheObj: any = {}
       // Salva a cela correspondente no cache em memória
       if (celaColIndex >= 0 && cells.length > celaColIndex) {
         const celaText = (await cells[celaColIndex].innerText()).trim()
-        if (celaText) {
-          listagemInfoCache.set(id, { cela: celaText })
-        }
+        if (celaText) cacheObj.cela = celaText
+      }
+      // Salva a situação correspondente no cache em memória
+      if (situacaoColIndex >= 0 && cells.length > situacaoColIndex) {
+        const situacaoText = (await cells[situacaoColIndex].innerText()).trim()
+        if (situacaoText) cacheObj.situacao = situacaoText
+      }
+
+      if (Object.keys(cacheObj).length > 0) {
+        const existing = listagemInfoCache.get(id) || {}
+        listagemInfoCache.set(id, { ...existing, ...cacheObj })
       }
     }
   }
@@ -2559,8 +2601,9 @@ async function scrapeApenadoFicha(
     // Falha silenciosa de foto
   }
 
-  // Recupera cela do cache obtido na listagem (prioridade) ou tenta ler do corpo do perfil
+  // Recupera cela e situação do cache obtido na listagem (prioridade) ou tenta ler do corpo do perfil
   const cela = listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? null;
+  const situacao = listagemInfoCache.get(sipeId)?.situacao ?? dados.situacao ?? null;
   const unidade = unidadeNome ?? dados.unidadeFicha ?? null;
 
   // --- Integração com Identificação de Apenados (tabela Apenado local) ---
@@ -2687,7 +2730,7 @@ async function scrapeApenadoFicha(
     telefone: dados.telefone,
     rji: dados.rji,
     regime: dados.regime,
-    situacao: dados.situacao,
+    situacao: situacao || undefined,
     dataEntrada: dados.dataEntrada,
     dataPrisao: dados.dataPrisao,
     tempoPena: dados.tempoPena,
@@ -6509,6 +6552,7 @@ async function scrapeApenadoFichaFast(
   }
 
   const cela = listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? null
+  const situacao = listagemInfoCache.get(sipeId)?.situacao ?? dados.situacao ?? null
   const unidade = unidadeNome ?? dados.unidadeFicha ?? null
 
   const nomeApenadoUpper = (dados.nome || 'SEM NOME').trim().toUpperCase()
@@ -6607,7 +6651,7 @@ async function scrapeApenadoFichaFast(
     telefone: dados.telefone,
     rji: dados.rji,
     regime: dados.regime,
-    situacao: dados.situacao,
+    situacao: situacao || undefined,
     dataEntrada: dados.dataEntrada,
     dataPrisao: dados.dataPrisao,
     tempoPena: dados.tempoPena,
