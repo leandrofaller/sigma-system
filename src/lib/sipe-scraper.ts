@@ -977,6 +977,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
       fase: 'Concluído',
     })
   } finally {
+    listagemInfoCache.clear()
     await context.close()
   }
 }
@@ -1310,6 +1311,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
     })
 
   } finally {
+    listagemInfoCache.clear()
     await context.close()
   }
 }
@@ -1351,9 +1353,9 @@ let lastCacheClearPageCount = 0;
 function clearCacheIfNeeded(currentPageCount: number) {
   if (currentPageCount % 50 === 0 && currentPageCount !== lastCacheClearPageCount) {
     const sizeAntes = listagemInfoCache.size;
-    listagemInfoCache.clear();
+    // listagemInfoCache.clear(); // 🔧 EVITA LIMPEZA DO CACHE ANTES DA SEGUNDA FASE
     lastCacheClearPageCount = currentPageCount;
-    console.log(`♻️ [Page ${currentPageCount}] Cache limpo: removidas ${sizeAntes} entradas`);
+    console.log(`♻️ [Page ${currentPageCount}] Cache de listagem preservado para a Fase 2. Tamanho: ${sizeAntes}`);
   }
 }
 
@@ -2601,10 +2603,16 @@ async function scrapeApenadoFicha(
     // Falha silenciosa de foto
   }
 
+  // Busca o apenado existente no banco local para preservar dados da listagem (como situação e cela) caso o cache esteja vazio
+  const existingApenado = await prisma.sipeApenadoImportado.findUnique({
+    where: { sipeId },
+    select: { situacao: true, cela: true, unidade: true }
+  });
+
   // Recupera cela e situação do cache obtido na listagem (prioridade) ou tenta ler do corpo do perfil
-  const cela = listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? null;
-  const situacao = listagemInfoCache.get(sipeId)?.situacao ?? dados.situacao ?? null;
-  const unidade = unidadeNome ?? dados.unidadeFicha ?? null;
+  const cela = listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null;
+  const situacao = listagemInfoCache.get(sipeId)?.situacao ?? existingApenado?.situacao ?? dados.situacao ?? null;
+  const unidade = unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null;
 
   // --- Integração com Identificação de Apenados (tabela Apenado local) ---
   const nomeApenadoUpper = (dados.nome || 'SEM NOME').trim().toUpperCase();
@@ -6554,9 +6562,15 @@ async function scrapeApenadoFichaFast(
     }
   }
 
-  const cela = listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? null
-  const situacao = listagemInfoCache.get(sipeId)?.situacao ?? dados.situacao ?? null
-  const unidade = unidadeNome ?? dados.unidadeFicha ?? null
+  // Busca o apenado existente no banco local para preservar dados da listagem (como situação e cela) caso o cache esteja vazio
+  const existingApenado = await prisma.sipeApenadoImportado.findUnique({
+    where: { sipeId },
+    select: { situacao: true, cela: true, unidade: true }
+  })
+
+  const cela = listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null
+  const situacao = listagemInfoCache.get(sipeId)?.situacao ?? existingApenado?.situacao ?? dados.situacao ?? null
+  const unidade = unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null
 
   const nomeApenadoUpper = (dados.nome || 'SEM NOME').trim().toUpperCase()
   let faccaoNome: string | null = null
