@@ -720,13 +720,15 @@ export function startCnaAllSync(jobId: string): void {
             const delayBetweenRequests = 4000 + Math.random() * 3000 // 4-7 segundos
             await page.waitForTimeout(delayBetweenRequests)
           } catch (err: any) {
-            globalThis.__sipeState!.erros++
+            if (globalThis.__sipeState) {
+              globalThis.__sipeState.erros++
+            }
             const errMsg = `Erro ao sincronizar ${adv.nome} (${adv.oab}): ${err?.message || err}`
             console.error(`[CNA API OAB] ${errMsg}`)
             
             refreshMemory(jobId, { ultimoLog: errMsg })
             await dbProgress(jobId, {
-              erros: globalThis.__sipeState!.erros,
+              erros: globalThis.__sipeState?.erros ?? 0,
               log: errMsg,
             })
           }
@@ -926,7 +928,9 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
             if (job.tipo === 'ADVOGADOS') {
               await scrapeAdvogadoDetalhe(page, sipeId, jobId)
             } else {
-              await scrapeApenadoFicha(page, sipeId, job.unidadeNome, useSearch)
+              const apenadoCache = listagemInfoCache.get(sipeId)
+              const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? job.unidadeNome
+              await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome, useSearch)
             }
           } catch (err: any) {
             if (err?.message === 'SESSAO_EXPIRADA') {
@@ -938,7 +942,9 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
               if (job.tipo === 'ADVOGADOS') {
                 await scrapeAdvogadoDetalhe(page, sipeId, jobId)
               } else {
-                await scrapeApenadoFicha(page, sipeId, job.unidadeNome, useSearch)
+                const apenadoCache = listagemInfoCache.get(sipeId)
+                const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? job.unidadeNome
+                await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome, useSearch)
               }
             } else {
               throw err
@@ -946,27 +952,33 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
           }
         })
         lastProcessedId = sipeId
-        globalThis.__sipeState!.processado++
-        globalThis.__sipeState!.pct = globalThis.__sipeState!.total
-          ? Math.round(
-              (globalThis.__sipeState!.processado / globalThis.__sipeState!.total) * 100
-            )
-          : 0
+        if (globalThis.__sipeState) {
+          globalThis.__sipeState.processado++
+          globalThis.__sipeState.pct = globalThis.__sipeState.total
+            ? Math.round(
+                (globalThis.__sipeState.processado / globalThis.__sipeState.total) * 100
+              )
+            : 0
 
-        // Persiste cursor a cada registro para recovery sem perda em crash/restart
-        await dbProgress(jobId, {
-          processado: globalThis.__sipeState!.processado,
-          ultimoIdProcessado: sipeId,
-        })
+          // Persiste cursor a cada registro para recovery sem perda em crash/restart
+          await dbProgress(jobId, {
+            processado: globalThis.__sipeState.processado,
+            ultimoIdProcessado: sipeId,
+          })
+        }
         // Polite delay (reduzido drasticamente no modo SDK para velocidade máxima)
         await page.waitForTimeout(isPythonSdkEngine() ? 50 : (300 + Math.random() * 500))
       } catch (err) {
-        globalThis.__sipeState!.erros++
-        const msg = job.tipo === 'ADVOGADOS'
-          ? `Erro advogado #${sipeId} (após 3 tentativas): ${err}`
-          : `Erro apenado #${sipeId} (após 3 tentativas): ${err}`
-        globalThis.__sipeState!.ultimoLog = msg
-        await dbProgress(jobId, { erros: globalThis.__sipeState!.erros, log: msg })
+        if (globalThis.__sipeState) {
+          globalThis.__sipeState.erros++
+          const msg = job.tipo === 'ADVOGADOS'
+            ? `Erro advogado #${sipeId} (após 3 tentativas): ${err}`
+            : `Erro apenado #${sipeId} (após 3 tentativas): ${err}`
+          globalThis.__sipeState.ultimoLog = msg
+          await dbProgress(jobId, { erros: globalThis.__sipeState.erros, log: msg })
+        } else {
+          console.error(`Erro ao sincronizar #${sipeId} (estado inativo): ${err}`)
+        }
       }
     }
 
@@ -1240,12 +1252,16 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
 
           await withRetry(async () => {
             try {
-              await scrapeApenadoFicha(page, sipeId, u.nome)
+              const apenadoCache = listagemInfoCache.get(sipeId)
+              const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? u.nome
+              await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome)
             } catch (err: any) {
               if (err?.message === 'SESSAO_EXPIRADA') {
                 log(jobId, `Sessão expirada. Re-autenticando para unidade "${u.nome}"...`)
                 await login(page, u.id)
-                await scrapeApenadoFicha(page, sipeId, u.nome)
+                const apenadoCache = listagemInfoCache.get(sipeId)
+                const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? u.nome
+                await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome)
               } else {
                 throw err
               }
@@ -1364,7 +1380,7 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
 
 // Cache temporário para associar dados coletados da listagem geral aos apenados
 // 🔄 OTIMIZAÇÃO: Limpeza automática a cada 50 páginas para evitar memory leak
-const listagemInfoCache = new Map<number, { cela?: string; situacao?: string }>();
+const listagemInfoCache = new Map<number, { cela?: string; situacao?: string; unidadeNome?: string }>();
 
 let lastCacheClearPageCount = 0;
 
@@ -1484,6 +1500,171 @@ async function fetchPageWithRetry(
   return null
 }
 
+/**
+ * Normaliza uma string de nome de unidade para comparação tolerante.
+ */
+function normalizarNomeUnidade(nome: string): string {
+  return nome
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/[^a-z0-9]/g, '')       // Remove caracteres não alfanuméricos
+    .trim()
+}
+
+/**
+ * Resolve o ID do SIPE para uma unidade prisional a partir do seu nome,
+ * consultando o cache em memória e o banco de dados.
+ */
+async function resolveUnidadeIdByNome(nomeUnidade: string): Promise<string | null> {
+  if (!nomeUnidade) return null
+
+  // 1. Tentar obter do cache em memória
+  let unidades: { id: string; nome: string }[] = globalThis.__sipeUnidadesCache?.data ?? []
+
+  // 2. Se não estiver no cache em memória, buscar do banco de dados
+  if (unidades.length === 0) {
+    try {
+      const config = await prisma.systemConfig.findUnique({
+        where: { key: 'sipe_unidades' }
+      })
+      if (config && Array.isArray(config.value)) {
+        unidades = config.value as any
+        globalThis.__sipeUnidadesCache = { data: unidades, fetchedAt: Date.now() }
+      }
+    } catch (err) {
+      console.error(`[SIPE SCRAPER] Erro ao carregar unidades do banco:`, err)
+    }
+  }
+
+  if (unidades.length === 0) {
+    return null
+  }
+
+  const nomeNormalizado = normalizarNomeUnidade(nomeUnidade)
+  if (!nomeNormalizado) return null
+
+  // Tentar match exato normalizado
+  let match = unidades.find(u => normalizarNomeUnidade(u.nome) === nomeNormalizado)
+  if (match) return match.id
+
+  // Tentar inclusão normalizada (se o nome da unidade no apenado está contido no nome completo cadastrado, ou vice-versa)
+  match = unidades.find(u => {
+    const uNorm = normalizarNomeUnidade(u.nome)
+    return uNorm.includes(nomeNormalizado) || nomeNormalizado.includes(uNorm)
+  })
+  if (match) return match.id
+
+  return null
+}
+
+/**
+ * Altera a unidade ativa da sessão no navegador Playwright se ela for diferente da desejada.
+ */
+async function switchPlaywrightUnit(page: Page, unidadeId: string, jobId: string): Promise<boolean> {
+  try {
+    // Garante que o menu superior carregou completamente antes de inspecionar
+    await page.waitForSelector('a[name="btnMudaUnidade"]', { timeout: 5_000 }).catch(() => {})
+
+    let unidadeAtiva = await page.evaluate(() => {
+      const el = document.querySelector('a[name="btnMudaUnidade"]') as HTMLAnchorElement | null
+      return el ? el.getAttribute('title')?.toUpperCase().trim() || '' : ''
+    }).catch(() => '')
+
+    // Precisamos saber qual o nome esperado para esta unidadeId para comparar.
+    const unidades: { id: string; nome: string }[] = globalThis.__sipeUnidadesCache?.data ?? []
+    const unidadeDesejadaObj = unidades.find(u => u.id === unidadeId)
+    if (!unidadeDesejadaObj) {
+      return false
+    }
+    const esperadaClean = unidadeDesejadaObj.nome.toUpperCase().trim()
+
+    // Se a unidade ativa já for a esperada, não faz nada
+    if (unidadeAtiva && (unidadeAtiva.includes(esperadaClean) || esperadaClean.includes(unidadeAtiva))) {
+      return true
+    }
+
+    log(jobId, `⚠️ Troca de unidade necessária! Unidade ativa na sessão: "${unidadeAtiva}" | Desejada: "${esperadaClean}" (#${unidadeId}). Alterando...`)
+
+    // Vai para a tela de seleção de papel
+    await gotoSipeWithFallback(page, '/selectRole/1', { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(async () => {
+      await gotoSipeWithFallback(page, '/selectRole', { waitUntil: 'domcontentloaded', timeout: 20_000 })
+    })
+
+    await page.locator('select').nth(0).waitFor({ state: 'attached', timeout: 10_000 })
+    await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 10_000 })
+
+    // 1. Altera perfil
+    await page.evaluate((perfil) => {
+      const selects = document.querySelectorAll('select')
+      const selectPerfil = selects[0] as HTMLSelectElement
+      if (selectPerfil) {
+        selectPerfil.value = perfil
+        selectPerfil.dispatchEvent(new Event('change', { bubbles: true }))
+        const w = window as any
+        if (w.$) {
+          try {
+            w.$(selectPerfil).trigger('chosen:updated')
+            w.$(selectPerfil).trigger('change')
+          } catch {}
+        }
+      }
+    }, SIPE_PERFIL)
+
+    // 2. Aguarda o AJAX popular as unidades para este perfil
+    try {
+      await page.waitForFunction((unidade) => {
+        const selects = document.querySelectorAll('select')
+        const selectUnidade = selects[1] as HTMLSelectElement
+        if (!selectUnidade) return false
+        const options = Array.from(selectUnidade.options)
+        return options.some(opt => opt.value === unidade)
+      }, unidadeId, { timeout: 10_000 })
+    } catch (err) {
+      // Fallback
+    }
+
+    // 3. Altera a unidade
+    await page.evaluate((unidade) => {
+      const selects = document.querySelectorAll('select')
+      const selectUnidade = selects[1] as HTMLSelectElement
+      if (selectUnidade) {
+        selectUnidade.value = unidade
+        selectUnidade.dispatchEvent(new Event('change', { bubbles: true }))
+        const w = window as any
+        if (w.$) {
+          try {
+            w.$(selectUnidade).trigger('chosen:updated')
+            w.$(selectUnidade).trigger('change')
+          } catch {}
+        }
+      }
+    }, unidadeId)
+
+    // 4. Pequeno delay de propagação
+    await page.waitForTimeout(500)
+
+    const submitBtn = (await page.$('button[type="submit"]')) ?? (await page.$('input[type="submit"]'))
+    if (submitBtn) {
+      await submitBtn.click()
+      await page.waitForURL('**/home**', { timeout: 20_000 })
+      
+      // Validação final de confirmação
+      await page.waitForSelector('a[name="btnMudaUnidade"]', { timeout: 10_000 }).catch(() => {})
+      unidadeAtiva = await page.evaluate(() => {
+        const el = document.querySelector('a[name="btnMudaUnidade"]') as HTMLAnchorElement | null
+        return el ? el.getAttribute('title')?.toUpperCase().trim() || '' : ''
+      }).catch(() => '')
+      
+      log(jobId, `✅ Unidade após troca de papel no SIPE: "${unidadeAtiva}"`)
+      return true
+    }
+  } catch (err) {
+    log(jobId, `⚠️ Falha ao alterar unidade ativa no menu: ${err}`)
+  }
+  return false
+}
+
 async function coletarIdsApenados(
   page: Page,
   unidadeId: string,
@@ -1511,11 +1692,13 @@ async function coletarIdsApenados(
         let codigoColIndex = -1
         let celaColIndex = -1
         let situacaoColIndex = -1
+        let unidadeColIndex = -1
         $first(table).find('thead tr th, thead tr td').each((i, el) => {
           const text = $first(el).text().toUpperCase().trim()
           if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = i
           if (text === 'CELA') celaColIndex = i
           if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = i
+          if (text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')) unidadeColIndex = i
         })
         if (codigoColIndex === -1) codigoColIndex = 1
         $first(table).find('tbody tr').each((_, row) => {
@@ -1524,11 +1707,13 @@ async function coletarIdsApenados(
             const idVal = parseInt($first(cells[codigoColIndex]).text().trim(), 10)
             const celaText = celaColIndex >= 0 && cells.length > celaColIndex ? $first(cells[celaColIndex]).text().trim() : undefined
             const situacaoText = situacaoColIndex >= 0 && cells.length > situacaoColIndex ? $first(cells[situacaoColIndex]).text().trim() : undefined
+            const unidadeText = unidadeColIndex >= 0 && cells.length > unidadeColIndex ? $first(cells[unidadeColIndex]).text().trim() : undefined
             
             if (!isNaN(idVal) && idVal > 0) {
               const cacheData: any = {}
               if (celaText) cacheData.cela = celaText
               if (situacaoText) cacheData.situacao = situacaoText
+              if (unidadeText) cacheData.unidadeNome = unidadeText
               listagemInfoCache.set(idVal, cacheData)
             }
           }
@@ -1598,11 +1783,13 @@ async function coletarIdsApenados(
             let codigoColIndex = -1
             let celaColIndex = -1
             let situacaoColIndex = -1
+            let unidadeColIndex = -1
             $page(table).find('thead tr th, thead tr td').each((c, el) => {
               const text = $page(el).text().toUpperCase().trim()
               if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
               if (text === 'CELA') celaColIndex = c
               if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = c
+              if (text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')) unidadeColIndex = c
             })
             if (codigoColIndex === -1) codigoColIndex = 1
             $page(table).find('tbody tr').each((_, row) => {
@@ -1611,11 +1798,13 @@ async function coletarIdsApenados(
                 const idVal = parseInt($page(cells[codigoColIndex]).text().trim(), 10)
                 const celaText = celaColIndex >= 0 && cells.length > celaColIndex ? $page(cells[celaColIndex]).text().trim() : undefined
                 const situacaoText = situacaoColIndex >= 0 && cells.length > situacaoColIndex ? $page(cells[situacaoColIndex]).text().trim() : undefined
+                const unidadeText = unidadeColIndex >= 0 && cells.length > unidadeColIndex ? $page(cells[unidadeColIndex]).text().trim() : undefined
                 
                 if (!isNaN(idVal) && idVal > 0) {
                   const cacheData: any = {}
                   if (celaText) cacheData.cela = celaText
                   if (situacaoText) cacheData.situacao = situacaoText
+                  if (unidadeText) cacheData.unidadeNome = unidadeText
                   
                   const existing = listagemInfoCache.get(idVal) || {}
                   listagemInfoCache.set(idVal, { ...existing, ...cacheData })
@@ -1674,11 +1863,13 @@ async function coletarIdsApenados(
           let codigoColIndex = -1
           let celaColIndex = -1
           let situacaoColIndex = -1
+          let unidadeColIndex = -1
           $page(table).find('thead tr th, thead tr td').each((c, el) => {
             const text = $page(el).text().toUpperCase().trim()
             if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
             if (text === 'CELA') celaColIndex = c
             if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = c
+            if (text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')) unidadeColIndex = c
           })
           if (codigoColIndex === -1) codigoColIndex = 1
           $page(table).find('tbody tr').each((_, row) => {
@@ -1687,11 +1878,13 @@ async function coletarIdsApenados(
               const idVal = parseInt($page(cells[codigoColIndex]).text().trim(), 10)
               const celaText = celaColIndex >= 0 && cells.length > celaColIndex ? $page(cells[celaColIndex]).text().trim() : undefined
               const situacaoText = situacaoColIndex >= 0 && cells.length > situacaoColIndex ? $page(cells[situacaoColIndex]).text().trim() : undefined
+              const unidadeText = unidadeColIndex >= 0 && cells.length > unidadeColIndex ? $page(cells[unidadeColIndex]).text().trim() : undefined
               
               if (!isNaN(idVal) && idVal > 0) {
                 const cacheData: any = {}
                 if (celaText) cacheData.cela = celaText
                 if (situacaoText) cacheData.situacao = situacaoText
+                if (unidadeText) cacheData.unidadeNome = unidadeText
                 
                 const existing = listagemInfoCache.get(idVal) || {}
                 listagemInfoCache.set(idVal, { ...existing, ...cacheData })
@@ -1750,98 +1943,7 @@ async function coletarIdsApenados(
 
   // Validação da unidade ativa no menu superior do SIPE para garantir a troca correta
   if (!globalMode && unidadeNomeEsperada) {
-    try {
-      // Garante que o menu superior carregou completamente antes de inspecionar
-      await page.waitForSelector('a[name="btnMudaUnidade"]', { timeout: 10_000 }).catch(() => {})
-
-      let unidadeAtiva = await page.evaluate(() => {
-        const el = document.querySelector('a[name="btnMudaUnidade"]') as HTMLAnchorElement | null
-        return el ? el.getAttribute('title')?.toUpperCase().trim() || '' : ''
-      }).catch(() => '')
-
-      const esperadaClean = unidadeNomeEsperada.toUpperCase().trim()
-      log(jobId, `Unidade ativa na sessão SIPE: "${unidadeAtiva}" | Esperada: "${esperadaClean}"`)
-
-      // Se a unidade ativa for vazia (não detectada) ou diferente da esperada, força a troca
-      if (!unidadeAtiva || (!unidadeAtiva.includes(esperadaClean) && !esperadaClean.includes(unidadeAtiva))) {
-        log(jobId, `⚠️ Unidade divergente ou não detectada! Forçando troca de papel no SIPE para ID #${unidadeId}...`)
-        
-        // Vai para a tela de seleção de papel
-        await gotoSipeWithFallback(page, '/selectRole/1', { waitUntil: 'domcontentloaded' }).catch(async () => {
-          await gotoSipeWithFallback(page, '/selectRole', { waitUntil: 'domcontentloaded' })
-        })
-
-        await page.locator('select').nth(0).waitFor({ state: 'attached', timeout: 10_000 })
-        await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 10_000 })
-
-        // 1. Altera perfil
-        await page.evaluate((perfil) => {
-          const selects = document.querySelectorAll('select')
-          const selectPerfil = selects[0] as HTMLSelectElement
-          if (selectPerfil) {
-            selectPerfil.value = perfil
-            selectPerfil.dispatchEvent(new Event('change', { bubbles: true }))
-            const w = window as any
-            if (w.$) {
-              try {
-                w.$(selectPerfil).trigger('chosen:updated')
-                w.$(selectPerfil).trigger('change')
-              } catch {}
-            }
-          }
-        }, SIPE_PERFIL)
-
-        // 2. Aguarda o AJAX popular as unidades para este perfil
-        try {
-          await page.waitForFunction((unidade) => {
-            const selects = document.querySelectorAll('select')
-            const selectUnidade = selects[1] as HTMLSelectElement
-            if (!selectUnidade) return false
-            const options = Array.from(selectUnidade.options)
-            return options.some(opt => opt.value === unidade)
-          }, unidadeId, { timeout: 15_000 })
-        } catch (err) {
-          // Fallback se estourar tempo
-        }
-
-        // 3. Altera a unidade
-        await page.evaluate((unidade) => {
-          const selects = document.querySelectorAll('select')
-          const selectUnidade = selects[1] as HTMLSelectElement
-          if (selectUnidade) {
-            selectUnidade.value = unidade
-            selectUnidade.dispatchEvent(new Event('change', { bubbles: true }))
-            const w = window as any
-            if (w.$) {
-              try {
-                w.$(selectUnidade).trigger('chosen:updated')
-                w.$(selectUnidade).trigger('change')
-              } catch {}
-            }
-          }
-        }, unidadeId)
-
-        // 4. Pequeno delay de propagação
-        await page.waitForTimeout(500)
-
-        const submitBtn = (await page.$('button[type="submit"]')) ?? (await page.$('input[type="submit"]'))
-        if (submitBtn) {
-          await submitBtn.click()
-          await page.waitForURL('**/home**', { timeout: 20_000 })
-          
-          // Validação final de confirmação
-          await page.waitForSelector('a[name="btnMudaUnidade"]', { timeout: 10_000 }).catch(() => {})
-          unidadeAtiva = await page.evaluate(() => {
-            const el = document.querySelector('a[name="btnMudaUnidade"]') as HTMLAnchorElement | null
-            return el ? el.getAttribute('title')?.toUpperCase().trim() || '' : ''
-          }).catch(() => '')
-          
-          log(jobId, `✅ Unidade após troca de papel no SIPE: "${unidadeAtiva}"`)
-        }
-      }
-    } catch (err) {
-      log(jobId, `⚠️ Falha ao verificar/alterar unidade ativa no menu: ${err}`)
-    }
+    await switchPlaywrightUnit(page, unidadeId, jobId)
   }
 
   if (globalMode) {
@@ -1896,7 +1998,7 @@ async function coletarIdsApenados(
         return []
       }
 
-      // Descobre os índices de código, cela e situação na tabela
+      // Descobre os índices de código, cela, situação e unidade na tabela
       const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
       const codigoIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
@@ -1907,6 +2009,10 @@ async function coletarIdsApenados(
         const text = (h.textContent ?? '').toUpperCase().trim()
         return text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO'
       })
+      const unidadeIndex = headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')
+      })
 
       const data: any[] = dt.rows().data().toArray()
       return data
@@ -1914,16 +2020,19 @@ async function coletarIdsApenados(
           let id = NaN
           let cela = ''
           let situacao = ''
+          let unidadeNome = ''
           if (Array.isArray(row)) {
             id = parseInt(row[codigoIndex >= 0 ? codigoIndex : 0])
             if (celaIndex >= 0) cela = (row[celaIndex] ?? '').toString().trim()
             if (situacaoIndex >= 0) situacao = (row[situacaoIndex] ?? '').toString().trim()
+            if (unidadeIndex >= 0) unidadeNome = (row[unidadeIndex] ?? '').toString().trim()
           } else if (row) {
             id = parseInt(row.id ?? row.sipeId ?? '')
             cela = (row.cela ?? '').toString().trim()
             situacao = (row.situacao ?? row.status ?? '').toString().trim()
+            unidadeNome = (row.unidade ?? row.unidadeNome ?? '').toString().trim()
           }
-          return { id, cela, situacao }
+          return { id, cela, situacao, unidadeNome }
         })
         .filter(item => !isNaN(item.id) && item.id > 0)
     } catch { return [] }
@@ -1944,6 +2053,7 @@ async function coletarIdsApenados(
       const cacheData: any = {}
       if (item.cela) cacheData.cela = item.cela
       if (item.situacao) cacheData.situacao = item.situacao
+      if (item.unidadeNome) cacheData.unidadeNome = item.unidadeNome
       if (Object.keys(cacheData).length > 0) {
         listagemInfoCache.set(item.id, cacheData)
       }
@@ -1967,7 +2077,7 @@ async function coletarIdsApenados(
       if (!rawUrl) return []
       const ajaxUrl = rawUrl.startsWith('http') ? rawUrl : baseUrl + rawUrl
 
-      // Descobre os índices de código, cela e situação na tabela
+      // Descobre os índices de código, cela, situação e unidade na tabela
       const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
       const codigoIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
@@ -1977,6 +2087,10 @@ async function coletarIdsApenados(
       const situacaoIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
         return text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO'
+      })
+      const unidadeIndex = headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')
       })
 
       let allRows: any[] = []
@@ -2035,16 +2149,19 @@ async function coletarIdsApenados(
           let id = NaN
           let cela = ''
           let situacao = ''
+          let unidadeNome = ''
           if (Array.isArray(row)) {
             id = parseInt(row[codigoIndex >= 0 ? codigoIndex : 0])
             if (celaIndex >= 0) cela = (row[celaIndex] ?? '').toString().trim()
             if (situacaoIndex >= 0) situacao = (row[situacaoIndex] ?? '').toString().trim()
+            if (unidadeIndex >= 0) unidadeNome = (row[unidadeIndex] ?? '').toString().trim()
           } else if (row) {
             id = parseInt(row.id ?? row.sipeId ?? '')
             cela = (row.cela ?? '').toString().trim()
             situacao = (row.situacao ?? row.status ?? '').toString().trim()
+            unidadeNome = (row.unidade ?? row.unidadeNome ?? '').toString().trim()
           }
-          return { id, cela, situacao }
+          return { id, cela, situacao, unidadeNome }
         })
         .filter(item => !isNaN(item.id) && item.id > 0)
     } catch { return [] }
@@ -2065,6 +2182,7 @@ async function coletarIdsApenados(
       const cacheData: any = {}
       if (item.cela) cacheData.cela = item.cela
       if (item.situacao) cacheData.situacao = item.situacao
+      if (item.unidadeNome) cacheData.unidadeNome = item.unidadeNome
       if (Object.keys(cacheData).length > 0) {
         listagemInfoCache.set(item.id, cacheData)
       }
@@ -2119,12 +2237,26 @@ async function coletarIdsApenados(
     } catch { return -1 }
   }).catch(() => -1)
 
+  // Descobre dinamicamente qual coluna se refere à unidade prisional do apenado
+  const unidadeColIndex = await page.evaluate(() => {
+    try {
+      const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
+      return headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')
+      })
+    } catch { return -1 }
+  }).catch(() => -1)
+
   log(jobId, `🔍 Identificada coluna de IDs na posição (0-index): ${codigoColIndex}`)
   if (celaColIndex >= 0) {
     log(jobId, `🔍 Identificada coluna de CELA na posição (0-index): ${celaColIndex}`)
   }
   if (situacaoColIndex >= 0) {
     log(jobId, `🔍 Identificada coluna de SITUAÇÃO na posição (0-index): ${situacaoColIndex}`)
+  }
+  if (unidadeColIndex >= 0) {
+    log(jobId, `🔍 Identificada coluna de UNIDADE na posição (0-index): ${unidadeColIndex}`)
   }
 
   const ids = new Set<number>()
@@ -2153,6 +2285,11 @@ async function coletarIdsApenados(
       if (situacaoColIndex >= 0 && cells.length > situacaoColIndex) {
         const situacaoText = (await cells[situacaoColIndex].innerText()).trim()
         if (situacaoText) cacheObj.situacao = situacaoText
+      }
+      // Salva a unidade correspondente no cache em memória
+      if (unidadeColIndex >= 0 && cells.length > unidadeColIndex) {
+        const unidadeText = (await cells[unidadeColIndex].innerText()).trim()
+        if (unidadeText) cacheObj.unidadeNome = unidadeText
       }
 
       if (Object.keys(cacheObj).length > 0) {
@@ -2259,6 +2396,14 @@ async function scrapeApenadoFicha(
       return
     } catch (err) {
       console.warn(`[SCRAPER FAST] ⚠️ Falha na aceleração Cheerio para o apenado #${sipeId}: ${err}. Ativando fallback via Playwright tradicional.`)
+    }
+  }
+
+  // Troca dinâmica de unidade ativa no Playwright se fornecida e diferente da atual
+  if (unidadeNome) {
+    const unidadeId = await resolveUnidadeIdByNome(unidadeNome)
+    if (unidadeId) {
+      await switchPlaywrightUnit(page, unidadeId, 'FICHA')
     }
   }
 
@@ -2389,6 +2534,12 @@ async function scrapeApenadoFicha(
     }
   }
 
+
+  // Se fomos redirecionados silenciosamente de volta para o index, significa falha de permissão de unidade
+  const finalUrl = page.url()
+  if (finalUrl.includes('/apenados/index') || finalUrl.endsWith('/apenados') || finalUrl.endsWith('/apenados/')) {
+    throw new Error('APENADO_NAO_ENCONTRADO_OU_REDIRECIONADO')
+  }
 
   await page.waitForSelector('[name="nomeapenado"]', { timeout: 30_000 })
 
@@ -5579,6 +5730,15 @@ export async function closeBrowser(): Promise<void> {
 function parseApenadoFichaHtmlCheerio(html: string) {
   const $ = cheerio.load(html)
   
+  // Detecção de redirecionamento para o index / listagem
+  const isListagem = $('table').length > 0 && $('[name="nomemae"]').length === 0 && $('[name="nomepai"]').length === 0
+  if (isListagem) {
+    return {
+      dados: { nome: null } as any,
+      imagesInfo: []
+    }
+  }
+  
   const val = (name: string) => $(`[name="${name}"]`).val()?.toString().trim() || null
 
   const selVal = (name: string) => {
@@ -6486,6 +6646,18 @@ async function scrapeApenadoFichaFast(
   unidadeNome?: string | null,
   useSearch = false
 ): Promise<void> {
+  // Configura a unidade da sessão para o proxy se informada e resolvida
+  if (unidadeNome) {
+    const unidadeId = await resolveUnidadeIdByNome(unidadeNome)
+    if (unidadeId) {
+      globalThis.__sipeFallbackUnidade = unidadeId
+    } else {
+      globalThis.__sipeFallbackUnidade = null
+    }
+  } else {
+    globalThis.__sipeFallbackUnidade = null
+  }
+
   let editHtml = ''
   
   if (useSearch) {

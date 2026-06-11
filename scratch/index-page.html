@@ -1,0 +1,2335 @@
+<!DOCTYPE html><html lang="pt-BR"><head>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta charset="utf-8">
+    <title> </title>
+
+    <script type="text/javascript">
+        var current_page_url = "https://sipe.sejus.ro.gov.br/apenados/index";
+        var current_page_fullurl = "https://sipe.sejus.ro.gov.br/apenados/index";
+        var CSRF_TOKEN='rYAU5vTh5iS3FQxBZKg06MQJDDQB0BZMkpyeNi8w';
+    </script>
+
+    <meta name="description" content="SIPE - SISTEMA DE INFORMAÇÃO PENITENCIÁRIA">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+
+    <!-- bootstrap & fontawesome -->
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/css/bootstrap.css">
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/css/font-awesome/4.5.0/css/font-awesome.min.css">
+
+    <!-- text fonts -->
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/css/ace.css">
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/css/colorbox.css">
+
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/css/jquery-ui.custom.css">
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/chosen/chosen.css">
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/css/datepicker.css">
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/css/bootstrap-timepicker.css">
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/css/daterangepicker.css">
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/css/sweetalert.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js" type="text/javascript"></script>
+    <script src="https://sipe.sejus.ro.gov.br/resources/assets/js/mask/jquery.maskedinput.min.js"></script>
+
+    
+    <script src="https://sipe.sejus.ro.gov.br/resources/assets/librarys/jodit/js/jodit.js"></script>
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/librarys/jodit/css/jodit.css">
+
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/librarys/apexcharts/dist/apexcharts.js">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <link media="all" type="text/css" rel="stylesheet" href="https://sipe.sejus.ro.gov.br/resources/assets/css/jquery-ui.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/css/select2.min.css" rel="stylesheet">
+
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.3.6/cropper.min.js" integrity="sha512-gbzrO1jSsHNIt2RskCrJzrufq9NIg3AB5zg+BhD8S/oPecSWuJpgkX9Wm1PoZQ/nSixk9uL5UTqY6QpB2dxm+Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.3.6/cropper.css" integrity="sha512-B5/ptBe1f2f8+Q3zbWflXVJc9alIMlczS6jzxuDY8IFHOAhcugynXJd/Abd2qSZJ1uunZupPbuAU+NQ7yJzwXw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.3.6/cropper.js" integrity="sha512-g3Xrwkdz8MczysPw6DNSobJsijwQkxGhG5wSPQkhk/yQqsMaq5QduzZ9NOJ87wtcL3KlCSioJGHFDvVyckEFig==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.3.6/cropper.min.css" integrity="sha512-kvpmm7hvR5i43f9VIFOQJqNIn+pQMg08kvAfsVQeLeR6sQiLjZ8Z8nR6YKHa99xQMFefazhd+sMUHShj7/B2eg==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    
+    
+</head>
+
+<body class="no-skin">
+<div id="loader" style="display: block; opacity: 0.7;"><img src="https://sipe.sejus.ro.gov.br/public/img/loading.gif" alt=""> Carregando... </div>
+
+<div id="navbar" class="navbar navbar-default    navbar-collapse       h-navbar ace-save-state">
+        <div class="navbar-container ace-save-state" id="navbar-container">
+
+
+<div class="navbar-header pull-left">
+		<!-- #section:basics/navbar.layout.brand -->
+		<a href="https://sipe.sejus.ro.gov.br/home" class="navbar-brand">
+			<small>
+				SIPE
+			</small>
+		</a>
+
+		<button class="pull-right navbar-toggle navbar-toggle-img collapsed" type="button" data-toggle="collapse" data-target=".navbar-buttons,.navbar-menu">
+			<span class="sr-only">Toggle user menu</span>
+		</button>
+
+		<button class="pull-right navbar-toggle collapsed" type="button" data-toggle="collapse" data-target="#sidebar">
+			<span class="sr-only">Toggle sidebar</span>
+			<span class="icon-bar"></span>
+			<span class="icon-bar"></span>
+			<span class="icon-bar"></span>
+		</button>
+
+
+
+	</div>
+
+
+	<div class="navbar-buttons navbar-header pull-right" role="navigation">
+		<ul class="nav ace-nav">
+
+						<li class="light-blue">
+				<a href="#" aria-expanded="false" name="btnMudaUnidade" title="CENTRO DE DETENÇÃO PROVISÓRIO DE PORTO VELHO - CDPPVH">
+					<i class="ace-icon fa fa-tasks"></i>
+				</a>
+			</li>
+			
+				<li class="light-blue">
+					<a href="https://sipe.sejus.ro.gov.br/chamados/index" aria-expanded="false" title="Suporte Técnico">
+						<i class="ace-icon fa fa-comment"></i> 0
+
+					</a>
+				</li>
+
+			<li class="light-blue">
+				<a href="#" class="dropdown-toggle">
+					<small class="">Sessão </small><span id="sessao">00:30:00</span>
+					<i class="ace-icon fa fa-clock-o"></i>
+				</a>
+			</li>
+
+			<li class="light-blue">
+				<a data-toggle="dropdown" href="#" class="dropdown-toggle">
+										<small class=""> Leandro    </small>	/
+					300099500
+					<i class="ace-icon fa fa-cogs"></i>
+					<i class="ace-icon fa fa-caret-down"></i>
+				</a>
+				<ul class="user-menu dropdown-menu-right dropdown-menu dropdown-yellow dropdown-caret dropdown-close">
+					
+					<li><a href="https://sipe.sejus.ro.gov.br/alterarPassword"> <i class="ace-icon fa fa-key"></i> Controle de Acesso </a> </li>
+											<li><a href="https://sipe.sejus.ro.gov.br/configuracoes"> <i class="ace-icon fa fa-cog"></i> Configurações </a> </li>
+										
+					<li><a href="https://sipe.sejus.ro.gov.br/ajuda"> <i class="ace-icon fa fa-cog"></i> Configurações da Unidade </a> </li>
+				
+			<li><a href="https://sipe.sejus.ro.gov.br/termodeuso"><i class="ace-icon fa fa-book"></i> Termos de Uso</a> </li>     
+			<li class="divider"></li>
+									<li> <a href="https://sipe.sejus.ro.gov.br/selectRole/1"> <i class="ace-icon fa fa-exchange"></i> Mudar Perfil </a> </li>
+									<li> <a href="https://sipe.sejus.ro.gov.br/logout"> <i class="ace-icon fa fa-power-off"></i> Logout </a> </li>
+				</ul>
+			</li>
+
+		</ul>
+	</div>
+</div>
+
+</div>
+
+
+<div class="main-container ace-save-state" id="main-container">
+
+    <script type="text/javascript">
+        try{ace.settings.check('main-container' , 'fixed')}catch(e){}
+    </script>
+
+    <!-- #section:basics/sidebar -->
+    <div id="sidebar" class="sidebar h-sidebar navbar-collapse collapse ace-save-state" data-sidebar="true">
+
+        <script type="text/javascript">
+    try{ace.settings.loadState('sidebar')}catch(e){}
+</script>
+
+<ul class="nav nav-list">
+    <li class=" ">
+        <a href=" https://sipe.sejus.ro.gov.br/home ">
+            <i class="menu-icon fa fa-tachometer"></i>
+            <span class="menu-text"> PRINCIPAL </span>
+        </a>
+        <b class="arrow"></b>
+    </li>
+    
+            <li class="hover">
+            <a href="#" class="dropdown-toggle">
+                <i class="menu-icon fa fa-group"></i>
+                <span class="menu-text"> APENADOS </span>
+                <b class="arrow fa fa-angle-down"></b>
+            </a>
+            <b class="arrow"></b>
+            <ul class="submenu">
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/apenados/index">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Cadastros
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/apenados/localizacao">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Localização
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/apenados/transferencias">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-4"></i> Transferências
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/localizacao_avancada">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-5"></i> Localização Avançada
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/home">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Foto Geral
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                            </ul>
+        </li>
+            <li class="hover">
+            <a href="#" class="dropdown-toggle">
+                <i class="menu-icon fa fa-institution"></i>
+                <span class="menu-text"> UNIDADES </span>
+                <b class="arrow fa fa-angle-down"></b>
+            </a>
+            <b class="arrow"></b>
+            <ul class="submenu">
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/unidadesprisionais/index">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-institution"></i> Listar Unidades
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/regioes/index">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-0"></i> Regiões
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                            </ul>
+        </li>
+            <li class="hover">
+            <a href="#" class="dropdown-toggle">
+                <i class="menu-icon fa fa-area-chart"></i>
+                <span class="menu-text"> RELATÓRIOS </span>
+                <b class="arrow fa fa-angle-down"></b>
+            </a>
+            <b class="arrow"></b>
+            <ul class="submenu">
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/relatorios/busca">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Busca
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/relatorios/cadastrosUnidades">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Cadastros Unidades
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/relatorios/movimentacoesAdmin">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Movimentações
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/listagem/reincidente">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Reincidentes
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/exportarCadastrosUnidades">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Exportar Cadastros da Unidade
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/relatorios/recebimentoGeral">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Recebimentos
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/foragidos/index">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Foragidos
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/relatorios/temporarias">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Temporárias
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/listagem/recapturadosGeral">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-9"></i> Recapturados Geral
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/listagem/motivosaidas">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-10"></i> Motivos Saídas
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/dna/ColetasDna">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-10"></i> Coletas DNA
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/listagem/formulario_geral">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-10"></i> Formulário Geral
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/relatorios/orientacaoSexual">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-0"></i> Orientação Sexual
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/listagem/listagemRegimeUnidades">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-11"></i> Regime por Unidade
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/listagem/regimeUnidadeGeral">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-11"></i> Listagem regime por unidade
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/listagem/sem_foto_geral">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Sem Fotos Unidades
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/relatorios/cadastrosBiometrias">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Cadastros Biometrias
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/presidio_federal">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-8"></i> DEPEN
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/pontoBiometria/relatorio-geral">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Relatório de Presenças
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/pontoBiometria/relatorio-individual">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Relatório de Presenças Individual
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                            </ul>
+        </li>
+            <li class="hover">
+            <a href="#" class="dropdown-toggle">
+                <i class="menu-icon fa fa-photo"></i>
+                <span class="menu-text"> GALERIA IMAGENS </span>
+                <b class="arrow fa fa-angle-down"></b>
+            </a>
+            <b class="arrow"></b>
+            <ul class="submenu">
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/galeria/galerias">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Listar
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/galeria/novo">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Inserir
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                            </ul>
+        </li>
+            <li class="hover">
+            <a href="#" class="dropdown-toggle">
+                <i class="menu-icon fa fa-legal"></i>
+                <span class="menu-text"> ADVOGADOS </span>
+                <b class="arrow fa fa-angle-down"></b>
+            </a>
+            <b class="arrow"></b>
+            <ul class="submenu">
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/advogados/listaradvogados">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-2"></i> Lista Advogados
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/advogados/consulta/advmes">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Consulta Advogado Mês
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/advogados/listarEntradasByAdvogados">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-0"></i> Entradas Advogados
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/advogados/listarEntradasByApenados">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-0"></i> Entradas Apenados
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                            </ul>
+        </li>
+            <li class="hover">
+            <a href="#" class="dropdown-toggle">
+                <i class="menu-icon fa fa-credit-card"></i>
+                <span class="menu-text"> REMIÇÃO </span>
+                <b class="arrow fa fa-angle-down"></b>
+            </a>
+            <b class="arrow"></b>
+            <ul class="submenu">
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/remicao/incluirAtividade">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Incluir Atividade
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/remicao/ancamentoArtesanato">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-2"></i> Presos em Atividade
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/remicao/remicao/relatorio">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-6"></i> Relatório
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/remicao/modalidades">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-15"></i> Tipos de Modalidades
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/biblioteca/livro/index">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-16"></i> Livro
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                            </ul>
+        </li>
+            <li class="hover">
+            <a href="#" class="dropdown-toggle">
+                <i class="menu-icon fa fa-gear"></i>
+                <span class="menu-text"> RECURSOS </span>
+                <b class="arrow fa fa-angle-down"></b>
+            </a>
+            <b class="arrow"></b>
+            <ul class="submenu">
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/apenados/mudarcelaLote">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Mudar Cela Lote
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                            </ul>
+        </li>
+            <li class="hover">
+            <a href="#" class="dropdown-toggle">
+                <i class="menu-icon fa fa-envelope"></i>
+                <span class="menu-text"> ESTATÍSTICAS </span>
+                <b class="arrow fa fa-angle-down"></b>
+            </a>
+            <b class="arrow"></b>
+            <ul class="submenu">
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/painelEstatistico">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Dados - API - TJ
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                            </ul>
+        </li>
+            <li class="hover">
+            <a href="#" class="dropdown-toggle">
+                <i class="menu-icon fa fa-bomb"></i>
+                <span class="menu-text"> COVID 19 </span>
+                <b class="arrow fa fa-angle-down"></b>
+            </a>
+            <b class="arrow"></b>
+            <ul class="submenu">
+                                    <li class="hover">
+                        <a href="https://sipe.sejus.ro.gov.br/covid/index">
+                            <i class="menu-icon fa fa-caret-right"></i>
+                            <i class="fa fa-1"></i> Lançamento
+                        </a>
+                        <b class="arrow"></b>
+                    </li>
+                            </ul>
+        </li>
+    
+</ul><!-- /.nav-list -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </div>
+
+
+    <div class="main-content">
+        <div class="main-content-inner">
+            <div class="page-content">
+                
+    <div class="page-header">
+        <h1>
+             APENADOS
+            <small>
+                <i class="ace-icon fa fa-angle-double-right"></i>
+                 Relação de apenados
+            </small>
+
+        </h1>
+    </div><!-- /.page-header -->
+
+
+    
+        <p>
+            <a class="btn btn-primary pull-right" data-toggle="collapse" href="#collapseExample" role="button" aria-expanded="false" aria-controls="collapseExample">
+                Pesquisa Avançada
+            </a>
+        </p>
+        <div class="collapse" id="collapseExample">
+            <div class="panel-group">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        Pesquisa Avançada
+                    </div>
+                    <div class="panel-body">
+                        <form method="GET" action="https://sipe.sejus.ro.gov.br/apenados/index" accept-charset="UTF-8" id="formulario">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                            <select id="escolha" class="form-control" onchange="campoSelect(this.value)" name="escolha"><option value="nomeapenado">Nome apenado</option><option value="id">Código Apenado</option><option value="nomefalso">Nome falso</option><option value="cpf">Cpf</option><option value="nomepai">Nome do pai</option><option value="nomemae">Nome da mãe</option><option value="alcunha">Alcunha</option><option value="caracteristica">Característica</option><option value="naturalidade">Naturalidade</option><option value="nacionalidade">Nacionalidade</option></select>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                        <div class="form-group">
+                                    <input type="text" class="col-md-12 form-control" name="parametro" id="pesquisa" placeholder="Pesquise">
+                                    <select class="col-md-12 form-control" name="parametro" id="seleciona" disabled="" style="display: none">
+                                        <option value="1">Brasileiro Nato</option>
+                                        <option value="2">Brasileiro Naturalizado</option>
+                                        <option value="3">Estrangeiro</option>
+                                    </select>
+                                </div>
+                        </div>
+                        <!--
+                        <div class="col-md-6">
+                                <div class="form-group">
+                                    <input type="text" class="col-md-12 form-control" name="parametro" id="pesquisa" placeholder="Pesquise">
+                                </div>
+                        </div>
+                        -->
+                            <div class="form-group">
+                                <button type="submit" class="form-control btn btn-success" style="border-radius: 5px">Pesquisa</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- /.row -->
+        <div class="row">
+            <div class="col-xs-12">
+                <div>
+                    <form method="GET" action="https://sipe.sejus.ro.gov.br/apenados/index" accept-charset="UTF-8" id="formulario">
+                            <input type="hidden" name="escolha" value="nomeapenado">
+                            <input class="form-control pull-right" maxlength="100" placeholder="Digite o Nome ou Cpf e Tecle Enter para Pesquisar" id="parametro" name="parametro" type="text">
+                    </form>
+                </div>
+            </div>
+        </div>
+
+
+
+
+        <div class="row">
+            <div class="col-xs-12">
+                <div class="table-responsive">
+                   <table id="simple-table" class="table table-striped table-bordered table-hover">
+                        <thead>
+                            <tr class="">
+                                <th>#</th>
+                                <th>NOME DO APENADO</th>
+                                <th class="col-md-2">CPF</th>
+                                                                <th>UNIDADE PRISIONAL ATUAL</th>
+                                                                <th>CELA</th>
+                                <th>SITUAÇÃO</th>
+                                <th class="col-md-2"></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="64475"> 64475</td>
+                                        <td>
+                                              RONES GLEISON OLIVEIRA LACERDA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ILDETE MARIA DE JESUS OLIVEIRA</span>
+                                        </td>
+                                        <td>033.503.722-44</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/3c3479cc4a206eca2cd7dd2151b50682e30f63b2_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/3c3479cc4a206eca2cd7dd2151b50682e30f63b2_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/64475/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/64475/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="32785"> 32785</td>
+                                        <td>
+                                             ANDERSON NASCIMENTO DE FREITAS
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: FRANCISCA NASCIMENTO DE FREITAS</span>
+                                        </td>
+                                        <td>026.580.780-42</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/a9d488f9c07a0435caf1e1457f56ab6a1cc449fe_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/a9d488f9c07a0435caf1e1457f56ab6a1cc449fe_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Livramento Condicional </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/32785/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="64130"> 64130</td>
+                                        <td>
+                                             BEATRIZ TAVARES DO NASCIMENTO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: PATRICIA TAVARES DO NASCIMENTO</span>
+                                        </td>
+                                        <td>073.241.502-09</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/2f7118c241d72fbb33061980d56c7c864441437f_fotoUsuario.jpeg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/2f7118c241d72fbb33061980d56c7c864441437f_fotoUsuario.jpeg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/64130/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/64130/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="63232"> 63232</td>
+                                        <td>
+                                             GABRIEL DE OLIVEIRA FRITZ
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ERENALVA DE OLIVEIRA</span>
+                                        </td>
+                                        <td>041.979.722-02</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/63232/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/63232/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="48390"> 48390</td>
+                                        <td>
+                                             ISMAEL FERNANDES DE OLIVEIRA SILVA 
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARIA DAS DORES FERNANDES DE OLIVEIRA</span>
+                                        </td>
+                                        <td>391.270.522-49</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/84e88e9197338e743dd6b9e13099cdd2bd99e4de_fotoUsuario.jpeg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/84e88e9197338e743dd6b9e13099cdd2bd99e4de_fotoUsuario.jpeg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/48390/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/48390/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="17083"> 17083</td>
+                                        <td>
+                                             LEANDRO CAMPOS DA SILVA RAMALHO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: LUZIA CAMPOS DA FONSECA</span>
+                                        </td>
+                                        <td>819.754.812-91</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/9c073935e182ef644d66cc476cb68e9b4cb28344_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/9c073935e182ef644d66cc476cb68e9b4cb28344_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td>GERÊNCIA DE MONITORAÇÃO ELETRÔNICA - GME</td>
+                                                                                                <td>MASCULINO</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/17083/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="34783"> 34783</td>
+                                        <td>
+                                             LINCOLN LOPES DO REGO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ANDREIA LOPES DO REGO</span>
+                                        </td>
+                                        <td>842.984.722-72</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/68f84e47f4572ae1a0a619c3dcccd3042d827700_fotoUsuario.JPG"> https://sipe.sejus.ro.gov.br/public/fotosPresos/68f84e47f4572ae1a0a619c3dcccd3042d827700_fotoUsuario.JPG </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/34783/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/34783/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="17383"> 17383</td>
+                                        <td>
+                                             ONESIMO GOMES CAITANO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ROSILDA GOMES MONTEIRO</span>
+                                        </td>
+                                        <td>702.275.922-71</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/3bd4b2f94f7b7f8a7beb42ba18696b27364ffe7f_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/3bd4b2f94f7b7f8a7beb42ba18696b27364ffe7f_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Livramento Condicional </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/17383/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="37894"> 37894</td>
+                                        <td>
+                                             RENIERE SOUZA LOPES - CAUTELAR 90 DIAS ATE JUNHO 2025 ID 0057958307
+                                            <br> <span class="red">RENIERE SOUZA LOPES ou RANIERI DE SOUZA LOPES</span>
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ELITA SOUZA LOPES </span>
+                                        </td>
+                                        <td>548.991.412-20</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/6ce1a755f2df0794913f7e689a906424a755cc5a_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/6ce1a755f2df0794913f7e689a906424a755cc5a_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td>GERÊNCIA DE MONITORAÇÃO ELETRÔNICA - GME</td>
+                                                                                                <td>MASCULINO</td>
+                                                <td><span class="label label-danger arrowed"> Fuga </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/37894/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/foragidos/37894/recaptura" class="btn btn-xs btn-danger" title="Apenado Recapturado"> <i class="ace-icon fa fa-paw bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="14342"> 14342</td>
+                                        <td>
+                                             SÉRGIO HELENO XIMENDES DA CRUZ
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARIA MADALENA GOMES DA CRUZ</span>
+                                        </td>
+                                        <td></td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/61b64fabf7ed3386c1e8cffea93b2cef7c6c6822_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/61b64fabf7ed3386c1e8cffea93b2cef7c6c6822_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Livramento Condicional </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/14342/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="24367"> 24367</td>
+                                        <td>
+                                             UALACE PEREIRA BARBOSA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: SARA EDMEA BARBOSA PINTO</span>
+                                        </td>
+                                        <td>026.656.042-30</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/af059cb39ad667311abc4e85403d01e5d8397c48_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/af059cb39ad667311abc4e85403d01e5d8397c48_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Livramento Condicional </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/24367/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="59235"> 59235</td>
+                                        <td>
+                                            A.LINE SANTOS SILVA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ZENAIDE OLIVEIRA DOS SANTOS</span>
+                                        </td>
+                                        <td>023.443.392-21</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/4656e499ad0216fdbd3014b06a222a77848a5ecf_fotoUsuario.jpeg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/4656e499ad0216fdbd3014b06a222a77848a5ecf_fotoUsuario.jpeg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/59235/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/59235/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="48875"> 48875</td>
+                                        <td>
+                                            ABDELLTEIF ABDALLA ASHAG ADAM 
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: AZEZA ABDLLA ESSA OSMAN</span>
+                                        </td>
+                                        <td>716.516.601-74</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/e64791d7a6e589d902444f9ec5a39f965f76308a_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/e64791d7a6e589d902444f9ec5a39f965f76308a_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/48875/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/48875/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="55765"> 55765</td>
+                                        <td>
+                                            ABDIAS GUERRA OLIVEIRA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: DORA GUERRA MOREIRA OLIVEIRA</span>
+                                        </td>
+                                        <td>046.129.111-80</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/2428e27d3c98a6ad7fa5d50d3a5dd14416372051_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/2428e27d3c98a6ad7fa5d50d3a5dd14416372051_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/55765/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/55765/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="41920"> 41920</td>
+                                        <td>
+                                            ABDIEL ALVES FERREIRA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: FRANCISCA ALVES DA GAMA</span>
+                                        </td>
+                                        <td>022.749.762-79</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/d3ce06efe68d21abb5a27828ce4ebab781e0299e_fotoUsuario.JPG"> https://sipe.sejus.ro.gov.br/public/fotosPresos/d3ce06efe68d21abb5a27828ce4ebab781e0299e_fotoUsuario.JPG </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Preso Recambiado </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/41920/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="48009"> 48009</td>
+                                        <td>
+                                            ABDO DA SILVA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ISNA MARIA DA SILVA</span>
+                                        </td>
+                                        <td>654.185.572-20</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/48009/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/48009/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="44132"> 44132</td>
+                                        <td>
+                                            ABDON LIMA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARIA ROSA DE LIMA</span>
+                                        </td>
+                                        <td>190.898.992-00</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/147151cd85127c1cc31bc2a32fc18688c4797e2c_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/147151cd85127c1cc31bc2a32fc18688c4797e2c_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td>CASA DE PRISÃO ALBERGUE DE JARU E SEMIABERTO</td>
+                                                                                                <td>LIVR. CONDICIONAL</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/44132/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="51511"> 51511</td>
+                                        <td>
+                                            ABEL BARBOSA GENUINO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARTA BARBOSA GENUINO</span>
+                                        </td>
+                                        <td>748.877.182-68</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/e2a19f04824acb842f4cf97998add9b0bf764fe5_fotoUsuario.JPG"> https://sipe.sejus.ro.gov.br/public/fotosPresos/e2a19f04824acb842f4cf97998add9b0bf764fe5_fotoUsuario.JPG </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Solto </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/51511/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="32044"> 32044</td>
+                                        <td>
+                                            ABEL BLANCO DORADO JUNIOR
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: RUTI DO CARMO </span>
+                                        </td>
+                                        <td>040.124.562-45</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/93ed61d69794893f35d536b28581ed71ace54dd9_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/93ed61d69794893f35d536b28581ed71ace54dd9_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Livramento Condicional </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/32044/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="72088"> 72088</td>
+                                        <td>
+                                            ABEL CONCEIÇÃO DA SILVA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: RUDINALVA CONCEICAO</span>
+                                        </td>
+                                        <td>017.372.822-75</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/adb057a680b2b3095e5bbe313da1386de384b376_fotoUsuario.jpeg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/adb057a680b2b3095e5bbe313da1386de384b376_fotoUsuario.jpeg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/72088/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/72088/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="56751"> 56751</td>
+                                        <td>
+                                            ABEL DE SIQUEIRA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARIA DE LOURDES SIQUEIRA</span>
+                                        </td>
+                                        <td>448.562.709-82</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/56751/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/56751/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="35790"> 35790</td>
+                                        <td>
+                                            ABEL DE SOUZA QUIRINO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MINELVINA DE SOUZA</span>
+                                        </td>
+                                        <td>595.292.702-59</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/412bc1a0b7036030fb4a3e44b891e365c5649570_fotoUsuario.jpeg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/412bc1a0b7036030fb4a3e44b891e365c5649570_fotoUsuario.jpeg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/35790/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/35790/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="danger">
+                                        <td data-apenado_id="31935"> 31935</td>
+                                        <td>
+                                            ABEL ELIAS DE CAMARGO JUNIOR
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: VERONICA DE ANDRADE MESSIAS CAMARGO</span>
+                                        </td>
+                                        <td>543.206.902-49</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/cc3259f267b75530518b1720b56da9f6d3196d0e_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/cc3259f267b75530518b1720b56da9f6d3196d0e_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td>PENITENCIÁRIA ESTADUAL JORGE THIAGO AGUIAR AFONSO</td>
+                                                                                                <td>C/26 CL ESCOLA</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/31935/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="11427"> 11427</td>
+                                        <td>
+                                            ABEL EMERSON VIEIRA DE SOUSA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: GERALDA VIEIRA DE SOUZA</span>
+                                        </td>
+                                        <td>878.945.052-34</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/38e4072f82f01ea491ff88462ff6c982d17fe55f_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/38e4072f82f01ea491ff88462ff6c982d17fe55f_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Livramento Condicional </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/11427/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="31411"> 31411</td>
+                                        <td>
+                                            ABEL GONÇALVES AQUINO																	
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ROSIDETE GONÇALVES										</span>
+                                        </td>
+                                        <td>049.331.022-36</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/c5346fa6e17e9b02c74e82cf5892b1ad8fd9f357_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/c5346fa6e17e9b02c74e82cf5892b1ad8fd9f357_fotoUsuario.png </td>
+
+                                                                                                                                        <td>PENITENCIÁRIA ESTADUAL EDVAN MARIANO ROSENDO - PANDA</td>
+                                                                                                <td>G/07</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/31411/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="73456"> 73456</td>
+                                        <td>
+                                            ABEL WEZER MARQUES DE GODOY
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ANGELA MARIA MARQUES DE GODOY</span>
+                                        </td>
+                                        <td>961.310.122-53</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/aaf87ee75d8ed0a0c96bd1a765b7ccef870eba7a_fotoUsuario.jpeg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/aaf87ee75d8ed0a0c96bd1a765b7ccef870eba7a_fotoUsuario.jpeg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/73456/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/73456/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="77269"> 77269</td>
+                                        <td>
+                                            ABELARDO BELEZA FURTADO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARIA CONCEBIDA CASTRO BELEZA</span>
+                                        </td>
+                                        <td>002.292.042-01</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/ef9e6a9743e423ead777376f33e418b72fc8365f_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/ef9e6a9743e423ead777376f33e418b72fc8365f_fotoUsuario.png </td>
+
+                                                                                                                                        <td>PENITENCIÁRIA ESTADUAL JORGE THIAGO AGUIAR AFONSO</td>
+                                                                                                <td>A/04</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/77269/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="31656"> 31656</td>
+                                        <td>
+                                            ABELSON CONRADO DOS SANTOS
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ADELINA FERREIRA DA SILVA </span>
+                                        </td>
+                                        <td>267.283.112-20</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/c47aad1e5ad4150d13d94cc6713941ce7c49de86_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/c47aad1e5ad4150d13d94cc6713941ce7c49de86_fotoUsuario.png </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/31656/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/31656/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="43741"> 43741</td>
+                                        <td>
+                                            ABENILSON SANTOS SOARES
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: GENI MARIA DOS SANTOS SOARES</span>
+                                        </td>
+                                        <td>027.637.902-08</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/9842c5e1fe2f2b66bbe46dd1f558eecabc20c39b_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/9842c5e1fe2f2b66bbe46dd1f558eecabc20c39b_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td>PENITENCIÁRIA ESTADUAL EDVAN MARIANO ROSENDO - PANDA</td>
+                                                                                                <td>I/04</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/43741/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="30252"> 30252</td>
+                                        <td>
+                                            ABIAS FERNANDES DA SILVA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARIA RAIMUNDA SILVA </span>
+                                        </td>
+                                        <td>016.460.652-12</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/5a5cf04e1e79b943668761b875a0bf4cde5ca312_fotoUsuario.jpeg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/5a5cf04e1e79b943668761b875a0bf4cde5ca312_fotoUsuario.jpeg </td>
+
+                                                                                                                                        <td>CENTRO DE RESSOCIALIZAÇÃO JONAS FERRETI</td>
+                                                                                                <td>ABERTO</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/30252/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="54036"> 54036</td>
+                                        <td>
+                                            ABIB NEURO PEREIRA FREIRE
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: LUZIA PEREIRA DE SOUZA</span>
+                                        </td>
+                                        <td></td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/54036/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/54036/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="43678"> 43678</td>
+                                        <td>
+                                            ABÍBIO CUSTÓDIO BENITIZ
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: TEREZINHA CUSTODIO BENITES</span>
+                                        </td>
+                                        <td>893.492.532-91</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/25c4f06ab422c6af67fe1f9b7e118d0db2a087fb_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/25c4f06ab422c6af67fe1f9b7e118d0db2a087fb_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td>CASA DE DETENÇÃO DE PIMENTA BUENO</td>
+                                                                                                <td>A/ CELA 05</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/43678/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="77300"> 77300</td>
+                                        <td>
+                                            ABIDALA JUVINO MOLINO CHAVES
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: IZAURA CHAVES DE OLIVEIRA</span>
+                                        </td>
+                                        <td>701.308.332-15</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png </td>
+
+                                                                                                                                        <td>UNIDADE SEMIABERTO E ABERTO FEMININO E MASCULINO - USAFAM</td>
+                                                                                                <td>MASCULINO</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/77300/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="54753"> 54753</td>
+                                        <td>
+                                            ABIEL DURI LINO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: NANCY DURI SILVA</span>
+                                        </td>
+                                        <td>100.000.382-62</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/85d3ebc9c662a82acbd009a5c2f27713610a3dd7_fotoUsuario.JPG"> https://sipe.sejus.ro.gov.br/public/fotosPresos/85d3ebc9c662a82acbd009a5c2f27713610a3dd7_fotoUsuario.JPG </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/54753/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/54753/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="31356"> 31356</td>
+                                        <td>
+                                            ABIGAELSON LEANDRO SOARES DE OLIVEIRA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: RAIMUNDA JOSEFA SOARES DE MEDEIROS</span>
+                                        </td>
+                                        <td>043.631.272-79</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/dd3e8339fe6500b6f08714ff2a20167beea50c73_fotoUsuario.JPG"> https://sipe.sejus.ro.gov.br/public/fotosPresos/dd3e8339fe6500b6f08714ff2a20167beea50c73_fotoUsuario.JPG </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Solto </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/31356/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="77207"> 77207</td>
+                                        <td>
+                                            ABILENE MIRANDA SILVA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ROSALINA DOS SANTOS</span>
+                                        </td>
+                                        <td>110.931.666-65</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/2cf01496d6e66c1df60994666fa4cea726e2b2c6_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/2cf01496d6e66c1df60994666fa4cea726e2b2c6_fotoUsuario.png </td>
+
+                                                                                                                                        <td>CASA DO ALBERGADO DE ARIQUEMES</td>
+                                                                                                <td>Cela 06</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/77207/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="57062"> 57062</td>
+                                        <td>
+                                            ABILHO MENDES SOUZA (CELA SEGURO)
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARIA MENDES SOUZA </span>
+                                        </td>
+                                        <td>604.122.242-91</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/78eb87f7a1788d40aa239ec22a46883ed3464c0a_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/78eb87f7a1788d40aa239ec22a46883ed3464c0a_fotoUsuario.png </td>
+
+                                                                                                                                        <td>PENITENCIÁRIA ESTADUAL EDVAN MARIANO ROSENDO - PANDA</td>
+                                                                                                <td>F/05</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/57062/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="75630"> 75630</td>
+                                        <td>
+                                            ABILIO MARIANO DA SILVA NETO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARIA MARINETE FRANCISCA DA COSTA</span>
+                                        </td>
+                                        <td>792.222.422-20</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/61d5b19f220eff8db95dedcf226ff04940f6d7e8_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/61d5b19f220eff8db95dedcf226ff04940f6d7e8_fotoUsuario.png </td>
+
+                                                                                                                                        <td>GERÊNCIA DE MONITORAÇÃO ELETRÔNICA - GME</td>
+                                                                                                <td>MASCULINO</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/75630/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="51380"> 51380</td>
+                                        <td>
+                                            ABIMAEL ALVES CARVALHO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: RAIMUNDA ALVES DE SOUZA</span>
+                                        </td>
+                                        <td>525.646.302-00</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/a4d6cad54ca8025b3cb44b56dfb7f1dddbd772d5_fotoUsuario.jpeg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/a4d6cad54ca8025b3cb44b56dfb7f1dddbd772d5_fotoUsuario.jpeg </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Livramento Condicional </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/51380/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="75988"> 75988</td>
+                                        <td>
+                                            ABIMAEL CUNHA DE SOUZA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: SONIA ARAUJO CUNHA DE SOUZA </span>
+                                        </td>
+                                        <td>523.368.402-00</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/c6b0b51972f35cad696dd35ae9e448c7bf9a6b37_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/c6b0b51972f35cad696dd35ae9e448c7bf9a6b37_fotoUsuario.png </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-success arrowed"> Em Liberdade </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/75988/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/apenados/75988/novaentrada" class="btn btn-xs btn-success" title="Registrar Nova Entrada"> <i class="ace-icon fa fa-unlock bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="50700"> 50700</td>
+                                        <td>
+                                            ABIMAEL DO NASCIMENTO DE MELO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARIA DO NASCIMENTO COSTA</span>
+                                        </td>
+                                        <td>016.396.182-44</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/c01866a5db7ef0227c62db559d949ebb12a1b140_fotoUsuario.jpeg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/c01866a5db7ef0227c62db559d949ebb12a1b140_fotoUsuario.jpeg </td>
+
+                                                                                                                                        <td>GERÊNCIA DE MONITORAÇÃO ELETRÔNICA - GME</td>
+                                                                                                <td>MASCULINO</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/50700/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="15449"> 15449</td>
+                                        <td>
+                                            ABIMAEL FERNANDES PEREIRA OLIVEIRA
+                                            <br> <span class="red">MAEL</span>
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: ELIS FERNANDES PEREIRA</span>
+                                        </td>
+                                        <td>001.479.672-44</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/bc15466ddc06af0ae1c7cdb05ecdfb8bcb50e821_fotoUsuario.JPG"> https://sipe.sejus.ro.gov.br/public/fotosPresos/bc15466ddc06af0ae1c7cdb05ecdfb8bcb50e821_fotoUsuario.JPG </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Livramento Condicional </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/15449/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="60196"> 60196</td>
+                                        <td>
+                                            ABIMAEL PICININ DE QUEIROZ
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: CLEUZA PICININ DE QUEIROZ</span>
+                                        </td>
+                                        <td>054.678.272-86</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/8a3d7c1eba005e31b3acda19ad32cd6a7e27c2e5_fotoUsuario.jpeg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/8a3d7c1eba005e31b3acda19ad32cd6a7e27c2e5_fotoUsuario.jpeg </td>
+
+                                                                                                                                        <td>CADEIA PÚBLICA DE CEREJEIRAS</td>
+                                                                                                <td>Masculino</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/60196/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="60775"> 60775</td>
+                                        <td>
+                                            ABIMAR CAMPOS CORREA FILHO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: HELENA DUTRA DE SOUZA CORREA</span>
+                                        </td>
+                                        <td>663.049.462-87</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Solto </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/60775/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="15832"> 15832</td>
+                                        <td>
+                                            ABINADAB ALVES DE LIMA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: HELENA ALVES DE LIMA</span>
+                                        </td>
+                                        <td>006.676.102-60</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png </td>
+
+                                                                                                                                        <td></td>
+                                                                                                <td></td>
+                                                <td><span class="label label-purple arrowed"> Solto </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/15832/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="49763"> 49763</td>
+                                        <td>
+                                            ABINADABE GALDINO DE ALMEIDA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: PERCILIANA ALVES GALDINO</span>
+                                        </td>
+                                        <td>735.355.912-87</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/fece1058f401db556de1bb6db921c25cec2bde99_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/fece1058f401db556de1bb6db921c25cec2bde99_fotoUsuario.png </td>
+
+                                                                                                                                        <td>CASA DO ALBERGADO DE ARIQUEMES</td>
+                                                                                                <td>SEMIABERTO / DOMICILIAR</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/49763/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="9307"> 9307</td>
+                                        <td>
+                                            ABINATAN SILVA DE FARIAS
+                                            <br> <span class="red">LEGIAO</span>
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARIA DE NAZARÉ ROSA DA SILVA</span>
+                                        </td>
+                                        <td></td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/a9c362612115de266dba8176a9f34c410b9dc15c_fotoUsuario.PNG"> https://sipe.sejus.ro.gov.br/public/fotosPresos/a9c362612115de266dba8176a9f34c410b9dc15c_fotoUsuario.PNG </td>
+
+                                                                                                                                        <td>COLÔNIA AGRÍCOLA PENAL ÊNIO PINHEIRO DOS SANTOS - CAPEP I</td>
+                                                                                                <td>GALPAO 2</td>
+                                                <td><span class="label label-danger arrowed"> Evasão / Abandono </span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/9307/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                                <a href="https://sipe.sejus.ro.gov.br/foragidos/9307/recaptura" class="btn btn-xs btn-danger" title="Apenado Recapturado"> <i class="ace-icon fa fa-paw bigger-120"></i> </a>
+                                                                                                        
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="76886"> 76886</td>
+                                        <td>
+                                            ABINE ALVES FELEX
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: FRANCISCA ALVES FELEX</span>
+                                        </td>
+                                        <td>798.924.423-34</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png"> https://sipe.sejus.ro.gov.br/public/fotosPresos/semfoto_fotoUsuario.png </td>
+
+                                                                                                                                        <td>UNIDADE SEMIABERTO E ABERTO FEMININO E MASCULINO - USAFAM</td>
+                                                                                                <td>MASCULINO</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/76886/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="73047"> 73047</td>
+                                        <td>
+                                            ABINER SILVA ARAUJO
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MADALENA OLIVEIRA DA SILVA ARAUJO </span>
+                                        </td>
+                                        <td>021.938.072-48</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/3ae8771b40d9d0fed4a029b603dde6a10de08b2d_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/3ae8771b40d9d0fed4a029b603dde6a10de08b2d_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td>PENITENCIÁRIA ESTADUAL EDVAN MARIANO ROSENDO - PANDA</td>
+                                                                                                <td>G/04</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/73047/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                                                                        <tr class="">
+                                        <td data-apenado_id="4102"> 4102</td>
+                                        <td>
+                                            ABMAEL DO CARMO SUSSUARANA
+                                            
+                                                                                        <br> <span class="blue" style="font-size:10px;">MÃE: MARIA DO CARMO SUSSUARANA</span>
+                                        </td>
+                                        <td>712.691.262-53</td>
+                                        <td class="hidden" data-foto="https://sipe.sejus.ro.gov.br/public/fotosPresos/1f4cad0aa0b558dcd248cd6655fa9d523d69f2a7_fotoUsuario.jpg"> https://sipe.sejus.ro.gov.br/public/fotosPresos/1f4cad0aa0b558dcd248cd6655fa9d523d69f2a7_fotoUsuario.jpg </td>
+
+                                                                                                                                        <td>UNIDADE SEMIABERTO E ABERTO FEMININO E MASCULINO - USAFAM</td>
+                                                                                                <td>MASCULINO</td>
+                                                <td><span class="label label-grey arrowed">Apenado Preso</span> </td>
+                                                <td class="col-md-2">
+                                                                                                            <a href="https://sipe.sejus.ro.gov.br/apenados/4102/selecionarOpcao" class="btn btn-xs btn-danger" title="Editar Cadastro, Mudança de Cela, Alterar Foto e Registrar Saída, Etc..."> <i class="ace-icon fa fa-pencil-square bigger-120"></i> </a>
+                                                                                                                                                            
+                                                                                                            <a href="#" class="btn btn-xs btn-purple abrirModal" title="Mostrar Foto"> <i class="ace-icon fa fa-photo bigger-120"></i> </a>
+                                                    
+                                                    <a href="#" class="btn btn-xs btn-default " id="btnFicha" name="btnFicha" title="Ficha Completa"> <i class="ace-icon fa fa-newspaper-o bigger-120"></i> </a>
+
+                                                </td>
+                                                                            </tr>
+                                                            </tbody>
+                   </table>
+                  <ul class="pagination">
+        
+                    <li class="disabled"><span>«</span></li>
+        
+        
+                    
+            
+            
+                                                                        <li class="active"><span>1</span></li>
+                                                                                <li><a href="https://sipe.sejus.ro.gov.br/apenados/index?page=2">2</a></li>
+                                                                                <li><a href="https://sipe.sejus.ro.gov.br/apenados/index?page=3">3</a></li>
+                                                                                <li><a href="https://sipe.sejus.ro.gov.br/apenados/index?page=4">4</a></li>
+                                                                                <li><a href="https://sipe.sejus.ro.gov.br/apenados/index?page=5">5</a></li>
+                                                                                <li><a href="https://sipe.sejus.ro.gov.br/apenados/index?page=6">6</a></li>
+                                                                                <li><a href="https://sipe.sejus.ro.gov.br/apenados/index?page=7">7</a></li>
+                                                                                <li><a href="https://sipe.sejus.ro.gov.br/apenados/index?page=8">8</a></li>
+                                                                    
+                            <li class="disabled"><span>...</span></li>
+            
+            
+                                
+            
+            
+                                                                        <li><a href="https://sipe.sejus.ro.gov.br/apenados/index?page=1120">1120</a></li>
+                                                                                <li><a href="https://sipe.sejus.ro.gov.br/apenados/index?page=1121">1121</a></li>
+                                                        
+        
+                    <li><a href="https://sipe.sejus.ro.gov.br/apenados/index?page=2" rel="next">»</a></li>
+            </ul>
+
+                </div>
+
+                <!-- /.box -->
+            </div>
+        </div>
+
+<!-- Modal -->
+<div class="modal fade" id="myModalFicha" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+    <div class="modal-dialog modal-lg " role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">×</button>
+                <h4 class="modal-title">SELECIONE OS MÓDULOS PARA IMPRESSÃO NA FICHA PRISIONAL</h4>
+            </div>
+
+            <form method="POST" action="https://sipe.sejus.ro.gov.br/relatorios/fichaGeral" accept-charset="UTF-8" target="_blanck"><input name="_token" type="hidden" value="rYAU5vTh5iS3FQxBZKg06MQJDDQB0BZMkpyeNi8w">
+
+            <div class="modal-body" id="modalbody">
+                Selecione os campos que você deseja
+                <div class="widget-box widget-color-dark ">
+                    <div class="widget-body">
+                        <div class="widget-main no-padding">
+                            <fieldset>
+                                <input class="btnFicha" name="apenado_id" id="apenado_id" type="hidden" value="">
+                                <div class="col-md-4">
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="DP" type="checkbox" checked="checked" readonly="" class="ace input-lg">
+                                            <span class="lbl bigger-120"> DADOS PESSOAIS</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="ER" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> ENDEREÇO RESIDENCIAL</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="IP" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> INFORMAÇÕES PRISIONAIS</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="CL" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> CLASSIFICAÇÃO</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="M" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> MOVIMENTAÇÕES</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="P" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> PROCESSOS</span>
+                                        </label>
+                                    </div>
+
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="MC" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> MUDANÇAS DE CELAS</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="T" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> TEMPORÁRIAS</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="V" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> VISITAS</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="A" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> ADVOGADOS</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="IAP" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> PROFISSÃO</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="MD" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> MEDIDA DISCIPLINAR</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="PA" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> PAD's</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="IA" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> INFORMAÇÕES ADICIONAIS</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="C" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> CARACTERISTICAS</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="MapC" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> MAPEAMENTO CORPORAL</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="F" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> FOTOS </span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="dna" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> DNA</span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="cronica" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> DOENÇAS CRÔNICAS </span>
+                                        </label>
+                                    </div>
+                                    <div class="checkbox">
+                                        <label class="block">
+                                            <input name="listar[]" value="faccao" type="checkbox" class="ace input-lg marcadesmarcatodos">
+                                            <span class="lbl bigger-120"> FACÇÃO </span>
+                                        </label>
+                                    </div>
+                                    <br>
+                                </div>
+
+
+
+
+
+                            </fieldset>
+                        </div>
+                    </div>
+                </div>
+
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-large pull-left" type="button" title="Todos" id="todos" onclick="marcardesmarcar();">
+                    <i class="icon-large  icon-ok">Marcar/Desmarcar Todos</i>
+                </button>
+                <button class="btn btn-success" id="btnModalVincular" type="submit"> <i class="ace-icon fa fa-save"></i> GERAR FICHA </button>
+            </div>
+            </form>
+
+
+        </div>
+    </div>
+
+
+</div><!-- Modal -->
+<div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button>
+                <h4 class="modal-title" id="myModalLabel">Foto Principal do Apenado</h4>
+            </div>
+            <div class="modal-body text-center">
+                <img style="max-width: 500px; max-height: 600px" src="">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Sair</button>
+            </div>
+        </div>
+    </div>
+</div>
+            </div><!-- /.page-content -->
+        </div>
+    </div><!-- /.main-content -->
+
+
+
+
+    <div class="footer">
+        <div class="footer-inner">
+            <div class="footer-content">
+						<span class="bigger-120">
+                            <span class="blue bolder">SIPE</span>
+                            Todos os Direitos Reservados © 2019  / 2026
+                        </span>
+                - Desenvolvido por&nbsp;&nbsp;GEINFO
+            </div>
+        </div>
+    </div>
+
+    <a href="#" id="btn-scroll-up" class="btn-scroll-up btn btn-sm btn-inverse">
+        <i class="ace-icon fa fa-angle-double-up icon-only bigger-110"></i>
+    </a>
+</div>
+
+<!-- Modal do Inserir Cautela  modal-xl -->
+<div class="modal fade" id="myModalNovo" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+    <div class="modal-dialog modal-lg " role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">×</button>
+                <h2 class="modal-title text-center">Termos de Uso</h2>
+            </div>
+            <div style="padding-left: 20px; padding-right: 20px">
+                <p>
+                    Este documento informa as responsabilidades, deveres e obrigações que todos os visitantes e usuários assumem ao utilizarem o SIPE, denominado Sistema Penitenciário do Estado de Rondônia, bem como seus sítios e serviços. Ao utilizar o SIPE, o usuário ou visitante manifesta sua concordância com todas as condições impostas neste Termo de Uso.
+                </p>
+                <h3>  Definições</h3>
+                <ul>
+                    <li> <strong>Conteúdo Público:</strong> são documentos, dados e informações de interesse da sociedade,
+                        produzidos pelos servidores da SEJUS e órgãos relacionados no exercício de suas funções
+                        e atividades, e que não tenham restrições de sigilo legal; </li>
+                    <li><strong>Link:</strong> sinônimo de Hiperlink. É uma referência dentro de um documento em hipertexto a
+                        outras partes desse documento, ou a outro documento, ou página da internet. Links
+                        estabelecem ligações/vínculos entre endereços na Internet; </li>
+                    <li><strong>SIPE:</strong> compreende os sítios do Sistema Penitenciário do Governo do Estado de Rondônia
+                        e suas extensões; </li>
+                    <li><strong>Usuário:</strong> qualquer pessoa que acessa determinada área restrita do SIPE mediante
+                        cadastro; </li>
+                    <li><strong>Visitante:</strong> qualquer pessoa que navega pelo SIPE ou suas extensões.
+                    </li>
+
+                </ul>
+
+
+                <h3>  Finalidade do SIPE</h3>
+
+
+                <p>O SIPE é um importante canal de informações e de serviços eletrônicos relacionados com as
+                    atividades de gestão administrativa, provendo importantes instrumentos de controle e
+                    acompanhamento das movimentações de apenados, visitantes do sistema prisional do estado,
+                    advogados, bem como de servidores do quadro.Seguindo um modelo de gestão pública fundamentado em transparência, o SIPE busca despertar
+                    e estimular a consciência da legalidade e a prática da automatização visando o aprimoramento da
+                    gestão dos recursos públicos para melhor atender ao gestor estadual e à sociedade.</p>
+
+
+                <h3>    Uso do conteúdo do SIPE</h3>
+
+
+                <p>As informações, os documentos e os dados disponíveis pelo SIPE são de caráter público e
+                    gratuito. Entretanto, a utilização de alguns serviços pode acarretar em coleta de dados ou estar
+                    condicionada ao prévio cadastro do usuário, mediante fornecimento de informações pessoais, as
+                    quais são acessadas apenas por profissionais autorizados. Para saber mais sobre quais
+                    informações podem ser coletadas, bem como seu uso pelo SIPE, acesse a Política de
+                    Privacidade.
+                </p>
+                <p>
+                    A SEJUS busca manter o conteúdo do SIPE atualizado e completo. Por outro lado, a SEJUS não
+                    se responsabiliza pela utilização, aplicação ou processamento que os usuários ou visitantes
+                    possam dar às informações que disponibiliza, sendo o usuário e/ou visitante responsável pela
+                    finalidade do uso dessas informações.
+                </p>
+                <p> Ao utilizar o SIPE, o usuário e/ou visitante concorda em:
+                </p><ul>
+                    <li>Não fornecer informações falsas ou desatualizadas para efetivar seu cadastro para o uso
+                        de serviços; </li>
+                    <li>Não inutilizar ou modificar qualquer área do Portal; </li>
+                    <li> Não tentar violar os mecanismos de proteção ao conteúdo do Portal e dos serviços que
+                        este oferece;</li>
+                    <li>Não utilizar mecanismos automatizados de coleta de dados (robôs); </li>
+                    <li>Não compartilhar senhas de acesso utilizadas em sistemas eletrônicos do SIPE e zelar por
+                        sua confidencialidade. </li>
+                    <li>Não fazer uso indevido dos serviços disponibilizados. </li>
+                </ul>
+
+
+
+                <p>A utilização de determinados serviços e conteúdos oferecidos por meio do SIPE podem estar
+                    submetidas às condições de uso próprias que, conforme o caso, podem complementar este
+                    Termo de Uso. Portanto, é responsabilidade do usuário tomar ciência das respectivas condições
+                    de uso antes de utilizar tais conteúdos e serviços.</p>
+
+                <h3>    Utilização de Links</h3>
+
+
+
+                <p>SIPE contém links para outros sítios, que são disponibilizados para facilitar o acesso e dar
+                    comodidade aos usuários e visitantes. A SEJUS não se responsabiliza pelas práticas de
+                    privacidade ou pelos respectivos conteúdos destes.</p>
+
+                <p>A inserção de links e referências para o SIPE em outros sítios é autorizada, observando-se as
+                    seguintes condições: </p>
+                <ul>
+                    <li> A SEJUS não se responsabiliza por alterações no link do SIPE;</li>
+                    <li> Não é permitido a nenhum sítio utilizar como sua página inicial o acesso direto à página
+                        inicial do SIPE.</li>
+                </ul>
+
+
+                <h3>  Direitos Autorais</h3>
+
+                <p>Todo o conteúdo do SIPE, tais como textos, marcas, imagens e aplicativos exibidos e
+                    disponibilizados estão protegidos por direitos autorais e são de propriedade da SEJUS, não sendo
+                    permitidas quaisquer modificações.</p>
+
+                <p>É permitida a reprodução do Conteúdo Público disponível no SIPE com observância da legislação
+                    vigente e com a citação da fonte. Ressalte-se que a SEJUS se exime de responsabilidade e não
+                    mantém qualquer vínculo com sítios não governamentais que possam, eventualmente, reproduzir
+                    o Conteúdo Público disponível em seu Portal. </p>
+
+                <h3>   Comunicação com o usuário</h3>
+
+                <p>Em caso de dúvidas ou sugestões em relação ao conteúdo do SIPE entre em contato por meio
+                    dos canais de comunicação disponibilizados através do “Fale Conosco” ou pela ouvidoria da
+                    SEJUS. </p>
+
+                <h3>   Atualização das informações do usuário</h3>
+
+                <p>Além dos casos obrigatórios previstos em lei, é dever dos usuários dos sistemas e serviços
+                    disponíveis no SIPE manter seus dados atualizados. Para isso, a SEJUS oferece meios que
+                    possibilitam aos usuários atualizar e corrigir os dados preenchidos no cadastro. Essas mudanças
+                    poderão ser realizadas a qualquer momento, conforme necessário.
+                </p>
+
+                <h3>  Legislação Vigente</h3>
+
+                <p> A Portaria nº 3076/2019/SEJUS-GAF dispõe sobre as diretrizes para desenvolvimento e implantação do SIPE na Lei nº
+                    12.714, de 14 de setembro de 2012, e estabelece regras sobre a composição, o funcionamento e as atribuições de suas instâncias de governança.</p>
+
+                <h3>  Disposições Gerais</h3>
+
+                <p> A SEJUS se reserva o direito de modificar este Termo de Uso ou quaisquer termos adicionais que
+                    sejam aplicáveis a um serviço para refletir alterações na legislação ou mudanças nos próprios
+                    serviços.</p>
+                <p>Cabe aos usuários e visitantes manterem-se atualizados sobre este Termo de Uso, bem como
+                    sobre os termos de outros serviços que acessarem por meio do SIPE ou de suas extensões.
+                </p>
+
+                <div class="modal-footer">
+                    <button class="btn btn-primary" data-dismiss="modal" type="button">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <style>
+        p{
+            text-indent: 4em;
+            text-align: justify;
+        }
+        ul{
+            padding-left: 100px
+        }
+    </style>
+
+<!-- scripts basic layout -->
+
+
+
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/js/bootstrap.js"></script>
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/js/fuelux/fuelux.wizard.js"></script>
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/js/jquery.validate.js"></script>
+
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/js/jquery-ui.custom.js"></script>
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/js/jquery.ui.touch-punch.js"></script>
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/js/ace/ace.js"></script>
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/js/ace/ace.sidebar.js"></script>
+
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/js/ace/elements.wizard.js"></script>
+
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/js/sweetalert.min.js"></script>
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/js/sweetalert-dev.js"></script>
+
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/chosen/chosen.jquery.js"></script>
+<script src="https://sipe.sejus.ro.gov.br/resources/assets/chosen/chosen.js"></script>
+
+
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/js/select2.min.js"></script>
+<!-- O ACE.SIDEBAR.JS DA CONFLITO COM O MENU RESPONSIVO -  -->
+
+
+<script>
+
+    $('a[name=btnNovo]').click(function(){
+        //alert('oi');
+        // $('#myModalVincular').modal('hide')
+        $("#myModalNovo").modal({backdrop: "static"});
+    });
+
+
+
+    $('[data-rel=tooltip]').tooltip({container:'body'});
+    $('[data-rel=popover]').popover({container:'body'});
+
+</script>
+
+<script type="text/javascript">
+    $(function(){
+        $('#loader').css({	"display": "block", opacity: 0.7 });
+    });
+    jQuery(window).load(function() {
+        jQuery("#loader").fadeOut("slow");
+    });
+</script>
+
+<script type="text/javascript">
+//    $('a[name=btnPerguntas]').click(function(){
+    $("#btnPerguntas").click(function () {
+        $("#myModalAjuda").modal({backdrop: "static"});
+    });
+</script>
+
+<script type="text/javascript">
+
+    var tempo = new Number();
+    // Tempo em segundos
+    tempo = 1800;
+
+    function startCountdown(){
+
+        // Se o tempo não for zerado
+        if((tempo - 1) >= 0){
+
+            // Pega a parte inteira dos minutos
+            var min = parseInt(tempo/60);
+            // Calcula os segundos restantes
+            var seg = tempo%60;
+
+            // Formata o número menor que dez, ex: 08, 07, ...
+            if(min < 10){
+                min = "0"+min;
+                min = min.substr(0, 2);
+            }
+            if(seg <=9){
+                seg = "0"+seg;
+            }
+
+            // Cria a variável para formatar no estilo hora/cronômetro
+            horaImprimivel = '00:' + min + ':' + seg;
+            //JQuery pra setar o valor
+            $("#sessao").html(horaImprimivel);
+
+            // Define que a função será executada novamente em 1000ms = 1 segundo
+            setTimeout('startCountdown()',1000);
+
+            // diminui o tempo
+            tempo--;
+
+            // Quando o contador chegar a zero faz esta ação
+        } else {
+            window.open('https://sipe.sejus.ro.gov.br/logout', '_self');
+        }
+
+    }
+
+    // Chama a função ao carregar a tela
+    startCountdown();
+
+</script>
+
+
+<script type="text/javascript">
+    function marcardesmarcar() {
+        $('.marcadesmarcatodos').each(function () {
+            if (this.checked) $(this).attr("checked", false);
+            else $(this).prop("checked", true);
+        });
+    }
+</script>
+
+<!-- Google tag (gtag.js) -->
+<script async="" src="https://www.googletagmanager.com/gtag/js?id=G-001PBEK69F"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-001PBEK69F');
+</script>
+
+
+    <script src="https://sipe.sejus.ro.gov.br/resources/assets/js/modalFotos/script.js"></script>
+    <script src="https://sipe.sejus.ro.gov.br/resources/assets/js/ficha/script.js"></script>
+    <script src="https://sipe.sejus.ro.gov.br/resources/assets/js/apenados/pesquisaAvancada.js"></script>
+
+    <script>
+        $('#escolha').val('nomeapenado');
+        $('#parametro').val('')  // Limpa o valor do campo de texto com id 'parametro' quando a página é carregada
+       
+        $(document).ready(function(){
+    // Quando o documento HTML estiver completamente carregado
+    $('#escolha').on('change', function(e){
+        // Adiciona um evento de 'change' ao elemento com id 'escolha'
+        if(e.target.value == 'nacionalidade'){
+            // Se o valor do elemento selecionado for 'nacionalidade'
+            $('#seleciona')
+                .removeAttr('disabled') // Remove o atributo 'disabled' do elemento com id 'seleciona'
+                .removeAttr('style');   // Remove o atributo 'style' do elemento com id 'seleciona'
+            $('#pesquisa')
+                .prop('disabled', true) // Adiciona o atributo 'disabled' ao elemento com id 'pesquisa'
+                .css('display', 'none'); // Define o estilo 'display: none' para o elemento com id 'pesquisa'
+        } else {
+            // Se o valor do elemento selecionado não for 'nacionalidade'
+            $('#pesquisa')
+                .removeAttr('disabled') // Remove o atributo 'disabled' do elemento com id 'pesquisa'
+                .removeAttr('style');   // Remove o atributo 'style' do elemento com id 'pesquisa'
+            $('#seleciona')
+                .prop('disabled', true) // Adiciona o atributo 'disabled' ao elemento com id 'seleciona'
+                .css('display', 'none'); // Define o estilo 'display: none' para o elemento com id 'seleciona'
+        }
+    });
+});
+
+    </script>
+
+
+
+
+
+
+</div></body></html>
