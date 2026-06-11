@@ -42,20 +42,20 @@ def main():
             print(f"[FALHA] Falha no login automático: {login_err}")
             return
             
-    # 3. Tentar fazer uma busca de teste
+    # 3. Tentar fazer uma busca de teste e analisar o HTML de /listagem/geral
     try:
-        print("\nTentando pesquisar apenado com termo 'DIEGO'...")
-        results = client.pesquisar_apenado("DIEGO")
-        print(f"[OK] Busca realizada com sucesso! Encontrados {len(results)} resultados.")
-        if results:
-            print(f"Primeiro resultado: ID={results[0].id}, Nome={results[0].nome}")
-            
-            # 4. Tentar obter os detalhes do apenado retornado
-            print(f"\nTentando obter detalhes do apenado ID={results[0].id}...")
-            details = client.informacoes(results[0].id)
-            print(f"[OK] Detalhes obtidos com sucesso! Nome={details.nome}")
+        print("\nObtendo HTML de /listagem/geral...")
+        res = client._request("GET", "/listagem/geral")
+        print(f"[OK] Status de /listagem/geral: {res.status_code}")
+        
+        # Salva o HTML em arquivo para inspecao
+        os.makedirs("scratch", exist_ok=True)
+        with open("scratch/listagem_geral.html", "w", encoding="utf-8") as f:
+            f.write(res.text)
+        print("[OK] HTML salvo em scratch/listagem_geral.html")
+                        
     except Exception as search_err:
-        print(f"[FALHA] Falha na pesquisa/detalhes: {search_err}")
+        print(f"[FALHA] Falha na analise de listagem: {search_err}")
 
 if __name__ == "__main__":
     main()

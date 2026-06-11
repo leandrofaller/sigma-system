@@ -23,6 +23,7 @@ import { chromium, Browser, BrowserContext, Page } from 'playwright'
 import { existsSync } from 'fs'
 import { prisma } from './db'
 import sharp from 'sharp'
+import * as cheerio from 'cheerio'
 import { join } from 'path'
 import { getApenadosDir } from './storage'
 import { createHash } from 'crypto'
@@ -1401,6 +1402,41 @@ async function coletarIdsExtramuros(jobId: string): Promise<number[]> {
 
 // ── ID collection ─────────────────────────────────────────────
 
+function extractIdsFromTableHtml(html: string): number[] {
+  const $ = cheerio.load(html)
+  const ids = new Set<number>()
+  
+  $('table').each((_, table) => {
+    // 1. Achar a coluna de código/id no header
+    let codigoColIndex = -1
+    $(table).find('thead tr th, thead tr td').each((i, el) => {
+      const text = $(el).text().toUpperCase().trim()
+      if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') {
+        codigoColIndex = i
+      }
+    })
+    
+    // Se não achou a coluna código no header, assume index 1 como padrão para listagem geral
+    if (codigoColIndex === -1) {
+      codigoColIndex = 1
+    }
+    
+    // 2. Extrair de cada linha no tbody
+    $(table).find('tbody tr').each((_, row) => {
+      const cells = $(row).find('td, th')
+      if (cells.length > codigoColIndex) {
+        const cellText = $(cells[codigoColIndex]).text().trim()
+        const id = parseInt(cellText, 10)
+        if (!isNaN(id) && id > 0) {
+          ids.add(id)
+        }
+      }
+    })
+  })
+  
+  return [...ids]
+}
+
 async function coletarIdsApenados(
   page: Page,
   unidadeId: string,
@@ -1417,6 +1453,13 @@ async function coletarIdsApenados(
       const proxyData = await fetchSipeViaProxy(path)
       const html = proxyData?.html ?? proxyData?.text
       if (!html) continue
+
+      // Tenta extrair a partir de tabelas estruturadas estáticas (como a listagem geral com regime simples)
+      const idsViaTable = extractIdsFromTableHtml(html)
+      if (idsViaTable.length > 0) {
+        log(jobId, `🐍 SDK Python coletou ${idsViaTable.length} IDs estruturados da tabela HTML (${path})`)
+        return idsViaTable
+      }
 
       const ajaxPath = extractAjaxPathFromHtml(html)
       if (ajaxPath) {
