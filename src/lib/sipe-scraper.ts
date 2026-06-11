@@ -6460,6 +6460,9 @@ async function scrapeApenadoFichaFast(
       throw new Error('APENADO_NAO_ENCONTRADO')
     }
     
+    // 🔐 Garantia de ativação do apenado na sessão do Laravel do SIPE
+    await fetchSipeViaProxy(`/apenados/${sipeId}/selecionarOpcao`).catch(() => {})
+
     const cleanLinkPath = link.replace(SIPE_URL, '')
     const editProxyData = await fetchSipeViaProxy(cleanLinkPath)
     if (!editProxyData || editProxyData.is_binary || !editProxyData.html) {
