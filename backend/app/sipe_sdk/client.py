@@ -72,6 +72,9 @@ class _CookieJar:
     def get_dict(self) -> Dict[str, str]:
         return dict(self._cookies)
 
+    def clear(self) -> None:
+        self._cookies.clear()
+
 
 class _FallbackSession:
     """Sessao minima para permitir testes sem curl_cffi instalado."""
@@ -214,6 +217,13 @@ class SIPEClient:
 
         logger.info(f"Iniciando login automatico no SIPE com CPF: {cpf}")
 
+        # Limpa cookies antigos/expirados e cabecalho Cookie para evitar conflitos de sessao/CSRF
+        self.session.headers.pop("Cookie", None)
+        try:
+            self.session.cookies.clear()
+        except AttributeError:
+            pass
+
         try:
             res_get = self.session.get(f"{self.base_url}/", timeout=15)
             soup = BeautifulSoup(res_get.text, "lxml")
@@ -226,6 +236,11 @@ class SIPEClient:
             res_login = self.session.post(
                 f"{self.base_url}/validaLogin",
                 data={"_token": token, "cpf": cpf, "password": password},
+                headers={
+                    "Referer": f"{self.base_url}/",
+                    "Origin": self.base_url,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
                 timeout=20,
                 allow_redirects=True,
             )
@@ -250,6 +265,11 @@ class SIPEClient:
             res_role = self.session.post(
                 f"{self.base_url}/selectRole",
                 data={"_token": role_token, "app_role_id": perfil, "unidade_id": unidade},
+                headers={
+                    "Referer": f"{self.base_url}/selectRole",
+                    "Origin": self.base_url,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
                 timeout=20,
                 allow_redirects=True,
             )
