@@ -398,7 +398,20 @@ async function gotoSipeWithFallback(
 ) {
   await ensureFallbackLogin(page)
   const cleanPath = path.startsWith('/') ? path : `/${path}`
-  return page.goto(`${SIPE_URL}${cleanPath}`, options)
+  let res = await page.goto(`${SIPE_URL}${cleanPath}`, options)
+  
+  // Verifica se foi redirecionado para a tela de login
+  const currentUrl = page.url()
+  if (
+    currentUrl.includes('/login') ||
+    currentUrl.replace(/\/$/, '') === SIPE_URL.replace(/\/$/, '')
+  ) {
+    console.log(`[PLAYWRIGHT FALLBACK] ⚠️ Sessão expirada detectada ao navegar para ${cleanPath}. Re-autenticando no SIPE...`)
+    markFallbackSessionDirty(page)
+    await ensureFallbackLogin(page)
+    res = await page.goto(`${SIPE_URL}${cleanPath}`, options)
+  }
+  return res
 }
 
 function extractIdsFromHtml(html: string, entity: 'apenados' | 'advogados'): number[] {
