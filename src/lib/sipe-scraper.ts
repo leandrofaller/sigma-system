@@ -1449,31 +1449,145 @@ async function coletarIdsApenados(
       ? ['/apenados/index']
       : ['/listagem/geral', `/listagem/${unidadeId}/carceragem`]
 
-    for (const path of candidatePaths) {
-      const proxyData = await fetchSipeViaProxy(path)
-      const html = proxyData?.html ?? proxyData?.text
-      if (!html) continue
+    for (const basePath of candidatePaths) {
+      const idsAcumulados: number[] = []
+      let currentPath: string | null = basePath
+      let pageNum = 1
+      const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
+      const maxIds = testMode ? 150 : Infinity
+      let lastHtml: string | undefined = undefined
 
-      // Tenta extrair a partir de tabelas estruturadas estáticas (como a listagem geral com regime simples)
-      const idsViaTable = extractIdsFromTableHtml(html)
-      if (idsViaTable.length > 0) {
-        log(jobId, `🐍 SDK Python coletou ${idsViaTable.length} IDs estruturados da tabela HTML (${path})`)
-        return idsViaTable
-      }
+      while (currentPath) {
+        log(jobId, `🐍 SDK Python carregando página ${pageNum} da listagem: ${currentPath}`)
+        const proxyData = await fetchSipeViaProxy(currentPath)
+        const html = proxyData?.html ?? proxyData?.text
+        lastHtml = html
+        if (!html) {
+          break
+        }
 
-      const ajaxPath = extractAjaxPathFromHtml(html)
-      if (ajaxPath) {
-        const idsViaAjax = await fetchPaginatedIdsViaProxy(ajaxPath, 'apenados')
-        if (idsViaAjax.length > 0) {
-          log(jobId, `🐍 SDK Python coletou ${idsViaAjax.length} IDs via DataTables (${path})`)
-          return idsViaAjax
+        // 1. Extrair os IDs da tabela atual usando Cheerio
+        const idsPagina = extractIdsFromTableHtml(html)
+        if (idsPagina.length === 0) {
+          // Se não achou na tabela, tenta regex de fallback (para compatibilidade)
+          const idsRegex = extractIdsFromHtml(html, 'apenados')
+          if (idsRegex.length > 0) {
+            idsPagina.push(...idsRegex)
+          }
+        }
+
+        if (idsPagina.length === 0) {
+          // Se mesmo assim não achou nada, aborta o loop da tabela estática
+          break
+        }
+
+        // Adiciona os novos IDs
+        for (const id of idsPagina) {
+          if (!idsAcumulados.includes(id)) {
+            idsAcumulados.push(id)
+          }
+        }
+
+        // 2. Extrai a cela da listagem para cache
+        const $ = cheerio.load(html)
+        $('table').first().each((_, table) => {
+          let codigoColIndex = -1
+          let celaColIndex = -1
+          $(table).find('thead tr th, thead tr td').each((i, el) => {
+            const text = $(el).text().toUpperCase().trim()
+            if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = i
+            if (text === 'CELA') celaColIndex = i
+          })
+          if (codigoColIndex === -1) codigoColIndex = 1
+          
+          if (celaColIndex >= 0) {
+            $(table).find('tbody tr').each((_, row) => {
+              const cells = $(row).find('td, th')
+              if (cells.length > Math.max(codigoColIndex, celaColIndex)) {
+                const idVal = parseInt($(cells[codigoColIndex]).text().trim(), 10)
+                const celaText = $(cells[celaColIndex]).text().trim()
+                if (!isNaN(idVal) && idVal > 0 && celaText) {
+                  listagemInfoCache.set(idVal, { cela: celaText })
+                }
+              }
+            })
+          }
+        })
+
+        if (testMode && idsAcumulados.length >= maxIds) {
+          log(jobId, `🧪 [TESTE] Limite de 150 IDs atingido na listagem estática do SDK Python.`)
+          break
+        }
+
+        // 3. Verificar o link do botão "Próxima" para continuar
+        let nextLinkEl = $('ul.pagination li a[rel="next"]')
+        if (!nextLinkEl.length) {
+          nextLinkEl = $('a:contains("Próxima")')
+        }
+        if (!nextLinkEl.length) {
+          nextLinkEl = $('a:contains("Next")')
+        }
+        if (!nextLinkEl.length) {
+          nextLinkEl = $('li.next a, li.next > a')
+        }
+        if (!nextLinkEl.length) {
+          nextLinkEl = $('[data-dt-idx="next"] a, [data-dt-idx="next"]')
+        }
+        if (!nextLinkEl.length) {
+          nextLinkEl = $('a:contains("»")')
+        }
+        if (!nextLinkEl.length) {
+          nextLinkEl = $('a:contains(">>")')
+        }
+
+        const nextUrl = nextLinkEl.first().attr('href')
+        const parentLi = nextLinkEl.first().closest('li')
+        const isDisabled = parentLi.hasClass('disabled') || nextLinkEl.first().hasClass('disabled')
+
+        if (nextUrl && !isDisabled) {
+          // Garante que o caminho seja relativo
+          let relPath = nextUrl
+          if (relPath.startsWith('http://') || relPath.startsWith('https://')) {
+            try {
+              const parsed = new URL(relPath)
+              relPath = parsed.pathname + parsed.search
+            } catch {
+              relPath = relPath.replace(SIPE_URL, '').replace('http://sipe.sejus.ro.gov.br', '')
+            }
+          }
+          currentPath = relPath
+          pageNum++
+          // Delay de cortesia para não sobrecarregar
+          await new Promise(r => setTimeout(r, 800 + Math.random() * 500))
+        } else {
+          currentPath = null
         }
       }
 
-      const idsViaHtml = extractIdsFromHtml(html, 'apenados')
-      if (idsViaHtml.length > 0) {
-        log(jobId, `🐍 SDK Python coletou ${idsViaHtml.length} IDs diretamente do HTML (${path})`)
-        return idsViaHtml
+      if (idsAcumulados.length > 0) {
+        if (testMode && idsAcumulados.length > 150) {
+          idsAcumulados.splice(150)
+        }
+        log(jobId, `🐍 SDK Python concluiu a coleta. Total: ${idsAcumulados.length} IDs obtidos de todas as páginas.`)
+        return idsAcumulados
+      }
+
+      // Fallback para DataTables AJAX convencional (caso existam outras rotas)
+      if (lastHtml) {
+        const ajaxPath = extractAjaxPathFromHtml(lastHtml)
+        if (ajaxPath) {
+          const idsViaAjax = await fetchPaginatedIdsViaProxy(ajaxPath, 'apenados')
+          if (idsViaAjax.length > 0) {
+            log(jobId, `🐍 SDK Python coletou ${idsViaAjax.length} IDs via DataTables (${basePath})`)
+            return idsViaAjax
+          }
+        }
+
+        const idsViaHtml = extractIdsFromHtml(lastHtml, 'apenados')
+        if (idsViaHtml.length > 0) {
+          log(jobId, `🐍 SDK Python coletou ${idsViaHtml.length} IDs diretamente do HTML (${basePath})`)
+          return idsViaHtml
+        }
       }
     }
 
