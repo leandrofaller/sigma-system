@@ -1870,27 +1870,34 @@ async function coletarIdsApenados(
         return []
       }
 
-      // Descobre os índices de código e cela na tabela
+      // Descobre os índices de código, cela e situação na tabela
       const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
       const codigoIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
         return text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD'
       })
       const celaIndex = headers.findIndex(h => (h.textContent ?? '').toUpperCase().trim() === 'CELA')
+      const situacaoIndex = headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO'
+      })
 
       const data: any[] = dt.rows().data().toArray()
       return data
         .map((row: any) => {
           let id = NaN
           let cela = ''
+          let situacao = ''
           if (Array.isArray(row)) {
             id = parseInt(row[codigoIndex >= 0 ? codigoIndex : 0])
             if (celaIndex >= 0) cela = (row[celaIndex] ?? '').toString().trim()
+            if (situacaoIndex >= 0) situacao = (row[situacaoIndex] ?? '').toString().trim()
           } else if (row) {
             id = parseInt(row.id ?? row.sipeId ?? '')
             cela = (row.cela ?? '').toString().trim()
+            situacao = (row.situacao ?? row.status ?? '').toString().trim()
           }
-          return { id, cela }
+          return { id, cela, situacao }
         })
         .filter(item => !isNaN(item.id) && item.id > 0)
     } catch { return [] }
@@ -1908,7 +1915,12 @@ async function coletarIdsApenados(
 
     log(jobId, `⚡ Estratégia A (DataTables JS API): ${idsFinais.length} IDs`)
     for (const item of apenadosViaApi) {
-      if (item.cela) listagemInfoCache.set(item.id, { cela: item.cela })
+      const cacheData: any = {}
+      if (item.cela) cacheData.cela = item.cela
+      if (item.situacao) cacheData.situacao = item.situacao
+      if (Object.keys(cacheData).length > 0) {
+        listagemInfoCache.set(item.id, cacheData)
+      }
     }
     return idsFinais
   }
@@ -1929,13 +1941,17 @@ async function coletarIdsApenados(
       if (!rawUrl) return []
       const ajaxUrl = rawUrl.startsWith('http') ? rawUrl : baseUrl + rawUrl
 
-      // Descobre os índices de código e cela na tabela
+      // Descobre os índices de código, cela e situação na tabela
       const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
       const codigoIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
         return text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD'
       })
       const celaIndex = headers.findIndex(h => (h.textContent ?? '').toUpperCase().trim() === 'CELA')
+      const situacaoIndex = headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO'
+      })
 
       let allRows: any[] = []
       let start = 0
@@ -1992,14 +2008,17 @@ async function coletarIdsApenados(
         .map((row: any) => {
           let id = NaN
           let cela = ''
+          let situacao = ''
           if (Array.isArray(row)) {
             id = parseInt(row[codigoIndex >= 0 ? codigoIndex : 0])
             if (celaIndex >= 0) cela = (row[celaIndex] ?? '').toString().trim()
+            if (situacaoIndex >= 0) situacao = (row[situacaoIndex] ?? '').toString().trim()
           } else if (row) {
             id = parseInt(row.id ?? row.sipeId ?? '')
             cela = (row.cela ?? '').toString().trim()
+            situacao = (row.situacao ?? row.status ?? '').toString().trim()
           }
-          return { id, cela }
+          return { id, cela, situacao }
         })
         .filter(item => !isNaN(item.id) && item.id > 0)
     } catch { return [] }
@@ -2017,7 +2036,12 @@ async function coletarIdsApenados(
 
     log(jobId, `⚡ Estratégia B (fetch direto paginado): ${idsFinais.length} IDs`)
     for (const item of apenadosViaFetch) {
-      if (item.cela) listagemInfoCache.set(item.id, { cela: item.cela })
+      const cacheData: any = {}
+      if (item.cela) cacheData.cela = item.cela
+      if (item.situacao) cacheData.situacao = item.situacao
+      if (Object.keys(cacheData).length > 0) {
+        listagemInfoCache.set(item.id, cacheData)
+      }
     }
     return idsFinais
   }
