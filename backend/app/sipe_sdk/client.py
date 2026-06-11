@@ -137,28 +137,98 @@ class SIPEClient:
         }
         self.session = self._create_session(headers)
 
-        env_cookies: Dict[str, str] = {}
-        raw_cookies_str = os.getenv("SIPE_COOKIES")
-        if raw_cookies_str:
-            for pair in raw_cookies_str.split(";"):
-                if "=" in pair:
-                    key, value = pair.split("=", 1)
-                    env_cookies[key.strip()] = value.strip()
-
-        for key, value in os.environ.items():
-            if key.startswith("SIPE_COOKIE_"):
-                cookie_name = key.replace("SIPE_COOKIE_", "")
-                if cookie_name == "LARAVEL_SESSION":
-                    cookie_name = "laravel_session_sipe"
-                elif cookie_name == "XSRF_TOKEN":
-                    cookie_name = "XSRF-TOKEN"
-                env_cookies[cookie_name] = value
-
-        if env_cookies:
-            self.set_cookies(env_cookies)
-            logger.info(f"Carregados {len(env_cookies)} cookies de sessao no init.")
+        # Tenta carregar cookies persistidos (Redis ou arquivo local JSON)
+        persisted_cookies = self._load_persisted_cookies()
+        if persisted_cookies:
+            self.set_cookies(persisted_cookies)
+            logger.info(f"Carregados {len(persisted_cookies)} cookies persistidos no init do SIPEClient.")
         else:
-            logger.warning("Nenhum cookie de sessao foi encontrado no ambiente/.env.")
+            # Caso contrário, fallback para as variáveis de ambiente/.env
+            env_cookies: Dict[str, str] = {}
+            raw_cookies_str = os.getenv("SIPE_COOKIES")
+            if raw_cookies_str:
+                for pair in raw_cookies_str.split(";"):
+                    if "=" in pair:
+                        key, value = pair.split("=", 1)
+                        env_cookies[key.strip()] = value.strip()
+
+            for key, value in os.environ.items():
+                if key.startswith("SIPE_COOKIE_"):
+                    cookie_name = key.replace("SIPE_COOKIE_", "")
+                    if cookie_name == "LARAVEL_SESSION":
+                        cookie_name = "laravel_session_sipe"
+                    elif cookie_name == "XSRF_TOKEN":
+                        cookie_name = "XSRF-TOKEN"
+                    env_cookies[cookie_name] = value
+
+            if env_cookies:
+                self.set_cookies(env_cookies)
+                logger.info(f"Carregados {len(env_cookies)} cookies de sessao do ambiente no init.")
+                # Persiste os cookies do ambiente para uso futuro
+                self._persist_cookies()
+            else:
+                logger.warning("Nenhum cookie de sessao foi encontrado no ambiente/.env ou cache.")
+
+    def _get_cookie_file_path(self) -> str:
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "sipe_cookies.json")
+
+    def _persist_cookies(self) -> None:
+        """Persiste os cookies atuais no Redis (se ativo) e em um arquivo local JSON."""
+        cookies_dict = self.session.cookies.get_dict()
+        if not cookies_dict:
+            # Tenta extrair os cookies do cabeçalho literal caso a jarra de cookies do curl_cffi esteja vazia
+            cookie_header = self.session.headers.get("Cookie", "")
+            if cookie_header:
+                for pair in cookie_header.split(";"):
+                    if "=" in pair:
+                        k, v = pair.split("=", 1)
+                        cookies_dict[k.strip()] = v.strip()
+        
+        if not cookies_dict:
+            return
+
+        # 1. Salvar no Redis
+        if self.redis_client:
+            try:
+                self.redis_client.set("sipe:session:cookies", json.dumps(cookies_dict))
+                logger.info("Cookies de sessao persistidos com sucesso no Redis.")
+            except Exception as e:
+                logger.warning(f"Erro ao persistir cookies no Redis: {e}")
+
+        # 2. Salvar em arquivo local JSON
+        try:
+            file_path = self._get_cookie_file_path()
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(cookies_dict, f, indent=4)
+            logger.info(f"Cookies de sessao persistidos com sucesso em arquivo local: {file_path}")
+        except Exception as e:
+            logger.warning(f"Erro ao persistir cookies em arquivo local: {e}")
+
+    def _load_persisted_cookies(self) -> Optional[Dict[str, str]]:
+        """Carrega os cookies de sessão persistidos do Redis ou de arquivo local JSON."""
+        # 1. Tentar carregar do Redis
+        if self.redis_client:
+            try:
+                data = self.redis_client.get("sipe:session:cookies")
+                if data:
+                    logger.info("Cookies de sessao recuperados do Redis.")
+                    return json.loads(data)
+            except Exception as e:
+                logger.warning(f"Erro ao carregar cookies do Redis: {e}")
+
+        # 2. Tentar carregar do arquivo local JSON
+        file_path = self._get_cookie_file_path()
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    cookies_dict = json.load(f)
+                if cookies_dict:
+                    logger.info(f"Cookies de sessao recuperados do arquivo local: {file_path}")
+                    return cookies_dict
+            except Exception as e:
+                logger.warning(f"Erro ao carregar cookies do arquivo local JSON: {e}")
+
+        return None
 
     def _create_session(self, headers: Dict[str, str]):
         if requests is None:
@@ -288,6 +358,7 @@ class SIPEClient:
         if cookies_dict:
             self.session.headers["Cookie"] = "; ".join(f"{key}={value}" for key, value in cookies_dict.items())
             logger.info("Cabecalho literal Cookie atualizado a partir da jarra da sessao.")
+            self._persist_cookies()
 
     def _request(self, method: str, path: str, **kwargs):
         """Helper centralizado com retry exponencial, renovacao de sessao e cache Redis opcional."""

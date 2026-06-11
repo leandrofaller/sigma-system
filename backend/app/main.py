@@ -47,21 +47,39 @@ def parse_cookie_header(cookie_header: Optional[str]) -> dict:
                 cookies[k.strip()] = v.strip()
     return cookies
 
+_global_client: Optional[SIPEClient] = None
+
 def get_client(cookie_header: Optional[str] = None) -> SIPEClient:
     """
     Retorna uma instância configurada de SIPEClient.
-    Se cookies forem passados no cabeçalho Cookie da API, eles têm precedência.
-    Caso contrário, o client carrega dos cookies do .env por padrão.
+    Se cookies forem passados no cabeçalho Cookie da API, eles têm precedência e
+    uma nova instância é criada temporariamente para a requisição.
+    Caso contrário, a instância global compartilhada é reutilizada (evitando logins desnecessários).
     """
-    client = SIPEClient(base_url=base_url)
+    global _global_client
     
     # Se a requisição contiver cookies no cabeçalho Cookie
     req_cookies = parse_cookie_header(cookie_header)
     if req_cookies:
+        client = SIPEClient(base_url=base_url)
         client.set_cookies(req_cookies)
         logger.info("Cookies aplicados a partir da requisição HTTP (Header Cookie).")
+        return client
         
-    return client
+    # Reutiliza o cliente global se não foram fornecidos cookies explícitos na chamada
+    if _global_client is None:
+        _global_client = SIPEClient(base_url=base_url)
+        logger.info("Criada nova instância singleton global de SIPEClient.")
+    else:
+        # Carrega cookies mais recentes persistidos (caso tenham sido atualizados em arquivo/Redis por outro processo)
+        persisted = _global_client._load_persisted_cookies()
+        if persisted:
+            _global_client.set_cookies(persisted)
+            logger.info("Instância global do SIPEClient atualizada com cookies persistidos.")
+        else:
+            logger.info("Instância global do SIPEClient reutilizada com cookies em memória.")
+            
+    return _global_client
 
 def _serialize_proxy_response(response, path: str) -> Dict[str, Any]:
     content_type = response.headers.get("content-type", "")
