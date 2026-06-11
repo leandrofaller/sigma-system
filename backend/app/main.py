@@ -49,7 +49,7 @@ def parse_cookie_header(cookie_header: Optional[str]) -> dict:
 
 _global_client: Optional[SIPEClient] = None
 
-def get_client(cookie_header: Optional[str] = None) -> SIPEClient:
+def get_client(cookie_header: Optional[str] = None, unidade_header: Optional[str] = None) -> SIPEClient:
     """
     Retorna uma instância configurada de SIPEClient.
     Se cookies forem passados no cabeçalho Cookie da API, eles têm precedência e
@@ -64,6 +64,8 @@ def get_client(cookie_header: Optional[str] = None) -> SIPEClient:
         client = SIPEClient(base_url=base_url)
         client.set_cookies(req_cookies)
         logger.info("Cookies aplicados a partir da requisição HTTP (Header Cookie).")
+        if unidade_header:
+            client.selecionar_unidade(unidade_header)
         return client
         
     # Reutiliza o cliente global se não foram fornecidos cookies explícitos na chamada
@@ -79,6 +81,9 @@ def get_client(cookie_header: Optional[str] = None) -> SIPEClient:
         else:
             logger.info("Instância global do SIPEClient reutilizada com cookies em memória.")
             
+    if unidade_header:
+        _global_client.selecionar_unidade(unidade_header)
+        
     return _global_client
 
 def _serialize_proxy_response(response, path: str) -> Dict[str, Any]:
@@ -147,50 +152,54 @@ def generic_sipe_handler(request, exc: SIPEError):
 def pesquisar(
     termo: str = Query(..., min_length=1, description="Termo de pesquisa (nome, CPF, etc.)"),
     escolha: str = Query("nomeapenado", description="Critério de escolha"),
-    cookie: Optional[str] = Header(None, alias="Cookie")
+    cookie: Optional[str] = Header(None, alias="Cookie"),
+    unidade: Optional[str] = Header(None, alias="X-Sipe-Unidade")
 ):
     """
     Pesquisa apenados no SIPE por nome ou outro critério.
     Retorna lista contendo id, nome aproximado e url.
     """
-    client = get_client(cookie)
+    client = get_client(cookie, unidade)
     results = client.pesquisar_apenado(termo, escolha=escolha)
     return [r.dict() for r in results]
 
 @app.get("/sipe/apenado/{apenado_id}/informacoes")
 def informacoes(
     apenado_id: str,
-    cookie: Optional[str] = Header(None, alias="Cookie")
+    cookie: Optional[str] = Header(None, alias="Cookie"),
+    unidade: Optional[str] = Header(None, alias="X-Sipe-Unidade")
 ):
     """
     Obtém as informações detalhadas da ficha do apenado a partir do seu ID.
     """
-    client = get_client(cookie)
+    client = get_client(cookie, unidade)
     details = client.informacoes(apenado_id)
     return details.dict()
 
 @app.get("/sipe/ficha-completa")
 def ficha_completa(
     termo: str = Query(..., min_length=1, description="Termo a pesquisar (pegará o primeiro resultado)"),
-    cookie: Optional[str] = Header(None, alias="Cookie")
+    cookie: Optional[str] = Header(None, alias="Cookie"),
+    unidade: Optional[str] = Header(None, alias="X-Sipe-Unidade")
 ):
     """
     Pesquisa o termo, obtém o primeiro resultado e retorna a ficha de informações estruturada.
     """
-    client = get_client(cookie)
+    client = get_client(cookie, unidade)
     details = client.ficha_completa(termo)
     return details.dict()
 
 @app.get("/sipe/proxy")
 def sipe_proxy(
     path: str = Query(..., description="Caminho relativo da rota do SIPE a ser requisitado"),
-    cookie: Optional[str] = Header(None, alias="Cookie")
+    cookie: Optional[str] = Header(None, alias="Cookie"),
+    unidade: Optional[str] = Header(None, alias="X-Sipe-Unidade")
 ):
     """
     Proxy de requisição GET ao SIPE real para contornar o WAF (F5 BIG-IP).
     Retorna JSON com o HTML ou a imagem convertida em base64.
     """
-    client = get_client(cookie)
+    client = get_client(cookie, unidade)
     try:
         response = client._request("GET", path)
         return _serialize_proxy_response(response, path)
@@ -208,7 +217,8 @@ def sipe_proxy(
 @app.post("/sipe/proxy")
 def sipe_proxy_write(
     payload: Dict[str, Any] = Body(...),
-    cookie: Optional[str] = Header(None, alias="Cookie")
+    cookie: Optional[str] = Header(None, alias="Cookie"),
+    unidade: Optional[str] = Header(None, alias="X-Sipe-Unidade")
 ):
     """
     Proxy genérico GET/POST ao SIPE real para o modo SDK-first.
@@ -222,7 +232,7 @@ def sipe_proxy_write(
     if method not in {"GET", "POST"}:
         raise HTTPException(status_code=400, detail="Método não suportado. Use GET ou POST.")
 
-    client = get_client(cookie)
+    client = get_client(cookie, unidade)
 
     try:
         req_kwargs: Dict[str, Any] = {}

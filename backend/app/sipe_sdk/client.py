@@ -353,6 +353,57 @@ class SIPEClient:
         except RequestException as exc:
             raise SIPEAuthError(f"Falha de rede ao tentar logar no SIPE: {exc}") from exc
 
+    def selecionar_unidade(self, unidade_id: str) -> bool:
+        """Altera a unidade ativa na sessao do SIPE sem precisar de login completo."""
+        if not unidade_id:
+            return False
+            
+        unidade_str = str(unidade_id).strip()
+        if self.unidade == unidade_str:
+            logger.info(f"Unidade ja esta definida como {unidade_str} no SIPEClient.")
+            return True
+            
+        logger.info(f"Alterando unidade no SIPE para ID: {unidade_str}")
+        try:
+            # 1. Obter pagina home ou selectRole para pegar o CSRF token
+            res = self.session.get(f"{self.base_url}/selectRole", timeout=15)
+            soup = BeautifulSoup(res.text, "lxml")
+            
+            token_input = soup.find("input", {"name": "_token"})
+            if not token_input:
+                res = self.session.get(f"{self.base_url}/home", timeout=15)
+                soup = BeautifulSoup(res.text, "lxml")
+                token_input = soup.find("input", {"name": "_token"})
+                
+            if not token_input:
+                raise SIPEAuthError("Token CSRF nao encontrado para troca de unidade.")
+                
+            token = token_input.get("value")
+            
+            # 2. Fazer POST para selectRole
+            res_role = self.session.post(
+                f"{self.base_url}/selectRole",
+                data={"_token": token, "app_role_id": self.perfil, "unidade_id": unidade_str},
+                headers={
+                    "Referer": f"{self.base_url}/selectRole",
+                    "Origin": self.base_url,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                timeout=20,
+                allow_redirects=True,
+            )
+            
+            if "home" not in res_role.url:
+                raise SIPEAuthError(f"Falha ao selecionar papel. URL final: {res_role.url}")
+                
+            self.unidade = unidade_str
+            self._update_cookie_header()
+            logger.info(f"Unidade alterada com sucesso para ID: {unidade_str}")
+            return True
+        except Exception as e:
+            logger.warning(f"Erro ao trocar de unidade para {unidade_str}: {e}")
+            return False
+
     def _update_cookie_header(self) -> None:
         cookies_dict = self.session.cookies.get_dict()
         if cookies_dict:

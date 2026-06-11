@@ -77,6 +77,7 @@ async function requestSipeViaProxy(options: {
       method,
       headers: {
         'Accept': 'application/json',
+        'X-Sipe-Unidade': globalThis.__sipeFallbackUnidade || SIPE_UNIDADE,
         ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
       },
       body: method === 'POST'
