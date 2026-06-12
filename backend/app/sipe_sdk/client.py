@@ -476,6 +476,7 @@ class SIPEClient:
                     raise SIPEAuthError("Sessao expirada no SIPE e falha ao renovar.")
 
                 response.raise_for_status()
+                self._update_cookie_header()
 
                 if is_cacheable and response.status_code == 200 and cache_key:
                     try:

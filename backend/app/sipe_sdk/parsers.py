@@ -6,6 +6,10 @@ from .models import ApenadoSearchResult, ApenadoDetails
 
 def _check_session_expired(soup: BeautifulSoup) -> None:
     """Verifica se a página retornada indica que a sessão expirou ou não está autenticada."""
+    # Se contiver os selects de unidade ou papel, é a página selectRole legítima e não está expirada
+    if soup.find("select", {"name": "unidade_id"}) or soup.find("select", {"name": "app_role_id"}):
+        return
+
     # Procura campos de senha ou formulários de login
     if soup.find("input", {"type": "password"}) or soup.find("form", action=re.compile(r"/login", re.I)):
         raise SIPEAuthError("Sessão expirada ou não autenticada no SIPE.")
