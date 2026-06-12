@@ -4,4 +4,8 @@ const content = fs.readFileSync('src/lib/sipe-scraper.ts', 'utf8');
 const lines = content.split('\n');
 
 console.log('--- FUNÇÕES ASYNC NO SIPE-SCRAPER.TS ---');
-console.log(lines.slice(1667, 1730).join('\n'));
+lines.forEach((line, idx) => {
+  if (line.includes('prisma') && line.includes('import')) {
+    console.log(`Linha ${idx + 1}: ${line.trim()}`);
+  }
+});

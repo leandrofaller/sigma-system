@@ -6719,7 +6719,7 @@ async function saveAndLinkComplementaryPhotoCheerio(
   }
 }
 
-async function scrapeApenadoFichaFast(
+export async function scrapeApenadoFichaFast(
   sipeId: number,
   unidadeNome?: string | null,
   useSearch = false
@@ -6747,6 +6747,9 @@ async function scrapeApenadoFichaFast(
     const $ = cheerio.load(proxyData.html)
     
     let link: string | null = null
+    let listagemUnidade: string | null = null
+    let listagemCela: string | null = null
+
     const rows = $('table tbody tr').get()
     for (const row of rows) {
       const text = $(row).text()
@@ -6754,8 +6757,14 @@ async function scrapeApenadoFichaFast(
         const a = $(row).find('a[href]')
         if (a.length) {
           link = a.attr('href') || null
-          break
         }
+        
+        const tds = $(row).find('td')
+        if (tds.length >= 6) {
+          listagemUnidade = $(tds.get(4)).text().trim() || null
+          listagemCela = $(tds.get(5)).text().trim() || null
+        }
+        break
       }
     }
     if (!link) {
@@ -6770,6 +6779,23 @@ async function scrapeApenadoFichaFast(
     }
     if (!link) {
       throw new Error('APENADO_NAO_ENCONTRADO')
+    }
+
+    if (listagemUnidade && !unidadeNome) {
+      unidadeNome = listagemUnidade
+      const unidadeId = await resolveUnidadeIdByNome(listagemUnidade)
+      if (unidadeId) {
+        globalThis.__sipeFallbackUnidade = unidadeId
+      }
+    }
+
+    if (listagemUnidade || listagemCela) {
+      const cached = listagemInfoCache.get(sipeId)
+      listagemInfoCache.set(sipeId, {
+        unidadeNome: listagemUnidade || cached?.unidadeNome || '',
+        cela: listagemCela || cached?.cela || '',
+        situacao: cached?.situacao || null
+      })
     }
     
     // 🔐 Garantia de ativação do apenado na sessão do Laravel do SIPE
@@ -7057,7 +7083,10 @@ async function scrapeApenadoFichaFast(
   }
 
   const $ = cheerio.load(editHtml)
-  const csrfToken = $('meta[name="csrf-token"]').attr('content') || $('input[name="_token"]').val()?.toString()
+  const csrfToken = $('meta[name="csrf-token"]').attr('content') || 
+                    $('input[name="_token"]').attr('value') ||
+                    $('input[name="_token"]').val()?.toString() ||
+                    editHtml.match(/CSRF_TOKEN\s*=\s*['"]([^'"]+)['"]/i)?.[1]
 
   const subPagesPromises = [
     fetchSipeViaProxy(`/apenados/${sipeId}/incluirProcessos`),

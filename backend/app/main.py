@@ -243,7 +243,14 @@ def sipe_proxy_write(
         if isinstance(params, dict) and params:
             req_kwargs["params"] = params
         if isinstance(form, dict) and form:
-            req_kwargs["data"] = form
+            form_data = []
+            for k, v in form.items():
+                if isinstance(v, list):
+                    for item in v:
+                        form_data.append((k, str(item)))
+                else:
+                    form_data.append((k, str(v)))
+            req_kwargs["data"] = form_data
         if isinstance(headers, dict) and headers:
             req_kwargs["headers"] = headers
 
