@@ -52,7 +52,7 @@ FROM node:20-slim AS runner
 
 # Ferramentas gerais + dependências de sistema do Chromium headless (Playwright)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssl gosu postgresql-client zip \
+    openssl gosu postgresql-client zip tzdata \
     python3 python3-venv \
     libglib2.0-0 tesseract-ocr tesseract-ocr-por \
     libgbm1 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
