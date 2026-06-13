@@ -146,7 +146,7 @@ async function debugFaccoesIndex() {
         })),
 
         // Procurar por inputs hidden (pode conter faccao_id)
-        hiddenInputs: Array.from(document.querySelectorAll('input[type="hidden"]')).map(inp => ({
+        hiddenInputs: Array.from(document.querySelectorAll<HTMLInputElement>('input[type="hidden"]')).map(inp => ({
           name: inp.name,
           value: inp.value
         })),
@@ -258,7 +258,7 @@ async function debugFaccoesIndex() {
         console.log(`  → ${elements.length} elemento(s)`)
         console.log(`  → Type: ${info.type}`)
         if (info.type === 'select') {
-          console.log(`  → Opções: ${info.options.join(', ')}`)
+          console.log(`  → Opções: ${info.options?.join(', ')}`)
         }
         console.log(`  → Name: ${info.name}`)
       }

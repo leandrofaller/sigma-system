@@ -154,7 +154,7 @@ async function debugFaccoesAdvanced() {
 
       // Verificar quais unidades estão disponíveis
       const unidades = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll('select option'))
+        return Array.from(document.querySelectorAll<HTMLOptionElement>('select option'))
           .filter(opt => opt.value && opt.textContent?.trim())
           .map(opt => ({
             value: opt.value,
@@ -318,7 +318,7 @@ async function debugFaccoesAdvanced() {
       'tbody a'
     ]
 
-    let links = []
+    let links: any[] = []
     for (const selector of linkSelectors) {
       const found = await page.$$(selector)
       if (found.length > 0) {

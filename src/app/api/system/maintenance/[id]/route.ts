@@ -8,9 +8,10 @@ import { prisma } from '@/lib/db'
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
@@ -47,14 +48,14 @@ export async function PUT(
     }
 
     const maintenance = await prisma.systemMaintenance.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         createdByUser: { select: { name: true, email: true } },
       },
     })
 
-    console.log(`[Maintenance] Aviso ${params.id} editado por ${session.user.name}`)
+    console.log(`[Maintenance] Aviso ${id} editado por ${session.user.name}`)
 
     return NextResponse.json({ maintenance })
   } catch (err: any) {
@@ -77,9 +78,10 @@ export async function PUT(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
@@ -93,10 +95,10 @@ export async function DELETE(
     }
 
     await prisma.systemMaintenance.delete({
-      where: { id: params.id },
+      where: { id },
     })
 
-    console.log(`[Maintenance] Aviso ${params.id} deletado por ${session.user.name}`)
+    console.log(`[Maintenance] Aviso ${id} deletado por ${session.user.name}`)
 
     return NextResponse.json({ message: 'Aviso deletado' })
   } catch (err: any) {

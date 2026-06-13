@@ -195,10 +195,10 @@ async function coletarIdsApenadosFirecrawl(
   try {
     // First, do login to establish session
     const loginUrl = `${SIPE_URL}/login`
-    const loginResponse = await app.scrapeUrl(loginUrl, {
+    const loginResponse = (await app.scrapeUrl(loginUrl, {
       formats: ['html'],
       timeout: FIRECRAWL_TIMEOUT,
-    })
+    })) as any
 
     if (!loginResponse.success) {
       throw new Error('Falha ao acessar página de login')
@@ -210,10 +210,10 @@ async function coletarIdsApenadosFirecrawl(
       ? `${SIPE_URL}/apenados/index`
       : `${SIPE_URL}/apenados/index?unidade=${unidadeId}`
 
-    const indexResponse = await app.scrapeUrl(indexUrl, {
+    const indexResponse = (await app.scrapeUrl(indexUrl, {
       formats: ['html'],
       timeout: FIRECRAWL_TIMEOUT,
-    })
+    })) as any
 
     if (!indexResponse.success) {
       throw new Error('Falha ao coletar apenados')
@@ -240,10 +240,10 @@ async function scrapeApenadoFichaFirecrawl(
   try {
     const url = `${SIPE_URL}/apenados/${sipeId}/editar`
 
-    const response = await app.scrapeUrl(url, {
+    const response = (await app.scrapeUrl(url, {
       formats: ['html'],
       timeout: FIRECRAWL_TIMEOUT,
-    })
+    })) as any
 
     if (!response.success) {
       throw new Error(`APENADO_NAO_ENCONTRADO`)

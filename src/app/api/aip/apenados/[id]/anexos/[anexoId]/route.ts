@@ -5,22 +5,23 @@ import { deleteAnexoS3 } from '@/lib/s3'
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; anexoId: string } }
+  { params }: { params: Promise<{ id: string; anexoId: string }> }
 ) {
+  const { id, anexoId } = await params
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
   const anexo = await prisma.aIPApenadoAnexo.findUnique({
-    where: { id: params.anexoId },
+    where: { id: anexoId },
   })
 
   if (!anexo) {
     return NextResponse.json({ error: 'Anexo não encontrado' }, { status: 404 })
   }
 
-  if (anexo.apenadoId !== params.id) {
+  if (anexo.apenadoId !== id) {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
   }
 
@@ -30,7 +31,7 @@ export async function DELETE(
 
     // Deletar do banco
     await prisma.aIPApenadoAnexo.delete({
-      where: { id: params.anexoId },
+      where: { id: anexoId },
     })
 
     return NextResponse.json({ ok: true })

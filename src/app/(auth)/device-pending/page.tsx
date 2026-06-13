@@ -334,7 +334,7 @@ export default function DevicePendingPage() {
                 <p className="text-red-400 text-xs text-center">{geoError}</p>
               )}
               <button
-                onClick={submitLocation}
+                onClick={() => submitLocation(true)}
                 className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm"
               >
                 Enviar solicitação para análise

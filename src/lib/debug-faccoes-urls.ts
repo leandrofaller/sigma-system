@@ -117,7 +117,20 @@ async function debugFaccoesUrls() {
     console.log('🔍 TESTANDO URLS PARA ENCONTRAR FACÇÃO')
     console.log('═══════════════════════════════════════════════════════════════════\n')
 
-    const results = []
+    interface TestResult {
+      urlTestado: string;
+      urlRedirecionou?: string | null;
+      statusCode?: number;
+      titulo?: string;
+      temFaccaoNoHTML?: boolean;
+      selectsTotais?: number;
+      selectsComFaccao?: { name: string; id: string }[];
+      ocorrenciasFaccaoText?: number;
+      conteudoUtil?: boolean;
+      erro?: string;
+    }
+
+    const results: TestResult[] = []
 
     for (const url of URLS_TO_TEST) {
       const fullUrl = SIPE_URL + url
@@ -125,13 +138,13 @@ async function debugFaccoesUrls() {
       try {
         console.log(`📡 Testando: ${url}`)
 
-        await page.goto(fullUrl, {
+        const response = await page.goto(fullUrl, {
           waitUntil: 'domcontentloaded',
           timeout: 10_000
         })
 
         // Verificar status
-        const statusCode = page.response?.status() || 200
+        const statusCode = response?.status() || 200
         const pageTitle = await page.title()
         const currentUrl = page.url()
 
@@ -150,7 +163,7 @@ async function debugFaccoesUrls() {
         // Procurar por texto "facção"
         const faccaoText = await page.locator('text=/facção|faction/i').count()
 
-        const result = {
+        const result: TestResult = {
           urlTestado: url,
           urlRedirecionou: currentUrl !== fullUrl ? currentUrl : null,
           statusCode,
@@ -197,10 +210,10 @@ async function debugFaccoesUrls() {
       console.log(`✅ ENCONTRADAS ${comFaccao.length} URL(s) COM FACÇÃO:\n`)
       for (const result of comFaccao) {
         console.log(`  📍 ${result.urlTestado}`)
-        if (result.selectsComFaccao?.length > 0) {
+        if (result.selectsComFaccao && result.selectsComFaccao.length > 0) {
           console.log(`     - Selects: ${result.selectsComFaccao.map(s => s.name).join(', ')}`)
         }
-        if (result.ocorrenciasFaccaoText > 0) {
+        if (result.ocorrenciasFaccaoText !== undefined && result.ocorrenciasFaccaoText > 0) {
           console.log(`     - Menções a "facção": ${result.ocorrenciasFaccaoText}`)
         }
       }

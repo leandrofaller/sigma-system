@@ -11,7 +11,7 @@ import { prisma } from '@/lib/db'
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit'
 
 interface Params {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export async function GET(req: NextRequest, { params }: Params) {
@@ -21,8 +21,9 @@ export async function GET(req: NextRequest, { params }: Params) {
   }
 
   try {
+    const { id } = await params
     const evento = await prisma.occurrenceEvent.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         anexos: {
           where: { deletadoEm: null },
@@ -59,11 +60,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   try {
+    const { id } = await params
     const user = session.user as any
     const body = await req.json()
 
     const evento = await prisma.occurrenceEvent.findUnique({
-      where: { id: params.id },
+      where: { id },
     })
 
     if (!evento) {
@@ -72,7 +74,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     // Atualizar evento
     const eventoAtualizado = await prisma.occurrenceEvent.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         titulo: body.titulo?.trim() || evento.titulo,
         descricao: body.descricao?.trim() || null,
@@ -109,9 +111,10 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   }
 
   try {
+    const { id } = await params
     const user = session.user as any
     const evento = await prisma.occurrenceEvent.findUnique({
-      where: { id: params.id },
+      where: { id },
     })
 
     if (!evento) {
@@ -123,7 +126,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') {
       // Deletar direto (soft delete)
       await prisma.occurrenceEvent.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           deletadoEm: new Date(),
           deletadoPor: user.id,
@@ -142,7 +145,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       // Criar solicitação de aprovação
       const solicitacao = await prisma.deleteApprovalRequest.create({
         data: {
-          eventId: params.id,
+          eventId: id,
           solicitadoPor: user.id,
           motivo: 'Deleção solicitada por usuário comum',
           status: 'PENDENTE',

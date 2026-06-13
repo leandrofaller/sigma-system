@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 /**
  * GET /api/geolocation/stats
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
 
     // Usuários com localização
     const usersWithLocation = await prisma.user.count({
-      where: { lastLocation: { not: null } },
+      where: { lastLocation: { not: Prisma.DbNull } },
     });
 
     // Usuários ativos (com localização nos últimos X horas)

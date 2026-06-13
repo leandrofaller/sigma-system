@@ -5,8 +5,9 @@ import { uploadAnexoS3 } from '@/lib/s3'
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
@@ -36,7 +37,7 @@ export async function POST(
     // Upload para S3
     const { urlS3, chaveS3, tamanho } = await uploadAnexoS3(
       file,
-      params.id,
+      id,
       tipoCompactacao
     )
 
@@ -45,7 +46,7 @@ export async function POST(
     // Salvar metadados no banco
     const anexo = await prisma.aIPApenadoAnexo.create({
       data: {
-        apenadoId: params.id,
+        apenadoId: id,
         nomeOriginal: file.name,
         nomeS3: chaveS3.split('/').pop()!,
         tipoMime: file.type,
@@ -85,15 +86,16 @@ export async function POST(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
   const anexos = await prisma.aIPApenadoAnexo.findMany({
-    where: { apenadoId: params.id },
+    where: { apenadoId: id },
     include: { usuarioUpload: { select: { name: true } } },
     orderBy: { dataUpload: 'desc' },
   })

@@ -10,7 +10,7 @@ import { OnlineUsersPanel } from '@/components/dashboard/OnlineUsersPanel';
 
 async function getDashboardData(userId: string, role: string, groupId?: string) {
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
-  const groupFilter = isAdmin ? {} : { groupId: groupId ?? null };
+  const groupFilter = isAdmin ? {} : { groupId: groupId ?? '' };
   const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
 
   const [totalRelints, publishedRelints, draftRelints, totalUsers, recentRelints, receivedRelints, totalDebriefings, ongoingMissions, onlineUsers] =

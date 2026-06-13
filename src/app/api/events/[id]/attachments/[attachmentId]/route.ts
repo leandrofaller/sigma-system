@@ -10,7 +10,7 @@ import { deleteFromS3, getDownloadUrl } from '@/lib/s3-service'
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit'
 
 interface Params {
-  params: { id: string; attachmentId: string }
+  params: Promise<{ id: string; attachmentId: string }>
 }
 
 export async function GET(req: NextRequest, { params }: Params) {
@@ -20,11 +20,12 @@ export async function GET(req: NextRequest, { params }: Params) {
   }
 
   try {
+    const { id, attachmentId } = await params
     const anexo = await prisma.eventAttachment.findUnique({
-      where: { id: params.attachmentId },
+      where: { id: attachmentId },
     })
 
-    if (!anexo || anexo.eventId !== params.id || anexo.deletadoEm) {
+    if (!anexo || anexo.eventId !== id || anexo.deletadoEm) {
       return NextResponse.json({ error: 'Anexo não encontrado' }, { status: 404 })
     }
 
@@ -45,11 +46,12 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   }
 
   try {
+    const { id, attachmentId } = await params
     const user = session.user as any
 
     // Verificar se anexo existe
     const anexo = await prisma.eventAttachment.findUnique({
-      where: { id: params.attachmentId },
+      where: { id: attachmentId },
     })
 
     if (!anexo) {
@@ -57,7 +59,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     }
 
     // Verificar se pertence ao evento correto
-    if (anexo.eventId !== params.id) {
+    if (anexo.eventId !== id) {
       return NextResponse.json({ error: 'Anexo não pertence a este evento' }, { status: 400 })
     }
 
@@ -74,7 +76,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
       // Soft delete no banco
       await prisma.eventAttachment.update({
-        where: { id: params.attachmentId },
+        where: { id: attachmentId },
         data: {
           deletadoEm: new Date(),
           deletadoPor: user.id,
@@ -85,7 +87,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
         userId: user.id,
         action: AUDIT_ACTIONS.DELETE_EVENT_ATTACHMENT,
         details: {
-          eventoId: params.id,
+          eventoId: id,
           anexoId: anexo.id,
           nomeArquivo: anexo.nomeOriginal,
         },
@@ -97,7 +99,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       // Criar solicitação de aprovação
       const solicitacao = await prisma.deleteApprovalRequest.create({
         data: {
-          attachmentId: params.attachmentId,
+          attachmentId,
           solicitadoPor: user.id,
           motivo: 'Deleção de anexo solicitada por usuário comum',
           status: 'PENDENTE',

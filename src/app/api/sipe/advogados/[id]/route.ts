@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
   if (!session?.user) {
@@ -19,7 +19,7 @@ export async function DELETE(
     )
   }
 
-  const { id } = params
+  const { id } = await params
 
   try {
     const advogado = await prisma.sipeAdvogado.findUnique({

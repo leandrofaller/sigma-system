@@ -16,7 +16,7 @@ import {
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit'
 
 interface Params {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export async function GET(req: NextRequest, { params }: Params) {
@@ -26,8 +26,9 @@ export async function GET(req: NextRequest, { params }: Params) {
   }
 
   try {
+    const { id } = await params
     const evento = await prisma.occurrenceEvent.findUnique({
-      where: { id: params.id },
+      where: { id },
     })
 
     if (!evento) {
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 
     const anexos = await prisma.eventAttachment.findMany({
       where: {
-        eventId: params.id,
+        eventId: id,
         deletadoEm: null,
       },
       include: {
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   try {
+    const { id } = await params
     const user = session.user as any
     const formData = await req.formData()
     const file = formData.get('file') as File
@@ -71,7 +73,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // Verificar se evento existe
     const evento = await prisma.occurrenceEvent.findUnique({
-      where: { id: params.id },
+      where: { id },
     })
 
     if (!evento) {
@@ -92,7 +94,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     // Gerar chave S3 e fazer upload
-    const s3Key = generateS3Key(params.id, file.name)
+    const s3Key = generateS3Key(id, file.name)
     const { url } = await uploadToS3(s3Key, buffer, contentType)
 
     // Determinar tipo de anexo
@@ -111,7 +113,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     // Salvar registro no banco
     const anexo = await prisma.eventAttachment.create({
       data: {
-        eventId: params.id,
+        eventId: id,
         nomeOriginal: file.name,
         nomeS3: s3Key,
         tipo,
@@ -132,7 +134,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       userId: user.id,
       action: AUDIT_ACTIONS.UPLOAD_EVENT_ATTACHMENT,
       details: {
-        eventoId: params.id,
+        eventoId: id,
         anexoId: anexo.id,
         nomeArquivo: file.name,
         tamanho: buffer.length,

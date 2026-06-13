@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -135,7 +136,7 @@ export async function GET(req: NextRequest) {
 
       // Últimas localizações de todos os usuários
       const latestLocations = await prisma.user.findMany({
-        where: { lastLocation: { not: null } },
+        where: { lastLocation: { not: Prisma.DbNull } },
         select: {
           id: true,
           name: true,

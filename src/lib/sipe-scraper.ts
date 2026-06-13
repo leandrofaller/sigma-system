@@ -5770,7 +5770,7 @@ function parseApenadoFichaHtmlCheerio(html: string) {
   if (isListagem) {
     return {
       dados: { nome: null } as any,
-      imagesInfo: []
+      imagesInfo: { mainSrc: null, allSrcs: [] }
     }
   }
   
@@ -6794,7 +6794,7 @@ export async function scrapeApenadoFichaFast(
       listagemInfoCache.set(sipeId, {
         unidadeNome: listagemUnidade || cached?.unidadeNome || '',
         cela: listagemCela || cached?.cela || '',
-        situacao: cached?.situacao || null
+        situacao: cached?.situacao || undefined
       })
     }
     

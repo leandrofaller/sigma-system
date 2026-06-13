@@ -9,6 +9,7 @@ declare module 'next-auth' {
       groupName?: string | null;
       phone?: string | null;
       deviceAuthorized?: boolean;
+      geoStatus?: string | null;
     } & DefaultSession['user'];
   }
 
@@ -19,6 +20,7 @@ declare module 'next-auth' {
     groupName?: string | null;
     phone?: string | null;
     deviceAuthorized?: boolean;
+    geoStatus?: string | null;
   }
 }
 
@@ -30,5 +32,6 @@ declare module 'next-auth/jwt' {
     groupName?: string | null;
     phone?: string | null;
     deviceAuthorized?: boolean;
+    geoStatus?: string | null;
   }
 }

@@ -75,7 +75,7 @@ export async function queryAI(
     const client = new Anthropic({ apiKey });
     
     let contentParam: any = finalQuery;
-    if (isImage) {
+    if (isImage && file) {
       const base64Data = file.buffer.toString('base64');
       contentParam = [
         {
@@ -107,7 +107,7 @@ export async function queryAI(
     const supportsSystemInstruction = modelName.includes('1.5') || modelName.includes('2.') || modelName.includes('3.');
     
     const parts: any[] = [];
-    if (isImage) {
+    if (isImage && file) {
       const base64Data = file.buffer.toString('base64');
       parts.push({ text: supportsSystemInstruction ? query : `${fullSystemPrompt}\n\nPergunta: ${query}` });
       parts.push({
@@ -145,7 +145,7 @@ export async function queryAI(
     const openai = new OpenAI({ apiKey });
     
     let contentParam: any = finalQuery;
-    if (isImage) {
+    if (isImage && file) {
       const base64Data = file.buffer.toString('base64');
       contentParam = [
         { type: 'text', text: query },
@@ -196,7 +196,7 @@ export async function queryAI(
   }
 
   let dbQuery = finalQuery;
-  if (isImage) {
+  if (isImage && file) {
     dbQuery = `${query}\n\n[Imagem Anexa: ${file.name}]`;
   }
 

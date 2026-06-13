@@ -22,10 +22,15 @@ export default function ManutencaoClient() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string
+    message: string
+    severity: 'INFO' | 'WARNING' | 'CRITICAL'
+    graceTimeUntil: string
+  }>({
     title: '',
     message: '',
-    severity: 'WARNING' as const,
+    severity: 'WARNING',
     graceTimeUntil: '',
   })
 

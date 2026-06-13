@@ -48,9 +48,10 @@ async function main() {
 
       const current = await prisma.sipeSyncJob.findUnique({ where: { id: job.id } })
       if (current && (current.processado > lastStatus.processado || current.erros > lastStatus.erros)) {
-        const pct = Math.round((current.processado / current.total) * 100)
-        console.log(`[${current.processado}/${current.total}] ${pct}% | Erros: ${current.erros}`)
-        console.log(`  Última atualização: ${current.ultimoLog}\n`)
+        const total = current.total || 1
+        const pct = Math.round((current.processado / total) * 100)
+        console.log(`[${current.processado}/${total}] ${pct}% | Erros: ${current.erros}`)
+        console.log(`  Última atualização: ${current.log}\n`)
         lastStatus = { processado: current.processado, erros: current.erros }
       }
 
@@ -61,7 +62,7 @@ async function main() {
     }
 
   } catch (error) {
-    console.error('❌ Erro:', error.message)
+    console.error('❌ Erro:', error instanceof Error ? error.message : String(error))
   } finally {
     await prisma.$disconnect()
   }
