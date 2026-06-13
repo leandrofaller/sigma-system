@@ -101,7 +101,8 @@ export function ApenadoFoto({
   className = "w-14 h-14 rounded-xl",
   fallbackIcon: FallbackIcon = User,
   fallbackText,
-  onClick
+  onClick,
+  apiPhotoPrefix = "/api/sipe/apenados"
 }: {
   id: string
   nome: string
@@ -110,6 +111,7 @@ export function ApenadoFoto({
   fallbackIcon?: React.ComponentType<{ className?: string }>
   fallbackText?: string
   onClick?: () => void
+  apiPhotoPrefix?: string
 }) {
   const [hasError, setHasError] = useState(false)
 
@@ -124,7 +126,7 @@ export function ApenadoFoto({
     >
       {showPhoto ? (
         <img
-          src={`/api/sipe/apenados/${id}/foto`}
+          src={`${apiPhotoPrefix}/${id}/foto`}
           alt={nome}
           className="w-full h-full object-cover"
           onError={() => setHasError(true)}
@@ -140,7 +142,7 @@ export function ApenadoFoto({
   )
 }
 
-export function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; onClick: () => void }) {
+export function ApenadoCard({ apenado, onClick, apiPhotoPrefix = "/api/sipe/apenados" }: { apenado: ApenadoImportado; onClick: () => void; apiPhotoPrefix?: string }) {
   return (
     <div
       onClick={onClick}
@@ -154,6 +156,7 @@ export function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; o
           photoPath={apenado.photoPath || apenado.apenado?.photoPath}
           className="w-14 h-14 rounded-xl"
           fallbackText={apenado.nome.charAt(0)}
+          apiPhotoPrefix={apiPhotoPrefix}
         />
 
         {/* Informações */}
@@ -223,7 +226,7 @@ export function ApenadoCard({ apenado, onClick }: { apenado: ApenadoImportado; o
   )
 }
 
-export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; onClose: () => void }) {
+export function ApenadoModal({ apenado, onClose, apiPhotoPrefix = "/api/sipe/apenados" }: { apenado: ApenadoImportado; onClose: () => void; apiPhotoPrefix?: string }) {
   const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
   const [zoomedPhotoTitle, setZoomedPhotoTitle] = useState<string>('')
   const [cadastrandoEmAIP, setCadastrandoEmAIP] = useState(false)
@@ -284,10 +287,11 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
                   (apenado.photoPath || apenado.apenado?.photoPath) ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all' : ''
                 }`}
                 fallbackText={apenado.nome.charAt(0)}
+                apiPhotoPrefix={apiPhotoPrefix}
                 onClick={() => {
                   const finalPath = apenado.photoPath || apenado.apenado?.photoPath
                   if (finalPath) {
-                    setZoomedPhotoUrl(`/api/sipe/apenados/${apenado.id}/foto`);
+                    setZoomedPhotoUrl(`${apiPhotoPrefix}/${apenado.id}/foto`);
                     setZoomedPhotoTitle(apenado.nome);
                   }
                 }}
@@ -630,7 +634,15 @@ export function ApenadoModal({ apenado, onClose }: { apenado: ApenadoImportado; 
   )
 }
 
-export function ApenadosImportados() {
+interface ApenadosImportadosProps {
+  apiEndpoint?: string
+  apiPhotoPrefix?: string
+}
+
+export function ApenadosImportados({
+  apiEndpoint = '/api/sipe/apenados',
+  apiPhotoPrefix = '/api/sipe/apenados'
+}: ApenadosImportadosProps) {
   const [apenados, setApenados] = useState<ApenadoImportado[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -688,7 +700,7 @@ export function ApenadosImportados() {
     if (unidade) params.set('unidade', unidade)
     if (situacao) params.set('situacao', situacao)
 
-    const res = await fetch(`/api/sipe/apenados?${params}`)
+    const res = await fetch(`${apiEndpoint}?${params}`)
     if (res.ok) {
       const data = await res.json()
       setApenados(data.apenados)
@@ -757,7 +769,7 @@ export function ApenadosImportados() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {apenados.map(a => (
-              <ApenadoCard key={a.id} apenado={a} onClick={() => setSelected(a)} />
+              <ApenadoCard key={a.id} apenado={a} onClick={() => setSelected(a)} apiPhotoPrefix={apiPhotoPrefix} />
             ))}
           </div>
         )}
@@ -786,7 +798,7 @@ export function ApenadosImportados() {
         </div>
       )}
 
-      {selected && <ApenadoModal apenado={selected} onClose={() => setSelected(null)} />}
+      {selected && <ApenadoModal apenado={selected} onClose={() => setSelected(null)} apiPhotoPrefix={apiPhotoPrefix} />}
     </div>
   )
 }

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -38,6 +38,7 @@ const navItems: NavItem[] = [
   { label: 'SIAIP', href: '/siaip', icon: Database },
   { label: 'Celulares Recebidos', href: '/aparelhos', icon: Smartphone },
   { label: 'AIP', href: '/aip', icon: Brain, roles: ['SUPER_ADMIN', 'OPERATOR'] },
+  { label: 'Unidades Prisionais', href: '/unidades-prisionais', icon: Building2, roles: ['SUPER_ADMIN'] },
 ];
 
 const baseAdminItems: NavItem[] = [

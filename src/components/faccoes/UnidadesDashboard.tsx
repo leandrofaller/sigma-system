@@ -35,7 +35,11 @@ interface StatsData {
   sexos: Array<{ nome: string; quantidade: number }>
 }
 
-export function UnidadesDashboard() {
+interface UnidadesDashboardProps {
+  endpoint?: string
+}
+
+export function UnidadesDashboard({ endpoint = '/api/sipe/unidades/stats' }: UnidadesDashboardProps) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   
@@ -47,7 +51,7 @@ export function UnidadesDashboard() {
     async function fetchStats() {
       setLoading(true)
       try {
-        const res = await fetch('/api/sipe/unidades/stats')
+        const res = await fetch(endpoint)
         if (!res.ok) throw new Error('Erro ao carregar estatísticas')
         const stats = await res.json()
         setData(stats)

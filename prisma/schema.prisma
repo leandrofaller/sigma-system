@@ -570,6 +570,7 @@ model SipeFaccao {
   updatedAt DateTime @updatedAt
 
   apenados SipeApenadoImportado[]
+  apenadosUnidades SipeApenadoUnidadePrisional[]
 
   @@map("sipe_faccoes")
 }
@@ -1151,6 +1152,81 @@ model AparelhoApreendido {
   @@index([processoSei])
   @@index([marca])
   @@map("aparelhos_apreendidos")
+}
+
+model SipeApenadoUnidadePrisional {
+  id             String  @id @default(cuid())
+  sipeId         Int     @unique
+  apenadoLocalId String?
+  photoPath      String?
+
+  nome             String
+  nomeOutro        String?
+  cpf              String?
+  rg               String?
+  rgOrgao          String?
+  dataNascimento   String?
+  naturalidade     String?
+  sexo             String?
+  etnia            String?
+  orientacaoSexual String?
+  tipoSanguineo    String?
+  grauInstrucao    String?
+  religiao         String?
+  estadoCivil      String?
+  nomeConjuge      String?
+  qtdFilhos        Int?
+  nomeMae          String?
+  nomePai          String?
+  telefone         String?
+  rji              String?
+
+  unidade      String?
+  cela         String?
+  regime       String?
+  situacao     String?
+  dataEntrada  String?
+  dataPrisao   String?
+  tempoPena    String?
+  monitorado   Boolean?
+  intramuro    Boolean?
+  presoOriundo String?
+  oficioEntrada String?
+
+  faccaoId  String?
+  faccao    SipeFaccao? @relation(fields: [faccaoId], references: [id], onDelete: SetNull)
+
+  // Endereço residencial
+  logradouro   String?
+  numero       String?
+  complemento  String?
+  bairro       String?
+  cidade       String?
+  uf           String?
+  cep          String?
+
+  // Histórico
+  celeAtual            String?
+  ultimaMovimentacao   DateTime?
+
+  // Dados complementares em formato JSON
+  processos           Json?
+  alcunhas            Json?
+  enderecos           Json?
+  historicos          Json?
+  documentos          Json?
+  visitantes          Json?
+  advogados           Json?
+  fotosComplementares Json?
+
+  ultimaSyncAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([nome])
+  @@index([cpf])
+  @@index([faccaoId])
+  @@map("sipe_apenados_unidades_prisionais")
 }
 
 

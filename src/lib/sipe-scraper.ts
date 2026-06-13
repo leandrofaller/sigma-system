@@ -128,6 +128,7 @@ export interface SipeSyncProgress {
   startTime: number
   /** Percentage 0-100 */
   pct: number
+  tipo?: string
 }
 
 declare global {
@@ -594,6 +595,10 @@ export function startSipeSync(jobId: string, unidadeId: string, engine: SipeEngi
   const runPromise = async () => {
     const job = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
     if (!job) throw new Error('Job não encontrado')
+
+    if (globalThis.__sipeState) {
+      globalThis.__sipeState.tipo = job.tipo
+    }
 
     if (job.tipo === 'UNIDADES') {
       await runScrapeTodasUnidades(jobId, false)
@@ -3060,6 +3065,10 @@ async function scrapeApenadoFicha(
   await scrapeFotosComplementares(page, sipeId, apenado.id, localApenado.id).catch(() => {});
   await scrapeVisitantes(page, sipeId, apenado.id).catch(() => {});
   await scrapeAdvogadosDoApenado(page, sipeId, apenado.id).catch(() => {});
+
+  if (globalThis.__sipeState && (globalThis.__sipeState.tipo === 'UNIDADES' || globalThis.__sipeState.tipo === 'UNIDADES_FAST')) {
+    await saveApenadoUnidadePrisional(sipeId, apenado.id)
+  }
 }
 
 async function saveAndLinkComplementaryPhoto(
@@ -7161,6 +7170,10 @@ export async function scrapeApenadoFichaFast(
 
   await Promise.all(dbSavesPromises)
   console.log(`[SCRAPER FAST] 🚀 Apenado #${sipeId} processado inteiramente via Cheerio + Promise.all com sucesso!`)
+
+  if (globalThis.__sipeState && (globalThis.__sipeState.tipo === 'UNIDADES' || globalThis.__sipeState.tipo === 'UNIDADES_FAST')) {
+    await saveApenadoUnidadePrisional(sipeId, apenado.id)
+  }
 }
 
 // ── Scraping de Unidades Prisionais ──────────────────────────
@@ -7373,3 +7386,133 @@ function setupAutoSyncScheduler() {
 // if (typeof window === 'undefined') {
 //   setupAutoSyncScheduler()
 // }
+
+// ── Sincronização Isolada para Unidades Prisionais ──────────────────────────
+
+async function saveApenadoUnidadePrisional(sipeId: number, apenadoId: string): Promise<void> {
+  try {
+    const apenado = await prisma.sipeApenadoImportado.findUnique({
+      where: { id: apenadoId },
+      include: {
+        faccao: true,
+        alcunhas: true,
+        processos: true,
+        historicos: { orderBy: { datahora: 'desc' } },
+        vinculosAdvogado: { include: { advogado: true } },
+        vinculosVisitante: { include: { visitante: true } },
+        fotosComplementares: true,
+      }
+    })
+
+    if (!apenado) return
+
+    const processosJson = apenado.processos.map(p => ({
+      id: p.id,
+      sipeProcessoId: p.sipeProcessoId,
+      numero: p.numero,
+      vara: p.vara,
+      artigos: p.artigos,
+      tempoPena: p.tempoPena,
+      principal: p.principal
+    }))
+
+    const alcunhasJson = apenado.alcunhas.map(a => ({
+      alcunha: a.alcunha
+    }))
+
+    const historicosJson = apenado.historicos.map(h => ({
+      id: h.id,
+      tipo: h.tipo,
+      descricao: h.descricao,
+      datahora: h.datahora ? h.datahora.toISOString() : null,
+      cela: h.cela,
+      unidade: h.unidade
+    }))
+
+    const advogadosJson = apenado.vinculosAdvogado.map(va => ({
+      id: va.advogado.id,
+      nome: va.advogado.nome,
+      oab: va.advogado.oab
+    }))
+
+    const visitantesJson = apenado.vinculosVisitante.map(vv => ({
+      id: vv.visitante.id,
+      nome: vv.visitante.nome,
+      cpf: vv.visitante.cpf,
+      parentesco: vv.visitante.parentesco,
+      photoPath: vv.visitante.photoPath,
+      ativo: vv.ativo
+    }))
+
+    const fotosComplementaresJson = apenado.fotosComplementares.map(fc => ({
+      id: fc.id,
+      photoPath: fc.photoPath,
+      descricao: fc.descricao,
+      createdAt: fc.createdAt.toISOString()
+    }))
+
+    const upsertData = {
+      nome: apenado.nome,
+      nomeOutro: apenado.nomeOutro,
+      cpf: apenado.cpf,
+      rg: apenado.rg,
+      rgOrgao: apenado.rgOrgao,
+      dataNascimento: apenado.dataNascimento,
+      sexo: apenado.sexo,
+      etnia: apenado.etnia,
+      naturalidade: apenado.naturalidade,
+      orientacaoSexual: apenado.orientacaoSexual,
+      tipoSanguineo: apenado.tipoSanguineo,
+      grauInstrucao: apenado.grauInstrucao,
+      religiao: apenado.religiao,
+      estadoCivil: apenado.estadoCivil,
+      nomeConjuge: apenado.nomeConjuge,
+      qtdFilhos: apenado.qtdFilhos,
+      nomeMae: apenado.nomeMae,
+      nomePai: apenado.nomePai,
+      telefone: apenado.telefone,
+      rji: apenado.rji,
+      unidade: apenado.unidade,
+      cela: apenado.cela,
+      regime: apenado.regime,
+      situacao: apenado.situacao,
+      dataEntrada: apenado.dataEntrada,
+      dataPrisao: apenado.dataPrisao,
+      tempoPena: apenado.tempoPena,
+      monitorado: apenado.monitorado,
+      intramuro: apenado.intramuro,
+      presoOriundo: apenado.presoOriundo,
+      oficioEntrada: apenado.oficioEntrada,
+      photoPath: apenado.photoPath,
+      faccaoId: apenado.faccaoId,
+      logradouro: apenado.logradouro,
+      numero: apenado.numero,
+      complemento: apenado.complemento,
+      bairro: apenado.bairro,
+      cidade: apenado.cidade,
+      uf: apenado.uf,
+      cep: apenado.cep,
+      celeAtual: apenado.celeAtual,
+      ultimaMovimentacao: apenado.ultimaMovimentacao,
+      
+      processos: processosJson,
+      alcunhas: alcunhasJson,
+      historicos: historicosJson,
+      advogados: advogadosJson,
+      visitantes: visitantesJson,
+      fotosComplementares: fotosComplementaresJson,
+      
+      ultimaSyncAt: new Date(),
+    }
+
+    await prisma.sipeApenadoUnidadePrisional.upsert({
+      where: { sipeId },
+      create: { sipeId, ...upsertData },
+      update: upsertData,
+    })
+
+    console.log(`[UNIDADES PRISIONAIS] ✅ Apenado #${sipeId} copiado de forma independente para a tabela de Unidades Prisionais`)
+  } catch (err) {
+    console.error(`[UNIDADES PRISIONAIS] ❌ Erro ao salvar cópia independente para #${sipeId}:`, err)
+  }
+}
