@@ -374,7 +374,7 @@ export function AIPFaccoesPanel({ userRole }: AIPFaccoesPanelProps) {
           <Shield className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p className="text-sm">Nenhuma facção cadastrada.</p>
           {canCreate && (
-            <p className="text-xs mt-1">Clique em "Nova Facção" para começar.</p>
+            <p className="text-xs mt-1">Clique em &quot;Nova Facção&quot; para começar.</p>
           )}
         </div>
       ) : (

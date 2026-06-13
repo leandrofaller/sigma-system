@@ -389,7 +389,7 @@ export default function DevicePendingPage() {
                 <p className="text-green-400 text-sm font-medium">Solicitação enviada!</p>
                 <p className="text-gray-400 text-xs mt-1">
                   Aguardando aprovação do administrador. Após aprovação, clique em
-                  "Já fui aprovado" para entrar.
+                  &quot;Já fui aprovado&quot; para entrar.
                 </p>
               </div>
             </div>
