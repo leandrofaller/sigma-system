@@ -57,7 +57,17 @@ function FotoVisitante({
   )
 }
 
-export function SipeVisitantesPanel() {
+interface SipeVisitantesPanelProps {
+  apiEndpoint?: string
+  apiApenadoDetailPrefix?: string
+  apiPhotoPrefix?: string
+}
+
+export function SipeVisitantesPanel({
+  apiEndpoint = '/api/sipe/visitantes',
+  apiApenadoDetailPrefix = '/api/sipe/apenados',
+  apiPhotoPrefix = '/api/sipe/apenados'
+}: SipeVisitantesPanelProps) {
   const [visitantes, setVisitantes] = useState<Visitante[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -72,7 +82,7 @@ export function SipeVisitantesPanel() {
   const handleOpenApenado = async (apenadoId: string) => {
     setLoadingApenado(true)
     try {
-      const res = await fetch(`/api/sipe/apenados/${apenadoId}`)
+      const res = await fetch(`${apiApenadoDetailPrefix}/${apenadoId}`)
       if (res.ok) {
         const data = await res.json()
         setSelectedApenado(data)
@@ -91,7 +101,7 @@ export function SipeVisitantesPanel() {
   const fetchVisitantes = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/sipe/visitantes')
+      const res = await fetch(apiEndpoint)
       if (!res.ok) throw new Error()
       const data = await res.json()
       setVisitantes(data.visitantes ?? [])
@@ -297,11 +307,11 @@ export function SipeVisitantesPanel() {
                 <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                   {selected.apenado.photoPath ? (
                     <img
-                      src={`/api/sipe/apenados/${selected.apenado.id}/foto`}
+                      src={`${apiPhotoPrefix}/${selected.apenado.id}/foto`}
                       alt={selected.apenado.nome}
                       className="w-10 h-10 rounded-lg object-cover shrink-0 cursor-zoom-in hover:opacity-90 active:scale-95 transition-all"
                       onClick={() => {
-                        setZoomedPhotoUrl(`/api/sipe/apenados/${selected.apenado.id}/foto`)
+                        setZoomedPhotoUrl(`${apiPhotoPrefix}/${selected.apenado.id}/foto`)
                         setZoomedPhotoTitle(selected.apenado.nome)
                       }}
                       onError={(e) => {
@@ -365,6 +375,7 @@ export function SipeVisitantesPanel() {
         <ApenadoModal
           apenado={selectedApenado}
           onClose={() => setSelectedApenado(null)}
+          apiPhotoPrefix={apiPhotoPrefix}
         />
       )}
 

@@ -75,7 +75,17 @@ COPY --from=python_builder /opt/arcface-venv /opt/arcface-venv
 # Diretorio de modelos ja com dono nextjs (pode gravar no primeiro uso se download falhar aqui)
 RUN mkdir -p /opt/arcface-models && chown 1001:1001 /opt/arcface-models
 
-# Pre-baixa modelo buffalo_l (~326 MB) no build para evitar download na primeira requisicao
+# Garante que o pacote completo do playwright (incluindo cli.js) está disponível
+COPY --from=builder /app/node_modules/playwright ./node_modules/playwright
+COPY --from=builder /app/node_modules/playwright-core ./node_modules/playwright-core
+
+# Baixa o binário do Chromium como usuário nextjs (com retries tolerantes a instabilidades na CDN)
+# O Chromium (~150 MB) é baixado antes dos arquivos de código mutáveis, permitindo que a camada seja cacheada
+RUN HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium || \
+    (echo "⚠️ Falha no download. Tentando novamente em 5 segundos..." && sleep 5 && HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium) || \
+    (echo "⚠️ Segunda falha. Tentando novamente em 10 segundos..." && sleep 10 && HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium)
+
+# Pre-baixa o modelo buffalo_l do InsightFace (~326 MB) antes da cópia do código-fonte para aproveitar o cache do Docker
 COPY scripts/download_model.py /tmp/download_model.py
 RUN HOME=/tmp MPLCONFIGDIR=/tmp/.matplotlib MPLBACKEND=Agg ARCFACE_PROVIDERS=CPUExecutionProvider \
     gosu nextjs /opt/arcface-venv/bin/python3 -u /tmp/download_model.py || \
@@ -84,23 +94,6 @@ RUN rm -f /tmp/download_model.py
 
 ENV ARCFACE_PYTHON=/opt/arcface-venv/bin/python3
 ENV INSIGHTFACE_HOME=/opt/arcface-models
-
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/backend ./backend
-
-# Garante que o pacote completo do playwright (incluindo cli.js) está disponível
-# O standalone do Next.js rastreia apenas arquivos importados — cli.js não é importado
-COPY --from=builder /app/node_modules/playwright ./node_modules/playwright
-COPY --from=builder /app/node_modules/playwright-core ./node_modules/playwright-core
-
-# Baixa o binário do Chromium como usuário nextjs (com retries tolerantes a instabilidades na CDN)
-RUN HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium || \
-    (echo "⚠️ Falha no download. Tentando novamente em 5 segundos..." && sleep 5 && HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium) || \
-    (echo "⚠️ Segunda falha. Tentando novamente em 10 segundos..." && sleep 10 && HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium)
 
 # Copia o Prisma client e CLI completos para o runner
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
@@ -114,7 +107,15 @@ COPY --from=sharp_glibc /tmp/sharp_build/node_modules/@img /app/node_modules/@im
 RUN mkdir -p ./node_modules/.bin && \
     ln -sf ../prisma/build/index.js ./node_modules/.bin/prisma
 
+# Por último, realiza a cópia dos arquivos do código-fonte (que mudam frequentemente)
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/backend ./backend
 COPY --from=builder /app/start.sh ./start.sh
+
 RUN chmod +x start.sh && chown -R 1001:1001 /app
 
 # Caminho fixo para uploads

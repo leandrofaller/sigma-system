@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
   const ids = idRows.map(r => r.id)
 
   // Busca os registros completos com includes relevantes
-  const apenados = ids.length > 0
+  const dbApenados = ids.length > 0
     ? await prisma.sipeApenadoUnidadePrisional.findMany({
         where: { id: { in: ids } },
         include: {
@@ -78,6 +78,40 @@ export async function GET(req: NextRequest) {
         orderBy: { nome: 'asc' },
       })
     : []
+
+  const apenados = dbApenados.map((ap: any) => {
+    const advs = Array.isArray(ap.advogados) ? ap.advogados : []
+    const vists = Array.isArray(ap.visitantes) ? ap.visitantes : []
+    const alcunhas = Array.isArray(ap.alcunhas) ? ap.alcunhas : []
+    const processos = Array.isArray(ap.processos) ? ap.processos : []
+    const historicos = Array.isArray(ap.historicos) ? ap.historicos : []
+    const fotosComplementares = Array.isArray(ap.fotosComplementares) ? ap.fotosComplementares : []
+
+    return {
+      ...ap,
+      alcunhas,
+      processos,
+      historicos,
+      fotosComplementares,
+      vinculosAdvogado: advs.map((adv: any) => ({
+        advogado: {
+          id: adv.id,
+          nome: adv.nome,
+          oab: adv.oab || null
+        }
+      })),
+      vinculosVisitante: vists.map((v: any) => ({
+        visitante: {
+          id: v.id,
+          nome: v.nome,
+          cpf: v.cpf || null,
+          parentesco: v.parentesco || null,
+          photoPath: v.photoPath || null
+        },
+        ativo: v.ativo !== false
+      }))
+    }
+  })
 
   return NextResponse.json({ apenados, total, page, totalPages: Math.ceil(total / limit) })
 }

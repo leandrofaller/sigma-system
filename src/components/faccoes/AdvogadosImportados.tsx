@@ -349,7 +349,21 @@ function AdvogadoModal({
   )
 }
 
-export function AdvogadosImportados() {
+interface AdvogadosImportadosProps {
+  apiEndpoint?: string
+  apiApenadoDetailPrefix?: string
+  apiPhotoPrefix?: string
+  apiUnidadesLookup?: string
+  apiFaccoesLookup?: string
+}
+
+export function AdvogadosImportados({
+  apiEndpoint = '/api/sipe/advogados',
+  apiApenadoDetailPrefix = '/api/sipe/apenados',
+  apiPhotoPrefix = '/api/sipe/apenados',
+  apiUnidadesLookup = '/api/sipe/unidades',
+  apiFaccoesLookup = '/api/sipe/faccoes'
+}: AdvogadosImportadosProps) {
   const [advogados, setAdvogados] = useState<Advogado[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -375,7 +389,7 @@ export function AdvogadosImportados() {
   useEffect(() => {
     const fetchUnidades = async () => {
       try {
-        const res = await fetch('/api/sipe/unidades')
+        const res = await fetch(apiUnidadesLookup)
         if (res.ok) {
           const data = await res.json()
           setUnidadesList(data.unidades || [])
@@ -386,7 +400,7 @@ export function AdvogadosImportados() {
     }
     const fetchFaccoes = async () => {
       try {
-        const res = await fetch('/api/sipe/faccoes')
+        const res = await fetch(apiFaccoesLookup)
         if (res.ok) {
           const data = await res.json()
           setFaccoesList(data || [])
@@ -629,7 +643,7 @@ export function AdvogadosImportados() {
       if (selectedUnidade) params.set('unidade', selectedUnidade)
       if (selectedFaccao) params.set('faccao', selectedFaccao)
 
-      const res = await fetch(`/api/sipe/advogados?${params}`)
+      const res = await fetch(`${apiEndpoint}?${params}`)
       if (!res.ok) throw new Error('Erro ao buscar advogados')
       
       const data = await res.json()
@@ -668,7 +682,7 @@ export function AdvogadosImportados() {
   const handleApenadoClick = async (apenadoId: string) => {
     setLoadingApenado(true)
     try {
-      const res = await fetch(`/api/sipe/apenados/${apenadoId}`)
+      const res = await fetch(`${apiApenadoDetailPrefix}/${apenadoId}`)
       if (res.ok) {
         const data = await res.json()
         setSelectedApenado(data)
@@ -689,7 +703,7 @@ export function AdvogadosImportados() {
     if (selectedUnidade) params.set('unidade', selectedUnidade)
     if (selectedFaccao) params.set('faccao', selectedFaccao)
 
-    const res = await fetch(`/api/sipe/advogados?${params}`)
+    const res = await fetch(`${apiEndpoint}?${params}`)
     if (res.ok) {
       const data = await res.json()
       setAdvogados(data.advogados)
@@ -884,6 +898,7 @@ export function AdvogadosImportados() {
         <ApenadoModal
           apenado={selectedApenado}
           onClose={() => setSelectedApenado(null)}
+          apiPhotoPrefix={apiPhotoPrefix}
         />
       )}
 

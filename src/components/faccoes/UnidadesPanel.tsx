@@ -12,7 +12,17 @@ interface Unidade {
   nome: string
 }
 
-export function UnidadesPanel() {
+interface UnidadesPanelProps {
+  apiEndpoint?: string
+  apiApenadosEndpoint?: string
+  apiPhotoPrefix?: string
+}
+
+export function UnidadesPanel({
+  apiEndpoint = '/api/sipe/unidades',
+  apiApenadosEndpoint = '/api/sipe/apenados',
+  apiPhotoPrefix = '/api/sipe/apenados'
+}: UnidadesPanelProps) {
   const [unidades, setUnidades] = useState<Unidade[]>([])
   const [searchUnidade, setSearchUnidade] = useState('')
   const [selectedUnidade, setSelectedUnidade] = useState<Unidade | null>(null)
@@ -30,7 +40,7 @@ export function UnidadesPanel() {
   const fetchUnidades = async () => {
     setLoadingUnidades(true)
     try {
-      const res = await fetch('/api/sipe/unidades')
+      const res = await fetch(apiEndpoint)
       if (res.ok) {
         const data = await res.json()
         setUnidades(data.unidades || [])
@@ -61,7 +71,7 @@ export function UnidadesPanel() {
         params.set('q', searchApenado)
       }
 
-      const res = await fetch(`/api/sipe/apenados?${params}`)
+      const res = await fetch(`${apiApenadosEndpoint}?${params}`)
       if (res.ok) {
         const data = await res.json()
         setApenados(data.apenados || [])
@@ -200,7 +210,7 @@ export function UnidadesPanel() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {apenados.map(a => (
-                    <ApenadoCard key={a.id} apenado={a} onClick={() => setSelectedApenado(a)} />
+                    <ApenadoCard key={a.id} apenado={a} onClick={() => setSelectedApenado(a)} apiPhotoPrefix={apiPhotoPrefix} />
                   ))}
                 </div>
               )}
@@ -243,7 +253,7 @@ export function UnidadesPanel() {
       </div>
 
       {selectedApenado && (
-        <ApenadoModal apenado={selectedApenado} onClose={() => setSelectedApenado(null)} />
+        <ApenadoModal apenado={selectedApenado} onClose={() => setSelectedApenado(null)} apiPhotoPrefix={apiPhotoPrefix} />
       )}
     </div>
   )

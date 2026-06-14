@@ -58,7 +58,17 @@ function FaccaoCard({ faccao, onSelect }: { faccao: Faccao; onSelect: (f: Faccao
 
 // ── Modal de apenados por facção ──────────────────────────────
 
-function ApenadosFaccaoModal({ faccao, onClose }: { faccao: Faccao; onClose: () => void }) {
+function ApenadosFaccaoModal({
+  faccao,
+  onClose,
+  apiApenadosEndpoint = '/api/sipe/apenados',
+  apiPhotoPrefix = '/api/sipe/apenados'
+}: {
+  faccao: Faccao
+  onClose: () => void
+  apiApenadosEndpoint?: string
+  apiPhotoPrefix?: string
+}) {
   const [apenados, setApenados] = useState<ApenadoImportado[]>([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
@@ -73,7 +83,7 @@ function ApenadosFaccaoModal({ faccao, onClose }: { faccao: Faccao; onClose: () 
     try {
       const params = new URLSearchParams({ faccaoId: faccao.id, page: String(p), limit: String(LIMIT) })
       if (query) params.set('q', query)
-      const res = await fetch(`/api/sipe/apenados?${params}`)
+      const res = await fetch(`${apiApenadosEndpoint}?${params}`)
       if (res.ok) {
         const data = await res.json()
         setApenados(data.apenados)
@@ -178,6 +188,7 @@ function ApenadosFaccaoModal({ faccao, onClose }: { faccao: Faccao; onClose: () 
                           nome={a.nome}
                           photoPath={a.photoPath || a.apenado?.photoPath}
                           className="w-9 h-11 rounded"
+                          apiPhotoPrefix={apiPhotoPrefix}
                         />
                         {/* Nome e Data */}
                         <div className="min-w-0">
@@ -234,6 +245,7 @@ function ApenadosFaccaoModal({ faccao, onClose }: { faccao: Faccao; onClose: () 
         <ApenadoModal 
           apenado={selectedApenado} 
           onClose={() => setSelectedApenado(null)} 
+          apiPhotoPrefix={apiPhotoPrefix}
         />
       )}
     </div>
@@ -345,7 +357,17 @@ function NovaFaccaoModal({ onClose, onCreated }: { onClose: () => void; onCreate
   )
 }
 
-export function FaccoesPanel() {
+interface FaccoesPanelProps {
+  apiEndpoint?: string
+  apiApenadosEndpoint?: string
+  apiPhotoPrefix?: string
+}
+
+export function FaccoesPanel({
+  apiEndpoint = '/api/sipe/faccoes',
+  apiApenadosEndpoint = '/api/sipe/apenados',
+  apiPhotoPrefix = '/api/sipe/apenados'
+}: FaccoesPanelProps) {
   const [faccoes, setFaccoes] = useState<Faccao[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -353,7 +375,7 @@ export function FaccoesPanel() {
 
   const fetchFaccoes = async () => {
     setLoading(true)
-    const res = await fetch('/api/sipe/faccoes?withCount=true')
+    const res = await fetch(`${apiEndpoint}?withCount=true`)
     if (res.ok) setFaccoes(await res.json())
     setLoading(false)
   }
@@ -397,7 +419,12 @@ export function FaccoesPanel() {
       )}
 
       {selectedFaccao && (
-        <ApenadosFaccaoModal faccao={selectedFaccao} onClose={() => setSelectedFaccao(null)} />
+        <ApenadosFaccaoModal
+          faccao={selectedFaccao}
+          onClose={() => setSelectedFaccao(null)}
+          apiApenadosEndpoint={apiApenadosEndpoint}
+          apiPhotoPrefix={apiPhotoPrefix}
+        />
       )}
     </div>
   )
