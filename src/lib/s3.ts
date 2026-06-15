@@ -1,4 +1,5 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import sharp from 'sharp'
 import crypto from 'crypto'
 
@@ -47,7 +48,7 @@ export async function uploadAnexoS3(
   file: File,
   apenadoId: string,
   tipoCompactacao: 'imagem' | 'documento' | 'auto'
-): Promise<{ urlS3: string; chaveS3: string; tamanho: number }> {
+): Promise<{ urlS3: string; chaveS3: string; tamanho: number; tipoMime: string }> {
   // 🔍 DEBUG: Log das variáveis
   console.log('[S3] Iniciando upload com configuração:', {
     region: process.env.AWS_REGION,
@@ -80,16 +81,13 @@ export async function uploadAnexoS3(
   ) {
     try {
       const imagem = sharp(Buffer.from(buffer))
-      const metadata = await imagem.metadata()
-
-      if (metadata.width && metadata.height && (metadata.width > 2000 || metadata.height > 2000)) {
-        const tempBuf = await imagem
-          .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
-          .webp({ quality: 80 })
-          .toBuffer()
-        compactadoBuffer = Buffer.from(tempBuf)
-        tipoMimeProcessado = 'image/webp'
-      }
+      
+      const tempBuf = await imagem
+        .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 90 })
+        .toBuffer()
+      compactadoBuffer = Buffer.from(tempBuf)
+      tipoMimeProcessado = 'image/webp'
     } catch (erro) {
       console.error('Erro ao compactar imagem:', erro)
       // Continua com imagem original se falhar
@@ -118,7 +116,17 @@ export async function uploadAnexoS3(
     urlS3,
     chaveS3,
     tamanho: compactadoBuffer.length,
+    tipoMime: tipoMimeProcessado,
   }
+}
+
+export async function getAnexoPresignedUrl(chaveS3: string): Promise<string> {
+  const s3Client = createS3Client()
+  const command = new GetObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME!,
+    Key: chaveS3,
+  })
+  return getSignedUrl(s3Client, command, { expiresIn: 300 }) // expira em 5 minutos
 }
 
 export async function deleteAnexoS3(chaveS3: string): Promise<void> {

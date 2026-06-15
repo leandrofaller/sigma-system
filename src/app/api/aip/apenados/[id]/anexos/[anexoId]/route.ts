@@ -1,7 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { deleteAnexoS3 } from '@/lib/s3'
+import { deleteAnexoS3, getAnexoPresignedUrl } from '@/lib/s3'
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; anexoId: string }> }
+) {
+  const { id, anexoId } = await params
+  const session = await auth()
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
+
+  const anexo = await prisma.aIPApenadoAnexo.findUnique({
+    where: { id: anexoId },
+  })
+
+  if (!anexo) {
+    return NextResponse.json({ error: 'Anexo não encontrado' }, { status: 404 })
+  }
+
+  if (anexo.apenadoId !== id) {
+    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+  }
+
+  try {
+    const presignedUrl = await getAnexoPresignedUrl(anexo.chaveS3)
+    return NextResponse.redirect(presignedUrl, { status: 307 })
+  } catch (erro) {
+    console.error('Erro ao obter URL assinada do anexo:', erro)
+    return NextResponse.json({ error: 'Erro ao carregar anexo' }, { status: 500 })
+  }
+}
 
 export async function DELETE(
   req: NextRequest,

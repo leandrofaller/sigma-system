@@ -35,21 +35,23 @@ export async function POST(
     console.log(`[ANEXO] Iniciando upload: arquivo=${file.name}, tamanho=${file.size}, tipo=${file.type}`)
 
     // Upload para S3
-    const { urlS3, chaveS3, tamanho } = await uploadAnexoS3(
+    const { urlS3, chaveS3, tamanho, tipoMime } = await uploadAnexoS3(
       file,
       id,
       tipoCompactacao
     )
 
-    console.log(`[ANEXO] Upload S3 concluído: chave=${chaveS3}, tamanho=${tamanho}`)
+    console.log(`[ANEXO] Upload S3 concluído: chave=${chaveS3}, tamanho=${tamanho}, tipoMime=${tipoMime}`)
 
     // Salvar metadados no banco
     const anexo = await prisma.aIPApenadoAnexo.create({
       data: {
         apenadoId: id,
-        nomeOriginal: file.name,
+        nomeOriginal: file.type.startsWith('image/') && !file.name.endsWith('.webp')
+          ? file.name.replace(/\.[^/.]+$/, "") + ".webp"
+          : file.name,
         nomeS3: chaveS3.split('/').pop()!,
-        tipoMime: file.type,
+        tipoMime: tipoMime,
         tamanhoOriginal: file.size,
         tamanhoS3: tamanho,
         urlS3,

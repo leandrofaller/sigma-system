@@ -814,7 +814,7 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                                     {isImage && (
                                       <button
                                         onClick={() => {
-                                          setZoomedAnexoUrl(anexo.urlS3)
+                                          setZoomedAnexoUrl(`/api/aip/apenados/${apenado.id}/anexos/${anexo.id}`)
                                           setZoomedAnexoNome(anexo.nomeOriginal)
                                         }}
                                         className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
@@ -825,7 +825,7 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                                     )}
                                     {isPdf && (
                                       <a
-                                        href={anexo.urlS3}
+                                        href={`/api/aip/apenados/${apenado.id}/anexos/${anexo.id}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
@@ -835,7 +835,7 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                                       </a>
                                     )}
                                     <a
-                                      href={anexo.urlS3}
+                                      href={`/api/aip/apenados/${apenado.id}/anexos/${anexo.id}`}
                                       download={anexo.nomeOriginal}
                                       className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
                                       title="Download"
