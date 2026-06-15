@@ -355,6 +355,7 @@ interface AdvogadosImportadosProps {
   apiPhotoPrefix?: string
   apiUnidadesLookup?: string
   apiFaccoesLookup?: string
+  hideSyncCna?: boolean
 }
 
 export function AdvogadosImportados({
@@ -362,7 +363,8 @@ export function AdvogadosImportados({
   apiApenadoDetailPrefix = '/api/sipe/apenados',
   apiPhotoPrefix = '/api/sipe/apenados',
   apiUnidadesLookup = '/api/sipe/unidades',
-  apiFaccoesLookup = '/api/sipe/faccoes'
+  apiFaccoesLookup = '/api/sipe/faccoes',
+  hideSyncCna = false
 }: AdvogadosImportadosProps) {
   const [advogados, setAdvogados] = useState<Advogado[]>([])
   const [total, setTotal] = useState(0)
@@ -824,30 +826,32 @@ export function AdvogadosImportados({
             Imprimir Relatório
           </button>
 
-          <div className="flex flex-col items-end gap-1">
-            <button
-              onClick={handleSyncCna}
-              disabled={syncingCna || (isAnyJobActive && !activeCnaJob)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
-            >
-            {syncingCna || activeCnaJob ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <Users className="w-4 h-4" />
+          {!hideSyncCna && (
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={handleSyncCna}
+                disabled={syncingCna || (isAnyJobActive && !activeCnaJob)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+              >
+              {syncingCna || activeCnaJob ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Users className="w-4 h-4" />
+              )}
+              {activeCnaJob
+                ? `Sincronizando CNA (${activeCnaJob.processado}/${activeCnaJob.total ?? '?'})`
+                : isAnyJobActive
+                ? 'Sincronizador Ocupado'
+                : 'Sincronizar Fotos/Dados (CNA)'}
+            </button>
+            
+            {activeCnaJob && (
+              <span className="text-[10px] text-gray-500 animate-pulse">
+                Acompanhe os logs na aba Sincronização
+              </span>
             )}
-            {activeCnaJob
-              ? `Sincronizando CNA (${activeCnaJob.processado}/${activeCnaJob.total ?? '?'})`
-              : isAnyJobActive
-              ? 'Sincronizador Ocupado'
-              : 'Sincronizar Fotos/Dados (CNA)'}
-          </button>
-          
-          {activeCnaJob && (
-            <span className="text-[10px] text-gray-500 animate-pulse">
-              Acompanhe os logs na aba Sincronização
-            </span>
+          </div>
           )}
-        </div>
       </div>
     </div>
 
