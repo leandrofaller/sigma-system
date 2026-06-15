@@ -7105,6 +7105,9 @@ export async function scrapeApenadoFichaFast(
     fetchSipeViaProxy(`/anexos/${sipeId}/index`),
     fetchSipeViaProxy(`/autorizacoes/${sipeId}/mostrar`),
     fetchSipeViaProxy(`/apenados/${sipeId}/advogados`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/credenciamento`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/atendimentos`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/credenciados`),
   ]
 
   let fichaGeralPromise: Promise<SipeProxyResponse | null> = Promise.resolve(null)
@@ -7131,6 +7134,9 @@ export async function scrapeApenadoFichaFast(
     anexosData,
     visitantesData,
     advogadosData,
+    credenciamentoData,
+    atendimentosData,
+    credenciadosData,
     fichaGeralData
   ] = await Promise.all([
     ...subPagesPromises,
@@ -7157,9 +7163,24 @@ export async function scrapeApenadoFichaFast(
   if (visitantesData?.html) {
     dbSavesPromises.push(parseAndSaveVisitantesCheerio(visitantesData.html, apenado.id))
   }
-  if (advogadosData?.html) {
-    dbSavesPromises.push(parseAndSaveAdvogadosCheerio(advogadosData.html, apenado.id))
-  }
+  
+  // Salva advogados tentando as rotas candidatas na ordem de prioridade
+  dbSavesPromises.push((async () => {
+    let salvou = false
+    if (advogadosData?.html) {
+      salvou = await parseAndSaveAdvogadosCheerio(advogadosData.html, apenado.id)
+    }
+    if (!salvou && credenciamentoData?.html) {
+      salvou = await parseAndSaveAdvogadosCheerio(credenciamentoData.html, apenado.id)
+    }
+    if (!salvou && atendimentosData?.html) {
+      salvou = await parseAndSaveAdvogadosCheerio(atendimentosData.html, apenado.id)
+    }
+    if (!salvou && credenciadosData?.html) {
+      salvou = await parseAndSaveAdvogadosCheerio(credenciadosData.html, apenado.id)
+    }
+  })())
+
   if (fichaGeralData?.html) {
     dbSavesPromises.push(parseAndSaveFichaGeralCheerio(fichaGeralData.html, apenado.id))
   }
