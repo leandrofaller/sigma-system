@@ -120,11 +120,14 @@ export async function uploadAnexoS3(
   }
 }
 
-export async function getAnexoPresignedUrl(chaveS3: string): Promise<string> {
+export async function getAnexoPresignedUrl(chaveS3: string, nomeOriginal?: string): Promise<string> {
   const s3Client = createS3Client()
   const command = new GetObjectCommand({
     Bucket: process.env.AWS_BUCKET_NAME!,
     Key: chaveS3,
+    ...(nomeOriginal ? {
+      ResponseContentDisposition: `attachment; filename="${encodeURIComponent(nomeOriginal)}"`
+    } : {})
   })
   return getSignedUrl(s3Client, command, { expiresIn: 300 }) // expira em 5 minutos
 }

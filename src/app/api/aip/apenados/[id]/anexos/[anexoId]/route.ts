@@ -25,8 +25,14 @@ export async function GET(
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
   }
 
+  const { searchParams } = new URL(req.url)
+  const download = searchParams.get('download') === 'true'
+
   try {
-    const presignedUrl = await getAnexoPresignedUrl(anexo.chaveS3)
+    const presignedUrl = await getAnexoPresignedUrl(
+      anexo.chaveS3,
+      download ? anexo.nomeOriginal : undefined
+    )
     return NextResponse.redirect(presignedUrl, { status: 307 })
   } catch (erro) {
     console.error('Erro ao obter URL assinada do anexo:', erro)

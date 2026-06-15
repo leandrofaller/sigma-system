@@ -835,8 +835,7 @@ function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
                                       </a>
                                     )}
                                     <a
-                                      href={`/api/aip/apenados/${apenado.id}/anexos/${anexo.id}`}
-                                      download={anexo.nomeOriginal}
+                                      href={`/api/aip/apenados/${apenado.id}/anexos/${anexo.id}?download=true`}
                                       className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
                                       title="Download"
                                     >
