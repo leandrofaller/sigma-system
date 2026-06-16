@@ -8,7 +8,11 @@ Use a skill `headroom` para gerenciar, compactar e otimizar os dados de contexto
 
 ## Como Usar o Headroom CLI
 
-O `headroom` está instalado no ambiente virtual do backend (`backend\.venv\Scripts\headroom`). Sempre execute os comandos do CLI utilizando o caminho do executável do virtualenv e o prefixo `.\rtk.cmd` para otimização de tokens de console.
+O `headroom` está instalado em dois escopos:
+1. **Global no Usuário**: `C:\Users\leand\AppData\Roaming\Python\Python314\Scripts\headroom.exe` (usado automaticamente pelos hooks de inicialização da IDE).
+2. **Ambiente Virtual**: `backend\.venv\Scripts\headroom.exe`.
+
+Sempre execute os comandos utilizando o caminho do executável e o prefixo `.\rtk.cmd` para otimização de tokens de console. Exemplo:
 
 ### 1. Comprimir Arquivos ou Outputs Grandes
 Para ler arquivos muito extensos, logs de erro longos ou JSONs gigantes sem estourar o limite de tokens, passe o conteúdo para o compressor do headroom:
