@@ -2465,19 +2465,56 @@ async function scrapeApenadoFicha(
 
     // Localizar link do apenado na tabela de resultados e colher dados da linha
     const listagemInfo = await page.evaluate((id) => {
-      // 1. Procura linha da tabela que contenha o sipeId exato
+      // 1. Identificar colunas dinamicamente a partir do thead da tabela
+      const table = document.querySelector('table')
+      let unidadeIdx = 3
+      let celaIdx = 4
+      let situacaoIdx = 5
+
+      if (table) {
+        const ths = Array.from(table.querySelectorAll('thead tr th, thead tr td'))
+        ths.forEach((th, idx) => {
+          const text = (th.textContent ?? '').toUpperCase().trim()
+          if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) {
+            unidadeIdx = idx
+          } else if (text === 'CELA') {
+            celaIdx = idx
+          } else if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') {
+            situacaoIdx = idx
+          }
+        })
+      }
+
+      // 2. Procura linha da tabela que contenha o sipeId exato
       const rows = Array.from(document.querySelectorAll('table tbody tr'))
       for (const row of rows) {
         const text = row.textContent ?? ''
         if (text.includes(String(id))) {
           const a = row.querySelector('a[href]') as HTMLAnchorElement | null
           const tds = Array.from(row.querySelectorAll('td'))
-          if (tds.length >= 6) {
+          
+          // Se as colunas detectadas estiverem dentro do limite da linha
+          const maxIdx = Math.max(unidadeIdx, celaIdx, situacaoIdx)
+          if (tds.length > maxIdx) {
             return {
               link: a?.href || null,
-              unidade: tds[3]?.textContent?.trim() || null,
-              cela: tds[4]?.textContent?.trim() || null,
-              situacao: tds[5]?.textContent?.trim() || null,
+              unidade: tds[unidadeIdx]?.textContent?.trim() || null,
+              cela: tds[celaIdx]?.textContent?.trim() || null,
+              situacao: tds[situacaoIdx]?.textContent?.trim() || null,
+            }
+          }
+          
+          // Fallback tolerante com offset
+          if (tds.length >= 6) {
+            const col3Text = tds[3]?.textContent?.trim() || ''
+            const isCol3Photo = col3Text.startsWith('http') || col3Text.includes('/fotos') || tds[3]?.querySelector('img')
+            const offset = isCol3Photo ? 1 : 0
+            
+            return {
+              link: a?.href || null,
+              unidade: tds[3 + offset]?.textContent?.trim() || null,
+              cela: tds[4 + offset]?.textContent?.trim() || null,
+              situacao: tds[5 + offset]?.textContent?.trim() || null,
             }
           }
         }
@@ -6985,6 +7022,25 @@ export async function scrapeApenadoFichaFast(
     let listagemCela: string | null = null
     let listagemSituacao: string | null = null
 
+    // 1. Identificar colunas dinamicamente a partir do thead da tabela
+    let unidadeIdx = 3
+    let celaIdx = 4
+    let situacaoIdx = 5
+
+    const table = $('table')
+    if (table.length) {
+      table.find('thead tr th, table thead tr td').each((idx, el) => {
+        const text = $(el).text().toUpperCase().trim()
+        if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) {
+          unidadeIdx = idx
+        } else if (text === 'CELA') {
+          celaIdx = idx
+        } else if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') {
+          situacaoIdx = idx
+        }
+      })
+    }
+
     const rows = $('table tbody tr').get()
     for (const row of rows) {
       const text = $(row).text()
@@ -6995,10 +7051,21 @@ export async function scrapeApenadoFichaFast(
         }
         
         const tds = $(row).find('td')
-        if (tds.length >= 6) {
-          listagemUnidade = $(tds.get(3)).text().trim() || null
-          listagemCela = $(tds.get(4)).text().trim() || null
-          listagemSituacao = $(tds.get(5)).text().trim() || null
+        const maxIdx = Math.max(unidadeIdx, celaIdx, situacaoIdx)
+        
+        if (tds.length > maxIdx) {
+          listagemUnidade = $(tds.get(unidadeIdx)).text().trim() || null
+          listagemCela = $(tds.get(celaIdx)).text().trim() || null
+          listagemSituacao = $(tds.get(situacaoIdx)).text().trim() || null
+        } else if (tds.length >= 6) {
+          // Fallback tolerante com offset
+          const col3Text = $(tds.get(3)).text().trim() || ''
+          const isCol3Photo = col3Text.startsWith('http') || col3Text.includes('/fotos') || $(tds.get(3)).find('img').length > 0
+          const offset = isCol3Photo ? 1 : 0
+
+          listagemUnidade = $(tds.get(3 + offset)).text().trim() || null
+          listagemCela = $(tds.get(4 + offset)).text().trim() || null
+          listagemSituacao = $(tds.get(5 + offset)).text().trim() || null
         }
         break
       }
