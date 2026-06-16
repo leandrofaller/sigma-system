@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock, Users, Image, Brain, Loader2 } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock, Users, Image, Brain, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Alcunha { alcunha: string }
@@ -226,10 +226,50 @@ export function ApenadoCard({ apenado, onClick, apiPhotoPrefix = "/api/sipe/apen
   )
 }
 
-export function ApenadoModal({ apenado, onClose, apiPhotoPrefix = "/api/sipe/apenados" }: { apenado: ApenadoImportado; onClose: () => void; apiPhotoPrefix?: string }) {
+export function ApenadoModal({
+  apenado: initialApenado,
+  onClose,
+  onUpdate,
+  apiPhotoPrefix = "/api/sipe/apenados"
+}: {
+  apenado: ApenadoImportado;
+  onClose: () => void;
+  onUpdate?: (updated: ApenadoImportado) => void;
+  apiPhotoPrefix?: string
+}) {
+  const [apenado, setApenado] = useState<ApenadoImportado>(initialApenado)
   const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
   const [zoomedPhotoTitle, setZoomedPhotoTitle] = useState<string>('')
   const [cadastrandoEmAIP, setCadastrandoEmAIP] = useState(false)
+  const [sincronizando, setSincronizando] = useState(false)
+
+  useEffect(() => {
+    setApenado(initialApenado)
+  }, [initialApenado])
+
+  const handleSincronizarSipe = async () => {
+    setSincronizando(true)
+    const toastId = toast.loading(`Sincronizando dados de ${apenado.nome} com o SIPE...`)
+    try {
+      const res = await fetch(`/api/sipe/apenados/${apenado.id}/sync`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro na requisição')
+      }
+      toast.success('Ficha do apenado atualizada com sucesso!', { id: toastId })
+      if (data.apenado) {
+        setApenado(data.apenado)
+        if (onUpdate) onUpdate(data.apenado)
+      }
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err?.message || 'Falha ao sincronizar com o SIPE', { id: toastId })
+    } finally {
+      setSincronizando(false)
+    }
+  }
 
   const handleCadastrarEmAIP = async () => {
     setCadastrandoEmAIP(true)
@@ -313,14 +353,25 @@ export function ApenadoModal({ apenado, onClose, apiPhotoPrefix = "/api/sipe/ape
                   )}
                 </div>
 
-                <button
-                  onClick={handleCadastrarEmAIP}
-                  disabled={cadastrandoEmAIP}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 rounded-xl disabled:opacity-50 transition-all active:scale-95 shadow-sm shadow-purple-500/10"
-                >
-                  {cadastrandoEmAIP ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
-                  Cadastrar em AIP
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCadastrarEmAIP}
+                    disabled={cadastrandoEmAIP || sincronizando}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 rounded-xl disabled:opacity-50 transition-all active:scale-95 shadow-sm shadow-purple-500/10"
+                  >
+                    {cadastrandoEmAIP ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
+                    Cadastrar em AIP
+                  </button>
+
+                  <button
+                    onClick={handleSincronizarSipe}
+                    disabled={cadastrandoEmAIP || sincronizando}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 rounded-xl disabled:opacity-50 transition-all active:scale-95 shadow-sm shadow-blue-500/10"
+                  >
+                    {sincronizando ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    Atualizar SIPE
+                  </button>
+                </div>
               </div>
             </div>
             <div className="flex items-center">
@@ -798,7 +849,17 @@ export function ApenadosImportados({
         </div>
       )}
 
-      {selected && <ApenadoModal apenado={selected} onClose={() => setSelected(null)} apiPhotoPrefix={apiPhotoPrefix} />}
+      {selected && (
+        <ApenadoModal 
+          apenado={selected} 
+          onClose={() => setSelected(null)} 
+          onUpdate={(updated) => {
+            setSelected(updated)
+            setApenados(prev => prev.map(a => a.id === updated.id ? updated : a))
+          }}
+          apiPhotoPrefix={apiPhotoPrefix} 
+        />
+      )}
     </div>
   )
 }

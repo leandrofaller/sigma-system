@@ -246,6 +246,10 @@ function ApenadosFaccaoModal({
           apenado={selectedApenado} 
           onClose={() => setSelectedApenado(null)} 
           apiPhotoPrefix={apiPhotoPrefix}
+          onUpdate={(updated) => {
+            setApenados(prev => prev.map(a => a.id === updated.id ? updated : a))
+            setSelectedApenado(updated)
+          }}
         />
       )}
     </div>

@@ -376,6 +376,13 @@ export function SipeVisitantesPanel({
           apenado={selectedApenado}
           onClose={() => setSelectedApenado(null)}
           apiPhotoPrefix={apiPhotoPrefix}
+          onUpdate={(updated) => {
+            setSelectedApenado(updated)
+            setVisitantes(prev => prev.map(v => v.apenado.id === updated.id ? { ...v, apenado: { ...v.apenado, nome: updated.nome, photoPath: updated.photoPath } } : v))
+            if (selected && selected.apenado.id === updated.id) {
+              setSelected(prev => prev ? { ...prev, apenado: { ...prev.apenado, nome: updated.nome, photoPath: updated.photoPath } } : null)
+            }
+          }}
         />
       )}
 

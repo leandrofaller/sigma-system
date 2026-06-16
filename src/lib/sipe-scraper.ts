@@ -1545,7 +1545,7 @@ function normalizarNomeUnidade(nome: string): string {
  * Resolve o ID do SIPE para uma unidade prisional a partir do seu nome,
  * consultando o cache em memória e o banco de dados.
  */
-async function resolveUnidadeIdByNome(nomeUnidade: string): Promise<string | null> {
+export async function resolveUnidadeIdByNome(nomeUnidade: string): Promise<string | null> {
   if (!nomeUnidade) return null
 
   // 1. Tentar obter do cache em memória

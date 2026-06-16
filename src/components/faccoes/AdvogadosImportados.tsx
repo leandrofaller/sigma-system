@@ -904,6 +904,46 @@ export function AdvogadosImportados({
           apenado={selectedApenado}
           onClose={() => setSelectedApenado(null)}
           apiPhotoPrefix={apiPhotoPrefix}
+          onUpdate={(updated) => {
+            setSelectedApenado(updated)
+            setAdvogados(prev => prev.map(adv => {
+              const temVinculo = adv.vinculos.some(v => v.apenado.id === updated.id)
+              if (!temVinculo) return adv
+              return {
+                ...adv,
+                vinculos: adv.vinculos.map(v => v.apenado.id === updated.id ? {
+                  ...v,
+                  apenado: {
+                    ...v.apenado,
+                    nome: updated.nome,
+                    regime: updated.regime,
+                    unidade: updated.unidade,
+                    cela: updated.cela,
+                    faccao: updated.faccao
+                  }
+                } : v)
+              }
+            }))
+            if (selected) {
+              const temVinculo = selected.vinculos.some(v => v.apenado.id === updated.id)
+              if (temVinculo) {
+                setSelected(prev => prev ? {
+                  ...prev,
+                  vinculos: prev.vinculos.map(v => v.apenado.id === updated.id ? {
+                    ...v,
+                    apenado: {
+                      ...v.apenado,
+                      nome: updated.nome,
+                      regime: updated.regime,
+                      unidade: updated.unidade,
+                      cela: updated.cela,
+                      faccao: updated.faccao
+                    }
+                  } : v)
+                } : null)
+              }
+            }
+          }}
         />
       )}
 
