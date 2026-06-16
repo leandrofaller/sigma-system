@@ -405,7 +405,8 @@ export function AdvogadosImportados({
         const res = await fetch(apiFaccoesLookup)
         if (res.ok) {
           const data = await res.json()
-          setFaccoesList(data || [])
+          const list = Array.isArray(data) ? data : (data && Array.isArray(data.faccoes) ? data.faccoes : [])
+          setFaccoesList(list)
         }
       } catch (e) {
         console.error('Erro ao buscar facções:', e)
