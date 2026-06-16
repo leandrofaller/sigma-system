@@ -110,7 +110,8 @@ interface AIPApenadoAnexo {
   descricao?: string | null
 }
 
-// ── Card de Apenado em AIP ────────�function AIApenadoCard({
+// ── Card de Apenado em AIP ────────�
+function AIApenadoCard({
   apenado,
   onSelect,
   onViewVinculos
@@ -199,12 +200,6 @@ interface AIPApenadoAnexo {
               </button>
             )}
           </div>
-        </div>
-      </div>
-    </button>
-  )
-}    </div>
-          )}
         </div>
       </div>
     </button>
@@ -1098,7 +1093,7 @@ export function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }:
   )
 }
 
-export function AIPanel({ userRole }: { userRole?: string }) {
+export function AIPanel({ userRole, onViewVinculos }: { userRole?: string; onViewVinculos?: (sipeId: number) => void }) {
   const [apenados, setApenados] = useState<AIPApenado[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedApenado, setSelectedApenado] = useState<AIPApenado | null>(null)
@@ -1231,6 +1226,7 @@ export function AIPanel({ userRole }: { userRole?: string }) {
                 key={a.id}
                 apenado={a}
                 onSelect={setSelectedApenado}
+                onViewVinculos={onViewVinculos}
               />
             ))}
           </div>
