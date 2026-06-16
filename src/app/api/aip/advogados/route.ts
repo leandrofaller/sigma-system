@@ -105,7 +105,11 @@ export async function GET(req: NextRequest) {
             where: vinculoWhere,
             include: {
               apenado: {
-                include: { faccao: true, alcunhas: true },
+                include: { 
+                  faccao: true, 
+                  alcunhas: true,
+                  aipApenado: true
+                },
               },
             },
           },
@@ -114,8 +118,97 @@ export async function GET(req: NextRequest) {
       })
     : []
 
+  // Carregar todas as facções para mapear no AIP pelo nome/sigla
+  const faccoesDb = await prisma.sipeFaccao.findMany()
+  const mapFaccoes = new Map<string, typeof faccoesDb[0]>()
+  for (const f of faccoesDb) {
+    mapFaccoes.set(f.nome.toUpperCase(), f)
+    if (f.sigla) {
+      mapFaccoes.set(f.sigla.toUpperCase(), f)
+    }
+  }
+
+  const advogadosFormatados = advogados.map(adv => {
+    const vinculosFormatados = adv.vinculos.map(v => {
+      const apenadoObj = v.apenado
+      let faccaoResolvida = apenadoObj.faccao
+      
+      let regimeResolvido = apenadoObj.regime
+      let unidadeResolvida = apenadoObj.unidade
+      let celaResolvida = apenadoObj.cela
+      let cpfResolvido = apenadoObj.cpf
+      let nomeResolvido = apenadoObj.nome
+      let photoPathResolvido = apenadoObj.photoPath
+
+      const aipAp = apenadoObj.aipApenado
+      if (aipAp) {
+        if (aipAp.regime) regimeResolvido = aipAp.regime
+        if (aipAp.unidade) unidadeResolvida = aipAp.unidade
+        if (aipAp.cela) celaResolvida = aipAp.cela
+        if (aipAp.cpf) cpfResolvido = aipAp.cpf
+        if (aipAp.nome) nomeResolvido = aipAp.nome
+        if (aipAp.photoPath) photoPathResolvido = aipAp.photoPath
+
+        if (aipAp.facaoRealNome) {
+          const key = aipAp.facaoRealNome.toUpperCase()
+          const f = mapFaccoes.get(key)
+          if (f) {
+            faccaoResolvida = {
+              nome: f.nome,
+              sigla: f.sigla,
+              cor: f.cor
+            } as any
+          } else {
+            faccaoResolvida = {
+              nome: aipAp.facaoRealNome,
+              sigla: aipAp.facaoRealNome,
+              cor: '#9ca3af'
+            } as any
+          }
+        } else if (aipAp.faccao) {
+          const key = aipAp.faccao.toUpperCase()
+          const f = mapFaccoes.get(key)
+          if (f) {
+            faccaoResolvida = {
+              nome: f.nome,
+              sigla: f.sigla,
+              cor: f.cor
+            } as any
+          } else {
+            faccaoResolvida = {
+              nome: aipAp.faccao,
+              sigla: aipAp.faccao,
+              cor: '#9ca3af'
+            } as any
+          }
+        }
+      }
+      
+      const { aipApenado: _, ...apenadoSemAip } = apenadoObj as any
+      
+      return {
+        ...v,
+        apenado: {
+          ...apenadoSemAip,
+          nome: nomeResolvido,
+          cpf: cpfResolvido,
+          regime: regimeResolvido,
+          unidade: unidadeResolvida,
+          cela: celaResolvida,
+          photoPath: photoPathResolvido,
+          faccao: faccaoResolvida
+        }
+      }
+    })
+    
+    return {
+      ...adv,
+      vinculos: vinculosFormatados
+    }
+  })
+
   return NextResponse.json({
-    advogados,
+    advogados: advogadosFormatados,
     total,
     page,
     totalPages: Math.ceil(total / limit)
