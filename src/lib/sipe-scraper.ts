@@ -2465,68 +2465,116 @@ async function scrapeApenadoFicha(
 
     // Localizar link do apenado na tabela de resultados e colher dados da linha
     const listagemInfo = await page.evaluate((id) => {
-      // 1. Identificar colunas dinamicamente a partir do thead da tabela
-      const table = document.querySelector('table')
-      let unidadeIdx = 3
-      let celaIdx = 4
-      let situacaoIdx = 5
-
-      if (table) {
-        const ths = Array.from(table.querySelectorAll('thead tr th, thead tr td'))
-        ths.forEach((th, idx) => {
-          const text = (th.textContent ?? '').toUpperCase().trim()
-          if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) {
-            unidadeIdx = idx
-          } else if (text === 'CELA') {
-            celaIdx = idx
-          } else if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) {
-            situacaoIdx = idx
-          }
-        })
+      // 1. Identificar a tabela correta da listagem (a que contém o apenado em suas linhas)
+      let table = document.querySelector('table');
+      const tables = Array.from(document.querySelectorAll('table'));
+      for (const t of tables) {
+        if (t.textContent && t.textContent.includes(String(id))) {
+          table = t;
+          break;
+        }
       }
 
-      // 2. Procura linha da tabela que contenha o sipeId exato
-      const rows = Array.from(document.querySelectorAll('table tbody tr'))
+      // 2. Mapear dinamicamente os títulos de cabeçalhos
+      let headers: string[] = [];
+      if (table) {
+        const trs = Array.from(table.querySelectorAll('tr'));
+        for (const tr of trs) {
+          const cells = Array.from(tr.querySelectorAll('th, td'));
+          const texts = cells.map(c => (c.textContent ?? '').toUpperCase().trim());
+          if (texts.some(t => t.includes('NOME') || t.includes('CPF') || t.includes('UNID') || t.includes('CELA'))) {
+            headers = texts;
+            break;
+          }
+        }
+      }
+
+      let unidadeIdx = 3;
+      let celaIdx = 4;
+      let situacaoIdx = 5;
+
+      if (headers.length > 0) {
+        headers.forEach((text, idx) => {
+          if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) {
+            unidadeIdx = idx;
+          } else if (text === 'CELA') {
+            celaIdx = idx;
+          } else if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) {
+            situacaoIdx = idx;
+          }
+        });
+      }
+
+      // 3. Procurar a linha correspondente ao apenado no corpo da tabela
+      const rows = table ? Array.from(table.querySelectorAll('tr')) : Array.from(document.querySelectorAll('tr'));
       for (const row of rows) {
-        const text = row.textContent ?? ''
-        if (text.includes(String(id))) {
-          const a = row.querySelector('a[href]') as HTMLAnchorElement | null
-          const tds = Array.from(row.querySelectorAll('td'))
+        const isHeader = Array.from(row.querySelectorAll('th')).length > 0;
+        if (isHeader) continue;
+
+        const tds = Array.from(row.querySelectorAll('td'));
+        if (tds.length === 0) continue;
+
+        const text = row.textContent ?? '';
+        const firstColText = tds[0]?.textContent?.trim() || '';
+
+        // Valida se esta linha representa o apenado procurado
+        if (firstColText === String(id) || (firstColText.includes(String(id)) && text.includes(String(id)))) {
+          const a = row.querySelector('a[href]') as HTMLAnchorElement | null;
           
-          // Se as colunas detectadas estiverem dentro do limite da linha
-          const maxIdx = Math.max(unidadeIdx, celaIdx, situacaoIdx)
-          if (tds.length > maxIdx) {
+          // Detectar dinamicamente se e onde a foto está na linha (coluna fantasma)
+          let fotoIdx = -1;
+          tds.forEach((td, idx) => {
+            const tdText = (td.textContent ?? '').trim();
+            const html = td.innerHTML ?? '';
+            const hasImg = td.querySelector('img') !== null;
+            const hasPhotoLink = tdText.startsWith('http') || tdText.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png');
+            if (hasImg || hasPhotoLink) {
+              fotoIdx = idx;
+            }
+          });
+
+          // Aplicar offset dinamicamente
+          let realUnidadeIdx = unidadeIdx;
+          let realCelaIdx = celaIdx;
+          let realSituacaoIdx = situacaoIdx;
+
+          if (fotoIdx !== -1) {
+            if (unidadeIdx >= fotoIdx) realUnidadeIdx++;
+            if (celaIdx >= fotoIdx) realCelaIdx++;
+            if (situacaoIdx >= fotoIdx) realSituacaoIdx++;
+          }
+
+          // Se os índices reais couberem na linha
+          if (tds.length > Math.max(realUnidadeIdx, realCelaIdx, realSituacaoIdx)) {
             return {
               link: a?.href || null,
-              unidade: tds[unidadeIdx]?.textContent?.trim() || null,
-              cela: tds[celaIdx]?.textContent?.trim() || null,
-              situacao: tds[situacaoIdx]?.textContent?.trim() || null,
-            }
+              unidade: tds[realUnidadeIdx]?.textContent?.trim() || null,
+              cela: tds[realCelaIdx]?.textContent?.trim() || null,
+              situacao: tds[realSituacaoIdx]?.textContent?.trim() || null,
+            };
           }
-          
-          // Fallback tolerante com offset
+
+          // Fallback tolerante final com offset estático se necessário
           if (tds.length >= 6) {
-            const col3Text = tds[3]?.textContent?.trim() || ''
-            const isCol3Photo = col3Text.startsWith('http') || col3Text.includes('/fotos') || tds[3]?.querySelector('img')
-            const offset = isCol3Photo ? 1 : 0
-            
+            const offset = (fotoIdx !== -1) ? 1 : 0;
             return {
               link: a?.href || null,
               unidade: tds[3 + offset]?.textContent?.trim() || null,
               cela: tds[4 + offset]?.textContent?.trim() || null,
               situacao: tds[5 + offset]?.textContent?.trim() || null,
-            }
+            };
           }
         }
       }
-      // 2. Fallback: qualquer link na página que contenha o sipeId na URL
-      const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[]
+
+      // 4. Fallback: qualquer link na página que contenha o sipeId na URL
+      const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
       for (const a of anchors) {
         if (a.href.includes(`/apenados/${id}`)) {
-          return { link: a.href, unidade: null, cela: null, situacao: null }
+          return { link: a.href, unidade: null, cela: null, situacao: null };
         }
       }
-      return null
+      return null;
     }, sipeId)
 
     if (!listagemInfo || !listagemInfo.link) {
@@ -2922,8 +2970,19 @@ async function scrapeApenadoFicha(
       unidade = null;
     }
   }
-  if (cela && (cela.includes('http') || cela.includes('/fotos') || cela.includes('.jpg') || cela.includes('.png') || cela.includes('uploads/'))) {
-    cela = null;
+  if (cela) {
+    const celaUpper = cela.toUpperCase().trim();
+    if (
+      celaUpper.includes('MASCULINO') ||
+      celaUpper.includes('FEMININO') ||
+      celaUpper.includes('http') ||
+      celaUpper.includes('/fotos') ||
+      celaUpper.includes('.jpg') ||
+      celaUpper.includes('.png') ||
+      celaUpper.includes('uploads/')
+    ) {
+      cela = null;
+    }
   }
 
   // --- Integração com Identificação de Apenados (tabela Apenado local) ---
@@ -7038,15 +7097,36 @@ export async function scrapeApenadoFichaFast(
     let listagemCela: string | null = null
     let listagemSituacao: string | null = null
 
-    // 1. Identificar colunas dinamicamente a partir do thead da tabela
+    // 1. Identificar a tabela correta da listagem (a que contém o apenado em suas linhas)
+    let table = $('table').first()
+    const tables = $('table').get()
+    for (const t of tables) {
+      if ($(t).text().includes(String(sipeId))) {
+        table = $(t)
+        break
+      }
+    }
+
+    // 2. Mapear dinamicamente os títulos de cabeçalhos
+    let headers: string[] = []
+    if (table.length) {
+      const trs = table.find('tr').get()
+      for (const tr of trs) {
+        const cells = $(tr).find('th, td').get()
+        const texts = cells.map(c => $(c).text().toUpperCase().trim())
+        if (texts.some(t => t.includes('NOME') || t.includes('CPF') || t.includes('UNID') || t.includes('CELA'))) {
+          headers = texts
+          break
+        }
+      }
+    }
+
     let unidadeIdx = 3
     let celaIdx = 4
     let situacaoIdx = 5
 
-    const table = $('table')
-    if (table.length) {
-      table.find('thead tr th, table thead tr td').each((idx, el) => {
-        const text = $(el).text().toUpperCase().trim()
+    if (headers.length > 0) {
+      headers.forEach((text, idx) => {
         if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) {
           unidadeIdx = idx
         } else if (text === 'CELA') {
@@ -7057,28 +7137,56 @@ export async function scrapeApenadoFichaFast(
       })
     }
 
-    const rows = $('table tbody tr').get()
+    // 3. Procurar a linha correspondente ao apenado no corpo da tabela
+    const rows = table.length ? table.find('tr').get() : $('tr').get()
     for (const row of rows) {
+      const isHeader = $(row).find('th').length > 0
+      if (isHeader) continue
+
+      const tds = $(row).find('td')
+      if (tds.length === 0) continue
+
       const text = $(row).text()
-      if (text.includes(String(sipeId))) {
+      const firstColText = $(tds.get(0)).text().trim()
+
+      // Valida se esta linha representa o apenado procurado
+      if (firstColText === String(sipeId) || (firstColText.includes(String(sipeId)) && text.includes(String(sipeId)))) {
         const a = $(row).find('a[href]')
         if (a.length) {
           link = a.attr('href') || null
         }
         
-        const tds = $(row).find('td')
-        const maxIdx = Math.max(unidadeIdx, celaIdx, situacaoIdx)
-        
-        if (tds.length > maxIdx) {
-          listagemUnidade = $(tds.get(unidadeIdx)).text().trim() || null
-          listagemCela = $(tds.get(celaIdx)).text().trim() || null
-          listagemSituacao = $(tds.get(situacaoIdx)).text().trim() || null
-        } else if (tds.length >= 6) {
-          // Fallback tolerante com offset
-          const col3Text = $(tds.get(3)).text().trim() || ''
-          const isCol3Photo = col3Text.startsWith('http') || col3Text.includes('/fotos') || $(tds.get(3)).find('img').length > 0
-          const offset = isCol3Photo ? 1 : 0
+        // Detectar dinamicamente se e onde a foto está na linha (coluna fantasma)
+        let fotoIdx = -1
+        tds.each((idx, td) => {
+          const tdText = $(td).text().trim()
+          const html = $(td).html() || ''
+          const hasImg = $(td).find('img').length > 0
+          const hasPhotoLink = tdText.startsWith('http') || tdText.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png')
+          if (hasImg || hasPhotoLink) {
+            fotoIdx = idx
+          }
+        })
 
+        // Aplicar offset dinamicamente
+        let realUnidadeIdx = unidadeIdx
+        let realCelaIdx = celaIdx
+        let realSituacaoIdx = situacaoIdx
+
+        if (fotoIdx !== -1) {
+          if (unidadeIdx >= fotoIdx) realUnidadeIdx++
+          if (celaIdx >= fotoIdx) realCelaIdx++
+          if (situacaoIdx >= fotoIdx) realSituacaoIdx++
+        }
+
+        // Se os índices reais couberem na linha
+        if (tds.length > Math.max(realUnidadeIdx, realCelaIdx, realSituacaoIdx)) {
+          listagemUnidade = $(tds.get(realUnidadeIdx)).text().trim() || null
+          listagemCela = $(tds.get(realCelaIdx)).text().trim() || null
+          listagemSituacao = $(tds.get(realSituacaoIdx)).text().trim() || null
+        } else if (tds.length >= 6) {
+          // Fallback tolerante final com offset estático se necessário
+          const offset = (fotoIdx !== -1) ? 1 : 0
           listagemUnidade = $(tds.get(3 + offset)).text().trim() || null
           listagemCela = $(tds.get(4 + offset)).text().trim() || null
           listagemSituacao = $(tds.get(5 + offset)).text().trim() || null
@@ -7227,8 +7335,19 @@ export async function scrapeApenadoFichaFast(
       unidade = null
     }
   }
-  if (cela && (cela.includes('http') || cela.includes('/fotos') || cela.includes('.jpg') || cela.includes('.png') || cela.includes('uploads/'))) {
-    cela = null
+  if (cela) {
+    const celaUpper = cela.toUpperCase().trim()
+    if (
+      celaUpper.includes('MASCULINO') ||
+      celaUpper.includes('FEMININO') ||
+      celaUpper.includes('http') ||
+      celaUpper.includes('/fotos') ||
+      celaUpper.includes('.jpg') ||
+      celaUpper.includes('.png') ||
+      celaUpper.includes('uploads/')
+    ) {
+      cela = null
+    }
   }
 
   const nomeApenadoUpper = (dados.nome || 'SEM NOME').trim().toUpperCase()

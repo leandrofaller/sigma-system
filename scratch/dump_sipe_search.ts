@@ -30,19 +30,53 @@ async function dump() {
     await page.fill('input[name="password"]', SIPE_SENHA);
     await page.click('button[type="submit"]');
     
-    await page.waitForURL(url => url.includes('/selectRole') || url.includes('/dashboard') || url.includes('/index'), { timeout: 30000 });
+    await page.waitForURL(url => url.href.includes('/selectRole') || url.href.includes('/dashboard') || url.href.includes('/index'), { timeout: 30000 });
     console.log('Login efetuado, URL atual:', page.url());
 
     if (page.url().includes('/selectRole')) {
       console.log('Selecionando papel/perfil...');
-      await page.selectOption('select[name="perfil"]', SIPE_PERFIL);
-      await page.selectOption('select[name="unidade"]', SIPE_UNIDADE);
+      await page.locator('select').nth(0).waitFor({ state: 'attached', timeout: 10_000 });
+      await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 10_000 });
+
+      await page.evaluate((perfil) => {
+        const selects = document.querySelectorAll('select');
+        const selectPerfil = selects[0];
+        if (selectPerfil) {
+          selectPerfil.value = perfil;
+          selectPerfil.dispatchEvent(new Event('change', { bubbles: true }));
+          const w = window as any;
+          if (w.$) {
+            try {
+              w.$(selectPerfil).trigger('chosen:updated');
+              w.$(selectPerfil).trigger('change');
+            } catch {}
+          }
+        }
+      }, SIPE_PERFIL);
+
+      await page.evaluate((unidade) => {
+        const selects = document.querySelectorAll('select');
+        const selectUnidade = selects[1];
+        if (selectUnidade) {
+          selectUnidade.value = unidade;
+          selectUnidade.dispatchEvent(new Event('change', { bubbles: true }));
+          const w = window as any;
+          if (w.$) {
+            try {
+              w.$(selectUnidade).trigger('chosen:updated');
+              w.$(selectUnidade).trigger('change');
+            } catch {}
+          }
+        }
+      }, SIPE_UNIDADE);
+
+      await page.waitForTimeout(500);
       await page.click('button[type="submit"]');
-      await page.waitForURL(url => url.includes('/dashboard') || url.includes('/index'), { timeout: 30000 });
+      await page.waitForURL(url => url.href.includes('/dashboard') || url.href.includes('/index') || url.href.includes('/home'), { timeout: 30000 });
       console.log('Papel selecionado, URL atual:', page.url());
     }
 
-    const sipeId = 37894;
+    const sipeId = 77624;
     const searchUrl = `${SIPE_URL}/apenados/index?escolha=nomeapenado&parametro=${sipeId}`;
     console.log('Buscando apenado no index:', searchUrl);
     
