@@ -50,6 +50,25 @@ type SipeProxyResponse = {
   json?: any
 }
 
+export function normalizeOAB(oab: string | null | undefined): string | null {
+  if (!oab) return null
+  let cleaned = oab.trim().toUpperCase()
+  cleaned = cleaned.replace(/\./g, '')
+  cleaned = cleaned.replace(/[-\s]/g, '/')
+  cleaned = cleaned.replace(/\/+/g, '/')
+  const match = cleaned.match(/^(\d+[A-Z]?)\/?([A-Z]{2})$/)
+  if (match) {
+    return `${match[1]}/${match[2]}`
+  }
+  return cleaned
+}
+
+export function normalizeCPF(cpf: string | null | undefined): string | null {
+  if (!cpf) return null
+  const cleaned = cpf.replace(/\D/g, '')
+  return cleaned.length === 11 ? cleaned : null
+}
+
 /**
  * Tenta obter o HTML ou Imagem do SIPE através do Proxy Python FastAPI (curl_cffi).
  * Caso a chamada falhe ou o motor de scraping não seja "python-sdk", retorna null (para ativar o fallback).
@@ -3537,6 +3556,8 @@ async function scrapeVisitantes(
     }
 
     for (const v of visitantes) {
+      const normalizedCpf = normalizeCPF(v.cpf)
+      v.cpf = normalizedCpf
       let photoPath: string | null = null
       let photoSrc = v.photoSrc
 
@@ -3674,7 +3695,7 @@ async function scrapeVisitantes(
 
       const upsertData = {
         nome: v.nome,
-        cpf: v.cpf,
+        cpf: v.cpf || null,
         parentesco: v.parentesco,
         ...(photoPath ? { photoPath } : {})
       }
@@ -4096,6 +4117,8 @@ export async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: 
   if (!dadosAdv.nome) return;
 
   const { nome, oab, cpf, endereco, telefone, dataCadastro, fotoSrc } = dadosAdv;
+  const normalizedOab = normalizeOAB(oab);
+  const normalizedCpf = normalizeCPF(cpf);
 
   // Verifica se o advogado já tem foto manual no banco local para evitar sobrescrever
   const advogadoExistente = await prisma.sipeAdvogado.findUnique({
@@ -4137,8 +4160,8 @@ export async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: 
     create: { 
       sipeId, 
       nome, 
-      oab: oab || null, 
-      cpf: cpf || null, 
+      oab: normalizedOab || null, 
+      cpf: normalizedCpf || null, 
       telefone: telefone || null, 
       dataCadastro: dataCadastro || null,
       endereco: endereco || null,
@@ -4146,8 +4169,8 @@ export async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: 
     },
     update: { 
       nome, 
-      oab: oab || null, 
-      cpf: cpf || null, 
+      oab: normalizedOab || null, 
+      cpf: normalizedCpf || null, 
       telefone: telefone || null, 
       dataCadastro: dataCadastro || null,
       endereco: endereco || null,
@@ -6242,7 +6265,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
       })
 
       const nomeAdv = (fields['NOME DO ADVOGADO'] || fields['NOME'] || '').trim().toUpperCase()
-      const oab = (fields['OAB'] || '').trim()
+      const oab = normalizeOAB((fields['OAB'] || '').trim())
       const situacao = (fields['SITUAÇÃO'] || fields['SITUACAO'] || '').trim()
       const telefone = (fields['TELEFONE DE CONTATO'] || '').trim()
       const dataCadastro = (fields['DATA DE CADASTRO'] || '').trim()
@@ -6364,7 +6387,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
       const labelSituacao = Object.keys(fields).find(k => k.includes('SITUAÇÃO') || k.includes('SITUACAO')) || 'SITUAÇÃO'
 
       const nomeVis = (fields[labelNome] || '').trim().toUpperCase()
-      const cpf = (fields['CPF'] || '').replace(/\D/g, '')
+      const cpf = normalizeCPF(fields['CPF'] || '')
       const parentesco = (fields[labelParentesco] || '').trim()
       const situacao = (fields[labelSituacao] || '').trim()
 
@@ -6406,7 +6429,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
         }
 
         let vis = null
-        if (cpf && cpf.length === 11) {
+        if (cpf) {
           vis = await prisma.sipeVisitante.findFirst({ where: { cpf } })
         }
         if (!vis) {
@@ -6618,7 +6641,7 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
       list.push({
         visitaId,
         nome,
-        cpf: cpf && cpf.length === 11 ? cpf : null,
+        cpf: normalizeCPF(cpf),
         parentesco,
         photoSrc,
         ativo: isTableAtivo
@@ -6641,7 +6664,7 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
           rows.each((_, r) => {
             const nameText = $sub(r).find('.profile-info-name').text().trim() || ''
             if (nameText.toLowerCase().includes('cpf')) {
-              cpf = $sub(r).find('.profile-info-value').text().trim().replace(/\D/g, '') || cpf
+              cpf = normalizeCPF($sub(r).find('.profile-info-value').text()) || cpf
             }
           })
 
@@ -6734,7 +6757,7 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
 
     const upsertData = {
       nome: v.nome,
-      cpf: cpf && cpf.length === 11 ? cpf : null,
+      cpf: cpf || null,
       parentesco: v.parentesco,
       ...(photoPath ? { photoPath } : {})
     }
@@ -7301,54 +7324,55 @@ export async function scrapeApenadoFichaFast(
     fichaGeralPromise
   ])
 
-  const dbSavesPromises: Promise<any>[] = []
+  const independentPromises: Promise<any>[] = []
 
   if (processosData?.html) {
-    dbSavesPromises.push(parseAndSaveProcessosCheerio(processosData.html, apenado.id))
+    independentPromises.push(parseAndSaveProcessosCheerio(processosData.html, apenado.id))
   }
   if (alcunhasData?.html) {
-    dbSavesPromises.push(parseAndSaveAlcunhasCheerio(alcunhasData.html, apenado.id))
+    independentPromises.push(parseAndSaveAlcunhasCheerio(alcunhasData.html, apenado.id))
   }
   if (enderecosData?.html) {
-    dbSavesPromises.push(parseAndSaveEnderecoCheerio(enderecosData.html, apenado.id))
+    independentPromises.push(parseAndSaveEnderecoCheerio(enderecosData.html, apenado.id))
   }
   if (mudarCelaData?.html) {
-    dbSavesPromises.push(parseAndSaveMudarCelaCheerio(mudarCelaData.html, apenado.id))
+    independentPromises.push(parseAndSaveMudarCelaCheerio(mudarCelaData.html, apenado.id))
   }
   if (anexosData?.html) {
-    dbSavesPromises.push(parseAndSaveDocumentosCheerio(anexosData.html, apenado.id, localApenado.id))
+    independentPromises.push(parseAndSaveDocumentosCheerio(anexosData.html, apenado.id, localApenado.id))
   }
+  for (const src of complementaryPhotoSrcs) {
+    independentPromises.push(saveAndLinkComplementaryPhotoCheerio(src, apenado.id, localApenado.id, 'Foto de Identificação'))
+  }
+
+  // Executa os dados estruturados independentes em paralelo
+  await Promise.all(independentPromises)
+
+  // Salva visitantes e advogados de forma sequencial para evitar Race Conditions
   if (visitantesData?.html) {
-    dbSavesPromises.push(parseAndSaveVisitantesCheerio(visitantesData.html, apenado.id))
+    await parseAndSaveVisitantesCheerio(visitantesData.html, apenado.id)
   }
   
-  // Salva advogados tentando as rotas candidatas na ordem de prioridade
-  dbSavesPromises.push((async () => {
-    let salvou = false
-    if (advogadosData?.html) {
-      salvou = await parseAndSaveAdvogadosCheerio(advogadosData.html, apenado.id)
-    }
-    if (!salvou && credenciamentoData?.html) {
-      salvou = await parseAndSaveAdvogadosCheerio(credenciamentoData.html, apenado.id)
-    }
-    if (!salvou && atendimentosData?.html) {
-      salvou = await parseAndSaveAdvogadosCheerio(atendimentosData.html, apenado.id)
-    }
-    if (!salvou && credenciadosData?.html) {
-      salvou = await parseAndSaveAdvogadosCheerio(credenciadosData.html, apenado.id)
-    }
-  })())
+  let salvouAdv = false
+  if (advogadosData?.html) {
+    salvouAdv = await parseAndSaveAdvogadosCheerio(advogadosData.html, apenado.id)
+  }
+  if (!salvouAdv && credenciamentoData?.html) {
+    salvouAdv = await parseAndSaveAdvogadosCheerio(credenciamentoData.html, apenado.id)
+  }
+  if (!salvouAdv && atendimentosData?.html) {
+    salvouAdv = await parseAndSaveAdvogadosCheerio(atendimentosData.html, apenado.id)
+  }
+  if (!salvouAdv && credenciadosData?.html) {
+    salvouAdv = await parseAndSaveAdvogadosCheerio(credenciadosData.html, apenado.id)
+  }
 
+  // Por último, executa a Ficha Geral consolidada (evitando duplicar advogados e visitantes criados acima)
   if (fichaGeralData?.html) {
-    dbSavesPromises.push(parseAndSaveFichaGeralCheerio(fichaGeralData.html, apenado.id))
+    await parseAndSaveFichaGeralCheerio(fichaGeralData.html, apenado.id)
   }
 
-  for (const src of complementaryPhotoSrcs) {
-    dbSavesPromises.push(saveAndLinkComplementaryPhotoCheerio(src, apenado.id, localApenado.id, 'Foto de Identificação'))
-  }
-
-  await Promise.all(dbSavesPromises)
-  console.log(`[SCRAPER FAST] 🚀 Apenado #${sipeId} processado inteiramente via Cheerio + Promise.all com sucesso!`)
+  console.log(`[SCRAPER FAST] 🚀 Apenado #${sipeId} processado de forma sequencial-segura com sucesso!`)
 
   if (globalThis.__sipeState && (globalThis.__sipeState.tipo === 'UNIDADES' || globalThis.__sipeState.tipo === 'UNIDADES_FAST')) {
     await saveApenadoUnidadePrisional(sipeId, apenado.id)

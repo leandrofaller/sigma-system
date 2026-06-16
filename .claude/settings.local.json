@@ -176,7 +176,12 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "PowerShell(Get-ChildItem \"$env:LOCALAPPDATA\\\\Programs\\\\claude-cli-nodejs\" -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem \"$env:LOCALAPPDATA\\\\Programs\\\\Claude\" -ErrorAction SilentlyContinue | Select-Object Name)",
       "Bash(python3 -c ' *)",
-      "Bash(git ls-tree *)"
+      "Bash(git ls-tree *)",
+      "Bash(awk '/async function parseAndSaveFichaGeralCheerio/,0{print NR\": \"$0; if\\(/^async function|^function/ && NR>6233\\) {if\\(count++>0\\) exit}}' src/lib/sipe-scraper.ts)",
+      "Bash(sed -n '6232,6235p' src/lib/sipe-scraper.ts)",
+      "Bash(awk 'NR==6232,0{print} ' src/lib/sipe-scraper.ts)",
+      "Bash(awk '/^async function|^function/{c++; if\\(c==2\\){print NR; exit}}')",
+      "Bash(awk '/^export async function parseAndSaveFichaGeralCheerio/,0{print; if\\(/^async function parseAndSaveDocumentosCheerio/ && NR>1\\) exit}')"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
