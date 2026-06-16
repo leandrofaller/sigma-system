@@ -5437,8 +5437,6 @@ export async function scrapeHistorico(
         bodyParams.append('apenado_id', String(sipeId))
         bodyParams.append('listar[]', 'DP') // Dados Pessoais (requerido)
         bodyParams.append('listar[]', 'M')  // Movimentações
-        bodyParams.append('listar[]', 'A')  // Advogados
-        bodyParams.append('listar[]', 'V')  // Visitas
 
         const res = await fetch(`${url}/relatorios/fichaGeral`, {
           method: 'POST',
@@ -5468,10 +5466,96 @@ export async function scrapeHistorico(
       return
     }
 
-    // Processa movimentações, advogados e visitantes da Ficha Geral
-    await parseAndSaveFichaGeralCheerio(postResult.html, apenadoId)
+    // Faz o parser do HTML retornado usando DOMParser na própria página do Playwright
+    const movimentacoes = await page.evaluate((htmlString) => {
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(htmlString, 'text/html')
+      const table = doc.querySelector('table')
+      if (!table) return []
+
+      const trs = Array.from(table.querySelectorAll('tbody tr, tr'))
+      const list: any[] = []
+
+      for (const tr of trs) {
+        if (tr.querySelector('th')?.textContent?.trim() === 'Codigo') continue
+        if (tr.textContent?.includes('Data Entrada') && tr.textContent?.includes('Data Saída')) continue
+
+        const cells = Array.from(tr.children)
+        if (cells.length < 9) continue
+
+        const codigo = cells[0].textContent?.trim() || ''
+        const regime = cells[1].textContent?.trim() || ''
+        const intramuro = cells[2].textContent?.trim() || ''
+        const monitorado = cells[3].textContent?.trim() || ''
+        const dataEntrada = cells[4].textContent?.trim() || ''
+        const origem = cells[5].textContent?.trim() || ''
+        const dataSaida = cells[6].textContent?.trim() || ''
+        const destino = cells[7].textContent?.trim() || ''
+        const motivo = cells[8].textContent?.trim() || ''
+
+        if (!codigo || codigo === 'Codigo') continue
+
+        list.push({
+          codigo,
+          regime,
+          intramuro,
+          monitorado,
+          dataEntrada,
+          origem,
+          dataSaida,
+          destino,
+          motivo
+        })
+      }
+      return list
+    }, postResult.html)
+
+    for (const m of movimentacoes) {
+      const dataStr = m.dataEntrada !== '-----' ? m.dataEntrada : (m.dataSaida !== '-----' ? m.dataSaida : null)
+      let datahora: Date | null = null
+
+      if (dataStr) {
+        try {
+          const dateParts = dataStr.split('/')
+          if (dateParts.length === 3) {
+            datahora = new Date(
+              parseInt(dateParts[2]),
+              parseInt(dateParts[1]) - 1,
+              parseInt(dateParts[0]),
+              12, // Meio-dia padrão para normalização
+              0
+            )
+          }
+        } catch {
+          datahora = new Date(dataStr)
+        }
+      }
+
+      const tipo = 'MOVIMENTACAO'
+      const descricao = `Movimentação Geral - Código: ${m.codigo} | Motivo: ${m.motivo} | Origem: ${m.origem} | Destino: ${m.destino} | Entrada: ${m.dataEntrada} | Saída: ${m.dataSaida} | Regime: ${m.regime} | Intramuro: ${m.intramuro} | Monitorado: ${m.monitorado}`
+
+      const idString = `sipe-mov-${apenadoId}-${m.codigo}`
+      const hashId = createHash('md5').update(idString).digest('hex')
+
+      await prisma.sipeHistorico.upsert({
+        where: { id: hashId },
+        create: {
+          id: hashId,
+          apenadoId,
+          tipo,
+          descricao,
+          datahora,
+          unidade: m.destino !== '-----' ? m.destino : (m.origem !== '-----' ? m.origem : null),
+        },
+        update: {
+          descricao,
+          datahora,
+          unidade: m.destino !== '-----' ? m.destino : (m.origem !== '-----' ? m.origem : null),
+        },
+      })
+    }
   } catch (err) {
-    console.error(`Erro ao sincronizar Ficha Geral do apenado ${sipeId}:`, err)
+    console.error(`Erro ao sincronizar movimentações da Ficha Geral do apenado ${sipeId}:`, err)
   }
 }
 
@@ -5634,7 +5718,7 @@ async function scrapeAdvogadosDoApenado(
       }
 
       for (const item of linksAdvogados) {
-        const match = item.href.match(/\/advogados?\/(\d+)/) || item.href.match(/\/detalhaclientes\/(\d+)/) || item.href.match(/[?&]id=(\d+)/)
+        const match = item.href.match(/\/advogados\/(\d+)/) || item.href.match(/\/advogado\/(\d+)/)
         if (!match) continue
 
         const advSipeId = parseInt(match[1])
@@ -6145,329 +6229,71 @@ async function parseAndSaveMudarCelaCheerio(html: string, apenadoId: string): Pr
   }
 }
 
-function generateFakeSipeId(nome: string, oab?: string | null): number {
-  const seed = oab ? `${nome}-${oab}` : nome
-  let hash = 0
-  for (let i = 0; i < seed.length; i++) {
-    const character = seed.charCodeAt(i)
-    hash = ((hash << 5) - hash) + character
-    hash = hash & hash // Converte para inteiro de 32 bits
-  }
-  return -Math.abs(hash)
-}
-
-export async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): Promise<void> {
-  console.log(`[DEBUG] parseAndSaveFichaGeralCheerio iniciada para apenadoId: ${apenadoId}`)
-  console.log(`[DEBUG] Tamanho do HTML: ${html ? html.length : 0} bytes`)
-  console.log(`[DEBUG] Contem "ADVOGADOS CADASTRADOS"?`, html ? html.toUpperCase().includes('ADVOGADOS CADASTRADOS') : false)
-  console.log(`[DEBUG] Contem "VISITANTES CADASTRADAS"?`, html ? html.toUpperCase().includes('VISITANTES CADASTRADAS') : false)
-  
-  try {
-    const fsPromises = await import('fs/promises')
-    await fsPromises.writeFile('scratch_ficha_geral_dinamica.html', html || '', 'utf8')
-    console.log('[DEBUG] Salvo scratch_ficha_geral_dinamica.html com sucesso!')
-  } catch (errWrite) {
-    console.error('[DEBUG] Erro ao salvar HTML dinamico:', errWrite)
-  }
-  
+async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): Promise<void> {
   const $ = cheerio.load(html)
   const table = $('table').first()
-  
-  if (table.length) {
-    const rows = table.find('tbody tr, tr')
-    for (let i = 0; i < rows.length; i++) {
-      const tr = rows[i]
-      const cells = $(tr).find('td, th')
-      if (cells.length < 9) continue
+  if (!table.length) return
 
-      const codigo = $(cells.get(0)).text().trim()
-      if (!codigo || codigo === 'Codigo' || codigo === 'Código') continue
+  const rows = table.find('tbody tr, tr')
+  for (let i = 0; i < rows.length; i++) {
+    const tr = rows[i]
+    const cells = $(tr).find('td, th')
+    if (cells.length < 9) continue
 
-      const regime = $(cells.get(1)).text().trim()
-      const intramuro = $(cells.get(2)).text().trim()
-      const monitorado = $(cells.get(3)).text().trim()
-      const dataEntrada = $(cells.get(4)).text().trim()
-      const origem = $(cells.get(5)).text().trim()
-      const dataSaida = $(cells.get(6)).text().trim()
-      const destino = $(cells.get(7)).text().trim()
-      const motivo = $(cells.get(8)).text().trim()
+    const codigo = $(cells.get(0)).text().trim()
+    if (!codigo || codigo === 'Codigo' || codigo === 'Código') continue
 
-      const dataStr = dataEntrada !== '-----' ? dataEntrada : (dataSaida !== '-----' ? dataSaida : null)
-      let datahora: Date | null = null
+    const regime = $(cells.get(1)).text().trim()
+    const intramuro = $(cells.get(2)).text().trim()
+    const monitorado = $(cells.get(3)).text().trim()
+    const dataEntrada = $(cells.get(4)).text().trim()
+    const origem = $(cells.get(5)).text().trim()
+    const dataSaida = $(cells.get(6)).text().trim()
+    const destino = $(cells.get(7)).text().trim()
+    const motivo = $(cells.get(8)).text().trim()
 
-      if (dataStr) {
-        try {
-          const dateParts = dataStr.split('/')
-          if (dateParts.length === 3) {
-            datahora = new Date(
-              parseInt(dateParts[2]),
-              parseInt(dateParts[1]) - 1,
-              parseInt(dateParts[0]),
-              12,
-              0
-            )
-          }
-        } catch {
-          datahora = new Date(dataStr)
+    const dataStr = dataEntrada !== '-----' ? dataEntrada : (dataSaida !== '-----' ? dataSaida : null)
+    let datahora: Date | null = null
+
+    if (dataStr) {
+      try {
+        const dateParts = dataStr.split('/')
+        if (dateParts.length === 3) {
+          datahora = new Date(
+            parseInt(dateParts[2]),
+            parseInt(dateParts[1]) - 1,
+            parseInt(dateParts[0]),
+            12,
+            0
+          )
         }
+      } catch {
+        datahora = new Date(dataStr)
       }
-
-      const tipo = 'MOVIMENTACAO'
-      const descricao = `Movimentação Geral - Código: ${codigo} | Motivo: ${motivo} | Origem: ${origem} | Destino: ${destino} | Entrada: ${dataEntrada} | Saída: ${dataSaida} | Regime: ${regime} | Intramuro: ${intramuro} | Monitorado: ${monitorado}`
-
-      const idString = `sipe-mov-${apenadoId}-${codigo}`
-      const hashId = createHash('md5').update(idString).digest('hex')
-
-      await prisma.sipeHistorico.upsert({
-        where: { id: hashId },
-        create: {
-          id: hashId,
-          apenadoId,
-          tipo,
-          descricao,
-          datahora,
-          unidade: destino !== '-----' ? destino : (origem !== '-----' ? origem : null),
-        },
-        update: {
-          descricao,
-          datahora,
-          unidade: destino !== '-----' ? destino : (origem !== '-----' ? origem : null),
-        },
-      })
     }
-  }
 
-  // --- Extração de Advogados da Ficha Geral consolidada ---
-  const titleAdv = $('div.title').filter((_, elem) => $(elem).text().toUpperCase().includes('ADVOGADOS CADASTRADOS'))
-  console.log(`[DEBUG] titleAdv encontrado? ${titleAdv.length > 0}`)
-  if (titleAdv.length) {
-    let next = titleAdv.next()
-    while (next.length && next.hasClass('line')) {
-      const line = next
-      const photoSrc = line.find('img').attr('src') || null
-      const fields: Record<string, string> = {}
-      
-      line.find('.input').each((_, inputElem) => {
-        const label = $(inputElem).find('label').text().trim().toUpperCase()
-        const value = $(inputElem).find('input').val()?.toString().trim() || $(inputElem).find('input').attr('value')?.trim() || ''
-        if (label) {
-          fields[label] = value
-        }
-      })
-      
-      const nomeAdv = (fields['NOME DO ADVOGADO'] || fields['NOME'] || '').trim().toUpperCase()
-      const oab = (fields['OAB'] || '').trim()
-      const situacao = (fields['SITUAÇÃO'] || fields['SITUACAO'] || '').trim()
-      const telefone = (fields['TELEFONE DE CONTATO'] || '').trim()
-      const dataCadastro = (fields['DATA DE CADASTRO'] || '').trim()
+    const tipo = 'MOVIMENTACAO'
+    const descricao = `Movimentação Geral - Código: ${codigo} | Motivo: ${motivo} | Origem: ${origem} | Destino: ${destino} | Entrada: ${dataEntrada} | Saída: ${dataSaida} | Regime: ${regime} | Intramuro: ${intramuro} | Monitorado: ${monitorado}`
 
-      if (nomeAdv && nomeAdv.length > 2) {
-        let photoPath: string | null = null
-        if (photoSrc && !photoSrc.includes('Undefined offset') && !photoSrc.includes('loading.gif')) {
-          try {
-            const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
-            const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
-            let proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
-            if (!proxyPhoto && cleanPhotoSrc !== photoSrc) {
-              proxyPhoto = await fetchSipeViaProxy(photoSrc.replace(SIPE_URL, ''))
-            }
-            if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
-              const base64Data = proxyPhoto.data
-              if (base64Data.includes(',')) {
-                const base64Content = base64Data.split(',')[1]
-                const imageBuffer = Buffer.from(base64Content, 'base64')
-                const webpBuffer = await sharp(imageBuffer)
-                  .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
-                  .webp({ quality: 85 })
-                  .toBuffer()
+    const idString = `sipe-mov-${apenadoId}-${codigo}`
+    const hashId = createHash('md5').update(idString).digest('hex')
 
-                const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
-                const advDir = join(baseDir, 'advogados')
-                const { mkdir, writeFile } = await import('fs/promises')
-                await mkdir(advDir, { recursive: true })
-
-                const fileKey = oab ? oab.replace(/[^a-zA-Z0-9-]/g, '_') : Math.abs(hashCodeLocal(nomeAdv))
-                const filename = `advogado-${fileKey}.webp`
-                const localPath = join(advDir, filename)
-                await writeFile(localPath, webpBuffer)
-                photoPath = `uploads/advogados/${filename}`
-              }
-            }
-          } catch (imgErr) {
-            console.error(`Erro ao baixar foto do advogado ${nomeAdv} na Ficha Geral:`, imgErr)
-          }
-        }
-
-        let adv = await prisma.sipeAdvogado.findFirst({
-          where: {
-            OR: [
-              { nome: nomeAdv },
-              oab ? { oab } : null
-            ].filter(Boolean) as any
-          }
-        })
-
-        const upsertData = {
-          nome: nomeAdv,
-          oab: oab || null,
-          telefone: telefone || null,
-          dataCadastro: dataCadastro || null,
-          ...(photoPath ? { photoPath } : {})
-        }
-
-        if (adv) {
-          adv = await prisma.sipeAdvogado.update({
-            where: { id: adv.id },
-            data: upsertData
-          })
-        } else {
-          const fakeSipeId = generateFakeSipeId(nomeAdv, oab)
-          adv = await prisma.sipeAdvogado.create({
-            data: {
-              sipeId: fakeSipeId,
-              ...upsertData
-            }
-          })
-        }
-
-        const isAtivo = situacao.toUpperCase() === 'ATIVO' || situacao === ''
-        await prisma.sipeVinculoAdvogado.upsert({
-          where: {
-            apenadoId_advogadoId: {
-              apenadoId,
-              advogadoId: adv.id
-            }
-          },
-          create: {
-            apenadoId,
-            advogadoId: adv.id,
-            ativo: isAtivo
-          },
-          update: {
-            ativo: isAtivo
-          }
-        })
-      }
-
-      next = next.next()
-    }
-  }
-
-  // --- Extração de Visitantes da Ficha Geral consolidada ---
-  const titleVis = $('div.title').filter((_, elem) => {
-    const t = $(elem).text().toUpperCase()
-    return t.includes('VISITANTES CADASTRADAS') || t.includes('VISITANTES CADASTRADOS')
-  })
-  console.log(`[DEBUG] titleVis encontrado? ${titleVis.length > 0}`)
-  if (titleVis.length) {
-    let next = titleVis.next()
-    while (next.length && next.hasClass('line')) {
-      const line = next
-      const photoSrc = line.find('img').attr('src') || null
-      const fields: Record<string, string> = {}
-      
-      line.find('.input').each((_, inputElem) => {
-        const label = $(inputElem).find('label').text().trim().toUpperCase()
-        const value = $(inputElem).find('input').val()?.toString().trim() || $(inputElem).find('input').attr('value')?.trim() || ''
-        if (label) {
-          fields[label] = value
-        }
-      })
-      
-      const labelNome = Object.keys(fields).find(k => k.includes('NOME')) || 'NOME DA VISITANTE'
-      const labelParentesco = Object.keys(fields).find(k => k.includes('PARENTESCO') || k.includes('VINCULO')) || 'GRAU PARENTESCO'
-      const labelEndereco = Object.keys(fields).find(k => k.includes('ENDEREÇO') || k.includes('ENDERECO')) || 'ENDEREÇO'
-      const labelSituacao = Object.keys(fields).find(k => k.includes('SITUAÇÃO') || k.includes('SITUACAO')) || 'SITUAÇÃO'
-
-      const nomeVis = (fields[labelNome] || '').trim().toUpperCase()
-      const cpf = (fields['CPF'] || '').replace(/\D/g, '')
-      const parentesco = (fields[labelParentesco] || '').trim()
-      const situacao = (fields[labelSituacao] || '').trim()
-
-      if (nomeVis && nomeVis.length > 2) {
-        let photoPath: string | null = null
-        if (photoSrc && !photoSrc.includes('Undefined offset') && !photoSrc.includes('loading.gif')) {
-          try {
-            const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
-            const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
-            let proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
-            if (!proxyPhoto && cleanPhotoSrc !== photoSrc) {
-              proxyPhoto = await fetchSipeViaProxy(photoSrc.replace(SIPE_URL, ''))
-            }
-            if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
-              const base64Data = proxyPhoto.data
-              if (base64Data.includes(',')) {
-                const base64Content = base64Data.split(',')[1]
-                const imageBuffer = Buffer.from(base64Content, 'base64')
-                const webpBuffer = await sharp(imageBuffer)
-                  .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
-                  .webp({ quality: 85 })
-                  .toBuffer()
-
-                const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
-                const visitDir = join(baseDir, 'visitantes')
-                const { mkdir, writeFile } = await import('fs/promises')
-                await mkdir(visitDir, { recursive: true })
-
-                const fileKey = cpf || Math.abs(hashCodeLocal(nomeVis))
-                const filename = `visitante-${fileKey}.webp`
-                const localPath = join(visitDir, filename)
-                await writeFile(localPath, webpBuffer)
-                photoPath = `uploads/visitantes/${filename}`
-              }
-            }
-          } catch (imgErr) {
-            console.error(`Erro ao baixar foto do visitante ${nomeVis} na Ficha Geral:`, imgErr)
-          }
-        }
-
-        let vis = null
-        if (cpf && cpf.length === 11) {
-          vis = await prisma.sipeVisitante.findFirst({ where: { cpf } })
-        }
-        if (!vis) {
-          vis = await prisma.sipeVisitante.findFirst({ where: { nome: nomeVis } })
-        }
-
-        const upsertData = {
-          nome: nomeVis,
-          cpf: cpf && cpf.length === 11 ? cpf : null,
-          parentesco: parentesco || null,
-          ...(photoPath ? { photoPath } : {})
-        }
-
-        if (vis) {
-          vis = await prisma.sipeVisitante.update({
-            where: { id: vis.id },
-            data: upsertData
-          })
-        } else {
-          vis = await prisma.sipeVisitante.create({
-            data: upsertData
-          })
-        }
-
-        const isAtivo = situacao.toUpperCase() === 'ATIVO' || situacao === ''
-        await prisma.sipeVinculoVisitante.upsert({
-          where: {
-            apenadoId_visitanteId: {
-              apenadoId,
-              visitanteId: vis.id
-            }
-          },
-          create: {
-            apenadoId,
-            visitanteId: vis.id,
-            ativo: isAtivo
-          },
-          update: {
-            ativo: isAtivo
-          }
-        })
-      }
-
-      next = next.next()
-    }
+    await prisma.sipeHistorico.upsert({
+      where: { id: hashId },
+      create: {
+        id: hashId,
+        apenadoId,
+        tipo,
+        descricao,
+        datahora,
+        unidade: destino !== '-----' ? destino : (origem !== '-----' ? origem : null),
+      },
+      update: {
+        descricao,
+        datahora,
+        unidade: destino !== '-----' ? destino : (origem !== '-----' ? origem : null),
+      },
+    })
   }
 }
 
@@ -6805,7 +6631,7 @@ async function parseAndSaveAdvogadosCheerio(html: string, apenadoId: string): Pr
   }
 
   for (const item of linksAdvogados) {
-    const match = item.href.match(/\/advogados?\/(\d+)/) || item.href.match(/\/detalhaclientes\/(\d+)/) || item.href.match(/[?&]id=(\d+)/)
+    const match = item.href.match(/\/advogados\/(\d+)/) || item.href.match(/\/advogado\/(\d+)/)
     if (!match) continue
 
     const advSipeId = parseInt(match[1])
@@ -7271,47 +7097,51 @@ export async function scrapeApenadoFichaFast(
                     $('input[name="_token"]').val()?.toString() ||
                     editHtml.match(/CSRF_TOKEN\s*=\s*['"]([^'"]+)['"]/i)?.[1]
 
-  let processosData: SipeProxyResponse | null = null
-  let alcunhasData: SipeProxyResponse | null = null
-  let enderecosData: SipeProxyResponse | null = null
-  let mudarCelaData: SipeProxyResponse | null = null
-  let anexosData: SipeProxyResponse | null = null
-  let visitantesData: SipeProxyResponse | null = null
-  let advogadosData: SipeProxyResponse | null = null
-  let credenciamentoData: SipeProxyResponse | null = null
-  let atendimentosData: SipeProxyResponse | null = null
-  let credenciadosData: SipeProxyResponse | null = null
-  let fichaGeralData: SipeProxyResponse | null = null
+  const subPagesPromises = [
+    fetchSipeViaProxy(`/apenados/${sipeId}/incluirProcessos`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/alcunhas`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/enderecos`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/mudarcela`),
+    fetchSipeViaProxy(`/anexos/${sipeId}/index`),
+    fetchSipeViaProxy(`/autorizacoes/${sipeId}/mostrar`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/advogados`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/credenciamento`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/atendimentos`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/credenciados`),
+  ]
 
-  try {
-    processosData = await fetchSipeViaProxy(`/apenados/${sipeId}/incluirProcessos`)
-    alcunhasData = await fetchSipeViaProxy(`/apenados/${sipeId}/alcunhas`)
-    enderecosData = await fetchSipeViaProxy(`/apenados/${sipeId}/enderecos`)
-    mudarCelaData = await fetchSipeViaProxy(`/apenados/${sipeId}/mudarcela`)
-    anexosData = await fetchSipeViaProxy(`/anexos/${sipeId}/index`)
-    visitantesData = await fetchSipeViaProxy(`/autorizacoes/${sipeId}/mostrar`)
-    advogadosData = await fetchSipeViaProxy(`/apenados/${sipeId}/advogados`)
-    credenciamentoData = await fetchSipeViaProxy(`/apenados/${sipeId}/credenciamento`)
-    atendimentosData = await fetchSipeViaProxy(`/apenados/${sipeId}/atendimentos`)
-    credenciadosData = await fetchSipeViaProxy(`/apenados/${sipeId}/credenciados`)
-
-    if (csrfToken) {
-      fichaGeralData = await requestSipeViaProxy({
-        path: '/relatorios/fichaGeral',
-        method: 'POST',
-        form: {
-          _token: csrfToken,
-          apenado_id: String(sipeId),
-          'listar[]': ['DP', 'M', 'A', 'V']
-        },
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      })
-    }
-  } catch (err: any) {
-    console.error(`[SCRAPER FAST] Erro ao carregar subpáginas sequencialmente para #${sipeId}:`, err.message || err)
+  let fichaGeralPromise: Promise<SipeProxyResponse | null> = Promise.resolve(null)
+  if (csrfToken) {
+    fichaGeralPromise = requestSipeViaProxy({
+      path: '/relatorios/fichaGeral',
+      method: 'POST',
+      form: {
+        _token: csrfToken,
+        apenado_id: String(sipeId),
+        'listar[]': ['DP', 'M']
+      },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    })
   }
+
+  const [
+    processosData,
+    alcunhasData,
+    enderecosData,
+    mudarCelaData,
+    anexosData,
+    visitantesData,
+    advogadosData,
+    credenciamentoData,
+    atendimentosData,
+    credenciadosData,
+    fichaGeralData
+  ] = await Promise.all([
+    ...subPagesPromises,
+    fichaGeralPromise
+  ])
 
   const dbSavesPromises: Promise<any>[] = []
 
