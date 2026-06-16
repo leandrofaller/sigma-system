@@ -2463,27 +2463,48 @@ async function scrapeApenadoFicha(
       }
     }
 
-    // Localizar link do apenado na tabela de resultados
-    const link = await page.evaluate((id) => {
+    // Localizar link do apenado na tabela de resultados e colher dados da linha
+    const listagemInfo = await page.evaluate((id) => {
       // 1. Procura linha da tabela que contenha o sipeId exato
       const rows = Array.from(document.querySelectorAll('table tbody tr'))
       for (const row of rows) {
         const text = row.textContent ?? ''
         if (text.includes(String(id))) {
           const a = row.querySelector('a[href]') as HTMLAnchorElement | null
-          if (a?.href) return a.href
+          const tds = Array.from(row.querySelectorAll('td'))
+          if (tds.length >= 6) {
+            return {
+              link: a?.href || null,
+              unidade: tds[3]?.textContent?.trim() || null,
+              cela: tds[4]?.textContent?.trim() || null,
+              situacao: tds[5]?.textContent?.trim() || null,
+            }
+          }
         }
       }
       // 2. Fallback: qualquer link na página que contenha o sipeId na URL
       const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[]
       for (const a of anchors) {
-        if (a.href.includes(`/apenados/${id}`)) return a.href
+        if (a.href.includes(`/apenados/${id}`)) {
+          return { link: a.href, unidade: null, cela: null, situacao: null }
+        }
       }
       return null
     }, sipeId)
 
-    if (!link) {
+    if (!listagemInfo || !listagemInfo.link) {
       throw new Error('APENADO_NAO_ENCONTRADO')
+    }
+
+    const link = listagemInfo.link
+
+    if (listagemInfo.unidade || listagemInfo.cela || listagemInfo.situacao) {
+      const cached = listagemInfoCache.get(sipeId) || {}
+      listagemInfoCache.set(sipeId, {
+        unidadeNome: listagemInfo.unidade || cached.unidadeNome || '',
+        cela: listagemInfo.cela || cached.cela || '',
+        situacao: listagemInfo.situacao || cached.situacao || undefined,
+      })
     }
 
     // Navegar para o link encontrado (chega na /editar via fluxo legítimo de busca)
@@ -6962,6 +6983,7 @@ export async function scrapeApenadoFichaFast(
     let link: string | null = null
     let listagemUnidade: string | null = null
     let listagemCela: string | null = null
+    let listagemSituacao: string | null = null
 
     const rows = $('table tbody tr').get()
     for (const row of rows) {
@@ -6974,8 +6996,9 @@ export async function scrapeApenadoFichaFast(
         
         const tds = $(row).find('td')
         if (tds.length >= 6) {
-          listagemUnidade = $(tds.get(4)).text().trim() || null
-          listagemCela = $(tds.get(5)).text().trim() || null
+          listagemUnidade = $(tds.get(3)).text().trim() || null
+          listagemCela = $(tds.get(4)).text().trim() || null
+          listagemSituacao = $(tds.get(5)).text().trim() || null
         }
         break
       }
@@ -7002,12 +7025,12 @@ export async function scrapeApenadoFichaFast(
       }
     }
 
-    if (listagemUnidade || listagemCela) {
-      const cached = listagemInfoCache.get(sipeId)
+    if (listagemUnidade || listagemCela || listagemSituacao) {
+      const cached = listagemInfoCache.get(sipeId) || {}
       listagemInfoCache.set(sipeId, {
         unidadeNome: listagemUnidade || cached?.unidadeNome || '',
         cela: listagemCela || cached?.cela || '',
-        situacao: cached?.situacao || undefined
+        situacao: listagemSituacao || cached?.situacao || undefined
       })
     }
     
