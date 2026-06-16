@@ -83,6 +83,7 @@ export function AIPVinculosPanel() {
   const [searchTargetQuery, setSearchTargetQuery] = useState('')
   const [targetSearchResults, setTargetSearchResults] = useState<any[]>([])
   const [searchingTarget, setSearchingTarget] = useState(false)
+  const [targetSelected, setTargetSelected] = useState(false)
 
   // Debounce para busca do apenado base
   useEffect(() => {
@@ -111,14 +112,8 @@ export function AIPVinculosPanel() {
 
   // Debounce para busca do apenado alvo
   useEffect(() => {
-    if (!searchTargetQuery.trim()) {
+    if (!searchTargetQuery.trim() || targetSelected) {
       setTargetSearchResults([])
-      return
-    }
-
-    // Se já foi selecionado e o texto bate com o nome, evita buscar novamente
-    const alreadySelected = targetSearchResults.find(t => t.nome === searchTargetQuery)
-    if (alreadySelected && newLinkTargetSipeId === alreadySelected.sipeId) {
       return
     }
 
@@ -138,7 +133,7 @@ export function AIPVinculosPanel() {
     }, 400)
 
     return () => clearTimeout(delayDebounce)
-  }, [searchTargetQuery, newLinkTargetSipeId, targetSearchResults])
+  }, [searchTargetQuery, targetSelected])
 
   // Carregar layout para o modal
   const fetchLayout = useCallback(async () => {
@@ -231,6 +226,7 @@ export function AIPVinculosPanel() {
         setNewLinkTargetId('')
         setNewLinkTargetSipeId(null)
         setSearchTargetQuery('')
+        setTargetSelected(false)
         setNewLinkNota('')
         setShowAddForm(false)
         fetchVinculos(selectedSipeApenado.sipeId)
@@ -694,7 +690,17 @@ export function AIPVinculosPanel() {
             <div className="w-full grid grid-cols-2 gap-2 mt-2">
               <button
                 type="button"
-                onClick={() => setShowAddForm(!showAddForm)}
+                onClick={() => {
+                  const nextState = !showAddForm
+                  setShowAddForm(nextState)
+                  if (nextState) {
+                    setNewLinkTargetId('')
+                    setNewLinkTargetSipeId(null)
+                    setSearchTargetQuery('')
+                    setTargetSelected(false)
+                    setTargetSearchResults([])
+                  }
+                }}
                 className="flex items-center justify-center gap-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all"
               >
                 <PlusCircle className="w-3.5 h-3.5" />
@@ -745,7 +751,14 @@ export function AIPVinculosPanel() {
               {!showAddForm && (
                 <button
                   type="button"
-                  onClick={() => setShowAddForm(true)}
+                  onClick={() => {
+                    setShowAddForm(true)
+                    setNewLinkTargetId('')
+                    setNewLinkTargetSipeId(null)
+                    setSearchTargetQuery('')
+                    setTargetSelected(false)
+                    setTargetSearchResults([])
+                  }}
                   className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-lg border border-purple-200 dark:border-purple-900/50 transition-colors shadow-sm flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -780,7 +793,12 @@ export function AIPVinculosPanel() {
                         type="text"
                         placeholder="Buscar por nome ou CPF..."
                         value={searchTargetQuery}
-                        onChange={e => setSearchTargetQuery(e.target.value)}
+                        onChange={e => {
+                          setSearchTargetQuery(e.target.value)
+                          setTargetSelected(false)
+                          setNewLinkTargetSipeId(null)
+                          setNewLinkTargetId('')
+                        }}
                         className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white"
                       />
                     </div>
@@ -808,6 +826,8 @@ export function AIPVinculosPanel() {
                                   setNewLinkTargetId(a.id)
                                   setNewLinkTargetSipeId(a.sipeId)
                                   setSearchTargetQuery(a.nome)
+                                  setTargetSelected(true)
+                                  setTargetSearchResults([])
                                 }}
                                 className={`w-full text-left p-2 text-xs hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-950/20 dark:hover:text-purple-400 flex items-center justify-between ${
                                   newLinkTargetSipeId === a.sipeId ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400 font-bold' : ''
@@ -878,6 +898,8 @@ export function AIPVinculosPanel() {
                       setNewLinkTargetId('')
                       setNewLinkTargetSipeId(null)
                       setSearchTargetQuery('')
+                      setTargetSelected(false)
+                      setTargetSearchResults([])
                       setNewLinkNota('')
                       setShowAddForm(false)
                     }}
