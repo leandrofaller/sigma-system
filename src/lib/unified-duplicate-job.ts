@@ -291,7 +291,7 @@ async function runFacePhase(
     if ((i + 1) % 5000 === 0) await new Promise<void>((r) => setImmediate(r));
   }
 
-  // Coletar pares de candidatos a partir dos baldes
+  // Coletar pares de candidatos a partir dos baldes aplicando pré-filtro Hamming
   const faceCandidatePairs = new Set<string>();
   let iteration = 0;
 
@@ -304,30 +304,32 @@ async function runFacePhase(
           const idxB = indices[j];
           const a = idxA < idxB ? idxA : idxB;
           const b = idxA < idxB ? idxB : idxA;
-          faceCandidatePairs.add(`${a}|${b}`);
+          
+          // Calcula Hamming para filtrar antes de guardar no Set
+          const hamming = popcount32(simLo[a] ^ simLo[b]) + popcount32(simHi[a] ^ simHi[b]);
+          if (hamming <= FACE_HAMMING_THRESHOLD) {
+            faceCandidatePairs.add(`${a}|${b}`);
+          }
           if (++iteration % 50_000 === 0) await new Promise<void>((r) => setImmediate(r));
         }
       }
     }
   }
 
-  // Comparação detalhada (distância de Hamming + cosseno exato) dos candidatos
+  // Comparação detalhada (cosseno exato) dos candidatos que passaram no pré-filtro
   iteration = 0;
   for (const pair of faceCandidatePairs) {
     const [idxAStr, idxBStr] = pair.split('|');
     const idxA = parseInt(idxAStr, 10);
     const idxB = parseInt(idxBStr, 10);
 
-    const hamming = popcount32(simLo[idxA] ^ simLo[idxB]) + popcount32(simHi[idxA] ^ simHi[idxB]);
-    if (hamming <= FACE_HAMMING_THRESHOLD) {
-      // Exact cosine similarity (dot product on L2-normalized embeddings)
-      const iBase = idxA * DIMS, jBase = idxB * DIMS;
-      let dot = 0;
-      for (let d = 0; d < DIMS; d++) dot += vecArray[iBase + d] * vecArray[jBase + d];
-      if (dot >= FACE_SIM_THRESHOLD) {
-        const ra = find(ids[idxA]), rb = find(ids[idxB]);
-        if (ra !== rb) parent.set(ra, rb);
-      }
+    // Exact cosine similarity (dot product on L2-normalized embeddings)
+    const iBase = idxA * DIMS, jBase = idxB * DIMS;
+    let dot = 0;
+    for (let d = 0; d < DIMS; d++) dot += vecArray[iBase + d] * vecArray[jBase + d];
+    if (dot >= FACE_SIM_THRESHOLD) {
+      const ra = find(ids[idxA]), rb = find(ids[idxB]);
+      if (ra !== rb) parent.set(ra, rb);
     }
     if (++iteration % 50_000 === 0) await new Promise<void>((r) => setImmediate(r));
   }
@@ -394,9 +396,14 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
       if (ids.length < 2) continue;
       for (let i = 0; i < ids.length; i++) {
         for (let j = i + 1; j < ids.length; j++) {
-          const a = ids[i] < ids[j] ? ids[i] : ids[j];
-          const b = ids[i] < ids[j] ? ids[j] : ids[i];
-          candidatePairs.add(`${a}|${b}`);
+          const idA = ids[i] < ids[j] ? ids[i] : ids[j];
+          const idB = ids[i] < ids[j] ? ids[j] : ids[i];
+          
+          const a = idToRecord.get(idA);
+          const b = idToRecord.get(idB);
+          if (a?.photoHash && b?.photoHash && hammingDistance(a.photoHash, b.photoHash) <= DHASH_THRESHOLD) {
+            candidatePairs.add(`${idA}|${idB}`);
+          }
           if (++iteration % 50_000 === 0) await new Promise<void>((r) => setImmediate(r));
         }
       }
@@ -408,15 +415,11 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
   iteration = 0;
   for (const pair of candidatePairs) {
     const [idA, idB] = pair.split('|');
-    const a = idToRecord.get(idA);
-    const b = idToRecord.get(idB);
-    if (a?.photoHash && b?.photoHash && hammingDistance(a.photoHash, b.photoHash) <= DHASH_THRESHOLD) {
-      const ra = find(idA),
-        rb = find(idB);
-      if (ra !== rb) parent.set(ra, rb);
-      pixelMergedIds.add(idA);
-      pixelMergedIds.add(idB);
-    }
+    const ra = find(idA),
+      rb = find(idB);
+    if (ra !== rb) parent.set(ra, rb);
+    pixelMergedIds.add(idA);
+    pixelMergedIds.add(idB);
     if (++iteration % 50_000 === 0) await new Promise<void>((r) => setImmediate(r));
   }
 
