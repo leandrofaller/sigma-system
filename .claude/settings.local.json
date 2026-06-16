@@ -170,7 +170,13 @@
       "PowerShell(Get-ChildItem \"F:\\\\relatorio_claude\" | Where-Object { $_.Name -match \"next.config|.env|vercel\" } | Select-Object Name)",
       "Bash(xargs grep -l \"geolocation_enabled\")",
       "Bash(xargs grep -l \"GeoMonitorPanel\\\\|GeoMap\")",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "PowerShell(claude --help 2>&1)",
+      "Bash(rtk gh *)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "PowerShell(Get-ChildItem \"$env:LOCALAPPDATA\\\\Programs\\\\claude-cli-nodejs\" -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem \"$env:LOCALAPPDATA\\\\Programs\\\\Claude\" -ErrorAction SilentlyContinue | Select-Object Name)",
+      "Bash(python3 -c ' *)",
+      "Bash(git ls-tree *)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
