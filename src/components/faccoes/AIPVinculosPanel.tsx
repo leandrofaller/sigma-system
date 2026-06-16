@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Brain, Users, Plus, Trash2, Shield, User, MapPin, Printer, AlertTriangle, Link2, PlusCircle, Loader2, ArrowRightLeft, FileText, Calendar, Search } from 'lucide-react'
+import { Brain, Users, Plus, Trash2, Shield, User, MapPin, Printer, AlertTriangle, Link2, PlusCircle, Loader2, ArrowRightLeft, FileText, Calendar, Search, Network, List } from 'lucide-react'
 import { toast } from 'sonner'
 import { AIApenadoModal, AIPApenado } from './AIPanel'
+import { AIPVinculosGraph } from './AIPVinculosGraph'
 
 interface AIPVinculo {
   id: string
@@ -67,6 +68,7 @@ export function AIPVinculosPanel({
   const [apenadoAip, setApenadoAip] = useState<any | null>(null)
   const [vinculos, setVinculos] = useState<AIPVinculo[]>([])
   const [loading, setLoading] = useState(false)
+  const [viewMode, setViewMode] = useState<'list' | 'graph'>('graph')
 
   // Efeito para tratar a pré-seleção externa de um apenado
   useEffect(() => {
@@ -769,7 +771,7 @@ export function AIPVinculosPanel({
         ) : (
           <div className="flex-1 flex flex-col gap-4 min-h-0">
             {/* Header do Painel */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 flex items-center justify-between shadow-sm shrink-0">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm shrink-0">
               <div>
                 <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
                   <ArrowRightLeft className="w-4 h-4 text-purple-500" />
@@ -778,24 +780,54 @@ export function AIPVinculosPanel({
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{vinculos.length} ligação(ões) prisionais ou familiares confirmadas/suspeitas</p>
               </div>
 
-              {/* Botão de Add no topo do painel caso queira */}
-              {!showAddForm && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddForm(true)
-                    setNewLinkTargetId('')
-                    setNewLinkTargetSipeId(null)
-                    setSearchTargetQuery('')
-                    setTargetSelected(false)
-                    setTargetSearchResults([])
-                  }}
-                  className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-lg border border-purple-200 dark:border-purple-900/50 transition-colors shadow-sm flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Novo Vínculo
-                </button>
-              )}
+              <div className="flex items-center gap-3 self-end sm:self-auto">
+                {/* Seletor Segmentado de Visualização */}
+                <div className="bg-gray-100 dark:bg-gray-900 p-0.5 rounded-xl border border-gray-250 dark:border-gray-750 flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('graph')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      viewMode === 'graph'
+                        ? 'bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-400 shadow-sm'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Network className="w-3.5 h-3.5" />
+                    <span>Grafo (i2)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('list')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      viewMode === 'list'
+                        ? 'bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-400 shadow-sm'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    <span>Lista</span>
+                  </button>
+                </div>
+
+                {/* Botão de Add */}
+                {!showAddForm && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddForm(true)
+                      setNewLinkTargetId('')
+                      setNewLinkTargetSipeId(null)
+                      setSearchTargetQuery('')
+                      setTargetSelected(false)
+                      setTargetSearchResults([])
+                    }}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1 shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Novo Vínculo
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Painel de Formulário Rápido de Novo Vínculo (Condicional) */}
@@ -960,78 +992,102 @@ export function AIPVinculosPanel({
               </form>
             )}
 
-            {/* Grid de Vínculos por Categoria */}
-            <div className="flex-1 overflow-y-auto space-y-6">
-              {vinculos.length === 0 ? (
-                <div className="h-60 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl flex flex-col items-center justify-center p-8 text-center text-gray-400 gap-2 shadow-sm animate-fade-in">
-                  <Users className="w-10 h-10 opacity-30 text-purple-500" />
-                  <p className="text-sm font-semibold">Nenhum vínculo documentado</p>
-                  <p className="text-xs max-w-xs">Este apenado não possui nenhuma ligação de parentesco, facção ou rivalidades registradas no sistema.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
-                  {/* Categoria 1: Família */}
-                  {vinculosCategorizados.familia.length > 0 && (
-                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
-                      <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5 border-b border-gray-100 dark:border-gray-750 pb-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        🟢 Família e Relacionamentos ({vinculosCategorizados.familia.length})
-                      </h4>
-                      <div className="space-y-3">
-                        {vinculosCategorizados.familia.map(v => (
-                          <RelationCard key={v.id} link={v} onDelete={handleDeleteLink} onClick={handleApenadoClick} />
-                        ))}
+            {/* Grid de Vínculos por Categoria ou Grafo de Vínculos */}
+            {viewMode === 'graph' ? (
+              <AIPVinculosGraph
+                selectedApenado={selectedApenado}
+                initialVinculos={vinculos}
+                onApenadoClick={handleApenadoClick}
+                onFocarApenado={(sipeId) => {
+                  const loadApenado = async () => {
+                    try {
+                      const res = await fetch(`/api/sipe/apenados?sipeId=${sipeId}`)
+                      if (res.ok) {
+                        const data = await res.json()
+                        if (data.apenados && data.apenados.length > 0) {
+                          setSelectedSipeApenado(data.apenados[0])
+                        }
+                      }
+                    } catch (err) {
+                      console.error('Erro ao focar apenado do grafo:', err)
+                    }
+                  }
+                  loadApenado()
+                }}
+              />
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-6">
+                {vinculos.length === 0 ? (
+                  <div className="h-60 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl flex flex-col items-center justify-center p-8 text-center text-gray-400 gap-2 shadow-sm animate-fade-in">
+                    <Users className="w-10 h-10 opacity-30 text-purple-500" />
+                    <p className="text-sm font-semibold">Nenhum vínculo documentado</p>
+                    <p className="text-xs max-w-xs">Este apenado não possui nenhuma ligação de parentesco, facção ou rivalidades registradas no sistema.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
+                    {/* Categoria 1: Família */}
+                    {vinculosCategorizados.familia.length > 0 && (
+                      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5 border-b border-gray-100 dark:border-gray-750 pb-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          🟢 Família e Relacionamentos ({vinculosCategorizados.familia.length})
+                        </h4>
+                        <div className="space-y-3">
+                          {vinculosCategorizados.familia.map(v => (
+                            <RelationCard key={v.id} link={v} onDelete={handleDeleteLink} onClick={handleApenadoClick} />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Categoria 2: Facção / Alianças */}
-                  {vinculosCategorizados.faccao.length > 0 && (
-                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
-                      <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5 border-b border-gray-100 dark:border-gray-750 pb-2">
-                        <span className="w-2 h-2 rounded-full bg-amber-500" />
-                        🟡 Alianças e Facção ({vinculosCategorizados.faccao.length})
-                      </h4>
-                      <div className="space-y-3">
-                        {vinculosCategorizados.faccao.map(v => (
-                          <RelationCard key={v.id} link={v} onDelete={handleDeleteLink} onClick={handleApenadoClick} />
-                        ))}
+                    {/* Categoria 2: Facção / Alianças */}
+                    {vinculosCategorizados.faccao.length > 0 && (
+                      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5 border-b border-gray-100 dark:border-gray-750 pb-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-500" />
+                          🟡 Alianças e Facção ({vinculosCategorizados.faccao.length})
+                        </h4>
+                        <div className="space-y-3">
+                          {vinculosCategorizados.faccao.map(v => (
+                            <RelationCard key={v.id} link={v} onDelete={handleDeleteLink} onClick={handleApenadoClick} />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Categoria 3: Rivalidades */}
-                  {vinculosCategorizados.rival.length > 0 && (
-                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
-                      <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5 border-b border-gray-100 dark:border-gray-750 pb-2">
-                        <span className="w-2 h-2 rounded-full bg-red-500" />
-                        🔴 Conflitos e Rivalidades ({vinculosCategorizados.rival.length})
-                      </h4>
-                      <div className="space-y-3">
-                        {vinculosCategorizados.rival.map(v => (
-                          <RelationCard key={v.id} link={v} onDelete={handleDeleteLink} onClick={handleApenadoClick} />
-                        ))}
+                    {/* Categoria 3: Rivalidades */}
+                    {vinculosCategorizados.rival.length > 0 && (
+                      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5 border-b border-gray-100 dark:border-gray-750 pb-2">
+                          <span className="w-2 h-2 rounded-full bg-red-500" />
+                          🔴 Conflitos e Rivalidades ({vinculosCategorizados.rival.length})
+                        </h4>
+                        <div className="space-y-3">
+                          {vinculosCategorizados.rival.map(v => (
+                            <RelationCard key={v.id} link={v} onDelete={handleDeleteLink} onClick={handleApenadoClick} />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Categoria 4: Outros */}
-                  {vinculosCategorizados.outros.length > 0 && (
-                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
-                      <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5 border-b border-gray-100 dark:border-gray-750 pb-2">
-                        <span className="w-2 h-2 rounded-full bg-blue-500" />
-                        🔵 Outras Conexões ({vinculosCategorizados.outros.length})
-                      </h4>
-                      <div className="space-y-3">
-                        {vinculosCategorizados.outros.map(v => (
-                          <RelationCard key={v.id} link={v} onDelete={handleDeleteLink} onClick={handleApenadoClick} />
-                        ))}
+                    {/* Categoria 4: Outros */}
+                    {vinculosCategorizados.outros.length > 0 && (
+                      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5 border-b border-gray-100 dark:border-gray-750 pb-2">
+                          <span className="w-2 h-2 rounded-full bg-blue-500" />
+                          🔵 Outras Conexões ({vinculosCategorizados.outros.length})
+                        </h4>
+                        <div className="space-y-3">
+                          {vinculosCategorizados.outros.map(v => (
+                            <RelationCard key={v.id} link={v} onDelete={handleDeleteLink} onClick={handleApenadoClick} />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
