@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download, Link2 } from 'lucide-react'
+import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download, Link2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface AIPFotoVisitante {
@@ -208,19 +208,53 @@ function AIApenadoCard({
 
 // ── Modal de Detalhes do Apenado em AIP ──────────────────────────────
 
-export function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
+export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpdate, onDelete }: {
   apenado: AIPApenado
   layout?: any
   onClose: () => void
   onUpdate: (apenado: AIPApenado) => void
   onDelete?: (id: string) => Promise<void>
 }) {
+  const [apenadoState, setApenadoState] = useState(initialApenado)
+  const apenado = apenadoState // Mantém compatibilidade com todos os usos de 'apenado.' no componente
+
   const [editing, setEditing] = useState(false)
-  const [formData, setFormData] = useState(apenado)
+  const [formData, setFormData] = useState(initialApenado)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [faccoes, setFaccoes] = useState<{ id: string; nome: string; cor: string }[]>([])
+  const [sincronizando, setSincronizando] = useState(false)
+
+  useEffect(() => {
+    setApenadoState(initialApenado)
+    setFormData(initialApenado)
+  }, [initialApenado])
+
+  const handleSincronizarSipe = async () => {
+    setSincronizando(true)
+    const toastId = toast.loading(`Sincronizando dados de ${apenadoState.nome} com o SIPE...`)
+    try {
+      const res = await fetch(`/api/aip/apenados/${apenadoState.id}/sync`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro na requisição')
+      }
+      toast.success('Ficha do apenado em AIP atualizada com sucesso!', { id: toastId })
+      if (data.apenado) {
+        setApenadoState(data.apenado)
+        setFormData(data.apenado)
+        onUpdate(data.apenado)
+      }
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err?.message || 'Falha ao sincronizar com o SIPE', { id: toastId })
+    } finally {
+      setSincronizando(false)
+    }
+  }
 
   // Carregar facções disponíveis quando entrar em modo de edição
   useEffect(() => {
@@ -483,6 +517,14 @@ export function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }:
             <div className="flex items-center gap-2 shrink-0">
               {!editing ? (
                 <>
+                  <button
+                    onClick={handleSincronizarSipe}
+                    disabled={sincronizando}
+                    className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400 disabled:opacity-50"
+                    title="Atualizar SIPE"
+                  >
+                    {sincronizando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  </button>
                   <button
                     onClick={() => setEditing(true)}
                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-400"
