@@ -6171,6 +6171,7 @@ export async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: str
   }
   
   const $ = cheerio.load(html)
+  const photoPromises: Promise<void>[] = []
   const table = $('table').first()
   
   if (table.length) {
@@ -6263,39 +6264,43 @@ export async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: str
 
       if (nomeAdv && nomeAdv.length > 2) {
         let photoPath: string | null = null
+        const fileKey = oab ? oab.replace(/[^a-zA-Z0-9-]/g, '_') : Math.abs(hashCodeLocal(nomeAdv))
+        const filename = `advogado-${fileKey}.webp`
+
         if (photoSrc && !photoSrc.includes('Undefined offset') && !photoSrc.includes('loading.gif')) {
-          try {
-            const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
-            const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
-            let proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
-            if (!proxyPhoto && cleanPhotoSrc !== photoSrc) {
-              proxyPhoto = await fetchSipeViaProxy(photoSrc.replace(SIPE_URL, ''))
-            }
-            if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
-              const base64Data = proxyPhoto.data
-              if (base64Data.includes(',')) {
-                const base64Content = base64Data.split(',')[1]
-                const imageBuffer = Buffer.from(base64Content, 'base64')
-                const webpBuffer = await sharp(imageBuffer)
-                  .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
-                  .webp({ quality: 85 })
-                  .toBuffer()
-
-                const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
-                const advDir = join(baseDir, 'advogados')
-                const { mkdir, writeFile } = await import('fs/promises')
-                await mkdir(advDir, { recursive: true })
-
-                const fileKey = oab ? oab.replace(/[^a-zA-Z0-9-]/g, '_') : Math.abs(hashCodeLocal(nomeAdv))
-                const filename = `advogado-${fileKey}.webp`
-                const localPath = join(advDir, filename)
-                await writeFile(localPath, webpBuffer)
-                photoPath = `uploads/advogados/${filename}`
+          photoPath = `uploads/advogados/${filename}`
+          
+          photoPromises.push((async () => {
+            try {
+              const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
+              const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
+              let proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
+              if (!proxyPhoto && cleanPhotoSrc !== photoSrc) {
+                proxyPhoto = await fetchSipeViaProxy(photoSrc.replace(SIPE_URL, ''))
               }
+              if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
+                const base64Data = proxyPhoto.data
+                if (base64Data.includes(',')) {
+                  const base64Content = base64Data.split(',')[1]
+                  const imageBuffer = Buffer.from(base64Content, 'base64')
+                  const webpBuffer = await sharp(imageBuffer)
+                    .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
+                    .webp({ quality: 85 })
+                    .toBuffer()
+
+                  const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
+                  const advDir = join(baseDir, 'advogados')
+                  const { mkdir, writeFile } = await import('fs/promises')
+                  await mkdir(advDir, { recursive: true })
+
+                  const localPath = join(advDir, filename)
+                  await writeFile(localPath, webpBuffer)
+                }
+              }
+            } catch (imgErr) {
+              console.error(`Erro ao baixar foto do advogado ${nomeAdv} na Ficha Geral (background):`, imgErr)
             }
-          } catch (imgErr) {
-            console.error(`Erro ao baixar foto do advogado ${nomeAdv} na Ficha Geral:`, imgErr)
-          }
+          })())
         }
 
         let adv = await prisma.sipeAdvogado.findFirst({
@@ -6386,39 +6391,43 @@ export async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: str
 
       if (nomeVis && nomeVis.length > 2) {
         let photoPath: string | null = null
+        const fileKey = cpf || Math.abs(hashCodeLocal(nomeVis))
+        const filename = `visitante-${fileKey}.webp`
+
         if (photoSrc && !photoSrc.includes('Undefined offset') && !photoSrc.includes('loading.gif')) {
-          try {
-            const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
-            const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
-            let proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
-            if (!proxyPhoto && cleanPhotoSrc !== photoSrc) {
-              proxyPhoto = await fetchSipeViaProxy(photoSrc.replace(SIPE_URL, ''))
-            }
-            if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
-              const base64Data = proxyPhoto.data
-              if (base64Data.includes(',')) {
-                const base64Content = base64Data.split(',')[1]
-                const imageBuffer = Buffer.from(base64Content, 'base64')
-                const webpBuffer = await sharp(imageBuffer)
-                  .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
-                  .webp({ quality: 85 })
-                  .toBuffer()
-
-                const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
-                const visitDir = join(baseDir, 'visitantes')
-                const { mkdir, writeFile } = await import('fs/promises')
-                await mkdir(visitDir, { recursive: true })
-
-                const fileKey = cpf || Math.abs(hashCodeLocal(nomeVis))
-                const filename = `visitante-${fileKey}.webp`
-                const localPath = join(visitDir, filename)
-                await writeFile(localPath, webpBuffer)
-                photoPath = `uploads/visitantes/${filename}`
+          photoPath = `uploads/visitantes/${filename}`
+          
+          photoPromises.push((async () => {
+            try {
+              const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
+              const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
+              let proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
+              if (!proxyPhoto && cleanPhotoSrc !== photoSrc) {
+                proxyPhoto = await fetchSipeViaProxy(photoSrc.replace(SIPE_URL, ''))
               }
+              if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
+                const base64Data = proxyPhoto.data
+                if (base64Data.includes(',')) {
+                  const base64Content = base64Data.split(',')[1]
+                  const imageBuffer = Buffer.from(base64Content, 'base64')
+                  const webpBuffer = await sharp(imageBuffer)
+                    .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
+                    .webp({ quality: 85 })
+                    .toBuffer()
+
+                  const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
+                  const visitDir = join(baseDir, 'visitantes')
+                  const { mkdir, writeFile } = await import('fs/promises')
+                  await mkdir(visitDir, { recursive: true })
+
+                  const localPath = join(visitDir, filename)
+                  await writeFile(localPath, webpBuffer)
+                }
+              }
+            } catch (imgErr) {
+              console.error(`Erro ao baixar foto do visitante ${nomeVis} na Ficha Geral (background):`, imgErr)
             }
-          } catch (imgErr) {
-            console.error(`Erro ao baixar foto do visitante ${nomeVis} na Ficha Geral:`, imgErr)
-          }
+          })())
         }
 
         let vis = null
@@ -6468,6 +6477,13 @@ export async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: str
 
       next = next.next()
     }
+  }
+
+  // Esperar o download de todas as fotos em paralelo
+  if (photoPromises.length > 0) {
+    console.log(`[DEBUG] Aguardando download de ${photoPromises.length} foto(s) em paralelo...`)
+    await Promise.all(photoPromises)
+    console.log(`[DEBUG] Todos os downloads de fotos em paralelo concluídos com sucesso!`)
   }
 }
 
