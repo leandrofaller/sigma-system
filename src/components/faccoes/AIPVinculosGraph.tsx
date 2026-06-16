@@ -866,7 +866,10 @@ export function AIPVinculosGraph({
             >
               {node.photoPath ? (
                 <image
-                  href={`/api/aip/apenados/${node.id}/foto`}
+                  href={node.isCentral 
+                    ? `/api/sipe/apenados/${node.id}/foto` 
+                    : `/api/aip/apenados/${node.id}/foto`
+                  }
                   x="0"
                   y="0"
                   width={node.isCentral ? "60" : "44"}
@@ -1054,24 +1057,24 @@ export function AIPVinculosGraph({
                   <g transform={`translate(0, ${nodeRadius + 14})`}>
                     {/* Retângulo de Fundo para o Nome do Nó */}
                     <rect
-                      x={-60}
-                      y={-10}
-                      width={120}
-                      height={24}
-                      rx={5}
+                      x={-70}
+                      y={-11}
+                      width={140}
+                      height={27}
+                      rx={6}
                       fill="#ffffff"
-                      stroke="#e5e7eb"
-                      strokeWidth={1}
-                      className="dark:fill-gray-850 dark:stroke-gray-750 shadow-sm transition-all"
+                      stroke="#cbd5e1"
+                      strokeWidth={1.5}
+                      className="fill-white dark:fill-slate-800 stroke-slate-200 dark:stroke-slate-700 shadow-sm transition-all"
                     />
                     
                     {/* Nome do Apenado */}
                     <text
                       textAnchor="middle"
-                      fill="#111827"
-                      fontSize="8px"
+                      fill="#0f172a"
+                      fontSize="9px"
                       fontWeight="bold"
-                      className="dark:fill-gray-100 pointer-events-none uppercase font-sans select-none"
+                      className="fill-slate-900 dark:fill-slate-100 pointer-events-none uppercase font-sans select-none"
                     >
                       {node.nome.length > 20 ? `${node.nome.substring(0, 18)}...` : node.nome}
                     </text>
@@ -1080,11 +1083,11 @@ export function AIPVinculosGraph({
                     {node.vulgo && (
                       <text
                         textAnchor="middle"
-                        y={9}
-                        fill="#6b21a8"
-                        fontSize="7px"
+                        y={10}
+                        fill="#7c3aed"
+                        fontSize="7.5px"
                         fontWeight="bold"
-                        className="dark:fill-purple-400 pointer-events-none italic select-none"
+                        className="fill-purple-600 dark:fill-purple-400 pointer-events-none italic select-none"
                       >
                         Vulgo: {node.vulgo.length > 20 ? `${node.vulgo.substring(0, 18)}...` : node.vulgo}
                       </text>
@@ -1100,13 +1103,16 @@ export function AIPVinculosGraph({
       {/* 4. Caixa Flutuante de Detalhes (Tooltip Elegante) */}
       {hoveredNode && (
         <div 
-          className="absolute bottom-4 left-4 right-4 md:right-auto md:max-w-sm bg-white/95 dark:bg-gray-850/95 backdrop-blur-md border border-gray-250 dark:border-gray-750 p-3.5 rounded-2xl shadow-xl z-20 flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 pointer-events-none text-xs"
+          className="absolute bottom-4 left-4 right-4 md:right-auto md:max-w-sm bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border border-gray-200 dark:border-gray-700 p-3.5 rounded-2xl shadow-xl z-20 flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 pointer-events-none text-xs"
         >
           {/* Foto Miniatura */}
           <div className="w-12 h-16 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden shrink-0 flex items-center justify-center text-gray-400">
             {hoveredNode.photoPath ? (
               <img 
-                src={`/api/aip/apenados/${hoveredNode.id}/foto`}
+                src={hoveredNode.isCentral 
+                  ? `/api/sipe/apenados/${hoveredNode.id}/foto` 
+                  : `/api/aip/apenados/${hoveredNode.id}/foto`
+                }
                 alt={hoveredNode.nome}
                 className="w-full h-full object-cover"
               />
