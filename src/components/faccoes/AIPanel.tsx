@@ -15,7 +15,7 @@ interface AIPFotoVisitante {
   descricao: string | null
 }
 
-interface AIPApenado {
+export interface AIPApenado {
   id: string
   sipeId: number
   nome: string
@@ -176,7 +176,7 @@ function AIApenadoCard({ apenado, onSelect }: { apenado: AIPApenado; onSelect: (
 
 // ── Modal de Detalhes do Apenado em AIP ──────────────────────────────
 
-function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
+export function AIApenadoModal({ apenado, layout, onClose, onUpdate, onDelete }: {
   apenado: AIPApenado
   layout?: any
   onClose: () => void

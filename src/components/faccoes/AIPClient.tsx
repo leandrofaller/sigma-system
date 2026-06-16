@@ -7,7 +7,8 @@ import { AIPanel } from './AIPanel'
 import { AIPFaccoesPanel } from './AIPFaccoesPanel'
 import { AIPAdvogadosPanel } from './AIPAdvogadosPanel'
 import { AIPVisitantesPanel } from './AIPVisitantesPanel'
-import { Brain, BarChart2, Users, Shield, Briefcase, Camera } from 'lucide-react'
+import { AIPVinculosPanel } from './AIPVinculosPanel'
+import { Brain, BarChart2, Users, Shield, Briefcase, Camera, Link2 } from 'lucide-react'
 
 interface AIPClientProps {
   userRole: string
@@ -52,6 +53,10 @@ export function AIPClient({ userRole }: AIPClientProps) {
               <Users className="w-4 h-4" />
               Apenados
             </TabsTrigger>
+            <TabsTrigger value="vinculos" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
+              <Link2 className="w-4 h-4" />
+              Vínculos
+            </TabsTrigger>
             <TabsTrigger value="faccoes" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
               <Shield className="w-4 h-4" />
               Facções
@@ -60,7 +65,7 @@ export function AIPClient({ userRole }: AIPClientProps) {
               <Briefcase className="w-4 h-4" />
               Advogados
             </TabsTrigger>
-            <TabsTrigger value="visitantes" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
+            <TabsTrigger value="visitantes" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-950 dark:text-white data-[state=active]:shadow-sm snap-start">
               <Camera className="w-4 h-4" />
               Visitantes
             </TabsTrigger>
@@ -73,6 +78,10 @@ export function AIPClient({ userRole }: AIPClientProps) {
 
           <TabsContent value="apenados" className="flex-1 min-h-0 mt-0">
             <AIPanel userRole={userRole} />
+          </TabsContent>
+
+          <TabsContent value="vinculos" className="flex-1 min-h-0 mt-0">
+            <AIPVinculosPanel />
           </TabsContent>
 
           <TabsContent value="faccoes" className="flex-1 min-h-0 mt-0 overflow-y-auto">

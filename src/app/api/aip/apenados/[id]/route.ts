@@ -3,6 +3,44 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 
 /**
+ * GET /api/aip/apenados/{id}
+ * Busca detalhes completos de um apenado em AIP
+ */
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    if (!id) {
+      return NextResponse.json({ error: 'ID do apenado é obrigatório' }, { status: 400 })
+    }
+
+    const apenado = await prisma.aIPApenado.findUnique({
+      where: { id },
+      include: {
+        fotoVisitantes: true,
+        sipeApenado: {
+          include: {
+            vinculosAdvogado: {
+              include: {
+                advogado: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!apenado) {
+      return NextResponse.json({ error: 'Apenado não encontrado' }, { status: 404 })
+    }
+
+    return NextResponse.json(apenado)
+  } catch (error) {
+    console.error('[AIP] Erro ao buscar apenado por ID:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+  }
+}
+
+/**
  * PUT /api/aip/apenados/{id}
  * Atualiza campos de inteligência (nunca campos SIPE)
  *
