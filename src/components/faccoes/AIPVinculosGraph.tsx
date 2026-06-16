@@ -49,6 +49,7 @@ interface GraphNode {
   id: string
   sipeId: number
   dbId: string
+  photoUrl: string
   nome: string
   vulgo: string
   unidade: string
@@ -172,11 +173,17 @@ export function AIPVinculosGraph({
       return ''
     }
 
+    // URL de foto do central
+    const centralPhotoUrl = selectedApenado.aipId 
+      ? `/api/aip/apenados/${selectedApenado.aipId}/foto`
+      : `/api/sipe/apenados/${selectedApenado.id}/foto`
+
     // Adiciona o nó central
     initialNodes[centralId] = {
       id: centralId,
       sipeId: selectedApenado.sipeId,
       dbId: selectedApenado.aipId || selectedApenado.id,
+      photoUrl: centralPhotoUrl,
       nome: selectedApenado.nome,
       vulgo: getVulgos(selectedApenado) || '',
       unidade: selectedApenado.unidade || 'Sem Unidade',
@@ -210,6 +217,7 @@ export function AIPVinculosGraph({
           id: outroId,
           sipeId: outro.sipeId,
           dbId: outro.id,
+          photoUrl: `/api/aip/apenados/${outro.id}/foto`,
           nome: outro.nome,
           vulgo: getVulgos(outro) || '',
           unidade: outro.unidade || 'Sem Unidade',
@@ -600,6 +608,7 @@ export function AIPVinculosGraph({
             id: outroId,
             sipeId: outro.sipeId,
             dbId: outro.id,
+            photoUrl: `/api/aip/apenados/${outro.id}/foto`,
             nome: outro.nome,
             vulgo: outro.vulgo || (outro.alcunhas && outro.alcunhas.length > 0 ? outro.alcunhas.map(a => a.alcunha).join(', ') : '') || '',
             unidade: outro.unidade || 'Sem Unidade',
@@ -1039,10 +1048,7 @@ export function AIPVinculosGraph({
             >
               {node.photoPath ? (
                 <image
-                  href={node.isCentral 
-                    ? `/api/sipe/apenados/${node.dbId}/foto` 
-                    : `/api/aip/apenados/${node.dbId}/foto`
-                  }
+                  href={node.photoUrl}
                   x="0"
                   y="0"
                   width={node.isCentral ? "60" : "44"}
@@ -1326,10 +1332,7 @@ export function AIPVinculosGraph({
           <div className="w-12 h-16 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden shrink-0 flex items-center justify-center text-gray-400">
             {hoveredNode.photoPath ? (
               <img 
-                src={hoveredNode.isCentral 
-                  ? `/api/sipe/apenados/${hoveredNode.dbId}/foto` 
-                  : `/api/aip/apenados/${hoveredNode.dbId}/foto`
-                }
+                src={hoveredNode.photoUrl}
                 alt={hoveredNode.nome}
                 className="w-full h-full object-cover"
               />
