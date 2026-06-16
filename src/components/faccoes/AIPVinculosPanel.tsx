@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Brain, Users, Plus, Trash2, Shield, User, MapPin, Printer, AlertTriangle, Link2, PlusCircle, Loader2, ArrowRightLeft, FileText, Calendar } from 'lucide-react'
+import { Brain, Users, Plus, Trash2, Shield, User, MapPin, Printer, AlertTriangle, Link2, PlusCircle, Loader2, ArrowRightLeft, FileText, Calendar, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { AIApenadoModal, AIPApenado } from './AIPanel'
 
@@ -18,13 +18,48 @@ interface AIPVinculo {
   direction: 'outgoing' | 'incoming'
 }
 
+const VINCULO_OPCOES = {
+  "Família / Relacionamentos": [
+    "Mãe",
+    "Pai",
+    "Filho(a)",
+    "Cônjuge",
+    "Companheiro(a)",
+    "Irmão/Irmã",
+    "Tio(a)",
+    "Sobrinho(a)",
+    "Primo(a)",
+    "Avô/Avó",
+    "Neto(a)",
+    "Outro Familiar"
+  ],
+  "Crime / Facção / Alianças": [
+    "Parceiro de Facção",
+    "Liderança",
+    "Subordinado",
+    "Comparsa",
+    "Apoio Logístico",
+    "Apoio Financeiro",
+    "Coautor de Crime"
+  ],
+  "Rivalidades / Conflitos": [
+    "Rival de Facção",
+    "Desafeto",
+    "Inimigo Declarado"
+  ],
+  "Outros / Conexões": [
+    "Amigo",
+    "Conhecido",
+    "Advogado",
+    "Outro"
+  ]
+}
+
 export function AIPVinculosPanel() {
-  const [apenadosList, setApenadosList] = useState<AIPApenado[]>([])
-  const [selectedApenadoId, setSelectedApenadoId] = useState<string>('')
-  const [selectedApenado, setSelectedApenado] = useState<AIPApenado | null>(null)
+  const [selectedSipeApenado, setSelectedSipeApenado] = useState<any | null>(null)
+  const [apenadoAip, setApenadoAip] = useState<any | null>(null)
   const [vinculos, setVinculos] = useState<AIPVinculo[]>([])
   const [loading, setLoading] = useState(false)
-  const [loadingList, setLoadingList] = useState(true)
 
   // Modais e Detalhes
   const [modalApenado, setModalApenado] = useState<any | null>(null)
@@ -33,28 +68,77 @@ export function AIPVinculosPanel() {
   // Formulário de Novo Vínculo
   const [showAddForm, setShowAddForm] = useState(false)
   const [newLinkTargetId, setNewLinkTargetId] = useState('')
-  const [newLinkTipo, setNewLinkTipo] = useState('Família')
+  const [newLinkTargetSipeId, setNewLinkTargetSipeId] = useState<number | null>(null)
+  const [newLinkTipo, setNewLinkTipo] = useState('')
   const [newLinkForca, setNewLinkForca] = useState('confirmado')
   const [newLinkNota, setNewLinkNota] = useState('')
   const [savingLink, setSavingLink] = useState(false)
-  const [searchTargetQuery, setSearchTargetQuery] = useState('')
 
-  // Carregar lista inicial de apenados no AIP
-  const fetchApenados = useCallback(async () => {
-    setLoadingList(true)
-    try {
-      const res = await fetch('/api/aip/apenados?limit=1000')
-      if (res.ok) {
-        const data = await res.json()
-        setApenadosList(data.apenados || [])
-      }
-    } catch (error) {
-      console.error('Erro ao buscar lista de apenados:', error)
-      toast.error('Erro ao carregar lista de apenados')
-    } finally {
-      setLoadingList(false)
+  // Busca de apenado base (barra lateral)
+  const [searchBaseQuery, setSearchBaseQuery] = useState('')
+  const [baseSearchResults, setBaseSearchResults] = useState<any[]>([])
+  const [searchingBase, setSearchingBase] = useState(false)
+
+  // Busca do apenado de destino (formulário)
+  const [searchTargetQuery, setSearchTargetQuery] = useState('')
+  const [targetSearchResults, setTargetSearchResults] = useState<any[]>([])
+  const [searchingTarget, setSearchingTarget] = useState(false)
+
+  // Debounce para busca do apenado base
+  useEffect(() => {
+    if (!searchBaseQuery.trim()) {
+      setBaseSearchResults([])
+      return
     }
-  }, [])
+
+    const delayDebounce = setTimeout(async () => {
+      setSearchingBase(true)
+      try {
+        const res = await fetch(`/api/sipe/apenados?q=${encodeURIComponent(searchBaseQuery)}&limit=10`)
+        if (res.ok) {
+          const data = await res.json()
+          setBaseSearchResults(data.apenados || [])
+        }
+      } catch (err) {
+        console.error('Erro ao buscar apenado base:', err)
+      } finally {
+        setSearchingBase(false)
+      }
+    }, 400)
+
+    return () => clearTimeout(delayDebounce)
+  }, [searchBaseQuery])
+
+  // Debounce para busca do apenado alvo
+  useEffect(() => {
+    if (!searchTargetQuery.trim()) {
+      setTargetSearchResults([])
+      return
+    }
+
+    // Se já foi selecionado e o texto bate com o nome, evita buscar novamente
+    const alreadySelected = targetSearchResults.find(t => t.nome === searchTargetQuery)
+    if (alreadySelected && newLinkTargetSipeId === alreadySelected.sipeId) {
+      return
+    }
+
+    const delayDebounce = setTimeout(async () => {
+      setSearchingTarget(true)
+      try {
+        const res = await fetch(`/api/sipe/apenados?q=${encodeURIComponent(searchTargetQuery)}&limit=10`)
+        if (res.ok) {
+          const data = await res.json()
+          setTargetSearchResults(data.apenados || [])
+        }
+      } catch (err) {
+        console.error('Erro ao buscar apenado alvo:', err)
+      } finally {
+        setSearchingTarget(false)
+      }
+    }, 400)
+
+    return () => clearTimeout(delayDebounce)
+  }, [searchTargetQuery, newLinkTargetSipeId, targetSearchResults])
 
   // Carregar layout para o modal
   const fetchLayout = useCallback(async () => {
@@ -70,19 +154,19 @@ export function AIPVinculosPanel() {
   }, [])
 
   useEffect(() => {
-    fetchApenados()
     fetchLayout()
-  }, [fetchApenados, fetchLayout])
+  }, [fetchLayout])
 
   // Carregar vínculos do apenado selecionado
-  const fetchVinculos = useCallback(async (id: string) => {
-    if (!id) return
+  const fetchVinculos = useCallback(async (sipeId: number) => {
+    if (!sipeId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/aip/vinculos?apenadoId=${id}`)
+      const res = await fetch(`/api/aip/vinculos?sipeId=${sipeId}`)
       if (res.ok) {
         const data = await res.json()
         setVinculos(data.vinculos || [])
+        setApenadoAip(data.apenadoAip || null)
       }
     } catch (error) {
       console.error('Erro ao buscar vínculos:', error)
@@ -93,15 +177,13 @@ export function AIPVinculosPanel() {
   }, [])
 
   useEffect(() => {
-    if (selectedApenadoId) {
-      const found = apenadosList.find(a => a.id === selectedApenadoId)
-      setSelectedApenado(found || null)
-      fetchVinculos(selectedApenadoId)
+    if (selectedSipeApenado) {
+      fetchVinculos(selectedSipeApenado.sipeId)
     } else {
-      setSelectedApenado(null)
       setVinculos([])
+      setApenadoAip(null)
     }
-  }, [selectedApenadoId, apenadosList, fetchVinculos])
+  }, [selectedSipeApenado, fetchVinculos])
 
   // Abrir ficha completa de um apenado ao clicar
   const handleApenadoClick = async (id: string) => {
@@ -124,7 +206,7 @@ export function AIPVinculosPanel() {
   // Criar novo vínculo
   const handleCreateLink = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedApenadoId || !newLinkTargetId || !newLinkTipo) {
+    if (!selectedSipeApenado || !newLinkTargetSipeId || !newLinkTipo) {
       toast.error('Preencha todos os campos obrigatórios')
       return
     }
@@ -135,8 +217,8 @@ export function AIPVinculosPanel() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apenadoId: selectedApenadoId,
-          vinculadoComId: newLinkTargetId,
+          apenadoSipeId: selectedSipeApenado.sipeId,
+          vinculadoComSipeId: newLinkTargetSipeId,
           tipo: newLinkTipo,
           forca: newLinkForca,
           notaVinculo: newLinkNota
@@ -147,9 +229,11 @@ export function AIPVinculosPanel() {
       if (res.ok) {
         toast.success('Vínculo criado com sucesso!')
         setNewLinkTargetId('')
+        setNewLinkTargetSipeId(null)
+        setSearchTargetQuery('')
         setNewLinkNota('')
         setShowAddForm(false)
-        fetchVinculos(selectedApenadoId)
+        fetchVinculos(selectedSipeApenado.sipeId)
       } else {
         toast.error(data.error || 'Erro ao criar vínculo')
       }
@@ -172,7 +256,9 @@ export function AIPVinculosPanel() {
 
       if (res.ok) {
         toast.success('Vínculo removido com sucesso!')
-        fetchVinculos(selectedApenadoId)
+        if (selectedSipeApenado) {
+          fetchVinculos(selectedSipeApenado.sipeId)
+        }
       } else {
         const data = await res.json()
         toast.error(data.error || 'Erro ao remover vínculo')
@@ -183,16 +269,24 @@ export function AIPVinculosPanel() {
     }
   }
 
+  // Objeto unificado contendo os dados do SIPE enriquecidos pela Inteligência do AIP
+  const selectedApenado = selectedSipeApenado ? {
+    ...selectedSipeApenado,
+    ...(apenadoAip || {}),
+    id: selectedSipeApenado.id, // Manter o ID do SIPE (UUID) para fins de fotos e endpoints do SIPE
+    aipId: apenadoAip?.id || null // Armazenar o ID do AIP para referências do AIP
+  } : null
+
   // Agrupamento de Vínculos para renderização
   const categorizarVinculo = (tipo: string) => {
     const t = tipo.toLowerCase()
-    if (['mãe', 'pai', 'filho', 'filha', 'cônjuge', 'conjugue', 'esposa', 'esposo', 'irmão', 'irmã', 'familia', 'família', 'parente'].some(word => t.includes(word))) {
+    if (['mãe', 'pai', 'filho', 'filha', 'cônjuge', 'conjugue', 'esposa', 'esposo', 'irmão', 'irmã', 'familia', 'família', 'parente', 'companheiro', 'companheira', 'tio', 'tia', 'sobrinho', 'sobrinha', 'primo', 'prima', 'avô', 'avó', 'neto', 'neta'].some(word => t.includes(word))) {
       return 'familia'
     }
-    if (['aliado', 'parceiro', 'facção', 'faccao', 'corre', 'membro', 'mesma faccao', 'mesma facção'].some(word => t.includes(word))) {
+    if (['aliado', 'parceiro', 'facção', 'faccao', 'corre', 'membro', 'mesma faccao', 'mesma facção', 'liderança', 'lideranca', 'subordinado', 'comparsa', 'logístico', 'logistico', 'financeiro', 'coautor'].some(word => t.includes(word))) {
       return 'faccao'
     }
-    if (['rival', 'inimigo', 'conflito', 'oposição', 'oposto'].some(word => t.includes(word))) {
+    if (['rival', 'inimigo', 'conflito', 'oposição', 'oposto', 'desafeto'].some(word => t.includes(word))) {
       return 'rival'
     }
     return 'outros'
@@ -437,7 +531,7 @@ export function AIPVinculosPanel() {
 
           <div class="subject-section">
             ${selectedApenado.photoPath ? `
-              <img src="/api/aip/apenados/${selectedApenado.id}/foto" alt="${selectedApenado.nome}" class="subject-photo" />
+              <img src="/api/sipe/apenados/${selectedApenado.id}/foto" alt="${selectedApenado.nome}" class="subject-photo" />
             ` : `
               <div style="width: 90px; height: 120px; background-color: #ddd; border-radius: 6px; float: left; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 30px; color: #777;">${selectedApenado.nome.charAt(0)}</div>
             `}
@@ -481,16 +575,6 @@ export function AIPVinculosPanel() {
     }, 500)
   }
 
-  // Filtragem de apenados para o formulário de novo vínculo
-  const filteredApenadosList = apenadosList.filter(a => {
-    if (a.id === selectedApenadoId) return false // não lincar consigo mesmo
-    // evitar lincar se já existe vínculo
-    if (vinculos.some(v => v.apenadoId === a.id || v.vinculadoComId === a.id)) return false
-    
-    if (!searchTargetQuery) return true
-    return a.nome.toLowerCase().includes(searchTargetQuery.toLowerCase()) || 
-           (a.cpf && a.cpf.includes(searchTargetQuery))
-  }).slice(0, 10) // Limitar a 10 resultados para performance
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-0 flex-1">
@@ -504,35 +588,80 @@ export function AIPVinculosPanel() {
           <p className="text-xs text-gray-500 dark:text-gray-400">Escolha um apenado do AIP para analisar ou documentar vínculos</p>
         </div>
 
-        {loadingList ? (
-          <div className="flex justify-center py-6 text-gray-400">
-            <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando...
+        <div className="flex flex-col gap-2 relative">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar por nome, CPF..."
+              value={searchBaseQuery}
+              onChange={e => setSearchBaseQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all shadow-inner font-semibold"
+            />
           </div>
-        ) : (
-          <select
-            value={selectedApenadoId}
-            onChange={e => {
-              setSelectedApenadoId(e.target.value)
-              setShowAddForm(false)
-            }}
-            className="w-full px-3 py-2.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all shadow-inner font-semibold"
-          >
-            <option value="">Selecione o apenado...</option>
-            {apenadosList.map(a => (
-              <option key={a.id} value={a.id}>
-                {a.nome} {a.cpf ? `(${a.cpf})` : ''}
-              </option>
-            ))}
-          </select>
-        )}
+
+          {/* Resultados da busca lateral */}
+          {searchBaseQuery.trim() !== "" && (
+            <div className="absolute top-full left-0 right-0 z-20 mt-1 max-h-60 overflow-y-auto bg-white dark:bg-gray-900 border border-gray-250 dark:border-gray-700 rounded-lg shadow-lg divide-y divide-gray-100 dark:divide-gray-800 animate-in fade-in slide-in-from-top-1 duration-200">
+              {searchingBase ? (
+                <div className="flex justify-center p-3 text-xs text-gray-400">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Buscando...
+                </div>
+              ) : baseSearchResults.length === 0 ? (
+                <p className="p-3 text-xs text-gray-400 text-center">Nenhum apenado encontrado</p>
+              ) : (
+                baseSearchResults.map(a => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSipeApenado(a)
+                      setSearchBaseQuery('')
+                      setBaseSearchResults([])
+                      setShowAddForm(false)
+                    }}
+                    className="w-full text-left p-2.5 text-xs hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-950/20 dark:hover:text-purple-400 flex items-center justify-between transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="font-semibold block truncate uppercase">{a.nome}</span>
+                      <span className="text-[10px] text-gray-450 block truncate">
+                        {a.unidade || 'Sem Unidade'} {a.regime ? `• ${a.regime}` : ''}
+                      </span>
+                    </div>
+                    {a.cpf && (
+                      <span className="text-[10px] font-mono opacity-60 ml-2 shrink-0">{a.cpf}</span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Card do Apenado Base Selecionado */}
         {selectedApenado && (
-          <div className="bg-purple-50/40 dark:bg-purple-950/10 border border-purple-100 dark:border-purple-900/30 rounded-xl p-4 flex flex-col items-center text-center gap-3 mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-purple-50/40 dark:bg-purple-950/10 border border-purple-100 dark:border-purple-900/30 rounded-xl p-4 flex flex-col items-center text-center gap-3 mt-2 relative animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Botão de limpar seleção no card */}
+            <div className="absolute top-2 right-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedSipeApenado(null)
+                  setApenadoAip(null)
+                  setVinculos([])
+                  setShowAddForm(false)
+                }}
+                className="text-[10px] text-gray-400 hover:text-red-500 transition-colors font-bold uppercase"
+                title="Limpar seleção"
+              >
+                Limpar
+              </button>
+            </div>
+
             <div className="w-20 h-20 rounded-2xl overflow-hidden bg-purple-500 flex items-center justify-center text-white font-bold text-3xl shadow-md border-2 border-purple-200 dark:border-purple-800">
               {selectedApenado.photoPath ? (
                 <img
-                  src={`/api/aip/apenados/${selectedApenado.id}/foto`}
+                  src={`/api/sipe/apenados/${selectedApenado.id}/foto`}
                   alt={selectedApenado.nome}
                   className="w-full h-full object-cover"
                 />
@@ -543,8 +672,10 @@ export function AIPVinculosPanel() {
             
             <div className="min-w-0 w-full">
               <h4 className="font-bold text-gray-900 dark:text-white text-sm line-clamp-2 uppercase leading-snug">{selectedApenado.nome}</h4>
-              {selectedApenado.vulgo && (
-                <p className="text-xs text-purple-600 dark:text-purple-400 font-semibold mt-1">Vulgo: {selectedApenado.vulgo}</p>
+              {(selectedApenado.vulgo || (selectedApenado.alcunhas && selectedApenado.alcunhas.length > 0)) && (
+                <p className="text-xs text-purple-600 dark:text-purple-400 font-semibold mt-1">
+                  Vulgo: {selectedApenado.vulgo || selectedApenado.alcunhas.map((a: any) => a.alcunha).join(', ')}
+                </p>
               )}
               
               <div className="mt-3 space-y-1.5 text-left text-xs bg-white dark:bg-gray-900/50 p-3 rounded-lg border border-purple-100/40 dark:border-purple-950/20">
@@ -584,7 +715,7 @@ export function AIPVinculosPanel() {
 
       {/* Colunas Principais: Árvore Visual de Relacionamentos */}
       <div className="lg:col-span-3 flex flex-col gap-6 min-h-0">
-        {!selectedApenadoId ? (
+        {!selectedSipeApenado ? (
           <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl border border-gray-250 dark:border-gray-700 flex flex-col items-center justify-center text-center p-8 gap-4 shadow-sm select-none">
             <div className="w-16 h-16 rounded-full bg-purple-50 dark:bg-purple-950/20 flex items-center justify-center text-purple-500">
               <Users className="w-8 h-8" />
@@ -642,53 +773,76 @@ export function AIPVinculosPanel() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Busca do Apenado Destino */}
-                  <div className="md:col-span-1 flex flex-col gap-1.5">
+                  <div className="md:col-span-1 flex flex-col gap-1.5 relative">
                     <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Vincular com (Apenado):</label>
-                    <input
-                      type="text"
-                      placeholder="Buscar por nome..."
-                      value={searchTargetQuery}
-                      onChange={e => setSearchTargetQuery(e.target.value)}
-                      className="px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Buscar por nome ou CPF..."
+                        value={searchTargetQuery}
+                        onChange={e => setSearchTargetQuery(e.target.value)}
+                        className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white"
+                      />
+                    </div>
                     
                     {/* Lista rápida de resultados da busca */}
-                    <div className="bg-white dark:bg-gray-900 border border-gray-250 dark:border-gray-700 rounded-lg max-h-32 overflow-y-auto mt-1 divide-y divide-gray-100 dark:divide-gray-800">
-                      {filteredApenadosList.length === 0 ? (
-                        <p className="p-2 text-xs text-gray-400 text-center">Nenhum apenado encontrado/disponível</p>
-                      ) : (
-                        filteredApenadosList.map(a => (
-                          <button
-                            key={a.id}
-                            type="button"
-                            onClick={() => {
-                              setNewLinkTargetId(a.id)
-                              setSearchTargetQuery(a.nome)
-                            }}
-                            className={`w-full text-left p-2 text-xs hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-950/20 dark:hover:text-purple-400 flex items-center justify-between ${
-                              newLinkTargetId === a.id ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400 font-bold' : ''
-                            }`}
-                          >
-                            <span className="truncate">{a.nome}</span>
-                            {a.cpf && <span className="text-[10px] opacity-60 shrink-0 ml-1">{a.cpf}</span>}
-                          </button>
-                        ))
-                      )}
-                    </div>
+                    {searchTargetQuery.trim() !== "" && (
+                      <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-white dark:bg-gray-900 border border-gray-250 dark:border-gray-700 rounded-lg max-h-32 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800 shadow-md">
+                        {searchingTarget ? (
+                          <div className="flex justify-center p-2 text-xs text-gray-400">
+                            <Loader2 className="w-4 h-4 animate-spin mr-1" /> Buscando...
+                          </div>
+                        ) : targetSearchResults.length === 0 ? (
+                          <p className="p-2 text-xs text-gray-400 text-center">Nenhum apenado encontrado</p>
+                        ) : (
+                          targetSearchResults
+                            .filter(a => {
+                              if (selectedSipeApenado && a.sipeId === selectedSipeApenado.sipeId) return false
+                              return true
+                            })
+                            .map(a => (
+                              <button
+                                key={a.id}
+                                type="button"
+                                onClick={() => {
+                                  setNewLinkTargetId(a.id)
+                                  setNewLinkTargetSipeId(a.sipeId)
+                                  setSearchTargetQuery(a.nome)
+                                }}
+                                className={`w-full text-left p-2 text-xs hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-950/20 dark:hover:text-purple-400 flex items-center justify-between ${
+                                  newLinkTargetSipeId === a.sipeId ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400 font-bold' : ''
+                                }`}
+                              >
+                                <span className="truncate">{a.nome}</span>
+                                {a.cpf && <span className="text-[10px] opacity-60 shrink-0 ml-1">{a.cpf}</span>}
+                              </button>
+                            ))
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Tipo de Relação e Força */}
                   <div className="md:col-span-1 flex flex-col gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Grau de Parentesco / Vínculo:</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Mãe, Cônjuge, Aliado, Rival"
+                      <select
                         value={newLinkTipo}
                         onChange={e => setNewLinkTipo(e.target.value)}
                         required
-                        className="px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white"
-                      />
+                        className="px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white font-medium"
+                      >
+                        <option value="">Selecione o vínculo...</option>
+                        {Object.entries(VINCULO_OPCOES).map(([grupo, opcoes]) => (
+                          <optgroup key={grupo} label={grupo} className="font-bold text-purple-700 dark:text-purple-400 bg-white dark:bg-gray-900">
+                            {opcoes.map(opcao => (
+                              <option key={opcao} value={opcao} className="font-normal text-gray-900 dark:text-white bg-white dark:bg-gray-900">
+                                {opcao}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
                     </div>
 
                     <div className="flex flex-col gap-1.5">
@@ -722,6 +876,8 @@ export function AIPVinculosPanel() {
                     type="button"
                     onClick={() => {
                       setNewLinkTargetId('')
+                      setNewLinkTargetSipeId(null)
+                      setSearchTargetQuery('')
                       setNewLinkNota('')
                       setShowAddForm(false)
                     }}
@@ -731,7 +887,7 @@ export function AIPVinculosPanel() {
                   </button>
                   <button
                     type="submit"
-                    disabled={savingLink || !newLinkTargetId}
+                    disabled={savingLink || !newLinkTargetSipeId}
                     className="px-4 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
                   >
                     {savingLink ? (
@@ -829,11 +985,13 @@ export function AIPVinculosPanel() {
           onClose={() => setModalApenado(null)}
           onUpdate={(updated) => {
             // Atualizar o apenado no state se ele for o base
-            if (updated.id === selectedApenadoId) {
-              setSelectedApenado(updated)
+            if (selectedSipeApenado && updated.sipeId === selectedSipeApenado.sipeId) {
+              setApenadoAip(updated)
             }
             // Recarregar os vínculos de qualquer forma
-            fetchVinculos(selectedApenadoId)
+            if (selectedSipeApenado) {
+              fetchVinculos(selectedSipeApenado.sipeId)
+            }
             setModalApenado(updated)
           }}
         />

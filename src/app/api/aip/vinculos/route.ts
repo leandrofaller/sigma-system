@@ -4,6 +4,106 @@ import { prisma } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
+// Função auxiliar para garantir o registro do apenado no AIP
+async function getOrCreateAipApenado(sipeId: number, authorName: string) {
+  // 1. Verificar se já existe em AIP
+  const existe = await prisma.aIPApenado.findUnique({
+    where: { sipeId }
+  })
+  if (existe) return existe
+
+  // 2. Buscar no SIPE
+  const sipeApenado = await prisma.sipeApenadoImportado.findUnique({
+    where: { sipeId },
+    include: {
+      faccao: true,
+      vinculosVisitante: {
+        include: { visitante: true }
+      }
+    }
+  })
+
+  if (!sipeApenado) return null
+
+  // 3. Criar em AIP copiando todos os dados
+  const novo = await prisma.aIPApenado.create({
+    data: {
+      sipeApenadoId: sipeApenado.sipeId,
+      sipeId: sipeApenado.sipeId,
+      nome: sipeApenado.nome,
+      nomeOutro: sipeApenado.nomeOutro,
+      cpf: sipeApenado.cpf,
+      rg: sipeApenado.rg,
+      rgOrgao: sipeApenado.rgOrgao,
+      dataNascimento: sipeApenado.dataNascimento,
+      sexo: sipeApenado.sexo,
+      etnia: sipeApenado.etnia,
+      naturalidade: sipeApenado.naturalidade,
+      orientacaoSexual: sipeApenado.orientacaoSexual,
+      tipoSanguineo: sipeApenado.tipoSanguineo,
+      grauInstrucao: sipeApenado.grauInstrucao,
+      religiao: sipeApenado.religiao,
+      estadoCivil: sipeApenado.estadoCivil,
+      nomeConjuge: sipeApenado.nomeConjuge,
+      qtdFilhos: sipeApenado.qtdFilhos,
+      nomeMae: sipeApenado.nomeMae,
+      nomePai: sipeApenado.nomePai,
+      telefone: sipeApenado.telefone,
+      rji: sipeApenado.rji,
+      unidade: sipeApenado.unidade,
+      cela: sipeApenado.cela,
+      regime: sipeApenado.regime,
+      situacao: sipeApenado.situacao,
+      dataEntrada: sipeApenado.dataEntrada,
+      dataPrisao: sipeApenado.dataPrisao,
+      tempoPena: sipeApenado.tempoPena,
+      faccao: sipeApenado.faccao ? sipeApenado.faccao.nome : null,
+      monitorado: sipeApenado.monitorado,
+      intramuro: sipeApenado.intramuro,
+      presoOriundo: sipeApenado.presoOriundo,
+      oficioEntrada: sipeApenado.oficioEntrada,
+      celeAtual: sipeApenado.celeAtual,
+      ultimaMovimentacao: sipeApenado.ultimaMovimentacao,
+      logradouro: sipeApenado.logradouro,
+      numero: sipeApenado.numero,
+      complemento: sipeApenado.complemento,
+      bairro: sipeApenado.bairro,
+      cidade: sipeApenado.cidade,
+      uf: sipeApenado.uf,
+      cep: sipeApenado.cep,
+      photoPath: sipeApenado.photoPath,
+      ultimaSincAt: new Date(),
+      cadastradoPor: authorName
+    }
+  })
+
+  // Copiar visitantes para AIPFotoVisitante
+  if (sipeApenado.vinculosVisitante && sipeApenado.vinculosVisitante.length > 0) {
+    await Promise.all(
+      sipeApenado.vinculosVisitante.map(async (v) => {
+        if (v.visitante) {
+          await prisma.aIPFotoVisitante.create({
+            data: {
+              apenadoId: novo.id,
+              visitanteId: v.visitante.id,
+              nomeVisitante: v.visitante.nome,
+              cpfVisitante: v.visitante.cpf,
+              parentescoVisitante: v.visitante.parentesco || '',
+              ativoVisitante: v.ativo,
+              photoPath: v.visitante.photoPath,
+              descricao: 'Importado do SIPE'
+            }
+          }).catch(e => {
+            console.error(`Erro ao importar visitante ${v.visitante?.id} para AIP:`, e);
+          });
+        }
+      })
+    );
+  }
+
+  return novo
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
@@ -15,15 +115,35 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const apenadoId = searchParams.get('apenadoId')
+  const sipeIdParam = searchParams.get('sipeId')
+
+  let targetApenadoId = apenadoId
+  let aipAp = null
 
   try {
-    if (apenadoId) {
+    if (sipeIdParam) {
+      const sipeId = parseInt(sipeIdParam)
+      aipAp = await prisma.aIPApenado.findUnique({
+        where: { sipeId }
+      })
+      if (!aipAp) {
+        // Se não está cadastrado em AIP, não possui vínculos ainda
+        return NextResponse.json({ vinculos: [], apenadoAip: null })
+      }
+      targetApenadoId = aipAp.id
+    } else if (apenadoId) {
+      aipAp = await prisma.aIPApenado.findUnique({
+        where: { id: apenadoId }
+      })
+    }
+
+    if (targetApenadoId) {
       // Buscar todos os vínculos onde o apenado em questão está envolvido
       const vinculos = await prisma.aIPVinculo.findMany({
         where: {
           OR: [
-            { apenadoId: apenadoId },
-            { vinculadoComId: apenadoId }
+            { apenadoId: targetApenadoId },
+            { vinculadoComId: targetApenadoId }
           ]
         },
         include: {
@@ -33,7 +153,7 @@ export async function GET(req: NextRequest) {
 
       // Resolver o "outro" apenado para cada vínculo
       const vinculosFormatados = await Promise.all(vinculos.map(async (v) => {
-        const isPrincipal = v.apenadoId === apenadoId
+        const isPrincipal = v.apenadoId === targetApenadoId
         const outroId = isPrincipal ? v.vinculadoComId : v.apenadoId
 
         let outroApenado = null
@@ -67,9 +187,9 @@ export async function GET(req: NextRequest) {
         }
       }))
 
-      return NextResponse.json({ vinculos: vinculosFormatados })
+      return NextResponse.json({ vinculos: vinculosFormatados, apenadoAip: aipAp })
     } else {
-      // Retorna todos os vínculos se não for passado apenadoId
+      // Retorna todos os vínculos se não for passado apenadoId/sipeId
       const vinculos = await prisma.aIPVinculo.findMany({
         include: {
           apenado: {
@@ -132,27 +252,33 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { apenadoId, vinculadoComId, tipo, forca, notaVinculo } = body
+    const { apenadoSipeId, vinculadoComSipeId, tipo, forca, notaVinculo } = body
 
-    if (!apenadoId || !vinculadoComId || !tipo) {
-      return NextResponse.json({ error: 'Campos apenadoId, vinculadoComId e tipo são obrigatórios' }, { status: 400 })
+    if (!apenadoSipeId || !vinculadoComSipeId || !tipo) {
+      return NextResponse.json({ error: 'Campos apenadoSipeId, vinculadoComSipeId e tipo são obrigatórios' }, { status: 400 })
     }
 
-    if (apenadoId === vinculadoComId) {
+    const sId1 = parseInt(apenadoSipeId)
+    const sId2 = parseInt(vinculadoComSipeId)
+
+    if (sId1 === sId2) {
       return NextResponse.json({ error: 'Não é possível criar um vínculo de um apenado com ele mesmo' }, { status: 400 })
     }
 
-    // Verificar se ambos os apenados existem no AIP
-    const [ap1, ap2] = await Promise.all([
-      prisma.aIPApenado.findUnique({ where: { id: apenadoId } }),
-      prisma.aIPApenado.findUnique({ where: { id: vinculadoComId } })
-    ])
+    const userName = session.user.name || 'Agente'
+
+    // Garantir que ambos existem no AIP (registra se necessário)
+    const ap1 = await getOrCreateAipApenado(sId1, userName)
+    const ap2 = await getOrCreateAipApenado(sId2, userName)
 
     if (!ap1 || !ap2) {
-      return NextResponse.json({ error: 'Um ou ambos os apenados não estão cadastrados no AIP' }, { status: 404 })
+      return NextResponse.json({ error: 'Um ou ambos os apenados não foram encontrados no banco de dados' }, { status: 404 })
     }
 
-    // Prevenir duplicidade de vínculo na mesma direção ou direção contrária com o mesmo tipo
+    const apenadoId = ap1.id
+    const vinculadoComId = ap2.id
+
+    // Prevenir duplicidade de vínculo
     const vinculoExistente = await prisma.aIPVinculo.findFirst({
       where: {
         OR: [
@@ -165,8 +291,6 @@ export async function POST(req: NextRequest) {
     if (vinculoExistente) {
       return NextResponse.json({ error: 'Este vínculo já está registrado' }, { status: 409 })
     }
-
-    const userName = session.user.name || 'Agente'
 
     const novoVinculo = await prisma.aIPVinculo.create({
       data: {
