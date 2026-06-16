@@ -683,25 +683,8 @@ export function AIPVinculosGraph({
       svgCopy.setAttribute('width', width.toString())
       svgCopy.setAttribute('height', height.toString())
       
-      if (format === 'svg') {
-        const serializer = new XMLSerializer()
-        const svgString = serializer.serializeToString(svgCopy)
-        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
-        const svgUrl = URL.createObjectURL(svgBlob)
-
-        const downloadLink = document.createElement('a')
-        downloadLink.href = svgUrl
-        downloadLink.download = `rede_vinculos_${selectedApenado.nome.toLowerCase().replace(/\s+/g, '_')}.svg`
-        document.body.appendChild(downloadLink)
-        downloadLink.click()
-        document.body.removeChild(downloadLink)
-        URL.revokeObjectURL(svgUrl)
-        toast.success('Gráfico exportado em formato vetorial (.svg) com sucesso!')
-        return
-      }
-
-      // Para WebP, converter todas as fotos locais no SVG para Base64
-      // Isso evita erro de "Tainted Canvas" (CORS) e garante que as fotos apareçam no canvas exportado
+      // Para WebP e SVG, converter todas as fotos locais no SVG para Base64
+      // Isso evita erro de "Tainted Canvas" (CORS) e garante que as fotos apareçam no SVG/canvas exportado
       const images = svgCopy.querySelectorAll('image')
       const fetchPromises: Promise<void>[] = []
 
@@ -729,6 +712,23 @@ export function AIPVinculosGraph({
       })
 
       await Promise.all(fetchPromises)
+
+      if (format === 'svg') {
+        const serializer = new XMLSerializer()
+        const svgString = serializer.serializeToString(svgCopy)
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
+        const svgUrl = URL.createObjectURL(svgBlob)
+
+        const downloadLink = document.createElement('a')
+        downloadLink.href = svgUrl
+        downloadLink.download = `rede_vinculos_${selectedApenado.nome.toLowerCase().replace(/\s+/g, '_')}.svg`
+        document.body.appendChild(downloadLink)
+        downloadLink.click()
+        document.body.removeChild(downloadLink)
+        URL.revokeObjectURL(svgUrl)
+        toast.success('Gráfico exportado em formato vetorial (.svg) com sucesso!')
+        return
+      }
 
       // Serializa o SVG
       const serializer = new XMLSerializer()

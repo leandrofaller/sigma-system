@@ -932,6 +932,11 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
     }
 
     // ── Phase 2: scrape each profile ──────────────────────────
+    let cleanUnidadeNome = job.unidadeNome
+    if (job.tipo === 'IDS_MANUAIS' && job.unidadeNome?.includes(' — ')) {
+      cleanUnidadeNome = job.unidadeNome.split(' — ')[1]
+    }
+
     let lastProcessedId: number | undefined
     for (const sipeId of ids) {
       if (globalThis.__sipeStopFlag) {
@@ -953,7 +958,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
               await scrapeAdvogadoDetalhe(page, sipeId, jobId)
             } else {
               const apenadoCache = listagemInfoCache.get(sipeId)
-              const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? job.unidadeNome ?? null
+              const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? cleanUnidadeNome ?? null
               await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome, useSearch)
             }
           } catch (err: any) {
@@ -967,7 +972,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
                 await scrapeAdvogadoDetalhe(page, sipeId, jobId)
               } else {
                 const apenadoCache = listagemInfoCache.get(sipeId)
-                const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? job.unidadeNome ?? null
+                const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? cleanUnidadeNome ?? null
                 await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome, useSearch)
               }
             } else {
@@ -2425,6 +2430,9 @@ async function scrapeApenadoFicha(
 
   // Troca dinâmica de unidade ativa no Playwright se fornecida e diferente da atual
   if (unidadeNome) {
+    if (unidadeNome.includes(' — ')) {
+      unidadeNome = unidadeNome.split(' — ')[1];
+    }
     const unidadeId = await resolveUnidadeIdByNome(unidadeNome)
     if (unidadeId) {
       await switchPlaywrightUnit(page, unidadeId, 'FICHA')
@@ -2915,7 +2923,7 @@ async function scrapeApenadoFicha(
       updateData.matricula = dados.rji || dados.cpf;
     }
 
-    if (!localApenado.unidade && unidade) {
+    if (unidade && localApenado.unidade !== unidade) {
       updateData.unidade = unidade;
     }
     if (!localApenado.faccao && faccaoNome) {
@@ -6916,6 +6924,9 @@ export async function scrapeApenadoFichaFast(
 ): Promise<void> {
   // Configura a unidade da sessão para o proxy se informada e resolvida
   if (unidadeNome) {
+    if (unidadeNome.includes(' — ')) {
+      unidadeNome = unidadeNome.split(' — ')[1]
+    }
     const unidadeId = await resolveUnidadeIdByNome(unidadeNome)
     if (unidadeId) {
       globalThis.__sipeFallbackUnidade = unidadeId
@@ -7149,7 +7160,7 @@ export async function scrapeApenadoFichaFast(
     if ((dados.rji || dados.cpf) && !localApenado.matricula) {
       updateData.matricula = dados.rji || dados.cpf
     }
-    if (!localApenado.unidade && unidade) {
+    if (unidade && localApenado.unidade !== unidade) {
       updateData.unidade = unidade
     }
     if (!localApenado.faccao && faccaoNome) {
