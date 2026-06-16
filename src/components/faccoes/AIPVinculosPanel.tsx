@@ -25,6 +25,7 @@ const VINCULO_OPCOES = {
     "Filho(a)",
     "Cônjuge",
     "Companheiro(a)",
+    "Ex-Cônjuge",
     "Irmão/Irmã",
     "Tio(a)",
     "Sobrinho(a)",
@@ -804,7 +805,7 @@ export function AIPVinculosPanel() {
                     </div>
                     
                     {/* Lista rápida de resultados da busca */}
-                    {searchTargetQuery.trim() !== "" && (
+                    {searchTargetQuery.trim() !== "" && !targetSelected && (
                       <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-white dark:bg-gray-900 border border-gray-250 dark:border-gray-700 rounded-lg max-h-32 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800 shadow-md">
                         {searchingTarget ? (
                           <div className="flex justify-center p-2 text-xs text-gray-400">
@@ -839,6 +840,12 @@ export function AIPVinculosPanel() {
                             ))
                         )}
                       </div>
+                    )}
+                    
+                    {newLinkTargetSipeId && targetSelected && (
+                      <p className="text-[11px] text-green-600 dark:text-green-400 font-semibold mt-1 flex items-center gap-1 animate-in fade-in duration-200">
+                        <span>✓</span> Apenado selecionado com sucesso!
+                      </p>
                     )}
                   </div>
 
