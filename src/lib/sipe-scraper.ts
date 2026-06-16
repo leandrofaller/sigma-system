@@ -1733,10 +1733,33 @@ async function coletarIdsApenados(
         $first(table).find('tbody tr').each((_, row) => {
           const cells = $first(row).find('td, th')
           if (cells.length > codigoColIndex) {
-            const idVal = parseInt($first(cells[codigoColIndex]).text().trim(), 10)
-            const celaText = celaColIndex >= 0 && cells.length > celaColIndex ? $first(cells[celaColIndex]).text().trim() : undefined
-            const situacaoText = situacaoColIndex >= 0 && cells.length > situacaoColIndex ? $first(cells[situacaoColIndex]).text().trim() : undefined
-            const unidadeText = unidadeColIndex >= 0 && cells.length > unidadeColIndex ? $first(cells[unidadeColIndex]).text().trim() : undefined
+            const idVal = parseInt($first(cells.get(codigoColIndex)).text().trim(), 10)
+            
+            // Detectar dinamicamente a presença da foto na linha
+            let fotoIdx = -1
+            cells.each((idx, td) => {
+              const text = $first(td).text().trim()
+              const html = $first(td).html() || ''
+              const hasImg = $first(td).find('img').length > 0
+              const hasPhotoLink = text.startsWith('http') || text.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png')
+              if (hasImg || hasPhotoLink) {
+                fotoIdx = idx
+              }
+            })
+
+            let realUnidadeIdx = unidadeColIndex
+            let realCelaIdx = celaColIndex
+            let realSituacaoIdx = situacaoColIndex
+
+            if (fotoIdx !== -1) {
+              if (unidadeColIndex >= fotoIdx) realUnidadeIdx++
+              if (celaColIndex >= fotoIdx) realCelaIdx++
+              if (situacaoColIndex >= fotoIdx) realSituacaoIdx++
+            }
+
+            const celaText = realCelaIdx >= 0 && cells.length > realCelaIdx ? $first(cells.get(realCelaIdx)).text().trim() : undefined
+            const situacaoText = realSituacaoIdx >= 0 && cells.length > realSituacaoIdx ? $first(cells.get(realSituacaoIdx)).text().trim() : undefined
+            const unidadeText = realUnidadeIdx >= 0 && cells.length > realUnidadeIdx ? $first(cells.get(realUnidadeIdx)).text().trim() : undefined
             
             if (!isNaN(idVal) && idVal > 0) {
               const cacheData: any = {}
@@ -1824,10 +1847,33 @@ async function coletarIdsApenados(
             $page(table).find('tbody tr').each((_, row) => {
               const cells = $page(row).find('td, th')
               if (cells.length > codigoColIndex) {
-                const idVal = parseInt($page(cells[codigoColIndex]).text().trim(), 10)
-                const celaText = celaColIndex >= 0 && cells.length > celaColIndex ? $page(cells[celaColIndex]).text().trim() : undefined
-                const situacaoText = situacaoColIndex >= 0 && cells.length > situacaoColIndex ? $page(cells[situacaoColIndex]).text().trim() : undefined
-                const unidadeText = unidadeColIndex >= 0 && cells.length > unidadeColIndex ? $page(cells[unidadeColIndex]).text().trim() : undefined
+                const idVal = parseInt($page(cells.get(codigoColIndex)).text().trim(), 10)
+                
+                // Detectar dinamicamente a presença da foto na linha
+                let fotoIdx = -1
+                cells.each((idx, td) => {
+                  const text = $page(td).text().trim()
+                  const html = $page(td).html() || ''
+                  const hasImg = $page(td).find('img').length > 0
+                  const hasPhotoLink = text.startsWith('http') || text.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png')
+                  if (hasImg || hasPhotoLink) {
+                    fotoIdx = idx
+                  }
+                })
+
+                let realUnidadeIdx = unidadeColIndex
+                let realCelaIdx = celaColIndex
+                let realSituacaoIdx = situacaoColIndex
+
+                if (fotoIdx !== -1) {
+                  if (unidadeColIndex >= fotoIdx) realUnidadeIdx++
+                  if (celaColIndex >= fotoIdx) realCelaIdx++
+                  if (situacaoColIndex >= fotoIdx) realSituacaoIdx++
+                }
+
+                const celaText = realCelaIdx >= 0 && cells.length > realCelaIdx ? $page(cells.get(realCelaIdx)).text().trim() : undefined
+                const situacaoText = realSituacaoIdx >= 0 && cells.length > realSituacaoIdx ? $page(cells.get(realSituacaoIdx)).text().trim() : undefined
+                const unidadeText = realUnidadeIdx >= 0 && cells.length > realUnidadeIdx ? $page(cells.get(realUnidadeIdx)).text().trim() : undefined
                 
                 if (!isNaN(idVal) && idVal > 0) {
                   const cacheData: any = {}
@@ -1904,10 +1950,33 @@ async function coletarIdsApenados(
           $page(table).find('tbody tr').each((_, row) => {
             const cells = $page(row).find('td, th')
             if (cells.length > codigoColIndex) {
-              const idVal = parseInt($page(cells[codigoColIndex]).text().trim(), 10)
-              const celaText = celaColIndex >= 0 && cells.length > celaColIndex ? $page(cells[celaColIndex]).text().trim() : undefined
-              const situacaoText = situacaoColIndex >= 0 && cells.length > situacaoColIndex ? $page(cells[situacaoColIndex]).text().trim() : undefined
-              const unidadeText = unidadeColIndex >= 0 && cells.length > unidadeColIndex ? $page(cells[unidadeColIndex]).text().trim() : undefined
+              const idVal = parseInt($page(cells.get(codigoColIndex)).text().trim(), 10)
+              
+              // Detectar dinamicamente a presença da foto na linha
+              let fotoIdx = -1
+              cells.each((idx, td) => {
+                const text = $page(td).text().trim()
+                const html = $page(td).html() || ''
+                const hasImg = $page(td).find('img').length > 0
+                const hasPhotoLink = text.startsWith('http') || text.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png')
+                if (hasImg || hasPhotoLink) {
+                  fotoIdx = idx
+                }
+              })
+
+              let realUnidadeIdx = unidadeColIndex
+              let realCelaIdx = celaColIndex
+              let realSituacaoIdx = situacaoColIndex
+
+              if (fotoIdx !== -1) {
+                if (unidadeColIndex >= fotoIdx) realUnidadeIdx++
+                if (celaColIndex >= fotoIdx) realCelaIdx++
+                if (situacaoColIndex >= fotoIdx) realSituacaoIdx++
+              }
+
+              const celaText = realCelaIdx >= 0 && cells.length > realCelaIdx ? $page(cells.get(realCelaIdx)).text().trim() : undefined
+              const situacaoText = realSituacaoIdx >= 0 && cells.length > realSituacaoIdx ? $page(cells.get(realSituacaoIdx)).text().trim() : undefined
+              const unidadeText = realUnidadeIdx >= 0 && cells.length > realUnidadeIdx ? $page(cells.get(realUnidadeIdx)).text().trim() : undefined
               
               if (!isNaN(idVal) && idVal > 0) {
                 const cacheData: any = {}
@@ -2051,10 +2120,29 @@ async function coletarIdsApenados(
           let situacao = ''
           let unidadeNome = ''
           if (Array.isArray(row)) {
+            // Detectar offset da foto na listagem em memória
+            let fotoIdx = -1;
+            row.forEach((cellText, idx) => {
+              const text = String(cellText ?? '').trim();
+              if (text.startsWith('http') || text.includes('/fotos') || text.includes('.jpg') || text.includes('.png') || text.includes('<img')) {
+                fotoIdx = idx;
+              }
+            });
+
+            let realUnidadeIdx = unidadeIndex;
+            let realCelaIdx = celaIndex;
+            let realSituacaoIdx = situacaoIndex;
+
+            if (fotoIdx !== -1) {
+              if (unidadeIndex >= fotoIdx) realUnidadeIdx++;
+              if (celaIndex >= fotoIdx) realCelaIdx++;
+              if (situacaoIndex >= fotoIdx) realSituacaoIdx++;
+            }
+
             id = parseInt(row[codigoIndex >= 0 ? codigoIndex : 0])
-            if (celaIndex >= 0) cela = (row[celaIndex] ?? '').toString().trim()
-            if (situacaoIndex >= 0) situacao = (row[situacaoIndex] ?? '').toString().trim()
-            if (unidadeIndex >= 0) unidadeNome = (row[unidadeIndex] ?? '').toString().trim()
+            if (realCelaIdx >= 0) cela = (row[realCelaIdx] ?? '').toString().trim()
+            if (realSituacaoIdx >= 0) situacao = (row[realSituacaoIdx] ?? '').toString().trim()
+            if (realUnidadeIdx >= 0) unidadeNome = (row[realUnidadeIdx] ?? '').toString().trim()
           } else if (row) {
             id = parseInt(row.id ?? row.sipeId ?? '')
             cela = (row.cela ?? '').toString().trim()
@@ -2180,10 +2268,29 @@ async function coletarIdsApenados(
           let situacao = ''
           let unidadeNome = ''
           if (Array.isArray(row)) {
+            // Detectar offset da foto na listagem em memória
+            let fotoIdx = -1;
+            row.forEach((cellText, idx) => {
+              const text = String(cellText ?? '').trim();
+              if (text.startsWith('http') || text.includes('/fotos') || text.includes('.jpg') || text.includes('.png') || text.includes('<img')) {
+                fotoIdx = idx;
+              }
+            });
+
+            let realUnidadeIdx = unidadeIndex;
+            let realCelaIdx = celaIndex;
+            let realSituacaoIdx = situacaoIndex;
+
+            if (fotoIdx !== -1) {
+              if (unidadeIndex >= fotoIdx) realUnidadeIdx++;
+              if (celaIndex >= fotoIdx) realCelaIdx++;
+              if (situacaoIndex >= fotoIdx) realSituacaoIdx++;
+            }
+
             id = parseInt(row[codigoIndex >= 0 ? codigoIndex : 0])
-            if (celaIndex >= 0) cela = (row[celaIndex] ?? '').toString().trim()
-            if (situacaoIndex >= 0) situacao = (row[situacaoIndex] ?? '').toString().trim()
-            if (unidadeIndex >= 0) unidadeNome = (row[unidadeIndex] ?? '').toString().trim()
+            if (realCelaIdx >= 0) cela = (row[realCelaIdx] ?? '').toString().trim()
+            if (realSituacaoIdx >= 0) situacao = (row[realSituacaoIdx] ?? '').toString().trim()
+            if (realUnidadeIdx >= 0) unidadeNome = (row[realUnidadeIdx] ?? '').toString().trim()
           } else if (row) {
             id = parseInt(row.id ?? row.sipeId ?? '')
             cela = (row.cela ?? '').toString().trim()
@@ -2304,20 +2411,42 @@ async function coletarIdsApenados(
 
       ids.add(id)
 
+      // Detectar foto na linha
+      let fotoIdx = -1
+      for (let idx = 0; idx < cells.length; idx++) {
+        const tdText = (await cells[idx].innerText()).trim()
+        const html = await cells[idx].innerHTML().catch(() => '')
+        const hasImg = html.includes('<img')
+        const hasPhotoLink = tdText.startsWith('http') || tdText.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png')
+        if (hasImg || hasPhotoLink) {
+          fotoIdx = idx
+        }
+      }
+
+      let realUnidadeIdx = unidadeColIndex
+      let realCelaIdx = celaColIndex
+      let realSituacaoIdx = situacaoColIndex
+
+      if (fotoIdx !== -1) {
+        if (unidadeColIndex >= fotoIdx) realUnidadeIdx++
+        if (celaColIndex >= fotoIdx) realCelaIdx++
+        if (situacaoColIndex >= fotoIdx) realSituacaoIdx++
+      }
+
       const cacheObj: any = {}
       // Salva a cela correspondente no cache em memória
-      if (celaColIndex >= 0 && cells.length > celaColIndex) {
-        const celaText = (await cells[celaColIndex].innerText()).trim()
+      if (realCelaIdx >= 0 && cells.length > realCelaIdx) {
+        const celaText = (await cells[realCelaIdx].innerText()).trim()
         if (celaText) cacheObj.cela = celaText
       }
       // Salva a situação correspondente no cache em memória
-      if (situacaoColIndex >= 0 && cells.length > situacaoColIndex) {
-        const situacaoText = (await cells[situacaoColIndex].innerText()).trim()
+      if (realSituacaoIdx >= 0 && cells.length > realSituacaoIdx) {
+        const situacaoText = (await cells[realSituacaoIdx].innerText()).trim()
         if (situacaoText) cacheObj.situacao = situacaoText
       }
       // Salva a unidade correspondente no cache em memória
-      if (unidadeColIndex >= 0 && cells.length > unidadeColIndex) {
-        const unidadeText = (await cells[unidadeColIndex].innerText()).trim()
+      if (realUnidadeIdx >= 0 && cells.length > realUnidadeIdx) {
+        const unidadeText = (await cells[realUnidadeIdx].innerText()).trim()
         if (unidadeText) cacheObj.unidadeNome = unidadeText
       }
 
