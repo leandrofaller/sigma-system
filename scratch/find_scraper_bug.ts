@@ -8,7 +8,9 @@ console.log('Total de linhas:', lines.length);
 
 lines.forEach((line, idx) => {
   const lineNum = idx + 1;
-  if (line.includes('scrapeApenadoFicha') && !line.includes('Fast')) {
-    console.log(`L${lineNum}: ${line.trim()}`);
+  if (line.includes('=== \'SITUAÇÃO\'') || line.includes('=== "SITUAÇÃO"') || line.includes('SITUAÇAO')) {
+    if (line.includes('text') || line.includes('===')) {
+      console.log(`L${lineNum}: ${line.trim()}`);
+    }
   }
 });

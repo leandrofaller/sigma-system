@@ -1726,7 +1726,7 @@ async function coletarIdsApenados(
           const text = $first(el).text().toUpperCase().trim()
           if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = i
           if (text === 'CELA') celaColIndex = i
-          if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = i
+          if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) situacaoColIndex = i
           if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) unidadeColIndex = i
         })
         if (codigoColIndex === -1) codigoColIndex = 1
@@ -1817,7 +1817,7 @@ async function coletarIdsApenados(
               const text = $page(el).text().toUpperCase().trim()
               if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
               if (text === 'CELA') celaColIndex = c
-              if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = c
+              if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) situacaoColIndex = c
               if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) unidadeColIndex = c
             })
             if (codigoColIndex === -1) codigoColIndex = 1
@@ -1897,7 +1897,7 @@ async function coletarIdsApenados(
             const text = $page(el).text().toUpperCase().trim()
             if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
             if (text === 'CELA') celaColIndex = c
-            if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = c
+            if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) situacaoColIndex = c
             if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) unidadeColIndex = c
           })
           if (codigoColIndex === -1) codigoColIndex = 1
@@ -2036,7 +2036,7 @@ async function coletarIdsApenados(
       const celaIndex = headers.findIndex(h => (h.textContent ?? '').toUpperCase().trim() === 'CELA')
       const situacaoIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
-        return text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO'
+        return text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')
       })
       const unidadeIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
@@ -2115,7 +2115,7 @@ async function coletarIdsApenados(
       const celaIndex = headers.findIndex(h => (h.textContent ?? '').toUpperCase().trim() === 'CELA')
       const situacaoIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
-        return text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO'
+        return text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')
       })
       const unidadeIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
@@ -2261,7 +2261,7 @@ async function coletarIdsApenados(
       const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
       return headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
-        return text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO'
+        return text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')
       })
     } catch { return -1 }
   }).catch(() => -1)
@@ -2479,7 +2479,7 @@ async function scrapeApenadoFicha(
             unidadeIdx = idx
           } else if (text === 'CELA') {
             celaIdx = idx
-          } else if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') {
+          } else if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) {
             situacaoIdx = idx
           }
         })
@@ -7035,7 +7035,7 @@ export async function scrapeApenadoFichaFast(
           unidadeIdx = idx
         } else if (text === 'CELA') {
           celaIdx = idx
-        } else if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') {
+        } else if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) {
           situacaoIdx = idx
         }
       })
