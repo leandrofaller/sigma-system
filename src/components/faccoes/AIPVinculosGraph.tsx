@@ -15,7 +15,8 @@ import {
   Network,
   Users,
   Eye,
-  Info
+  Info,
+  Search
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -110,6 +111,10 @@ export function AIPVinculosGraph({
     rival: true,
     outros: true
   })
+
+  // Estados para busca interna e filtro de grau de parentesco
+  const [graphSearchQuery, setGraphSearchQuery] = useState('')
+  const [depthFilter, setDepthFilter] = useState<'all' | '1'>('all')
 
   // Detalhes de interação
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
@@ -365,6 +370,7 @@ export function AIPVinculosGraph({
 
   // Filtragem dos Vínculos e Nós
   const visibleLinks = useMemo(() => {
+    const centralId = selectedApenado?.sipeId.toString()
     return links.filter(link => {
       // 1. Filtrar por confiança (confirmado/suspeita)
       if (link.forca === 'confirmado' && !filterConfirmado) return false
@@ -377,15 +383,20 @@ export function AIPVinculosGraph({
       if (cat === 'rival' && !filterCategorias.rival) return false
       if (cat === 'outros' && !filterCategorias.outros) return false
 
+      // 3. Filtrar por profundidade (se depthFilter === '1', mostrar apenas conexões diretas com o central)
+      if (depthFilter === '1' && centralId) {
+        if (link.source !== centralId && link.target !== centralId) return false
+      }
+
       return true
     })
-  }, [links, filterConfirmado, filterSuspeita, filterCategorias])
+  }, [links, filterConfirmado, filterSuspeita, filterCategorias, depthFilter, selectedApenado])
 
   const visibleNodes = useMemo(() => {
     const idsVisiveis = new Set<string>()
     // O nó central deve estar sempre visível
     if (selectedApenado) {
-      idsVisiveis.add(selectedApenado.id)
+      idsVisiveis.add(selectedApenado.sipeId.toString())
     }
 
     visibleLinks.forEach(link => {
@@ -646,37 +657,132 @@ export function AIPVinculosGraph({
     }
   }
 
-  // Exportar o Grafo como SVG
-  const handleExportImage = () => {
+  // Exportar o Grafo como SVG ou WebP (para colar no Word)
+  const handleExportImage = async (format: 'svg' | 'webp' = 'webp') => {
     const svgEl = svgRef.current
     if (!svgEl) return
 
+    const toastId = toast.loading(`Preparando exportação do gráfico como ${format.toUpperCase()}...`)
+
     try {
-      // Cria uma cópia do SVG para podermos limpar filtros temporários ou estilizar para download
+      // Cria uma cópia do SVG para podermos preparar para download
       const svgCopy = svgEl.cloneNode(true) as SVGSVGElement
       
-      // Define a largura e altura explícitas para o arquivo
-      svgCopy.setAttribute('width', '1000')
-      svgCopy.setAttribute('height', '800')
+      // Define a largura e altura explícitas para garantir qualidade
+      const width = 1200
+      const height = 900
+      svgCopy.setAttribute('width', width.toString())
+      svgCopy.setAttribute('height', height.toString())
       
-      // Cria o serializer para gerar arquivo texto do SVG
+      if (format === 'svg') {
+        const serializer = new XMLSerializer()
+        const svgString = serializer.serializeToString(svgCopy)
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
+        const svgUrl = URL.createObjectURL(svgBlob)
+
+        const downloadLink = document.createElement('a')
+        downloadLink.href = svgUrl
+        downloadLink.download = `rede_vinculos_${selectedApenado.nome.toLowerCase().replace(/\s+/g, '_')}.svg`
+        document.body.appendChild(downloadLink)
+        downloadLink.click()
+        document.body.removeChild(downloadLink)
+        URL.revokeObjectURL(svgUrl)
+        toast.success('Gráfico exportado em formato vetorial (.svg) com sucesso!')
+        return
+      }
+
+      // Para WebP, converter todas as fotos locais no SVG para Base64
+      // Isso evita erro de "Tainted Canvas" (CORS) e garante que as fotos apareçam no canvas exportado
+      const images = svgCopy.querySelectorAll('image')
+      const fetchPromises: Promise<void>[] = []
+
+      images.forEach(img => {
+        const href = img.getAttribute('href') || img.getAttribute('xlink:href')
+        if (href && href.startsWith('/')) {
+          const absoluteUrl = window.location.origin + href
+          const p = fetch(absoluteUrl)
+            .then(res => res.blob())
+            .then(blob => new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onloadend = () => resolve(reader.result as string)
+              reader.onerror = reject
+              reader.readAsDataURL(blob)
+            }))
+            .then(base64 => {
+              img.setAttribute('href', base64)
+              img.removeAttribute('xlink:href')
+            })
+            .catch(err => {
+              console.error(`Erro ao converter foto local para base64: ${href}`, err)
+            })
+          fetchPromises.push(p)
+        }
+      })
+
+      await Promise.all(fetchPromises)
+
+      // Serializa o SVG
       const serializer = new XMLSerializer()
       const svgString = serializer.serializeToString(svgCopy)
       const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
       const svgUrl = URL.createObjectURL(svgBlob)
 
-      const downloadLink = document.createElement('a')
-      downloadLink.href = svgUrl
-      downloadLink.download = `rede_vinculos_${selectedApenado.nome.toLowerCase().replace(/\s+/g, '_')}.svg`
-      document.body.appendChild(downloadLink)
-      downloadLink.click()
-      document.body.removeChild(downloadLink)
-      URL.revokeObjectURL(svgUrl)
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        
+        if (!ctx) {
+          toast.error('Erro ao inicializar renderizador de imagem.')
+          return
+        }
 
-      toast.success('Gráfico exportado em formato vetorial (.svg) com sucesso!')
+        // Fundo branco sólido (essencial para relatórios/Word)
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, width, height)
+
+        // Renderiza o SVG no canvas
+        ctx.drawImage(img, 0, 0, width, height)
+
+        try {
+          // Exporta como WebP
+          const dataUrl = canvas.toDataURL('image/webp', 0.95)
+          const downloadLink = document.createElement('a')
+          downloadLink.href = dataUrl
+          downloadLink.download = `rede_vinculos_${selectedApenado.nome.toLowerCase().replace(/\s+/g, '_')}.webp`
+          document.body.appendChild(downloadLink)
+          downloadLink.click()
+          document.body.removeChild(downloadLink)
+          toast.success('Imagem exportada com sucesso em formato .webp (compatível com Office/Word)!')
+        } catch (canvasErr) {
+          console.error('Falha ao exportar em WebP, usando PNG como fallback:', canvasErr)
+          const dataUrl = canvas.toDataURL('image/png')
+          const downloadLink = document.createElement('a')
+          downloadLink.href = dataUrl
+          downloadLink.download = `rede_vinculos_${selectedApenado.nome.toLowerCase().replace(/\s+/g, '_')}.png`
+          document.body.appendChild(downloadLink)
+          downloadLink.click()
+          document.body.removeChild(downloadLink)
+          toast.success('Imagem exportada com sucesso em formato .png!')
+        }
+
+        URL.revokeObjectURL(svgUrl)
+      }
+
+      img.onerror = () => {
+        toast.error('Erro ao renderizar o grafo para imagem.')
+        URL.revokeObjectURL(svgUrl)
+      }
+
+      img.src = svgUrl
+
     } catch (err) {
       console.error(err)
       toast.error('Erro ao exportar imagem')
+    } finally {
+      toast.dismiss(toastId)
     }
   }
 
@@ -759,11 +865,64 @@ export function AIPVinculosGraph({
             <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
             Outros ({counts.outros})
           </label>
+
+          <div className="h-3 w-px bg-gray-200 dark:bg-gray-700 mx-1.5" />
+
+          {/* Filtro de Graus de Separação */}
+          <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-900/40 p-0.5 rounded-lg border border-gray-100 dark:border-gray-755">
+            <button
+              type="button"
+              onClick={() => setDepthFilter('1')}
+              className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase transition-all ${
+                depthFilter === '1'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-300'
+              }`}
+              title="Mostrar apenas contatos diretos (1º grau)"
+            >
+              1º Grau
+            </button>
+            <button
+              type="button"
+              onClick={() => setDepthFilter('all')}
+              className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase transition-all ${
+                depthFilter === 'all'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-300'
+              }`}
+              title="Mostrar toda a rede expandida"
+            >
+              Todos
+            </button>
+          </div>
         </div>
 
         {/* Lado Direito: Ações da Câmera, Física e Exportar */}
         <div className="flex items-center gap-2 pointer-events-auto bg-white/95 dark:bg-gray-800/95 backdrop-blur-md p-1.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           
+          {/* Busca Interna no Grafo */}
+          <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-750">
+            <Search className="w-3.5 h-3.5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar no grafo..."
+              value={graphSearchQuery}
+              onChange={e => setGraphSearchQuery(e.target.value)}
+              className="bg-transparent text-[10px] font-semibold text-gray-800 dark:text-gray-100 outline-none w-20 focus:w-32 transition-all border-none p-0 focus:ring-0"
+            />
+            {graphSearchQuery && (
+              <button 
+                type="button" 
+                onClick={() => setGraphSearchQuery('')}
+                className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 font-bold ml-1"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <div className="h-4 w-px bg-gray-200 dark:bg-gray-700 mx-1" />
+
           {/* Confiança */}
           <div className="flex items-center gap-2 px-2 text-[10px] uppercase font-bold border-r border-gray-200 dark:border-gray-700 mr-1 text-gray-500 dark:text-gray-400">
             <label className="flex items-center gap-1 cursor-pointer hover:text-gray-900 dark:hover:text-white">
@@ -828,12 +987,22 @@ export function AIPVinculosGraph({
 
           <button
             type="button"
-            onClick={handleExportImage}
+            onClick={() => handleExportImage('webp')}
             className="p-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all shadow-sm flex items-center gap-1 text-xs font-semibold px-2.5"
-            title="Exportar gráfico de vínculos para relatórios"
+            title="Exportar imagem do gráfico (.webp) para anexar em relatórios do Word"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Exportar</span>
+            <span>WebP</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleExportImage('svg')}
+            className="p-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-750 text-gray-650 dark:text-gray-300 rounded-lg transition-all shadow-sm flex items-center gap-1 text-xs font-semibold px-2.5"
+            title="Exportar gráfico em formato vetorial (.svg)"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>SVG</span>
           </button>
         </div>
       </div>
@@ -923,6 +1092,19 @@ export function AIPVinculosGraph({
                 angle += 180 // Evita texto de cabeça para baixo
               }
 
+              // Lógica de busca interna para as arestas
+              const isSearching = graphSearchQuery.trim().length > 0
+              const sourceMatches = isSearching && (
+                sourceNode.nome.toLowerCase().includes(graphSearchQuery.toLowerCase()) ||
+                sourceNode.vulgo.toLowerCase().includes(graphSearchQuery.toLowerCase())
+              )
+              const targetMatches = isSearching && (
+                targetNode.nome.toLowerCase().includes(graphSearchQuery.toLowerCase()) ||
+                targetNode.vulgo.toLowerCase().includes(graphSearchQuery.toLowerCase())
+              )
+              const linkMatchesSearch = !isSearching || sourceMatches || targetMatches
+              const linkSearchOpacity = linkMatchesSearch ? 1 : 0.15
+
               return (
                 <g key={`link-g-${link.id}`} className="transition-opacity duration-300">
                   {/* Linha de Conexão */}
@@ -934,7 +1116,7 @@ export function AIPVinculosGraph({
                     stroke={color}
                     strokeWidth={isConfirmado ? 2.5 : 1.5}
                     strokeDasharray={isConfirmado ? "0" : "4, 4"}
-                    opacity={hoveredNodeId === link.source || hoveredNodeId === link.target ? 0.95 : 0.45}
+                    opacity={(hoveredNodeId === link.source || hoveredNodeId === link.target ? 0.95 : 0.45) * linkSearchOpacity}
                     markerEnd={`url(#arrow-outgoing)`}
                     className={isConfirmado ? "animate-[dash_10s_linear_infinite]" : ""}
                   />
@@ -1001,6 +1183,14 @@ export function AIPVinculosGraph({
               const isHovered = hoveredNodeId === node.id
               const isDragged = draggedNodeIdRef.current === node.id
               
+              // Lógica de busca interna para os nós
+              const isSearching = graphSearchQuery.trim().length > 0
+              const isMatchedBySearch = isSearching && (
+                node.nome.toLowerCase().includes(graphSearchQuery.toLowerCase()) ||
+                node.vulgo.toLowerCase().includes(graphSearchQuery.toLowerCase())
+              )
+              const searchOpacity = isSearching ? (isMatchedBySearch ? 1 : 0.25) : 1
+              
               return (
                 <g
                   key={`node-g-${node.id}`}
@@ -1009,8 +1199,18 @@ export function AIPVinculosGraph({
                   onContextMenu={(e) => handleNodeContextMenu(node.id, e)}
                   onMouseEnter={() => setHoveredNodeId(node.id)}
                   onMouseLeave={() => setHoveredNodeId(null)}
+                  onDoubleClick={() => onFocarApenado(node.sipeId)}
+                  onClick={(e) => {
+                    if (e.shiftKey) {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (!node.expanded && !node.isCentral) {
+                        handleExpandNode(node.id)
+                      }
+                    }
+                  }}
                   className="cursor-grab active:cursor-grabbing transition-opacity duration-300"
-                  style={{ opacity: hoveredNodeId && hoveredNodeId !== node.id ? 0.6 : 1 }}
+                  style={{ opacity: (hoveredNodeId && hoveredNodeId !== node.id ? 0.6 : 1) * searchOpacity }}
                 >
                   {/* Sombra Glow de Destaque */}
                   <circle
@@ -1022,6 +1222,17 @@ export function AIPVinculosGraph({
                       filter: 'blur(3px)'
                     }}
                   />
+
+                  {/* Destaque de Busca Interna */}
+                  {isMatchedBySearch && (
+                    <circle
+                      r={nodeRadius + 8}
+                      fill="none"
+                      stroke="#eab308"
+                      strokeWidth={3}
+                      className="animate-pulse"
+                    />
+                  )}
 
                   {/* Círculo Principal com Foto do Apenado */}
                   <circle
@@ -1231,10 +1442,25 @@ export function AIPVinculosGraph({
         </div>
       )}
 
-      {/* 6. Indicadores Informativos de Ajuda */}
-      <div className="absolute bottom-4 right-4 pointer-events-auto bg-white/90 dark:bg-gray-800/90 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm text-[10px] text-gray-400 dark:text-gray-500 font-medium flex items-center gap-1.5">
-        <Info className="w-3.5 h-3.5 text-purple-500" />
-        <span>Arraste nós com botão esquerdo. Clique com botão direito para ver opções de expansão.</span>
+      {/* 6. Indicadores Informativos de Ajuda e Direcionalidade */}
+      <div className="absolute bottom-4 right-4 pointer-events-auto bg-white/95 dark:bg-gray-800/95 backdrop-blur-md px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm text-[10px] text-gray-500 dark:text-gray-400 font-medium flex flex-col gap-1 max-w-xs select-none">
+        <div className="flex items-center gap-1.5">
+          <Info className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+          <span>Arraste com clique esquerdo. Clique direito para opções.</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+          <span><strong>Duplo clique:</strong> Foca como central.</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+          <span><strong>Shift + Clique:</strong> Expande em 2º grau.</span>
+        </div>
+        <div className="h-px bg-gray-150 dark:bg-gray-700 w-full my-0.5" />
+        <div className="flex items-center gap-1 flex-wrap text-[9px]">
+          <span className="font-bold text-purple-600 dark:text-purple-400">Direção da Seta:</span>
+          <span>Origem ➔ [Vínculo] ➔ Destino</span>
+        </div>
       </div>
     </div>
   )
