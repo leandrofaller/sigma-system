@@ -263,8 +263,24 @@ export async function GET(request: NextRequest) {
         })
       : []
 
+    // Buscar todos os vínculos para marcar quem possui ligações
+    const todosVinculos = await prisma.aIPVinculo.findMany({
+      select: { apenadoId: true, vinculadoComId: true }
+    })
+
+    const idsComVinculos = new Set<string>()
+    for (const v of todosVinculos) {
+      if (v.apenadoId) idsComVinculos.add(v.apenadoId)
+      if (v.vinculadoComId) idsComVinculos.add(v.vinculadoComId)
+    }
+
+    const apenadosFormatados = apenados.map(a => ({
+      ...a,
+      temVinculos: idsComVinculos.has(a.id)
+    }))
+
     return NextResponse.json({
-      apenados,
+      apenados: apenadosFormatados,
       total,
       page,
       limit,

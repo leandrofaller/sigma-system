@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const q = unaccentParam(searchParams.get('q'))
+  const sipeIdParam = searchParams.get('sipeId')
   const faccaoId = searchParams.get('faccaoId')
   const unidade = unaccentParam(searchParams.get('unidade'))
   const situacao = unaccentParam(searchParams.get('situacao'))
@@ -20,6 +21,15 @@ export async function GET(req: NextRequest) {
   let whereClause = 'WHERE 1=1'
   const params: any[] = []
   let idx = 1
+
+  if (sipeIdParam) {
+    const sId = parseInt(sipeIdParam)
+    if (!isNaN(sId)) {
+      whereClause += ` AND "sipeId" = $${idx}`
+      params.push(sId)
+      idx++
+    }
+  }
 
   if (faccaoId) {
     whereClause += ` AND "faccaoId" = $${idx}`

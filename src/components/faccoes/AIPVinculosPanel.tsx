@@ -56,11 +56,41 @@ const VINCULO_OPCOES = {
   ]
 }
 
-export function AIPVinculosPanel() {
+export function AIPVinculosPanel({
+  preselectedSipeId,
+  onClearPreselected
+}: {
+  preselectedSipeId?: number | null
+  onClearPreselected?: () => void
+}) {
   const [selectedSipeApenado, setSelectedSipeApenado] = useState<any | null>(null)
   const [apenadoAip, setApenadoAip] = useState<any | null>(null)
   const [vinculos, setVinculos] = useState<AIPVinculo[]>([])
   const [loading, setLoading] = useState(false)
+
+  // Efeito para tratar a pré-seleção externa de um apenado
+  useEffect(() => {
+    if (preselectedSipeId) {
+      const loadPreselected = async () => {
+        try {
+          const res = await fetch(`/api/sipe/apenados?sipeId=${preselectedSipeId}`)
+          if (res.ok) {
+            const data = await res.json()
+            if (data.apenados && data.apenados.length > 0) {
+              setSelectedSipeApenado(data.apenados[0])
+            }
+          }
+        } catch (err) {
+          console.error('Erro ao buscar apenado pré-selecionado:', err)
+        } finally {
+          if (onClearPreselected) {
+            onClearPreselected()
+          }
+        }
+      }
+      loadPreselected()
+    }
+  }, [preselectedSipeId, onClearPreselected])
 
   // Modais e Detalhes
   const [modalApenado, setModalApenado] = useState<any | null>(null)

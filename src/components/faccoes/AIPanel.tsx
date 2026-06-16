@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download } from 'lucide-react'
+import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface AIPFotoVisitante {
@@ -110,11 +110,18 @@ interface AIPApenadoAnexo {
   descricao?: string | null
 }
 
-// ── Card de Apenado em AIP ──────────────────────────────
-
-function AIApenadoCard({ apenado, onSelect }: { apenado: AIPApenado; onSelect: (a: AIPApenado) => void }) {
+// ── Card de Apenado em AIP ────────�function AIApenadoCard({
+  apenado,
+  onSelect,
+  onViewVinculos
+}: {
+  apenado: AIPApenado
+  onSelect: (a: AIPApenado) => void
+  onViewVinculos?: (sipeId: number) => void
+}) {
   const temInteligencia = !!(apenado.facaoRealNome || apenado.notasInteligencia)
   const isFaccaoConfirmada = apenado.facaoRealNome && apenado.facaoNivel === 'confirmado'
+  const temVinculos = (apenado as any).temVinculos
 
   return (
     <button
@@ -147,26 +154,56 @@ function AIApenadoCard({ apenado, onSelect }: { apenado: AIPApenado; onSelect: (
         
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-gray-900 dark:text-white truncate text-sm">{apenado.nome}</h3>
-          <p className="text-xs text-gray-500 mt-1 truncate">
+          <p className="text-xs text-gray-550 mt-1 truncate">
             {apenado.unidade && `${apenado.unidade} • `}
             {apenado.faccao || '—'}
           </p>
-          {apenado.facaoRealNome ? (
-            <div className="mt-2 flex items-center">
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-                isFaccaoConfirmada
-                  ? 'bg-red-500 text-white animate-pulse shadow-sm shadow-red-500/20'
-                  : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
-              }`}>
-                <Shield className="w-2.5 h-2.5" />
-                {apenado.facaoRealNome} {isFaccaoConfirmada ? '(Verificada)' : '(Suspeita)'}
-              </span>
+
+          <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex flex-wrap gap-1">
+              {apenado.facaoRealNome ? (
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                  isFaccaoConfirmada
+                    ? 'bg-red-500 text-white animate-pulse shadow-sm shadow-red-500/20'
+                    : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                }`}>
+                  <Shield className="w-2.5 h-2.5" />
+                  {apenado.facaoRealNome}
+                </span>
+              ) : temInteligencia && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 dark:bg-purple-950/20 dark:text-purple-400">
+                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                  Inteligência
+                </span>
+              )}
+              {temVinculos && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 animate-pulse">
+                  <Link2 className="w-2.5 h-2.5" />
+                  COM VÍNCULO
+                </span>
+              )}
             </div>
-          ) : temInteligencia && (
-            <div className="mt-2 flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-purple-500" />
-              <span className="text-xs text-purple-600 dark:text-purple-400">Dados de inteligência</span>
-            </div>
+
+            {temVinculos && onViewVinculos && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onViewVinculos(apenado.sipeId)
+                }}
+                className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold border border-indigo-150 dark:border-indigo-900/40 flex items-center gap-1 transition-all"
+                title="Ver vínculos deste apenado"
+              >
+                <Link2 className="w-2.5 h-2.5" />
+                Ver Vínculos
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </button>
+  )
+}    </div>
           )}
         </div>
       </div>

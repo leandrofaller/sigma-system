@@ -16,6 +16,12 @@ interface AIPClientProps {
 
 export function AIPClient({ userRole }: AIPClientProps) {
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [preselectedSipeId, setPreselectedSipeId] = useState<number | null>(null)
+
+  const handleViewVinculos = (sipeId: number) => {
+    setPreselectedSipeId(sipeId)
+    setActiveTab('vinculos')
+  }
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -77,11 +83,14 @@ export function AIPClient({ userRole }: AIPClientProps) {
           </TabsContent>
 
           <TabsContent value="apenados" className="flex-1 min-h-0 mt-0">
-            <AIPanel userRole={userRole} />
+            <AIPanel userRole={userRole} onViewVinculos={handleViewVinculos} />
           </TabsContent>
 
           <TabsContent value="vinculos" className="flex-1 min-h-0 mt-0">
-            <AIPVinculosPanel />
+            <AIPVinculosPanel
+              preselectedSipeId={preselectedSipeId}
+              onClearPreselected={() => setPreselectedSipeId(null)}
+            />
           </TabsContent>
 
           <TabsContent value="faccoes" className="flex-1 min-h-0 mt-0 overflow-y-auto">
