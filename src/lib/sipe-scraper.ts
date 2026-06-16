@@ -958,7 +958,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
               await scrapeAdvogadoDetalhe(page, sipeId, jobId)
             } else {
               const apenadoCache = listagemInfoCache.get(sipeId)
-              const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? cleanUnidadeNome ?? null
+              const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? (job.tipo === 'APENADOS' ? cleanUnidadeNome : null)
               await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome, useSearch)
             }
           } catch (err: any) {
@@ -972,7 +972,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
                 await scrapeAdvogadoDetalhe(page, sipeId, jobId)
               } else {
                 const apenadoCache = listagemInfoCache.get(sipeId)
-                const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? cleanUnidadeNome ?? null
+                const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? (job.tipo === 'APENADOS' ? cleanUnidadeNome : null)
                 await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome, useSearch)
               }
             } else {
