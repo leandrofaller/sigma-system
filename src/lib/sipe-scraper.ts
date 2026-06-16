@@ -2911,10 +2911,20 @@ async function scrapeApenadoFicha(
     select: { situacao: true, cela: true, unidade: true }
   });
 
-  // Recupera cela e situação do cache obtido na listagem (prioridade) ou tenta ler do corpo do perfil
-  const cela = listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null;
-  const situacao = listagemInfoCache.get(sipeId)?.situacao ?? existingApenado?.situacao ?? dados.situacao ?? null;
-  const unidade = unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null;
+  // Recupera cela, situação e unidade do cache obtido na listagem (prioridade) ou tenta ler do corpo do perfil, com higienização de URLs sujas
+  let cela = listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null;
+  let situacao = listagemInfoCache.get(sipeId)?.situacao ?? existingApenado?.situacao ?? dados.situacao ?? null;
+  let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null;
+
+  if (unidade && (unidade.includes('http') || unidade.includes('/fotos') || unidade.includes('.jpg') || unidade.includes('.png') || unidade.includes('uploads/'))) {
+    unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? dados.unidadeFicha ?? null;
+    if (unidade && (unidade.includes('http') || unidade.includes('/fotos') || unidade.includes('.jpg') || unidade.includes('.png') || unidade.includes('uploads/'))) {
+      unidade = null;
+    }
+  }
+  if (cela && (cela.includes('http') || cela.includes('/fotos') || cela.includes('.jpg') || cela.includes('.png') || cela.includes('uploads/'))) {
+    cela = null;
+  }
 
   // --- Integração com Identificação de Apenados (tabela Apenado local) ---
   const nomeApenadoUpper = (dados.nome || 'SEM NOME').trim().toUpperCase();
@@ -3005,7 +3015,13 @@ async function scrapeApenadoFicha(
 
   // FIX: Para GLOBAL scraping, usar unidade extraída do formulário como fallback
   // Se não encontrar "Unidade:", tenta usar "cela" (que contém o nome da unidade prisional)
-  const resolvedUnidade = unidade || dados.unidadeFicha || cela || undefined
+  let resolvedUnidade = unidade || dados.unidadeFicha || cela || undefined;
+  if (resolvedUnidade && (resolvedUnidade.includes('http') || resolvedUnidade.includes('/fotos') || resolvedUnidade.includes('.jpg') || resolvedUnidade.includes('.png') || resolvedUnidade.includes('uploads/'))) {
+    resolvedUnidade = listagemInfoCache.get(sipeId)?.unidadeNome || undefined;
+    if (resolvedUnidade && (resolvedUnidade.includes('http') || resolvedUnidade.includes('/fotos') || resolvedUnidade.includes('.jpg') || resolvedUnidade.includes('.png') || resolvedUnidade.includes('uploads/'))) {
+      resolvedUnidade = undefined;
+    }
+  }
 
   // DEBUG: Log para verificar qual fallback foi usado
   if (!unidade) {
@@ -7201,9 +7217,19 @@ export async function scrapeApenadoFichaFast(
     select: { situacao: true, cela: true, unidade: true }
   })
 
-  const cela = listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null
-  const situacao = listagemInfoCache.get(sipeId)?.situacao ?? existingApenado?.situacao ?? dados.situacao ?? null
-  const unidade = unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null
+  let cela = listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null
+  let situacao = listagemInfoCache.get(sipeId)?.situacao ?? existingApenado?.situacao ?? dados.situacao ?? null
+  let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null
+
+  if (unidade && (unidade.includes('http') || unidade.includes('/fotos') || unidade.includes('.jpg') || unidade.includes('.png') || unidade.includes('uploads/'))) {
+    unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? dados.unidadeFicha ?? null
+    if (unidade && (unidade.includes('http') || unidade.includes('/fotos') || unidade.includes('.jpg') || unidade.includes('.png') || unidade.includes('uploads/'))) {
+      unidade = null
+    }
+  }
+  if (cela && (cela.includes('http') || cela.includes('/fotos') || cela.includes('.jpg') || cela.includes('.png') || cela.includes('uploads/'))) {
+    cela = null
+  }
 
   const nomeApenadoUpper = (dados.nome || 'SEM NOME').trim().toUpperCase()
   let faccaoNome: string | null = null
@@ -7277,7 +7303,13 @@ export async function scrapeApenadoFichaFast(
     }
   }
 
-  const resolvedUnidade = unidade || dados.unidadeFicha || cela || undefined
+  let resolvedUnidade = unidade || dados.unidadeFicha || cela || undefined;
+  if (resolvedUnidade && (resolvedUnidade.includes('http') || resolvedUnidade.includes('/fotos') || resolvedUnidade.includes('.jpg') || resolvedUnidade.includes('.png') || resolvedUnidade.includes('uploads/'))) {
+    resolvedUnidade = listagemInfoCache.get(sipeId)?.unidadeNome || undefined;
+    if (resolvedUnidade && (resolvedUnidade.includes('http') || resolvedUnidade.includes('/fotos') || resolvedUnidade.includes('.jpg') || resolvedUnidade.includes('.png') || resolvedUnidade.includes('uploads/'))) {
+      resolvedUnidade = undefined;
+    }
+  }
 
   const upsertData = {
     nome: dados.nome || 'SEM NOME',

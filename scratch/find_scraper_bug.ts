@@ -8,8 +8,8 @@ console.log('Total de linhas:', lines.length);
 
 lines.forEach((line, idx) => {
   const lineNum = idx + 1;
-  if (line.includes('=== \'SITUAÇÃO\'') || line.includes('=== "SITUAÇÃO"') || line.includes('SITUAÇAO')) {
-    if (line.includes('text') || line.includes('===')) {
+  if (line.includes('selectRole') || line.includes('perfil') || line.includes('unidade')) {
+    if (line.includes('page.') || line.includes('await') || line.includes('select')) {
       console.log(`L${lineNum}: ${line.trim()}`);
     }
   }
