@@ -169,7 +169,8 @@
       "PowerShell(git add src/lib/relint-pdf.tsx)",
       "PowerShell(Get-ChildItem \"F:\\\\relatorio_claude\" | Where-Object { $_.Name -match \"next.config|.env|vercel\" } | Select-Object Name)",
       "Bash(xargs grep -l \"geolocation_enabled\")",
-      "Bash(xargs grep -l \"GeoMonitorPanel\\\\|GeoMap\")"
+      "Bash(xargs grep -l \"GeoMonitorPanel\\\\|GeoMap\")",
+      "Bash(gh repo *)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
