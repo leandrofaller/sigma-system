@@ -110,7 +110,7 @@ interface AIPApenadoAnexo {
   descricao?: string | null
 }
 
-// ── Card de Apenado em AIP ────────�
+// ── Card de Apenado em AIP ────────
 function AIApenadoCard({
   apenado,
   onSelect,
