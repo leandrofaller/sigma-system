@@ -580,7 +580,7 @@ export function AIPVinculosPanel() {
         <div>
           <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-1">
             <Brain className="w-4 h-4 text-purple-500" />
-            Selecionar Investigado
+            Selecionar Custodiado/Apenado
           </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400">Escolha um apenado do AIP para analisar ou documentar vínculos</p>
         </div>
