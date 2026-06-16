@@ -1727,7 +1727,7 @@ async function coletarIdsApenados(
           if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = i
           if (text === 'CELA') celaColIndex = i
           if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = i
-          if (text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')) unidadeColIndex = i
+          if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) unidadeColIndex = i
         })
         if (codigoColIndex === -1) codigoColIndex = 1
         $first(table).find('tbody tr').each((_, row) => {
@@ -1818,7 +1818,7 @@ async function coletarIdsApenados(
               if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
               if (text === 'CELA') celaColIndex = c
               if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = c
-              if (text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')) unidadeColIndex = c
+              if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) unidadeColIndex = c
             })
             if (codigoColIndex === -1) codigoColIndex = 1
             $page(table).find('tbody tr').each((_, row) => {
@@ -1898,7 +1898,7 @@ async function coletarIdsApenados(
             if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
             if (text === 'CELA') celaColIndex = c
             if (text === 'SITUAÇÃO' || text === 'SITUACAO' || text === 'STATUS' || text === 'SITUAÇAO') situacaoColIndex = c
-            if (text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')) unidadeColIndex = c
+            if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) unidadeColIndex = c
           })
           if (codigoColIndex === -1) codigoColIndex = 1
           $page(table).find('tbody tr').each((_, row) => {
@@ -2040,7 +2040,7 @@ async function coletarIdsApenados(
       })
       const unidadeIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
-        return text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')
+        return text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')
       })
 
       const data: any[] = dt.rows().data().toArray()
@@ -2119,7 +2119,7 @@ async function coletarIdsApenados(
       })
       const unidadeIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
-        return text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')
+        return text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')
       })
 
       let allRows: any[] = []
@@ -2272,7 +2272,7 @@ async function coletarIdsApenados(
       const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
       return headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
-        return text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')
+        return text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')
       })
     } catch { return -1 }
   }).catch(() => -1)
@@ -2588,8 +2588,13 @@ async function scrapeApenadoFicha(
       return el?.options[el.selectedIndex]?.text?.trim() || null
     }
 
-    // Busca textual de contingência para cela, unidade e campos select via regex
-    const bodyText = document.body?.innerText || ''
+    // Clona o conteúdo útil ou remove elementos de layout para não ler a unidade ativa da sessão no cabeçalho do SIPE
+    const contentEl = document.querySelector('.content-wrapper') || document.querySelector('#content') || document.querySelector('.content') || document.querySelector('main') || document.body
+    const tempDiv = document.createElement('div')
+    tempDiv.innerHTML = contentEl.innerHTML
+    const unwanted = tempDiv.querySelectorAll('header, nav, .main-header, .navbar, .main-sidebar, aside, .sidebar, .user-panel, .dropdown-menu, #navbar, .header')
+    unwanted.forEach(el => el.remove())
+    const bodyText = tempDiv.innerText || tempDiv.textContent || ''
 
     let celaFicha = null
     const celaMatch = bodyText.match(/Cela:\s*([^\n]+)/i) || bodyText.match(/Cela\s*-\s*([^\n]+)/i)
@@ -2597,10 +2602,12 @@ async function scrapeApenadoFicha(
       celaFicha = celaMatch[1].trim()
     }
 
-    let unidadeFicha = null
-    const unidadeMatch = bodyText.match(/Unidade:\s*([^\n]+)/i) || bodyText.match(/Estabelecimento:\s*([^\n]+)/i) || bodyText.match(/Unidade\s*Prisional:\s*([^\n]+)/i)
-    if (unidadeMatch) {
-      unidadeFicha = unidadeMatch[1].trim()
+    let unidadeFicha = selVal('unidade_id') || selVal('fk_unidade') || selVal('estabelecimento') || selVal('unidade') || selVal('estabelecimento_id')
+    if (!unidadeFicha) {
+      const unidadeMatch = bodyText.match(/Unidade:\s*([^\n]+)/i) || bodyText.match(/Estabelecimento:\s*([^\n]+)/i) || bodyText.match(/Unidade\s*Prisional:\s*([^\n]+)/i)
+      if (unidadeMatch) {
+        unidadeFicha = unidadeMatch[1].trim()
+      }
     }
 
     // Extração via regex para campos que vêm como texto (não selects)
@@ -5747,7 +5754,10 @@ function parseApenadoFichaHtmlCheerio(html: string) {
     return select.find('option').first().text().trim() || null
   }
 
-  const bodyText = $('body').text() || ''
+  // Clona ou remove elementos de layout do cabeçalho superior e lateral do SIPE para não ler o nome da unidade ativa da sessão no menu do usuário
+  const $clean = cheerio.load(html)
+  $clean('header, nav, .main-header, .navbar, .main-sidebar, aside, .sidebar, .user-panel, .dropdown-menu, #navbar, .header').remove()
+  const bodyText = $clean('body').text() || ''
 
   let celaFicha = null
   const celaMatch = bodyText.match(/Cela:\s*([^\n]+)/i) || bodyText.match(/Cela\s*-\s*([^\n]+)/i)
@@ -5755,10 +5765,12 @@ function parseApenadoFichaHtmlCheerio(html: string) {
     celaFicha = celaMatch[1].trim()
   }
 
-  let unidadeFicha = null
-  const unidadeMatch = bodyText.match(/Unidade:\s*([^\n]+)/i) || bodyText.match(/Estabelecimento:\s*([^\n]+)/i) || bodyText.match(/Unidade\s*Prisional:\s*([^\n]+)/i)
-  if (unidadeMatch) {
-    unidadeFicha = unidadeMatch[1].trim()
+  let unidadeFicha = selVal('unidade_id') || selVal('fk_unidade') || selVal('estabelecimento') || selVal('unidade') || selVal('estabelecimento_id')
+  if (!unidadeFicha) {
+    const unidadeMatch = bodyText.match(/Unidade:\s*([^\n]+)/i) || bodyText.match(/Estabelecimento:\s*([^\n]+)/i) || bodyText.match(/Unidade\s*Prisional:\s*([^\n]+)/i)
+    if (unidadeMatch) {
+      unidadeFicha = unidadeMatch[1].trim()
+    }
   }
 
   const extractLabel = (label: string): string | null => {
