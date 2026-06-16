@@ -47,6 +47,7 @@ interface AIPVinculo {
 interface GraphNode {
   id: string
   sipeId: number
+  dbId: string
   nome: string
   vulgo: string
   unidade: string
@@ -155,7 +156,7 @@ export function AIPVinculosGraph({
     const initialNodes: { [id: string]: GraphNode } = {}
     const initialLinks: GraphLink[] = []
 
-    const centralId = selectedApenado.id
+    const centralId = selectedApenado.sipeId.toString()
     
     // Obter vulgos legíveis
     const getVulgos = (ap: AIPApenado) => {
@@ -170,6 +171,7 @@ export function AIPVinculosGraph({
     initialNodes[centralId] = {
       id: centralId,
       sipeId: selectedApenado.sipeId,
+      dbId: selectedApenado.aipId || selectedApenado.id,
       nome: selectedApenado.nome,
       vulgo: getVulgos(selectedApenado) || '',
       unidade: selectedApenado.unidade || 'Sem Unidade',
@@ -192,7 +194,7 @@ export function AIPVinculosGraph({
       const outro = v.outroApenado
       if (!outro) return
 
-      const outroId = outro.id
+      const outroId = outro.sipeId.toString()
       
       // Cria o nó de destino caso não exista
       if (!initialNodes[outroId]) {
@@ -202,6 +204,7 @@ export function AIPVinculosGraph({
         initialNodes[outroId] = {
           id: outroId,
           sipeId: outro.sipeId,
+          dbId: outro.id,
           nome: outro.nome,
           vulgo: getVulgos(outro) || '',
           unidade: outro.unidade || 'Sem Unidade',
@@ -572,7 +575,7 @@ export function AIPVinculosGraph({
         const outro = v.outroApenado
         if (!outro) return
 
-        const outroId = outro.id
+        const outroId = outro.sipeId.toString()
         
         // Evita adicionar o nó central do grafo original se já estiver lá
         if (!currentNodes[outroId]) {
@@ -585,6 +588,7 @@ export function AIPVinculosGraph({
           currentNodes[outroId] = {
             id: outroId,
             sipeId: outro.sipeId,
+            dbId: outro.id,
             nome: outro.nome,
             vulgo: outro.vulgo || (outro.alcunhas && outro.alcunhas.length > 0 ? outro.alcunhas.map(a => a.alcunha).join(', ') : '') || '',
             unidade: outro.unidade || 'Sem Unidade',
@@ -867,8 +871,8 @@ export function AIPVinculosGraph({
               {node.photoPath ? (
                 <image
                   href={node.isCentral 
-                    ? `/api/sipe/apenados/${node.id}/foto` 
-                    : `/api/aip/apenados/${node.id}/foto`
+                    ? `/api/sipe/apenados/${node.dbId}/foto` 
+                    : `/api/aip/apenados/${node.dbId}/foto`
                   }
                   x="0"
                   y="0"
@@ -944,8 +948,9 @@ export function AIPVinculosGraph({
                     stroke="transparent"
                     strokeWidth={15}
                     className="cursor-pointer"
-                    title={`${link.tipo} (${isConfirmado ? 'Confirmado' : 'Suspeito'})`}
-                  />
+                  >
+                    <title>{`${link.tipo} (${isConfirmado ? 'Confirmado' : 'Suspeito'})`}</title>
+                  </line>
 
                   {/* Etiqueta de Texto do Tipo de Vínculo sobre a Linha */}
                   <g transform={`translate(${midX}, ${midY}) rotate(${angle})`}>
@@ -1036,8 +1041,9 @@ export function AIPVinculosGraph({
                       fill="#10b981"
                       stroke="#ffffff"
                       strokeWidth={1}
-                      title="Totalmente Expandido"
-                    />
+                    >
+                      <title>Totalmente Expandido</title>
+                    </circle>
                   )}
 
                   {loadingNodeId === node.id && (
@@ -1110,8 +1116,8 @@ export function AIPVinculosGraph({
             {hoveredNode.photoPath ? (
               <img 
                 src={hoveredNode.isCentral 
-                  ? `/api/sipe/apenados/${hoveredNode.id}/foto` 
-                  : `/api/aip/apenados/${hoveredNode.id}/foto`
+                  ? `/api/sipe/apenados/${hoveredNode.dbId}/foto` 
+                  : `/api/aip/apenados/${hoveredNode.dbId}/foto`
                 }
                 alt={hoveredNode.nome}
                 className="w-full h-full object-cover"
@@ -1185,7 +1191,10 @@ export function AIPVinculosGraph({
           <button
             type="button"
             onClick={() => {
-              onApenadoClick(contextMenuNodeId)
+              const node = nodes[contextMenuNodeId]
+              if (node) {
+                onApenadoClick(node.dbId)
+              }
               setContextMenuNodeId(null)
             }}
             className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"
