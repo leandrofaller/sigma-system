@@ -4106,15 +4106,7 @@ export async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: 
 
   // Processamento e download da foto do advogado (se houver e não for manual)
   let localPhotoPath: string | null = null;
-  const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
-  const advDir = join(baseDir, 'advogados');
-  const filenameAdv = `advogado-${sipeId}.webp`;
-  const destPathAdv = join(advDir, filenameAdv);
-  const jaTemFotoAdv = existsSync(destPathAdv);
-
-  if (jaTemFotoAdv) {
-    localPhotoPath = `uploads/advogados/${filenameAdv}`;
-  } else if (!temFotoManual && fotoSrc && !fotoSrc.includes('semfoto') && !fotoSrc.includes('sem_foto') && !fotoSrc.includes('default')) {
+  if (!temFotoManual && fotoSrc && !fotoSrc.includes('semfoto') && !fotoSrc.includes('sem_foto') && !fotoSrc.includes('default')) {
     try {
       const imageBuffer = await downloadSipeImage(page, fotoSrc);
       if (imageBuffer) {
@@ -4123,11 +4115,16 @@ export async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: 
           .webp({ quality: 85 })
           .toBuffer();
 
+        const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
+        const advDir = join(baseDir, 'advogados');
         const { mkdir, writeFile } = await import('fs/promises');
         await mkdir(advDir, { recursive: true });
-        await writeFile(destPathAdv, webpBuffer);
 
-        localPhotoPath = `uploads/advogados/${filenameAdv}`;
+        const filename = `advogado-${sipeId}.webp`;
+        const destPath = join(advDir, filename);
+        await writeFile(destPath, webpBuffer);
+
+        localPhotoPath = `uploads/advogados/${filename}`;
         if (jobId) log(jobId, `[SIPE ADVOGADO] Foto do advogado #${sipeId} salva: ${localPhotoPath}`);
       }
     } catch (photoErr) {
@@ -4205,13 +4202,10 @@ export async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: 
     });
   })()`) as any[];
 
-  if (apenadosAtendidos.length === 0) return;
-
-  // --- OTIMIZAÇÃO: Batch Queries de Apenados ---
-  const apenadosPreIds: number[] = []
-  const apenadosNomes: string[] = []
-  const parsedApenadosData = apenadosAtendidos.map(ap => {
+  for (const ap of apenadosAtendidos) {
     let apenadoSipeId: number | null = null
+
+    // 1. Tenta extrair o SIPE ID correto do link href do nome (ex: /apenados/123456/editar)
     if (ap.href) {
       const match = ap.href.match(/\/apenados\/(\d+)/)
       if (match) {
@@ -4221,6 +4215,8 @@ export async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: 
         }
       }
     }
+
+    // 2. Se não conseguiu pelo link, limpa caracteres especiais do campo "Cpf" e tenta usar se não estourar Int32
     if (!apenadoSipeId && ap.sipeIdText) {
       const apenasDigitos = ap.sipeIdText.replace(/\D/g, '')
       const parsed = parseInt(apenasDigitos)
@@ -4228,238 +4224,197 @@ export async function scrapeAdvogadoDetalhe(page: Page, sipeId: number, jobId?: 
         apenadoSipeId = parsed
       }
     }
-    if (apenadoSipeId) apenadosPreIds.push(apenadoSipeId)
-    if (ap.nome) apenadosNomes.push(ap.nome.trim().toUpperCase())
-    return { ap, apenadoSipeId }
-  })
 
-  // Busca do banco em lote
-  const importadosExistentes = await prisma.sipeApenadoImportado.findMany({
-    where: {
-      OR: [
-        { sipeId: { in: apenadosPreIds } },
-        { nome: { in: apenadosAtendidos.map(ap => ap.nome).filter(Boolean) } }
-      ]
-    }
-  })
+    // Processamento e download da foto do apenado (se houver)
+    let apenadoPhotoPath: string | null = null;
+    let fotoApenadoAtualizada = false;
 
-  const locaisExistentes = await prisma.apenado.findMany({
-    where: {
-      name: { in: apenadosNomes }
-    }
-  })
+    if (apenadoSipeId && apenadoSipeId > 0 && ap.fotoSrc && !ap.fotoSrc.includes('semfoto') && !ap.fotoSrc.includes('sem_foto') && !ap.fotoSrc.includes('default')) {
+      try {
+        const imageBuffer = await downloadSipeImage(page, ap.fotoSrc);
+        if (imageBuffer) {
+          const webpBuffer = await sharp(imageBuffer)
+            .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 90 })
+            .toBuffer();
 
-  // Mapeamento em memória para consulta O(1)
-  const mapImportadoPorSipeId = new Map<number, typeof importadosExistentes[0]>()
-  const mapImportadoPorNomeNasc = new Map<string, typeof importadosExistentes[0]>()
-  const mapImportadoPorNome = new Map<string, typeof importadosExistentes[0]>()
+          const dir = getApenadosDir();
+          const { mkdir, writeFile, readFile } = await import('fs/promises');
+          await mkdir(dir, { recursive: true });
 
-  for (const imp of importadosExistentes) {
-    if (imp.sipeId) mapImportadoPorSipeId.set(imp.sipeId, imp)
-    if (imp.nome) {
-      const nomeUpper = imp.nome.toUpperCase()
-      if (imp.dataNascimento) {
-        mapImportadoPorNomeNasc.set(`${nomeUpper}_${imp.dataNascimento}`, imp)
-      }
-      mapImportadoPorNome.set(nomeUpper, imp)
-    }
-  }
+          const filename = `sipe-${apenadoSipeId}.webp`;
+          const localPath = join(dir, filename);
 
-  const mapLocalPorNome = new Map<string, typeof locaisExistentes[0]>()
-  for (const loc of locaisExistentes) {
-    mapLocalPorNome.set(loc.name.toUpperCase(), loc)
-  }
+          let shouldWrite = true;
+          if (existsSync(localPath)) {
+            try {
+              const existingBuffer = await readFile(localPath);
+              const currentHash = createHash('sha256').update(webpBuffer).digest('hex');
+              const existingHash = createHash('sha256').update(existingBuffer).digest('hex');
+              if (currentHash === existingHash) {
+                shouldWrite = false;
+              }
+            } catch {}
+          }
 
-  // Menor ID negativo para stubs no banco (evita colisões concorrentes)
-  const menorIdApenadoDb = await prisma.sipeApenadoImportado.findFirst({
-    where: { sipeId: { lt: 0 } },
-    orderBy: { sipeId: 'asc' },
-    select: { sipeId: true }
-  })
-  let proximoIdNegativo = menorIdApenadoDb ? menorIdApenadoDb.sipeId - 1 : -1000
-
-  // Função para dividir em blocos para execução concorrente controlada
-  const chunkArray = <T>(arr: T[], size: number): T[][] => {
-    const chunks: T[][] = []
-    for (let i = 0; i < arr.length; i += size) {
-      chunks.push(arr.slice(i, i + size))
-    }
-    return chunks
-  }
-
-  const apenadosLotes = chunkArray(parsedApenadosData, 5) // Processa de 5 em 5
-
-  for (const lote of apenadosLotes) {
-    await Promise.all(lote.map(async ({ ap, apenadoSipeId }) => {
-      let resolvedSipeId = apenadoSipeId
-
-      // Processamento e download da foto do apenado (se houver)
-      let apenadoPhotoPath: string | null = null;
-      let fotoApenadoAtualizada = false;
-
-      const dirApenado = getApenadosDir();
-      const filenameApenado = resolvedSipeId && resolvedSipeId > 0 ? `sipe-${resolvedSipeId}.webp` : null;
-      const localPathApenado = filenameApenado ? join(dirApenado, filenameApenado) : null;
-      const jaTemFotoApenado = localPathApenado ? existsSync(localPathApenado) : false;
-
-      if (jaTemFotoApenado && filenameApenado) {
-        apenadoPhotoPath = `uploads/apenados/${filenameApenado}`;
-      } else if (resolvedSipeId && resolvedSipeId > 0 && ap.fotoSrc && !ap.fotoSrc.includes('semfoto') && !ap.fotoSrc.includes('sem_foto') && !ap.fotoSrc.includes('default')) {
-        try {
-          const imageBuffer = await downloadSipeImage(page, ap.fotoSrc);
-          if (imageBuffer && filenameApenado && localPathApenado) {
-            const webpBuffer = await sharp(imageBuffer)
-              .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
-              .webp({ quality: 90 })
-              .toBuffer();
-
-            const { mkdir, writeFile } = await import('fs/promises');
-            await mkdir(dirApenado, { recursive: true });
-            await writeFile(localPathApenado, webpBuffer);
+          if (shouldWrite) {
+            await writeFile(localPath, webpBuffer);
             fotoApenadoAtualizada = true;
-
-            apenadoPhotoPath = `uploads/apenados/${filenameApenado}`;
-            if (jobId) {
-              log(jobId, `[SIPE ADVOGADO] Foto do apenado SIPE ID #${resolvedSipeId} salva/atualizada: ${apenadoPhotoPath}`);
-            }
           }
-        } catch (imgErr) {
-          console.error(`[SIPE ADVOGADO] Erro ao baixar foto do apenado SIPE ID ${resolvedSipeId}:`, imgErr);
-        }
-      }
 
-      // Tenta encontrar o apenado no banco pelo sipeId se tivermos um válido (via cache em memória)
-      let apenado = null
-      if (resolvedSipeId) {
-        apenado = mapImportadoPorSipeId.get(resolvedSipeId) || null
-      }
-
-      // Fallback: busca por Nome exato e Data de Nascimento (via cache em memória)
-      if (!apenado && ap.nome) {
-        const nomeUpper = ap.nome.toUpperCase()
-        if (ap.dataNascimento) {
-          apenado = mapImportadoPorNomeNasc.get(`${nomeUpper}_${ap.dataNascimento}`) || null
-        }
-        if (!apenado) {
-          apenado = mapImportadoPorNome.get(nomeUpper) || null
-        }
-      }
-
-      // Integração com Identificação de Apenados local (via cache em memória)
-      const nomeApenadoUpper = (ap.nome || 'SEM NOME').trim().toUpperCase();
-      let localApenado = mapLocalPorNome.get(nomeApenadoUpper) || null;
-
-      if (!localApenado) {
-        localApenado = await prisma.apenado.create({
-          data: {
-            name: nomeApenadoUpper,
-            unidade: ap.unidade || null,
-            photoPath: apenadoPhotoPath || null
-          }
-        });
-        // Atualiza cache em memória para evitar recriação se duplicado no lote subsequente
-        mapLocalPorNome.set(nomeApenadoUpper, localApenado)
-      } else {
-        const updateDataLocal: any = {};
-        if (!localApenado.unidade && ap.unidade) {
-          updateDataLocal.unidade = ap.unidade;
-        }
-        if (apenadoPhotoPath && (fotoApenadoAtualizada || !localApenado.photoPath)) {
-          updateDataLocal.photoPath = apenadoPhotoPath;
-          
-          if (fotoApenadoAtualizada) {
-            updateDataLocal.photoHash = null;
-            updateDataLocal.photoQuality = null;
-            updateDataLocal.photoHashSha = null;
-            updateDataLocal.faceDescriptor = null;
-            updateDataLocal.detScore = null;
+          apenadoPhotoPath = `uploads/apenados/${filename}`;
+          if (jobId && shouldWrite) {
+            log(jobId, `[SIPE ADVOGADO] Foto do apenado SIPE ID #${apenadoSipeId} salva/atualizada: ${apenadoPhotoPath}`);
           }
         }
-        if (Object.keys(updateDataLocal).length > 0) {
-          localApenado = await prisma.apenado.update({
-            where: { id: localApenado.id },
-            data: updateDataLocal
-          });
-          mapLocalPorNome.set(nomeApenadoUpper, localApenado)
-        }
+      } catch (imgErr) {
+        console.error(`[SIPE ADVOGADO] Erro ao baixar foto do apenado SIPE ID ${apenadoSipeId}:`, imgErr);
       }
+    }
 
-      // Se não encontramos o apenado importado, criamos um registro stub parcial
-      if (!apenado) {
-        if (!resolvedSipeId) {
-          // Atribuição atômica de ID negativo controlado na memória para evitar conflitos concorrentes
-          resolvedSipeId = proximoIdNegativo--;
-        }
+    // Tenta encontrar o apenado no banco pelo sipeId se tivermos um válido
+    let apenado = null
+    if (apenadoSipeId) {
+      apenado = await prisma.sipeApenadoImportado.findUnique({
+        where: { sipeId: apenadoSipeId }
+      })
+    }
 
-        const cpfLimpo = ap.sipeIdText ? ap.sipeIdText.replace(/\D/g, '') : null
-
-        apenado = await prisma.sipeApenadoImportado.create({
-          data: {
-            sipeId: resolvedSipeId,
-            nome: ap.nome || 'SEM NOME',
-            dataNascimento: ap.dataNascimento || null,
-            unidade: ap.unidade || null,
-            cela: ap.cela || null,
-            tempoPena: ap.tempoPena || null,
-            cpf: cpfLimpo && cpfLimpo.length === 11 ? cpfLimpo : null,
-            photoPath: apenadoPhotoPath || localApenado.photoPath || null,
-            apenadoLocalId: localApenado.id,
-            ultimaSyncAt: new Date()
+    // 3. Fallback: Se não encontramos por sipeId, tenta buscar por Nome exato e Data de Nascimento
+    if (!apenado && ap.nome) {
+      if (ap.dataNascimento) {
+        apenado = await prisma.sipeApenadoImportado.findFirst({
+          where: {
+            nome: ap.nome,
+            dataNascimento: ap.dataNascimento
           }
         })
-        if (resolvedSipeId) mapImportadoPorSipeId.set(resolvedSipeId, apenado)
-      } else {
-        // Se ele já existe, atualiza informações básicas
-        const updateData: any = {}
-        if (!apenado.unidade && ap.unidade) updateData.unidade = ap.unidade
-        if (!apenado.cela && ap.cela) updateData.cela = ap.cela
-        if (!apenado.tempoPena && ap.tempoPena) updateData.tempoPena = ap.tempoPena
-        if (!apenado.dataNascimento && ap.dataNascimento) updateData.dataNascimento = ap.dataNascimento
+      }
+      if (!apenado) {
+        apenado = await prisma.sipeApenadoImportado.findFirst({
+          where: { nome: ap.nome }
+        })
+      }
+    }
 
-        if (!apenado.apenadoLocalId) {
-          updateData.apenadoLocalId = localApenado.id
+    // --- Integração com Identificação de Apenados (tabela Apenado local) ---
+    const nomeApenadoUpper = (ap.nome || 'SEM NOME').trim().toUpperCase();
+    let localApenado = await prisma.apenado.findFirst({
+      where: { name: nomeApenadoUpper }
+    });
+
+    if (!localApenado) {
+      localApenado = await prisma.apenado.create({
+        data: {
+          name: nomeApenadoUpper,
+          unidade: ap.unidade || null,
+          photoPath: apenadoPhotoPath || null
         }
+      });
+    } else {
+      const updateDataLocal: any = {};
+      if (!localApenado.unidade && ap.unidade) {
+        updateDataLocal.unidade = ap.unidade;
+      }
+      if (apenadoPhotoPath && (fotoApenadoAtualizada || !localApenado.photoPath)) {
+        updateDataLocal.photoPath = apenadoPhotoPath;
         
-        if (apenadoPhotoPath && (fotoApenadoAtualizada || !apenado.photoPath)) {
-          updateData.photoPath = apenadoPhotoPath;
-        } else if (!apenado.photoPath && localApenado.photoPath) {
-          updateData.photoPath = localApenado.photoPath;
-        }
-
-        const cpfLimpo = ap.sipeIdText ? ap.sipeIdText.replace(/\D/g, '') : ''
-        if (!apenado.cpf && cpfLimpo.length === 11) {
-          updateData.cpf = cpfLimpo
-        }
-
-        if (Object.keys(updateData).length > 0) {
-          apenado = await prisma.sipeApenadoImportado.update({
-            where: { id: apenado.id },
-            data: updateData
-          })
-          if (resolvedSipeId) mapImportadoPorSipeId.set(resolvedSipeId, apenado)
+        // Reseta hashes para forçar re-indexação facial no job em background apenas se a foto mudou
+        if (fotoApenadoAtualizada) {
+          updateDataLocal.photoHash = null;
+          updateDataLocal.photoQuality = null;
+          updateDataLocal.photoHashSha = null;
+          updateDataLocal.faceDescriptor = null;
+          updateDataLocal.detScore = null;
         }
       }
+      if (Object.keys(updateDataLocal).length > 0) {
+        localApenado = await prisma.apenado.update({
+          where: { id: localApenado.id },
+          data: updateDataLocal
+        });
+      }
+    }
 
-      // Cria ou atualiza o vínculo de atendimento com o advogado
-      const ehAtivo = ap.situacao === 'ATIVA';
+    // 4. Se não encontramos o apenado importado, criamos um registro stub parcial
+    if (!apenado) {
+      // Se não temos um sipeId válido para criar o registro (ex: CPF maior que 2147483647),
+      // geramos um ID fictício negativo e único para manter integridade no banco
+      if (!apenadoSipeId) {
+        const menorIdApenado = await prisma.sipeApenadoImportado.findFirst({
+          where: { sipeId: { lt: 0 } },
+          orderBy: { sipeId: 'asc' },
+          select: { sipeId: true }
+        })
+        apenadoSipeId = menorIdApenado ? menorIdApenado.sipeId - 1 : -1000
+      }
 
-      await prisma.sipeVinculoAdvogado.upsert({
-        where: {
-          apenadoId_advogadoId: {
-            apenadoId: apenado.id,
-            advogadoId: adv.id
-          }
-        },
-        create: {
-          apenadoId: apenado.id,
-          advogadoId: adv.id,
-          ativo: ehAtivo
-        },
-        update: {
-          ativo: ehAtivo
+      const cpfLimpo = ap.sipeIdText ? ap.sipeIdText.replace(/\D/g, '') : null
+
+      apenado = await prisma.sipeApenadoImportado.create({
+        data: {
+          sipeId: apenadoSipeId,
+          nome: ap.nome || 'SEM NOME',
+          dataNascimento: ap.dataNascimento || null,
+          unidade: ap.unidade || null,
+          cela: ap.cela || null,
+          tempoPena: ap.tempoPena || null,
+          cpf: cpfLimpo && cpfLimpo.length === 11 ? cpfLimpo : null,
+          photoPath: apenadoPhotoPath || localApenado.photoPath || null, // Copia a foto
+          apenadoLocalId: localApenado.id, // Vincula à identificação local
+          ultimaSyncAt: new Date()
         }
       })
-    }))
+    } else {
+      // Se ele já existe, atualiza informações básicas
+      const updateData: any = {}
+      if (!apenado.unidade && ap.unidade) updateData.unidade = ap.unidade
+      if (!apenado.cela && ap.cela) updateData.cela = ap.cela
+      if (!apenado.tempoPena && ap.tempoPena) updateData.tempoPena = ap.tempoPena
+      if (!apenado.dataNascimento && ap.dataNascimento) updateData.dataNascimento = ap.dataNascimento
+
+      if (!apenado.apenadoLocalId) {
+        updateData.apenadoLocalId = localApenado.id
+      }
+      
+      if (apenadoPhotoPath && (fotoApenadoAtualizada || !apenado.photoPath)) {
+        updateData.photoPath = apenadoPhotoPath;
+      } else if (!apenado.photoPath && localApenado.photoPath) {
+        updateData.photoPath = localApenado.photoPath;
+      }
+
+      const cpfLimpo = ap.sipeIdText ? ap.sipeIdText.replace(/\D/g, '') : ''
+      if (!apenado.cpf && cpfLimpo.length === 11) {
+        updateData.cpf = cpfLimpo
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await prisma.sipeApenadoImportado.update({
+          where: { id: apenado.id },
+          data: updateData
+        })
+      }
+    }
+
+    // Cria ou atualiza o vínculo de atendimento com o advogado (definindo ativo conforme a situação no SIPE)
+    const ehAtivo = ap.situacao === 'ATIVA';
+
+    await prisma.sipeVinculoAdvogado.upsert({
+      where: {
+        apenadoId_advogadoId: {
+          apenadoId: apenado.id,
+          advogadoId: adv.id
+        }
+      },
+      create: {
+        apenadoId: apenado.id,
+        advogadoId: adv.id,
+        ativo: ehAtivo
+      },
+      update: {
+        ativo: ehAtivo
+      }
+    })
   }
 }
 
