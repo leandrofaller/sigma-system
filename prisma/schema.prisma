@@ -75,6 +75,10 @@ model User {
   lastSeenAt   DateTime?
   lastLocation Json?
 
+  // Reconhecimento facial para login
+  faceDescriptor    String?   @db.Text  // embedding 512D (JSON array) para login facial
+  faceRegisteredAt  DateTime?           // data/hora do cadastro facial
+
   // Geolocalização
   geoStatus         String    @default("pending")  // pending|authorized|denied|admin-approved
   geoLocationData   Json?     // { lat, lng, accuracy, address, timestamp }
