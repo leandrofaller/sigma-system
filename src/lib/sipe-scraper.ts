@@ -2903,7 +2903,6 @@ async function scrapeApenadoFicha(
       grauInstrucao: grauInstrucaoValue,
       religiao: religiaoValue,
       estadoCivil: estadoCivilValue,
-      nomeConjuge: val('nomeesposa'),
       qtdFilhos: parseInt(val('qtdfilhos') || '0') || null,
       nomeMae: val('nomemae'),
       nomePai: val('nomepai'),
@@ -3248,7 +3247,6 @@ async function scrapeApenadoFicha(
     grauInstrucao: dados.grauInstrucao,
     religiao: dados.religiao,
     estadoCivil: dados.estadoCivil,
-    nomeConjuge: dados.nomeConjuge,
     qtdFilhos: dados.qtdFilhos,
     nomeMae: dados.nomeMae,
     nomePai: dados.nomePai,
@@ -3303,7 +3301,6 @@ async function scrapeApenadoFicha(
       grauInstrucao: apenado.grauInstrucao,
       religiao: apenado.religiao,
       estadoCivil: apenado.estadoCivil,
-      nomeConjuge: apenado.nomeConjuge,
       qtdFilhos: apenado.qtdFilhos,
       nomeMae: apenado.nomeMae,
       nomePai: apenado.nomePai,
@@ -6157,7 +6154,6 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       grauInstrucao: grauInstrucaoValue,
       religiao: religiaoValue,
       estadoCivil: estadoCivilValue,
-      nomeConjuge: val('nomeesposa') || val('nome_esposa') || val('conjuge') || null,
       qtdFilhos: parseInt(val('qtdfilhos') || val('qtd_filhos') || val('num_filhos') || '0') || null,
       nomeMae: val('nomemae') || val('nome_mae') || null,
       nomePai: val('nomepai') || val('nome_pai') || null,
@@ -6204,11 +6200,12 @@ async function parseAndSaveProcessosCheerio(html: string, apenadoId: string): Pr
   
   for (let t = 0; t < tabelas.length; t++) {
     const table = tabelas[t]
-    const rows = $(table).find('tbody tr')
+    // Cheerio não adiciona <tbody>/<thead> implícitos — seleciona por td/th explicitamente
+    const rows = $(table).find('tr').filter((_, el) => $(el).find('td').length > 0)
     if (rows.length === 0) continue
 
     const headers: string[] = []
-    $(table).find('thead th, thead td').each((_, h) => {
+    $(table).find('thead th, thead td, tr:first-child th, tr:first-child td').each((_, h) => {
       headers.push($(h).text().toUpperCase().trim())
     })
 
@@ -6416,11 +6413,12 @@ async function parseAndSaveMudarCelaCheerio(html: string, apenadoId: string): Pr
     motivoIndex = 4
   }
 
-  const rows = table.find('tbody tr')
+  // Cheerio não adiciona <tbody> implícito — filtra só linhas com td
+  const rows = table.find('tr').filter((_, el) => $(el).find('td').length > 0)
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
     const cells = $(row).find('td')
-    if (cells.length < 5) continue
+    if (cells.length < 3) continue
 
     let unidadePrisional = unidadeIndex >= 0 && cells.length > unidadeIndex ? $(cells.get(unidadeIndex)).text().trim() : ''
     if (!unidadePrisional && unidadeForm) {
@@ -6496,26 +6494,53 @@ function generateFakeSipeId(nome: string, oab?: string | null): number {
 
 async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): Promise<void> {
   const $ = cheerio.load(html)
-  const table = $('table').first()
 
-  if (table.length) {
-  const rows = table.find('tbody tr, tr')
+  // Localiza a tabela de movimentações pelo título da seção
+  const titleMov = $('div.title').filter((_, el) => {
+    const t = $(el).text().toUpperCase()
+    return t.includes('MOVIMENT')
+  })
+  let movTable = titleMov.length ? titleMov.nextAll('table').first() : $()
+  if (!movTable.length) movTable = $('table').first()
+
+  if (movTable.length) {
+  // Detecção dinâmica de colunas — fallback para posições fixas do SIPE padrão
+  let codigoIdx = 0, regimeIdx = 1, intramuroIdx = 2, monitoradoIdx = 3
+  let dataEntradaIdx = 4, origemIdx = 5, dataSaidaIdx = 6, destinoIdx = 7, motivoIdx = 8
+
+  movTable.find('thead tr th, thead tr td, tr:first-child th').each((idx, el) => {
+    const t = $(el).text().toUpperCase().trim()
+    if (t.includes('CÓDIGO') || t === 'CODIGO' || t === 'COD') codigoIdx = idx
+    if (t.includes('REGIME')) regimeIdx = idx
+    if (t.includes('INTRAMURO')) intramuroIdx = idx
+    if (t.includes('MONITOR')) monitoradoIdx = idx
+    if (t.includes('ENTRADA') && !t.includes('SAÍDA') && !t.includes('SAIDA')) dataEntradaIdx = idx
+    if (t.includes('ORIGEM')) origemIdx = idx
+    if (t.includes('SAÍDA') || t.includes('SAIDA')) dataSaidaIdx = idx
+    if (t.includes('DESTINO')) destinoIdx = idx
+    if (t.includes('MOTIVO')) motivoIdx = idx
+  })
+
+  const minCols = Math.max(codigoIdx, dataEntradaIdx, origemIdx, destinoIdx, motivoIdx) + 1
+
+  // Cheerio não adiciona <tbody> implícito — filtra só linhas com td
+  const rows = movTable.find('tr').filter((_, el) => $(el).find('td').length > 0)
   for (let i = 0; i < rows.length; i++) {
     const tr = rows[i]
-    const cells = $(tr).find('td, th')
-    if (cells.length < 9) continue
+    const cells = $(tr).find('td')
+    if (cells.length < minCols) continue
 
-    const codigo = $(cells.get(0)).text().trim()
-    if (!codigo || codigo === 'Codigo' || codigo === 'Código') continue
+    const codigo = $(cells.get(codigoIdx)).text().trim()
+    if (!codigo) continue
 
-    const regime = $(cells.get(1)).text().trim()
-    const intramuro = $(cells.get(2)).text().trim()
-    const monitorado = $(cells.get(3)).text().trim()
-    const dataEntrada = $(cells.get(4)).text().trim()
-    const origem = $(cells.get(5)).text().trim()
-    const dataSaida = $(cells.get(6)).text().trim()
-    const destino = $(cells.get(7)).text().trim()
-    const motivo = $(cells.get(8)).text().trim()
+    const regime = $(cells.get(regimeIdx)).text().trim()
+    const intramuro = $(cells.get(intramuroIdx)).text().trim()
+    const monitorado = $(cells.get(monitoradoIdx)).text().trim()
+    const dataEntrada = $(cells.get(dataEntradaIdx)).text().trim()
+    const origem = $(cells.get(origemIdx)).text().trim()
+    const dataSaida = $(cells.get(dataSaidaIdx)).text().trim()
+    const destino = $(cells.get(destinoIdx)).text().trim()
+    const motivo = $(cells.get(motivoIdx)).text().trim()
 
     const dataStr = dataEntrada !== '-----' ? dataEntrada : (dataSaida !== '-----' ? dataSaida : null)
     let datahora: Date | null = null
@@ -6824,7 +6849,6 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     grauInstrucao:  pick('GRAU DE INSTRUÇÃO', 'GRAU DE INSTRUCAO', 'INSTRUÇÃO', 'INSTRUCAO', 'ESCOLARIDADE'),
     religiao:       pick('RELIGIÃO', 'RELIGIAO'),
     estadoCivil:    pick('ESTADO CIVIL'),
-    nomeConjuge:    pick('NOME DO CÔNJUGE', 'NOME DO CONJUGE', 'CÔNJUGE', 'CONJUGE', 'ESPOSO(A)', 'NOME DA ESPOSA', 'NOME DO ESPOSO'),
     nomeMae:        pick('NOME DA MÃE', 'NOME DA MAE', 'MÃE', 'MAE', 'NOME MÃE', 'NOME MAE'),
     nomePai:        pick('NOME DO PAI', 'PAI', 'NOME PAI'),
     regime:         pick('REGIME'),
@@ -7669,7 +7693,6 @@ export async function scrapeApenadoFichaFast(
     grauInstrucao: dados.grauInstrucao,
     religiao: dados.religiao,
     estadoCivil: dados.estadoCivil,
-    nomeConjuge: dados.nomeConjuge,
     qtdFilhos: dados.qtdFilhos,
     nomeMae: dados.nomeMae,
     nomePai: dados.nomePai,
@@ -7719,7 +7742,6 @@ export async function scrapeApenadoFichaFast(
       grauInstrucao: apenado.grauInstrucao,
       religiao: apenado.religiao,
       estadoCivil: apenado.estadoCivil,
-      nomeConjuge: apenado.nomeConjuge,
       qtdFilhos: apenado.qtdFilhos,
       nomeMae: apenado.nomeMae,
       nomePai: apenado.nomePai,
@@ -8162,7 +8184,6 @@ async function saveApenadoUnidadePrisional(sipeId: number, apenadoId: string): P
       grauInstrucao: apenado.grauInstrucao,
       religiao: apenado.religiao,
       estadoCivil: apenado.estadoCivil,
-      nomeConjuge: apenado.nomeConjuge,
       qtdFilhos: apenado.qtdFilhos,
       nomeMae: apenado.nomeMae,
       nomePai: apenado.nomePai,
