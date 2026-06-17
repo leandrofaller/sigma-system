@@ -139,6 +139,7 @@ class SIPEClient:
         self.session = self._create_session(headers)
         # Lock para serializar re-autenticações concorrentes (singleton compartilhado entre threads)
         self._auth_lock = threading.Lock()
+        self._last_cookie_hash: Optional[str] = None
 
         # Tenta carregar cookies persistidos (Redis ou arquivo local JSON)
         persisted_cookies = self._load_persisted_cookies()
@@ -186,9 +187,14 @@ class SIPEClient:
                     if "=" in pair:
                         k, v = pair.split("=", 1)
                         cookies_dict[k.strip()] = v.strip()
-        
+
         if not cookies_dict:
             return
+
+        new_hash = hashlib.md5(json.dumps(cookies_dict, sort_keys=True).encode()).hexdigest()
+        if new_hash == self._last_cookie_hash:
+            return
+        self._last_cookie_hash = new_hash
 
         # 1. Salvar no Redis
         if self.redis_client:
@@ -411,7 +417,7 @@ class SIPEClient:
         cookies_dict = self.session.cookies.get_dict()
         if cookies_dict:
             self.session.headers["Cookie"] = "; ".join(f"{key}={value}" for key, value in cookies_dict.items())
-            logger.info("Cabecalho literal Cookie atualizado a partir da jarra da sessao.")
+            logger.debug("Cabecalho literal Cookie atualizado a partir da jarra da sessao.")
             self._persist_cookies()
 
     def _request(self, method: str, path: str, **kwargs):
