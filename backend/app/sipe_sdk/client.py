@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import os
+import threading
 import time
 import urllib.parse
 from typing import Any, Dict, List, Optional
@@ -136,6 +137,8 @@ class SIPEClient:
             "Accept-Encoding": "gzip, deflate, br",
         }
         self.session = self._create_session(headers)
+        # Lock para serializar re-autenticações concorrentes (singleton compartilhado entre threads)
+        self._auth_lock = threading.Lock()
 
         # Tenta carregar cookies persistidos (Redis ou arquivo local JSON)
         persisted_cookies = self._load_persisted_cookies()
@@ -501,14 +504,26 @@ class SIPEClient:
 
                 if status_code in (401, 403):
                     if not session_renewed:
-                        logger.info(f"Erro HTTP {status_code} recebido. Tentando reautenticar...")
-                        try:
-                            self.login()
+                        acquired = self._auth_lock.acquire(blocking=False)
+                        if acquired:
+                            # Esta thread faz o login; outras aguardam no else abaixo
+                            try:
+                                logger.info(f"Erro HTTP {status_code} recebido. Renovando sessao...")
+                                self.login()
+                                session_renewed = True
+                                continue
+                            except Exception as login_err:
+                                logger.error(f"Falha ao reautenticar apos erro {status_code}: {login_err}")
+                                raise SIPEAuthError("Sessao expirada e reautenticacao falhou.") from exc
+                            finally:
+                                self._auth_lock.release()
+                        else:
+                            # Outra thread ja esta renovando — aguarda e tenta com os novos cookies
+                            logger.info("Outra thread esta renovando a sessao. Aguardando conclusao...")
+                            with self._auth_lock:
+                                pass  # so aguarda; o login ja foi feito pela outra thread
                             session_renewed = True
                             continue
-                        except Exception as login_err:
-                            logger.error(f"Falha ao reautenticar apos erro {status_code}: {login_err}")
-                            raise SIPEAuthError("Sessao expirada e reautenticacao falhou.") from exc
                     raise SIPEAuthError("Sessao expirada no SIPE.") from exc
 
                 if status_code >= 500:
