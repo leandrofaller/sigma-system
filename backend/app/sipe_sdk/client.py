@@ -449,7 +449,8 @@ class SIPEClient:
             except Exception as exc:
                 logger.warning(f"Erro ao ler cache do Redis: {exc}")
 
-        max_network_retries = 3
+        max_http5xx_retries = 1  # HTTP 5xx do SIPE raramente se resolve com retry
+        max_network_retries = 3  # erros de rede/conexao sao transitórios
         backoff_factor = 2.0
         initial_delay = 1.0
         session_renewed = False
@@ -527,11 +528,11 @@ class SIPEClient:
                     raise SIPEAuthError("Sessao expirada no SIPE.") from exc
 
                 if status_code >= 500:
-                    if attempt == max_network_retries:
+                    if attempt == max_http5xx_retries:
                         raise SIPEHTTPError(f"Erro HTTP do SIPE apos retries: {status_code}") from exc
                     delay = initial_delay * (backoff_factor ** (attempt - 1))
                     logger.warning(
-                        f"Erro HTTP {status_code} no SIPE. Tentativa {attempt}/{max_network_retries}. Retentando em {delay}s..."
+                        f"Erro HTTP {status_code} no SIPE. Tentativa {attempt}/{max_http5xx_retries}. Retentando em {delay}s..."
                     )
                     time.sleep(delay)
                 elif status_code == 404:
