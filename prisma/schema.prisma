@@ -593,6 +593,8 @@ model SipeApenadoImportado {
   rgOrgao          String?
   dataNascimento   String?
   naturalidade     String?
+  nacionalidade    String?
+  pais             String?
   sexo             String?
   etnia            String?
   orientacaoSexual String?
@@ -850,6 +852,8 @@ model AIPApenado {
   sexo              String? // M/F
   etnia             String?
   naturalidade      String?
+  nacionalidade     String?
+  pais              String?
   orientacaoSexual  String?
   tipoSanguineo     String?
   grauInstrucao     String?
@@ -1172,6 +1176,8 @@ model SipeApenadoUnidadePrisional {
   rgOrgao          String?
   dataNascimento   String?
   naturalidade     String?
+  nacionalidade    String?
+  pais             String?
   sexo             String?
   etnia            String?
   orientacaoSexual String?
