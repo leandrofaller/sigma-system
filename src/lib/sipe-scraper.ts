@@ -1810,15 +1810,24 @@ async function coletarIdsApenados(
         const lote = pagesToFetch.slice(i, i + LOTE_SIZE)
         log(jobId, `🐍 Carregando lote de páginas ${i + 2} até ${Math.min(i + 2 + lote.length - 1, pageLimit)} (concorrentes)...`)
 
-        const results = await Promise.all(
+        const settled = await Promise.allSettled(
           lote.map(async (path) => {
             const html = await fetchPageWithRetry(path, jobId)
-            if (!html) {
-              throw new Error(`Falha crítica ao obter o HTML da listagem para o path: ${path}`)
-            }
+            if (!html) return null
             return { path, html }
           })
         )
+
+        const results = settled
+          .filter((r): r is PromiseFulfilledResult<{ path: string; html: string }> =>
+            r.status === 'fulfilled' && r.value !== null
+          )
+          .map(r => r.value)
+
+        const falhas = settled.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value === null)).length
+        if (falhas > 0) {
+          log(jobId, `⚠️ ${falhas} página(s) do lote falharam e foram ignoradas — continuando scraping.`)
+        }
 
         for (const { html } of results) {
           const idsPagina = extractIdsFromTableHtml(html)
