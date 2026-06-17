@@ -6124,6 +6124,23 @@ function parseApenadoFichaHtmlCheerio(html: string) {
     }
   }
 
+  // Tenta extrair valor de elementos estáticos (read-only Bootstrap: <p class="form-control-static">)
+  const staticVal = (name: string): string | null => {
+    const input = $(`[name="${name}"]`)
+    if (input.length) {
+      const v = input.val()?.toString().trim() || input.attr('value')?.trim()
+      if (v) return v
+    }
+    // Busca <p class="form-control-static"> irmão do label que contém o name no for= ou próximo
+    const label = $(`label[for="${name}"]`)
+    if (label.length) {
+      const sibling = label.next('p, span, div')
+      const v = sibling.text().trim()
+      if (v) return v
+    }
+    return null
+  }
+
   return {
     dados: {
       nome: val('nomeapenado'),
@@ -6132,7 +6149,7 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       rg: val('rg'),
       rgOrgao: val('orgaoexpedidor'),
       dataNascimento: val('datanascimento'),
-      naturalidade: val('distrito'),
+      naturalidade: val('distrito') || val('municipio') || val('naturalidade') || selVal('fk_municipio') || selVal('fk_naturalidade') || extractLabel('Naturalidade'),
       sexo: sexoValue,
       etnia: etniaValue,
       orientacaoSexual: selVal('homosexual') || extractLabel('Orientação\\s+Sexual'),
@@ -6140,19 +6157,19 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       grauInstrucao: grauInstrucaoValue,
       religiao: religiaoValue,
       estadoCivil: estadoCivilValue,
-      nomeConjuge: val('nomeesposa'),
-      qtdFilhos: parseInt(val('qtdfilhos') || '0') || null,
-      nomeMae: val('nomemae'),
-      nomePai: val('nomepai'),
+      nomeConjuge: val('nomeesposa') || val('nome_esposa') || val('conjuge') || extractLabel('(?:Nome do )?C[oô]njuge'),
+      qtdFilhos: parseInt(val('qtdfilhos') || val('qtd_filhos') || val('num_filhos') || '0') || null,
+      nomeMae: val('nomemae') || val('nome_mae') || extractLabel('(?:Nome da )?M[aã]e'),
+      nomePai: val('nomepai') || val('nome_pai') || extractLabel('(?:Nome do )?Pai'),
       telefone: val('telefone'),
       rji: val('rji'),
-      regime: val('regime'),
+      regime: val('regime') || selVal('regime') || selVal('fk_regime') || staticVal('regime') || extractLabel('Regime'),
       situacao: situacaoValue,
-      dataEntrada: val('dataentrada'),
+      dataEntrada: val('dataentrada') || val('data_entrada') || staticVal('dataentrada') || extractLabel('(?:Data de )?Entrada'),
       dataPrisao: val('dataprisao'),
       tempoPena: val('tempodepena'),
       oficioEntrada: val('oficioentrada'),
-      presoOriundo: selVal('presooriundo'),
+      presoOriundo: selVal('presooriundo') || selVal('preso_oriundo') || val('presooriundo') || extractLabel('(?:Preso )?Oriundo'),
       monitorado: val('monitorado') === 'SIM',
       intramuro: val('intramuro') === 'SIM',
       faccaoSipeId: parseInt($('[name="faccao_id"]').val()?.toString() || '0') || null,
@@ -6773,6 +6790,68 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
 
       next = next.next()
     }
+  }
+
+  // --- Extração de Dados Pessoais da seção DP da Ficha Geral ---
+  // Coleta todos os pares label→valor de elementos .input em todo o HTML do relatório
+  const allFields: Record<string, string> = {}
+  $('.input').each((_, inputElem) => {
+    const label = $(inputElem).find('label').text().trim().toUpperCase().replace(/\s+/g, ' ').replace(/[:.]/g, '').trim()
+    const value = (
+      $(inputElem).find('input').attr('value')?.trim() ||
+      $(inputElem).find('input').val()?.toString().trim() ||
+      $(inputElem).find('span').text().trim() ||
+      $(inputElem).find('p').text().trim()
+    ) || ''
+    if (label && value && value.length > 0) {
+      allFields[label] = value
+    }
+  })
+
+  const pick = (...labels: string[]) => {
+    for (const l of labels) {
+      const v = allFields[l.toUpperCase().replace(/\s+/g, ' ').replace(/[:.]/g, '').trim()]
+      if (v) return v
+    }
+    return null
+  }
+
+  const dpData: Record<string, string | number | null> = {
+    naturalidade:   pick('NATURALIDADE', 'CIDADE DE NASCIMENTO', 'MUNICIPIO NATAL', 'MUNICIPIO DE NASCIMENTO'),
+    sexo:           pick('SEXO', 'GÊNERO', 'GENERO'),
+    etnia:          pick('ETNIA', 'COR/ETNIA', 'COR', 'RAÇA', 'RACA', 'COR ETNIA'),
+    tipoSanguineo:  pick('TIPO SANGUÍNEO', 'TIPO SANGUINEO', 'SANGUE', 'GRUPO SANGUÍNEO', 'GRUPO SANGUINEO'),
+    grauInstrucao:  pick('GRAU DE INSTRUÇÃO', 'GRAU DE INSTRUCAO', 'INSTRUÇÃO', 'INSTRUCAO', 'ESCOLARIDADE'),
+    religiao:       pick('RELIGIÃO', 'RELIGIAO'),
+    estadoCivil:    pick('ESTADO CIVIL'),
+    nomeConjuge:    pick('NOME DO CÔNJUGE', 'NOME DO CONJUGE', 'CÔNJUGE', 'CONJUGE', 'ESPOSO(A)', 'NOME DA ESPOSA', 'NOME DO ESPOSO'),
+    nomeMae:        pick('NOME DA MÃE', 'NOME DA MAE', 'MÃE', 'MAE', 'NOME MÃE', 'NOME MAE'),
+    nomePai:        pick('NOME DO PAI', 'PAI', 'NOME PAI'),
+    regime:         pick('REGIME'),
+    dataEntrada:    pick('DATA DE ENTRADA', 'DATA ENTRADA', 'ENTRADA', 'DT ENTRADA'),
+    presoOriundo:   pick('PRESO ORIUNDO', 'ORIUNDO', 'PROCEDÊNCIA', 'PROCEDENCIA'),
+  }
+
+  // qtdFilhos precisa de conversão para Int
+  const filhosRaw = pick('QTD FILHOS', 'QTD DE FILHOS', 'QTDE FILHOS', 'FILHOS', 'NÚMERO DE FILHOS', 'NUMERO DE FILHOS')
+  if (filhosRaw !== null) {
+    const n = parseInt(filhosRaw)
+    if (!isNaN(n)) dpData.qtdFilhos = n
+  }
+
+  // Monta objeto de atualização apenas com valores extraídos (não-nulos)
+  const dpUpdate: Record<string, any> = {}
+  for (const [key, value] of Object.entries(dpData)) {
+    if (value !== null && value !== '') {
+      dpUpdate[key] = value
+    }
+  }
+
+  if (Object.keys(dpUpdate).length > 0) {
+    await prisma.sipeApenadoImportado.update({
+      where: { id: apenadoId },
+      data: dpUpdate,
+    })
   }
 }
 
