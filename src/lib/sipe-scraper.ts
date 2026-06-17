@@ -6180,7 +6180,7 @@ function parseApenadoFichaHtmlCheerio(html: string) {
 
 async function parseAndSaveAlcunhasCheerio(html: string, apenadoId: string): Promise<void> {
   const $ = cheerio.load(html)
-  const rows = $('table tbody tr')
+  const rows = $('table tr').filter((_, el) => $(el).find('td').length > 0)
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
     const cells = $(row).find('td')
@@ -6883,7 +6883,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
 
 async function parseAndSaveDocumentosCheerio(html: string, apenadoId: string, apenadoLocalId: string | null): Promise<void> {
   const $ = cheerio.load(html)
-  const rows = $('table tbody tr')
+  const rows = $('table tr').filter((_, el) => $(el).find('td').length > 0)
   
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
@@ -6987,11 +6987,11 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
   }> = []
 
   tabelas.each((tableIdx, table) => {
-    const rows = $(table).find('tbody tr')
+    const rows = $(table).find('tr').filter((_, el) => $(el).find('td').length > 0)
     if (rows.length === 0) return
 
     const headers: string[] = []
-    $(table).find('thead th, thead td').each((_, h) => {
+    $(table).find('thead th, thead td, tr:first-child th').each((_, h) => {
       headers.push($(h).text().toUpperCase().trim())
     })
 
