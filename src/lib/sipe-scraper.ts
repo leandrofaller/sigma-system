@@ -3270,10 +3270,15 @@ async function scrapeApenadoFicha(
     ultimaSyncAt: new Date(),
   }
 
+  // Em re-sync, não sobrescrever campos com null — preserva dados existentes se o parser falhar
+  const updateData = Object.fromEntries(
+    Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
+  )
+
   const apenado = await prisma.sipeApenadoImportado.upsert({
     where: { sipeId },
     create: { sipeId, ...upsertData },
-    update: upsertData,
+    update: updateData,
     include: { faccao: true }
   })
 
@@ -6024,7 +6029,7 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       const opt = select.find(`option[value="${valAttr}"]`)
       if (opt.length) return opt.text().trim() || null
     }
-    return select.find('option').first().text().trim() || null
+    return null
   }
 
   // Clona ou remove elementos de layout do cabeçalho superior e lateral do SIPE para não ler o nome da unidade ativa da sessão no menu do usuário
@@ -7607,10 +7612,15 @@ export async function scrapeApenadoFichaFast(
     ultimaSyncAt: new Date(),
   }
 
+  // Em re-sync, não sobrescrever campos com null — preserva dados existentes se o parser falhar
+  const updateData = Object.fromEntries(
+    Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
+  )
+
   const apenado = await prisma.sipeApenadoImportado.upsert({
     where: { sipeId },
     create: { sipeId, ...upsertData },
-    update: upsertData,
+    update: updateData,
     include: { faccao: true }
   })
 
