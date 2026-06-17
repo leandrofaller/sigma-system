@@ -270,7 +270,7 @@ class SIPEClient:
             self.session.cookies.set(key, decoded_val, domain=host)
 
         self.session.headers["Cookie"] = "; ".join(cookie_parts)
-        logger.info("Cookies de sessao atualizados de forma literal no cabecalho Cookie do SIPEClient.")
+        logger.debug("Cookies de sessao atualizados de forma literal no cabecalho Cookie do SIPEClient.")
 
     def login(
         self,
@@ -363,7 +363,7 @@ class SIPEClient:
             
         unidade_str = str(unidade_id).strip()
         if self.unidade == unidade_str:
-            logger.info(f"Unidade ja esta definida como {unidade_str} no SIPEClient.")
+            logger.debug(f"Unidade ja esta definida como {unidade_str} no SIPEClient.")
             return True
             
         logger.info(f"Alterando unidade no SIPE para ID: {unidade_str}")

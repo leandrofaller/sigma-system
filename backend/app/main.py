@@ -72,14 +72,6 @@ def get_client(cookie_header: Optional[str] = None, unidade_header: Optional[str
     if _global_client is None:
         _global_client = SIPEClient(base_url=base_url)
         logger.info("Criada nova instância singleton global de SIPEClient.")
-    else:
-        # Carrega cookies mais recentes persistidos (caso tenham sido atualizados em arquivo/Redis por outro processo)
-        persisted = _global_client._load_persisted_cookies()
-        if persisted:
-            _global_client.set_cookies(persisted)
-            logger.info("Instância global do SIPEClient atualizada com cookies persistidos.")
-        else:
-            logger.info("Instância global do SIPEClient reutilizada com cookies em memória.")
             
     if unidade_header:
         _global_client.selecionar_unidade(unidade_header)
