@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock, Users, Image, Brain, Loader2, RefreshCw } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock, Users, Image, Brain, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useSession } from 'next-auth/react'
 
 interface Alcunha { alcunha: string }
 interface Faccao { id: string; nome: string; sigla: string | null; cor: string }
@@ -230,18 +231,24 @@ export function ApenadoModal({
   apenado: initialApenado,
   onClose,
   onUpdate,
+  onDelete,
   apiPhotoPrefix = "/api/sipe/apenados"
 }: {
   apenado: ApenadoImportado;
   onClose: () => void;
   onUpdate?: (updated: ApenadoImportado) => void;
+  onDelete?: (deletedId: string) => void;
   apiPhotoPrefix?: string
 }) {
+  const { data: session } = useSession()
+  const isSuperAdmin = (session?.user as any)?.role === 'SUPER_ADMIN'
+
   const [apenado, setApenado] = useState<ApenadoImportado>(initialApenado)
   const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
   const [zoomedPhotoTitle, setZoomedPhotoTitle] = useState<string>('')
   const [cadastrandoEmAIP, setCadastrandoEmAIP] = useState(false)
   const [sincronizando, setSincronizando] = useState(false)
+  const [deletando, setDeletando] = useState(false)
   const skipNextInitialUpdate = useRef(false)
 
   useEffect(() => {
@@ -274,6 +281,24 @@ export function ApenadoModal({
       toast.error(err?.message || 'Falha ao sincronizar com o SIPE', { id: toastId })
     } finally {
       setSincronizando(false)
+    }
+  }
+
+  const handleDeletar = async () => {
+    if (!confirm(`Tem certeza que deseja excluir o apenado "${apenado.nome}"? Esta ação não pode ser desfeita.`)) return
+    setDeletando(true)
+    const toastId = toast.loading(`Excluindo ${apenado.nome}...`)
+    try {
+      const res = await fetch(`/api/sipe/apenados/${apenado.id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao excluir')
+      toast.success('Apenado excluído com sucesso!', { id: toastId })
+      if (onDelete) onDelete(apenado.id)
+      onClose()
+    } catch (err: any) {
+      toast.error(err?.message || 'Falha ao excluir apenado', { id: toastId })
+    } finally {
+      setDeletando(false)
     }
   }
 
@@ -377,6 +402,17 @@ export function ApenadoModal({
                     {sincronizando ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                     Atualizar SIPE
                   </button>
+
+                  {isSuperAdmin && (
+                    <button
+                      onClick={handleDeletar}
+                      disabled={deletando || cadastrandoEmAIP || sincronizando}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 rounded-xl disabled:opacity-50 transition-all active:scale-95 shadow-sm shadow-red-500/10"
+                    >
+                      {deletando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      Excluir
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -856,14 +892,18 @@ export function ApenadosImportados({
       )}
 
       {selected && (
-        <ApenadoModal 
-          apenado={selected} 
-          onClose={() => setSelected(null)} 
+        <ApenadoModal
+          apenado={selected}
+          onClose={() => setSelected(null)}
           onUpdate={(updated) => {
             setSelected(updated)
             setApenados(prev => prev.map(a => a.id === updated.id ? updated : a))
           }}
-          apiPhotoPrefix={apiPhotoPrefix} 
+          onDelete={(deletedId) => {
+            setSelected(null)
+            setApenados(prev => prev.filter(a => a.id !== deletedId))
+          }}
+          apiPhotoPrefix={apiPhotoPrefix}
         />
       )}
     </div>
