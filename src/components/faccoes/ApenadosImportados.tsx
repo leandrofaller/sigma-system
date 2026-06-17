@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Search, ChevronLeft, ChevronRight, Shield, User, FileText, Briefcase, MapPin, Clock, Users, Image, Brain, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -242,8 +242,13 @@ export function ApenadoModal({
   const [zoomedPhotoTitle, setZoomedPhotoTitle] = useState<string>('')
   const [cadastrandoEmAIP, setCadastrandoEmAIP] = useState(false)
   const [sincronizando, setSincronizando] = useState(false)
+  const skipNextInitialUpdate = useRef(false)
 
   useEffect(() => {
+    if (skipNextInitialUpdate.current) {
+      skipNextInitialUpdate.current = false
+      return
+    }
     setApenado(initialApenado)
   }, [initialApenado])
 
@@ -260,6 +265,7 @@ export function ApenadoModal({
       }
       toast.success('Ficha do apenado atualizada com sucesso!', { id: toastId })
       if (data.apenado) {
+        skipNextInitialUpdate.current = true
         setApenado(data.apenado)
         if (onUpdate) onUpdate(data.apenado)
       }
