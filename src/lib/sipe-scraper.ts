@@ -7324,14 +7324,33 @@ async function saveAndLinkComplementaryPhotoCheerio(
           .toBuffer()
 
         const dir = getApenadosDir()
-        const { mkdir, writeFile } = await import('fs/promises')
+        const { mkdir, writeFile, readFile } = await import('fs/promises')
         await mkdir(dir, { recursive: true })
         
-        const fileHash = createHash('md5').update(src).digest('hex')
+        // Hashing baseado no conteúdo do buffer físico para evitar duplicatas perfeitas
+        const fileHash = createHash('md5').update(webpBuffer).digest('hex')
+        
+        // Verificar se é idêntica à foto principal do apenado
+        const importado = await prisma.sipeApenadoImportado.findUnique({
+          where: { id: apenadoId },
+          select: { sipeId: true }
+        })
+        if (importado?.sipeId) {
+          const mainPhotoPathLocal = join(dir, `sipe-${importado.sipeId}.webp`)
+          if (existsSync(mainPhotoPathLocal)) {
+            try {
+              const mainBuffer = await readFile(mainPhotoPathLocal)
+              const mainHash = createHash('md5').update(mainBuffer).digest('hex')
+              if (mainHash === fileHash) {
+                console.log(`[PHOTO SCRAPER] Foto complementar de ${apenadoId} ignorada por ser idêntica à foto principal.`)
+                return
+              }
+            } catch {}
+          }
+        }
+
         const filename = `sipe-comp-${apenadoId}-${fileHash}.webp`
         const localPath = join(dir, filename)
-
-        await writeFile(localPath, webpBuffer)
         const photoPath = `uploads/apenados/${filename}`
 
         const exists = await prisma.sipeFotoComplementar.findFirst({
@@ -7339,6 +7358,7 @@ async function saveAndLinkComplementaryPhotoCheerio(
         })
 
         if (!exists) {
+          await writeFile(localPath, webpBuffer)
           await prisma.sipeFotoComplementar.create({
             data: {
               apenadoImportadoId: apenadoId,
