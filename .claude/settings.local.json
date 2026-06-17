@@ -181,7 +181,9 @@
       "Bash(sed -n '6232,6235p' src/lib/sipe-scraper.ts)",
       "Bash(awk 'NR==6232,0{print} ' src/lib/sipe-scraper.ts)",
       "Bash(awk '/^async function|^function/{c++; if\\(c==2\\){print NR; exit}}')",
-      "Bash(awk '/^export async function parseAndSaveFichaGeralCheerio/,0{print; if\\(/^async function parseAndSaveDocumentosCheerio/ && NR>1\\) exit}')"
+      "Bash(awk '/^export async function parseAndSaveFichaGeralCheerio/,0{print; if\\(/^async function parseAndSaveDocumentosCheerio/ && NR>1\\) exit}')",
+      "Bash(cd /F/relatorio_claude && find . -type f -name \"*.py\" | head -20)",
+      "Bash(find F:\\\\\\\\relatorio_claude\\\\\\\\src\\\\\\\\app\\\\\\\\api\\\\\\\\sipe\\\\\\\\apenados -type f -name \"route.ts\")"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",

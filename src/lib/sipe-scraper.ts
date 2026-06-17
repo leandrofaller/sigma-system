@@ -6534,11 +6534,12 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
 
   const minCols = Math.max(codigoIdx, dataEntradaIdx, origemIdx, destinoIdx, motivoIdx) + 1
 
-  // Cheerio não adiciona <tbody> implícito — filtra só linhas com td
-  const rows = movTable.find('tr').filter((_, el) => $(el).find('td').length > 0)
+  // Cheerio não adiciona <tbody> implícito — filtra linhas com td ou th (o SIPE usa <th> para Regime, Intramuro, Monitorado, Origem e Destino)
+  const rows = movTable.find('tr').filter((_, el) => $(el).find('td, th').length > 0 && $(el).find('td').length > 0)
   for (let i = 0; i < rows.length; i++) {
     const tr = rows[i]
-    const cells = $(tr).find('td')
+    // Usar 'th, td' para capturar TODAS as células em ordem correta (o SIPE usa <th> para Código, Regime, Intramuro, Monitorado, Origem e Destino)
+    const cells = $(tr).find('th, td')
     if (cells.length < minCols) continue
 
     const codigo = $(cells.get(codigoIdx)).text().trim()
