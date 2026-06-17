@@ -5681,6 +5681,9 @@ export async function scrapeHistorico(
     }
 
     const rows = await page.$$('table tbody tr')
+    let unidadeMaisRecente: string | null = null
+    let celaMaisRecente: string | null = null
+
     for (const row of rows) {
       const cells = await row.$$('td')
       if (cells.length < 5) continue
@@ -5692,6 +5695,14 @@ export async function scrapeHistorico(
       const celaPara = celaParaIndex >= 0 && cells.length > celaParaIndex ? (await cells[celaParaIndex]?.innerText())?.trim() || '' : ''
 
       if (!dataStr) continue
+
+      // Captura a cela e unidade mais recentes (primeira linha processada)
+      if (!unidadeMaisRecente && unidadePrisional && unidadePrisional !== '-----') {
+        unidadeMaisRecente = unidadePrisional
+      }
+      if (!celaMaisRecente && celaPara && celaPara !== '-----') {
+        celaMaisRecente = celaPara
+      }
 
       let datahora: Date | null = null
       try {
@@ -5741,6 +5752,29 @@ export async function scrapeHistorico(
           unidade: unidadePrisional || null,
         },
       })
+    }
+
+    if (unidadeMaisRecente || celaMaisRecente) {
+      const updateData: { unidade?: string; cela?: string } = {}
+      if (unidadeMaisRecente) updateData.unidade = unidadeMaisRecente
+      if (celaMaisRecente) updateData.cela = celaMaisRecente
+
+      console.log(`[SCRAPER HISTORICO CELL] Atualizando local do apenado ${apenadoId}:`, updateData)
+      await prisma.sipeApenadoImportado.update({
+        where: { id: apenadoId },
+        data: updateData
+      }).catch(err => console.error(`Erro ao atualizar unidade/cela em SipeApenadoImportado:`, err))
+
+      const importado = await prisma.sipeApenadoImportado.findUnique({
+        where: { id: apenadoId },
+        select: { sipeId: true }
+      })
+      if (importado?.sipeId) {
+        await prisma.aIPApenado.update({
+          where: { sipeId: importado.sipeId },
+          data: updateData
+        }).catch(err => console.error(`Erro ao atualizar unidade/cela em AIPApenado:`, err))
+      }
     }
   } catch (err) {
     console.error(`Erro ao sincronizar histórico/mudança de cela do apenado ${sipeId}:`, err)
@@ -6431,6 +6465,10 @@ async function parseAndSaveMudarCelaCheerio(html: string, apenadoId: string): Pr
 
   // Cheerio não adiciona <tbody> implícito — filtra só linhas com td
   const rows = table.find('tr').filter((_, el) => $(el).find('td').length > 0)
+  
+  let unidadeMaisRecente: string | null = null
+  let celaMaisRecente: string | null = null
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
     const cells = $(row).find('td')
@@ -6446,6 +6484,14 @@ async function parseAndSaveMudarCelaCheerio(html: string, apenadoId: string): Pr
     const celaPara = celaParaIndex >= 0 && cells.length > celaParaIndex ? $(cells.get(celaParaIndex)).text().trim() : ''
 
     if (!dataStr) continue
+
+    // Captura a cela e unidade mais recentes (primeira linha processada)
+    if (!unidadeMaisRecente && unidadePrisional && unidadePrisional !== '-----') {
+      unidadeMaisRecente = unidadePrisional
+    }
+    if (!celaMaisRecente && celaPara && celaPara !== '-----') {
+      celaMaisRecente = celaPara
+    }
 
     let datahora: Date | null = null
     try {
@@ -6494,6 +6540,29 @@ async function parseAndSaveMudarCelaCheerio(html: string, apenadoId: string): Pr
         unidade: unidadePrisional || null,
       },
     })
+  }
+
+  if (unidadeMaisRecente || celaMaisRecente) {
+    const updateData: { unidade?: string; cela?: string } = {}
+    if (unidadeMaisRecente) updateData.unidade = unidadeMaisRecente
+    if (celaMaisRecente) updateData.cela = celaMaisRecente
+
+    console.log(`[SCRAPER MUDAR CELA] Atualizando local do apenado ${apenadoId}:`, updateData)
+    await prisma.sipeApenadoImportado.update({
+      where: { id: apenadoId },
+      data: updateData
+    }).catch(err => console.error(`Erro ao atualizar unidade/cela em SipeApenadoImportado:`, err))
+
+    const importado = await prisma.sipeApenadoImportado.findUnique({
+      where: { id: apenadoId },
+      select: { sipeId: true }
+    })
+    if (importado?.sipeId) {
+      await prisma.aIPApenado.update({
+        where: { sipeId: importado.sipeId },
+        data: updateData
+      }).catch(err => console.error(`Erro ao atualizar unidade/cela em AIPApenado:`, err))
+    }
   }
 }
 
