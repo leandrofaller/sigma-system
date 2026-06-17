@@ -22,7 +22,7 @@ const { PrismaClient } = require('@prisma/client');
 const p = new PrismaClient();
 Promise.all([
   p.\$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS unaccent'),
-  p.\$executeRawUnsafe(\`CREATE OR REPLACE FUNCTION immutable_unaccent(text) RETURNS text AS \\$\\$SELECT public.unaccent('public.unaccent', \\$1)\\$\\$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT\`),
+  p.\$executeRawUnsafe(\`CREATE OR REPLACE FUNCTION immutable_unaccent(text) RETURNS text AS \$\$SELECT public.unaccent('public.unaccent', \$1)\$\$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT\`),
 ]).then(() => { console.log('Extensao unaccent OK'); }).catch(e => { console.error('AVISO unaccent:', e.message); }).finally(() => p.\$disconnect());
 " || echo "AVISO: extensao unaccent falhou (nao critico)"
 
@@ -44,5 +44,5 @@ echo "Iniciando API Python FastAPI em background..."
 PYTHONPATH=/app/backend/app gosu nextjs /opt/arcface-venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 
 echo "Iniciando servidor..."
-exec gosu nextjs node server.js
+exec gosu nextjs env NODE_OPTIONS="--max-old-space-size=4096" node server.js
 
