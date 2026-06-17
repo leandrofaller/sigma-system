@@ -2829,9 +2829,10 @@ async function scrapeApenadoFicha(
 
     const selVal = (name: string) => {
       const el = document.querySelector(
-        `[name="${name}"]`
+        `select[name="${name}"]`
       ) as HTMLSelectElement | null
-      return el?.options[el.selectedIndex]?.text?.trim() || null
+      if (!el) return null
+      return el.options[el.selectedIndex]?.text?.trim() || null
     }
 
     // Clona o conteúdo útil ou remove elementos de layout para não ler a unidade ativa da sessão no cabeçalho do SIPE
@@ -6169,7 +6170,7 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       nomePai: val('nomepai') || val('nome_pai') || null,
       telefone: val('telefone'),
       rji: val('rji'),
-      regime: selVal('fk_regime') || selVal('regime') || staticVal('regime') || extractLabel('Regime'),
+      regime: selVal('fk_regime') || selVal('regime') || extractLabel('Regime'),
       situacao: situacaoValue,
       dataEntrada: val('dataentrada') || val('data_entrada') || staticVal('dataentrada') || extractLabel('(?:Data de )?Entrada'),
       dataPrisao: val('dataprisao'),
