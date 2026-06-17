@@ -20,22 +20,37 @@ interface FaceLoginCameraProps {
 let modelsLoaded = false;
 let modelsLoading: Promise<void> | null = null;
 
+// CDN do vladmandic/face-api — funciona sem precisar deployar arquivos locais
+const CDN_MODEL_URL =
+  'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model';
+const LOCAL_MODEL_URL = '/models';
+
+async function loadModelsFromUrl(faceapi: any, url: string): Promise<void> {
+  await Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri(url),
+    faceapi.nets.faceLandmark68TinyNet.loadFromUri(url),
+    faceapi.nets.faceRecognitionNet.loadFromUri(url),
+  ]);
+}
+
 async function ensureModelsLoaded(faceapi: any): Promise<void> {
   if (modelsLoaded) return;
   if (modelsLoading) return modelsLoading;
 
   modelsLoading = (async () => {
-    const MODEL_URL = '/models';
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-    ]);
+    try {
+      // Tenta arquivos locais primeiro (mais rápido quando disponíveis)
+      await loadModelsFromUrl(faceapi, LOCAL_MODEL_URL);
+    } catch {
+      // Fallback para CDN (funciona sempre, inclusive em produção)
+      await loadModelsFromUrl(faceapi, CDN_MODEL_URL);
+    }
     modelsLoaded = true;
   })();
 
   return modelsLoading;
 }
+
 
 export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) {
   const videoRef    = useRef<HTMLVideoElement>(null);

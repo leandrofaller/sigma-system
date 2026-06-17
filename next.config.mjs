@@ -3,8 +3,23 @@ const nextConfig = {
   output: 'standalone',
   async headers() {
     return [
+      // Páginas que usam a câmera — permitem acesso
       {
-        source: '/(.*)',
+        source: '/(login|perfil)',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // Permite câmera apenas nestas rotas
+          { key: 'Permissions-Policy', value: 'camera=self, microphone=(), geolocation=()' },
+          ...(process.env.NODE_ENV === 'production'
+            ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }]
+            : []),
+        ],
+      },
+      // Demais rotas — bloqueia câmera
+      {
+        source: '/((?!login|perfil).*)',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -17,6 +32,7 @@ const nextConfig = {
       },
     ];
   },
+
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
   experimental: {
