@@ -16,17 +16,40 @@ interface FaceLoginCameraProps {
   active: boolean;
 }
 
+// Cache global dos modelos — carrega apenas uma vez por sessão
+let modelsLoaded = false;
+let modelsLoading: Promise<void> | null = null;
+
+async function ensureModelsLoaded(faceapi: any): Promise<void> {
+  if (modelsLoaded) return;
+  if (modelsLoading) return modelsLoading;
+
+  modelsLoading = (async () => {
+    const MODEL_URL = '/models';
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+    ]);
+    modelsLoaded = true;
+  })();
+
+  return modelsLoading;
+}
+
 export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const faceApiRef = useRef<any>(null);
+  const videoRef    = useRef<HTMLVideoElement>(null);
+  const canvasRef   = useRef<HTMLCanvasElement>(null);
+  const streamRef   = useRef<MediaStream | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const faceApiRef  = useRef<any>(null);
+  const capturedRef = useRef(false); // evita dupla captura
 
-  const [state, setState] = useState<FaceState>('loading_models');
+  const [state, setState]       = useState<FaceState>('loading_models');
+  const [retryKey, setRetryKey] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
-  const [confidence, setConfidence] = useState(0);
 
+  // ── Para câmera e loop de detecção ───────────────────────────────────────
   const stopCamera = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -38,35 +61,45 @@ export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) 
     }
   }, []);
 
-  // Carrega face-api e modelos
+  // ── Inicializa câmera e modelos ───────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!active) return;
 
     let cancelled = false;
+    capturedRef.current = false;
 
     async function init() {
       try {
         setState('loading_models');
+        setErrorMsg('');
 
-        // Carrega face-api dinamicamente (client-only)
+        // Import dinâmico (client-only)
         const faceapi = await import('@vladmandic/face-api');
         faceApiRef.current = faceapi;
 
-        const MODEL_URL = '/models';
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-        ]);
-
+        await ensureModelsLoaded(faceapi);
         if (cancelled) return;
 
         setState('requesting_camera');
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 640, height: 480, facingMode: 'user' },
-          audio: false,
-        });
+        // ── Constraints compatíveis com iOS Safari ───────────────────────
+        // iOS exige `ideal:` para width/height; sem isso lança
+        // "The string did not match the expected pattern"
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: 'user' },
+              width:  { ideal: 640 },
+              height: { ideal: 480 },
+            },
+            audio: false,
+          });
+        } catch {
+          // Fallback mínimo — funciona em qualquer browser/dispositivo
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
 
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
@@ -74,22 +107,45 @@ export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) 
         }
 
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
+
+        const video = videoRef.current;
+        if (video) {
+          video.srcObject = stream;
+
+          // Aguarda metadados para saber as dimensões reais do vídeo
+          await new Promise<void>((resolve) => {
+            video.onloadedmetadata = () => resolve();
+          });
+
+          // Ajusta canvas às dimensões reais do stream
+          const canvas = canvasRef.current;
+          if (canvas) {
+            canvas.width  = video.videoWidth  || 640;
+            canvas.height = video.videoHeight || 480;
+          }
+
+          await video.play();
         }
+
+        if (cancelled) return;
 
         setState('no_face');
         startDetection(faceapi);
       } catch (err: any) {
-        if (!cancelled) {
-          if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
-            setErrorMsg('Permissão de câmera negada. Habilite nas configurações do navegador.');
-          } else {
-            setErrorMsg(err?.message ?? 'Erro ao inicializar a câmera.');
-          }
-          setState('error');
+        if (cancelled) return;
+
+        const name = err?.name ?? '';
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          setErrorMsg('Permissão de câmera negada. Habilite nas configurações do navegador.');
+        } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+          setErrorMsg('Nenhuma câmera encontrada neste dispositivo.');
+        } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+          setErrorMsg('A câmera está em uso por outro aplicativo.');
+        } else {
+          // Exibe a mensagem real do erro para diagnóstico
+          setErrorMsg(err?.message || 'Erro desconhecido ao inicializar a câmera.');
         }
+        setState('error');
       }
     }
 
@@ -99,145 +155,147 @@ export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) 
       cancelled = true;
       stopCamera();
     };
-  }, [active, stopCamera]);
+  }, [active, retryKey, stopCamera]); // retryKey força reinício no retry
 
+  // ── Loop de detecção facial ───────────────────────────────────────────────
   function startDetection(faceapi: any) {
     intervalRef.current = setInterval(async () => {
+      if (capturedRef.current) return;
+
       const video = videoRef.current;
-      if (!video || video.readyState < 2) return;
+      if (!video || video.readyState < 2 || video.paused) return;
 
-      const detection = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 }))
-        .withFaceLandmarks(true)
-        .withFaceDescriptor();
-
-      if (!detection) {
-        setState('no_face');
-        setConfidence(0);
-        drawOverlay(null);
-        return;
-      }
-
-      const score = detection.detection.score;
-      setConfidence(score);
-      drawOverlay(detection.detection.box);
-
-      if (score >= 0.80) {
-        setState('face_detected');
-
-        // Aguarda 1s estável antes de capturar
-        await new Promise((r) => setTimeout(r, 800));
-
-        // Redetecta para pegar o descriptor mais recente
-        const final = await faceapi
-          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.7 }))
+      try {
+        const detection = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
+            inputSize: 320,       // menor = mais rápido em mobile
+            scoreThreshold: 0.5,
+          }))
           .withFaceLandmarks(true)
           .withFaceDescriptor();
 
-        if (final && final.detection.score >= 0.75) {
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-          stopCamera();
-          setState('done');
-          onDescriptor(Array.from(final.descriptor));
+        if (!detection) {
+          setState('no_face');
+          drawOverlay(null);
+          return;
         }
-      } else {
-        setState('no_face');
+
+        const score = detection.detection.score;
+        drawOverlay(detection.detection.box);
+
+        if (score >= 0.75) {
+          setState('face_detected');
+
+          // Aguarda estabilização
+          await new Promise((r) => setTimeout(r, 700));
+          if (capturedRef.current) return;
+
+          // Segunda leitura para descriptor final
+          const final = await faceapi
+            .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
+              inputSize: 320,
+              scoreThreshold: 0.65,
+            }))
+            .withFaceLandmarks(true)
+            .withFaceDescriptor();
+
+          if (final && final.detection.score >= 0.65 && !capturedRef.current) {
+            capturedRef.current = true;
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            stopCamera();
+            setState('done');
+            onDescriptor(Array.from(final.descriptor));
+          }
+        } else {
+          setState('no_face');
+        }
+      } catch {
+        // Ignora erros de detecção individuais (frame ruim, video pausado etc.)
       }
-    }, 300);
+    }, 350);
   }
 
+  // ── Overlay no canvas ─────────────────────────────────────────────────────
   function drawOverlay(box: any) {
     const canvas = canvasRef.current;
-    const video = videoRef.current;
+    const video  = videoRef.current;
     if (!canvas || !video) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
     if (!box) return;
 
-    const scaleX = canvas.width / video.videoWidth;
-    const scaleY = canvas.height / video.videoHeight;
+    // Escala em relação ao tamanho atual do canvas (dinâmico)
+    const scaleX = canvas.width  / (video.videoWidth  || canvas.width);
+    const scaleY = canvas.height / (video.videoHeight || canvas.height);
 
     const x = box.x * scaleX;
     const y = box.y * scaleY;
-    const w = box.width * scaleX;
+    const w = box.width  * scaleX;
     const h = box.height * scaleY;
 
-    const isGood = state === 'face_detected' || confidence >= 0.80;
+    const isGood = state === 'face_detected';
     ctx.strokeStyle = isGood ? '#22c55e' : '#f97316';
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = isGood ? 12 : 0;
-    ctx.shadowColor = isGood ? '#22c55e' : '#f97316';
+    ctx.lineWidth   = 2.5;
+    ctx.shadowBlur  = isGood ? 14 : 6;
+    ctx.shadowColor = ctx.strokeStyle;
 
-    // Cantos do retângulo (estilo biométrico)
-    const corner = 20;
+    // Marcadores de canto estilo biométrico
+    const corner = Math.min(w, h) * 0.22;
     ctx.beginPath();
-    ctx.moveTo(x + corner, y);
-    ctx.lineTo(x, y);
-    ctx.lineTo(x, y + corner);
-    ctx.moveTo(x + w - corner, y);
-    ctx.lineTo(x + w, y);
-    ctx.lineTo(x + w, y + corner);
-    ctx.moveTo(x, y + h - corner);
-    ctx.lineTo(x, y + h);
-    ctx.lineTo(x + corner, y + h);
-    ctx.moveTo(x + w, y + h - corner);
-    ctx.lineTo(x + w, y + h);
-    ctx.lineTo(x + w - corner, y + h);
+    ctx.moveTo(x + corner, y);       ctx.lineTo(x, y);           ctx.lineTo(x, y + corner);
+    ctx.moveTo(x + w - corner, y);   ctx.lineTo(x + w, y);       ctx.lineTo(x + w, y + corner);
+    ctx.moveTo(x, y + h - corner);   ctx.lineTo(x, y + h);       ctx.lineTo(x + corner, y + h);
+    ctx.moveTo(x + w, y + h - corner); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - corner, y + h);
     ctx.stroke();
   }
 
   if (!active) return null;
 
+  // ── Mensagens de estado ───────────────────────────────────────────────────
   const stateMessages: Record<FaceState, string> = {
-    loading_models: 'Carregando modelos de IA...',
-    requesting_camera: 'Solicitando acesso à câmera...',
-    no_face: 'Posicione seu rosto na câmera',
-    face_detected: 'Rosto detectado! Aguarde...',
-    capturing: 'Capturando...',
-    done: '✓ Rosto reconhecido!',
-    error: errorMsg || 'Erro na câmera',
+    loading_models:    'Carregando modelos de IA...',
+    requesting_camera: 'Aguardando permissão da câmera...',
+    no_face:           'Posicione seu rosto na câmera',
+    face_detected:     'Rosto detectado! Aguarde...',
+    capturing:         'Capturando...',
+    done:              '✓ Rosto reconhecido!',
+    error:             errorMsg || 'Erro na câmera',
   };
 
-  const stateColors: Record<FaceState, string> = {
-    loading_models: 'rgba(249,115,22,0.15)',
-    requesting_camera: 'rgba(249,115,22,0.15)',
-    no_face: 'rgba(249,115,22,0.15)',
-    face_detected: 'rgba(34,197,94,0.15)',
-    capturing: 'rgba(34,197,94,0.15)',
-    done: 'rgba(34,197,94,0.2)',
-    error: 'rgba(239,68,68,0.15)',
-  };
+  const borderColor =
+    state === 'face_detected' || state === 'done' ? 'rgba(34,197,94,0.5)'
+    : state === 'error'                           ? 'rgba(239,68,68,0.4)'
+    :                                               'rgba(249,115,22,0.3)';
 
-  const stateTextColors: Record<FaceState, string> = {
-    loading_models: '#f97316',
-    requesting_camera: '#f97316',
-    no_face: '#f97316',
-    face_detected: '#22c55e',
-    capturing: '#22c55e',
-    done: '#22c55e',
-    error: '#ef4444',
-  };
+  const statusBg =
+    state === 'face_detected' || state === 'done' ? 'rgba(34,197,94,0.12)'
+    : state === 'error'                           ? 'rgba(239,68,68,0.12)'
+    :                                               'rgba(249,115,22,0.12)';
+
+  const statusColor =
+    state === 'face_detected' || state === 'done' ? '#22c55e'
+    : state === 'error'                           ? '#ef4444'
+    :                                               '#f97316';
+
+  const showOverlay = state === 'loading_models' || state === 'requesting_camera' || state === 'error';
 
   return (
     <div className="space-y-3">
-      {/* Viewport da câmera */}
+      {/* Viewport câmera */}
       <div
         className="relative rounded-2xl overflow-hidden"
         style={{
           background: '#111',
-          border: `2px solid ${state === 'face_detected' || state === 'done' ? 'rgba(34,197,94,0.5)' : state === 'error' ? 'rgba(239,68,68,0.4)' : 'rgba(249,115,22,0.3)'}`,
+          border: `2px solid ${borderColor}`,
           transition: 'border-color 0.3s ease',
           aspectRatio: '4/3',
-          maxHeight: '240px',
+          maxHeight: '260px',
         }}
       >
+        {/* Vídeo ao vivo — sempre presente no DOM para receber srcObject */}
         <video
           ref={videoRef}
           autoPlay
@@ -247,18 +305,17 @@ export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) 
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            transform: 'scaleX(-1)', // espelho
-            display: state === 'loading_models' || state === 'error' ? 'none' : 'block',
+            transform: 'scaleX(-1)',
+            display: showOverlay ? 'none' : 'block',
           }}
         />
+
+        {/* Canvas do overlay de bounding-box */}
         <canvas
           ref={canvasRef}
-          width={640}
-          height={480}
           style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
+            inset: 0,
             width: '100%',
             height: '100%',
             transform: 'scaleX(-1)',
@@ -266,11 +323,11 @@ export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) 
           }}
         />
 
-        {/* Overlay de loading/estado sem vídeo */}
-        {(state === 'loading_models' || state === 'requesting_camera' || state === 'error') && (
+        {/* Overlay de loading / erro */}
+        {showOverlay && (
           <div
-            className="absolute inset-0 flex flex-col items-center justify-center gap-3"
-            style={{ background: 'rgba(0,0,0,0.85)' }}
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-5 text-center"
+            style={{ background: 'rgba(0,0,0,0.88)' }}
           >
             {state !== 'error' ? (
               <svg className="animate-spin w-8 h-8 text-orange-400" viewBox="0 0 24 24" fill="none">
@@ -278,15 +335,24 @@ export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) 
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             ) : (
-              <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <svg className="w-9 h-9 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
               </svg>
             )}
-            <p className="text-sm text-gray-300 text-center px-4">{stateMessages[state]}</p>
+            <p className="text-sm text-gray-300 leading-snug max-w-xs">{stateMessages[state]}</p>
+            {state === 'error' && (
+              <button
+                type="button"
+                onClick={() => { modelsLoaded = false; modelsLoading = null; setState('loading_models'); setRetryKey((k) => k + 1); }}
+                className="mt-1 text-xs text-orange-400 underline hover:text-orange-300"
+              >
+                Tentar novamente
+              </button>
+            )}
           </div>
         )}
 
-        {/* Ícone de feito (done) */}
+        {/* Overlay de sucesso */}
         {state === 'done' && (
           <div
             className="absolute inset-0 flex flex-col items-center justify-center gap-2"
@@ -305,29 +371,29 @@ export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) 
         )}
       </div>
 
-      {/* Status bar */}
+      {/* Barra de status */}
       <div
-        className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-all"
+        className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-all duration-300"
         style={{
-          background: stateColors[state],
-          border: `1px solid ${stateTextColors[state]}40`,
-          color: stateTextColors[state],
+          background: statusBg,
+          border: `1px solid ${statusColor}40`,
+          color: statusColor,
         }}
       >
-        {state === 'face_detected' || state === 'done' ? (
-          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        {(state === 'face_detected' || state === 'done') ? (
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         ) : state === 'error' ? (
-          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
           </svg>
         ) : (
-          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 3.75H6A2.25 2.25 0 003.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0120.25 6v1.5m0 9V18A2.25 2.25 0 0118 20.25h-1.5m-9 0H6A2.25 2.25 0 013.75 18v-1.5M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         )}
-        <span>{stateMessages[state]}</span>
+        <span className="leading-tight">{stateMessages[state]}</span>
       </div>
     </div>
   );
