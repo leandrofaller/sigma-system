@@ -2865,7 +2865,7 @@ async function scrapeApenadoFicha(
       if (match) {
         const value = match[1].trim()
         // Remove valores vazios ou inúteis
-        if (value && value.length > 0 && !value.match(/^[\s•\-–—]+$/)) {
+        if (value && value.length > 0 && !value.match(/^[\s•\-–—*]+$/)) {
           return value
         }
       }
@@ -2874,7 +2874,7 @@ async function scrapeApenadoFicha(
       match = bodyText.match(new RegExp(`${label}\\s*[\\n\\r]+\\s*([^\\n]+)`, 'i'))
       if (match) {
         const value = match[1].trim()
-        if (value && value.length > 0 && !value.match(/^[\s•\-–—]+$/)) {
+        if (value && value.length > 0 && !value.match(/^[\s•\-–—*]+$/)) {
           return value
         }
       }
@@ -3318,6 +3318,7 @@ async function scrapeApenadoFicha(
       unidade: apenado.unidade,
       cela: apenado.cela,
       regime: apenado.regime,
+      motivoUltimaMovimentacao: apenado.motivoUltimaMovimentacao,
       situacao: apenado.situacao,
       dataEntrada: apenado.dataEntrada,
       dataPrisao: apenado.dataPrisao,
@@ -6065,14 +6066,14 @@ function parseApenadoFichaHtmlCheerio(html: string) {
     let match = bodyText.match(new RegExp(`${label}\\s*:?\\s*([^\\n]+)`, 'i'))
     if (match) {
       const value = match[1].trim()
-      if (value && value.length > 0 && !value.match(/^[\s•\-–—]+$/)) {
+      if (value && value.length > 0 && !value.match(/^[\s•\-–—*]+$/)) {
         return value
       }
     }
     match = bodyText.match(new RegExp(`${label}\\s*[\\n\\r]+\\s*([^\\n]+)`, 'i'))
     if (match) {
       const value = match[1].trim()
-      if (value && value.length > 0 && !value.match(/^[\s•\-–—]+$/)) {
+      if (value && value.length > 0 && !value.match(/^[\s•\-–—*]+$/)) {
         return value
       }
     }
@@ -6542,6 +6543,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
   const rows = movTable.find('tr').filter((_, el) => $(el).find('td, th').length > 0 && $(el).find('td').length > 0)
   
   let regimeMaisRecente: string | null = null
+  let motivoMaisRecente: string | null = null
 
   for (let i = 0; i < rows.length; i++) {
     const tr = rows[i]
@@ -6564,6 +6566,11 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     // Captura o regime mais recente (primeira linha válida com regime preenchido)
     if (regime && regime !== '-----' && !regimeMaisRecente) {
       regimeMaisRecente = regime
+    }
+
+    // Captura o motivo mais recente (primeira linha válida com motivo preenchido)
+    if (motivo && motivo !== '-----' && !motivoMaisRecente) {
+      motivoMaisRecente = motivo
     }
 
     const dataStr = dataEntrada !== '-----' ? dataEntrada : (dataSaida !== '-----' ? dataSaida : null)
@@ -6610,12 +6617,16 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     })
   }
 
-  if (regimeMaisRecente) {
-    console.log(`[SCRAPER REGIME] Atualizando regime do apenado ${apenadoId} para: ${regimeMaisRecente}`)
+  if (regimeMaisRecente || motivoMaisRecente) {
+    const updateData: { regime?: string; motivoUltimaMovimentacao?: string } = {}
+    if (regimeMaisRecente) updateData.regime = regimeMaisRecente
+    if (motivoMaisRecente) updateData.motivoUltimaMovimentacao = motivoMaisRecente
+
+    console.log(`[SCRAPER HISTORICO] Atualizando dados do apenado ${apenadoId}:`, updateData)
     await prisma.sipeApenadoImportado.update({
       where: { id: apenadoId },
-      data: { regime: regimeMaisRecente }
-    }).catch(err => console.error(`Erro ao atualizar regime em SipeApenadoImportado:`, err))
+      data: updateData
+    }).catch(err => console.error(`Erro ao atualizar regime/motivo em SipeApenadoImportado:`, err))
 
     const importado = await prisma.sipeApenadoImportado.findUnique({
       where: { id: apenadoId },
@@ -6624,8 +6635,8 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     if (importado?.sipeId) {
       await prisma.aIPApenado.update({
         where: { sipeId: importado.sipeId },
-        data: { regime: regimeMaisRecente }
-      }).catch(err => console.error(`Erro ao atualizar regime em AIPApenado:`, err))
+        data: updateData
+      }).catch(err => console.error(`Erro ao atualizar regime/motivo em AIPApenado:`, err))
     }
   }
   }
@@ -7819,6 +7830,7 @@ export async function scrapeApenadoFichaFast(
       unidade: apenado.unidade,
       cela: apenado.cela,
       regime: apenado.regime,
+      motivoUltimaMovimentacao: apenado.motivoUltimaMovimentacao,
       situacao: apenado.situacao,
       dataEntrada: apenado.dataEntrada,
       dataPrisao: apenado.dataPrisao,

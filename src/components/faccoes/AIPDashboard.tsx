@@ -16,6 +16,7 @@ interface Stats {
   porFaccao: Array<{ nome: string; sigla: string | null; cor: string; total: number }>
   porRegime: Array<{ regime: string | null; total: number }>
   porSituacao: Array<{ situacao: string | null; total: number }>
+  porMotivo: Array<{ motivo: string | null; total: number }>
 }
 
 function StatCard({
@@ -102,10 +103,11 @@ export function AIPDashboard() {
     )
   }
 
-  const { totais, porFaccao, porRegime, porSituacao } = stats
+  const { totais, porFaccao, porRegime, porSituacao, porMotivo } = stats
   const maxFaccao = Math.max(...porFaccao.map((f) => f.total), 1)
   const maxRegime = Math.max(...porRegime.map((r) => r.total), 1)
   const maxSituacao = Math.max(...porSituacao.map((s) => s.total), 1)
+  const maxMotivo = Math.max(...porMotivo.map((m) => m.total), 1)
 
   return (
     <div className="space-y-6">
@@ -121,7 +123,7 @@ export function AIPDashboard() {
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {/* Por Facção */}
         <div className="lg:col-span-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
@@ -182,6 +184,28 @@ export function AIPDashboard() {
                   value={s.total}
                   max={maxSituacao}
                   color="#10b981"
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Por Motivo da Última Movimentação */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+            <FileText className="w-4 h-4" /> Motivo da Última Movimentação
+          </h3>
+          {porMotivo.length === 0 ? (
+            <p className="text-sm text-gray-400">Sem dados</p>
+          ) : (
+            <div className="space-y-3">
+              {porMotivo.slice(0, 8).map((m) => (
+                <HorizontalBar
+                  key={m.motivo ?? 'desconhecido'}
+                  label={m.motivo ?? 'Não informado'}
+                  value={m.total}
+                  max={maxMotivo}
+                  color="#f59e0b"
                 />
               ))}
             </div>

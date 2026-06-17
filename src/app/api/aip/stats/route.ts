@@ -41,6 +41,7 @@ export async function GET() {
     porFaccaoRaw,
     porRegimeRaw,
     porSituacaoRaw,
+    porMotivoRaw,
   ] = await Promise.all([
     // Total de apenados no AIP
     prisma.aIPApenado.count(),
@@ -108,6 +109,19 @@ export async function GET() {
       where: { situacao: { not: null } },
       _count: { _all: true },
     }),
+
+    // Breakdown por motivo da última movimentação
+    prisma.aIPApenado.groupBy({
+      by: ['motivoUltimaMovimentacao'],
+      where: {
+        AND: [
+          { motivoUltimaMovimentacao: { not: null } },
+          { motivoUltimaMovimentacao: { not: '' } },
+          { motivoUltimaMovimentacao: { not: '-----' } },
+        ]
+      },
+      _count: { _all: true },
+    }),
   ])
 
   // Calcular advogados únicos e total de vínculos
@@ -143,6 +157,10 @@ export async function GET() {
     .map((g) => ({ situacao: g.situacao, total: (g._count as { _all: number })._all }))
     .sort((a, b) => b.total - a.total)
 
+  const porMotivo = porMotivoRaw
+    .map((g) => ({ motivo: g.motivoUltimaMovimentacao, total: (g._count as { _all: number })._all }))
+    .sort((a, b) => b.total - a.total)
+
   return NextResponse.json({
     totais: {
       apenados: totalApenados,
@@ -156,5 +174,6 @@ export async function GET() {
     porFaccao,
     porRegime,
     porSituacao,
+    porMotivo,
   })
 }

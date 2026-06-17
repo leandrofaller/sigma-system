@@ -612,6 +612,7 @@ model SipeApenadoImportado {
   unidade      String?
   cela         String?
   regime       String?
+  motivoUltimaMovimentacao String?
   situacao     String?
   dataEntrada  String?
   dataPrisao   String?
@@ -870,6 +871,7 @@ model AIPApenado {
   unidade           String?
   cela              String?
   regime            String?
+  motivoUltimaMovimentacao String?
   situacao          String?
   dataEntrada       String?
   dataPrisao        String?

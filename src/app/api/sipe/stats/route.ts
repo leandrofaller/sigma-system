@@ -19,6 +19,7 @@ export async function GET() {
     apenadosPorFaccao,
     apenadosPorRegime,
     apenadosPorSituacao,
+    apenadosPorMotivo,
     ultimaSync,
   ] = await Promise.all([
     prisma.sipeApenadoImportado.count({ where: { sexo: { not: null } } }),
@@ -48,6 +49,20 @@ export async function GET() {
       by: ['situacao'],
       _count: { _all: true },
       where: { situacao: { not: null }, sexo: { not: null } },
+    }),
+
+    // Breakdown by last movement reason
+    prisma.sipeApenadoImportado.groupBy({
+      by: ['motivoUltimaMovimentacao'],
+      _count: { _all: true },
+      where: {
+        AND: [
+          { motivoUltimaMovimentacao: { not: null } },
+          { motivoUltimaMovimentacao: { not: '' } },
+          { motivoUltimaMovimentacao: { not: '-----' } },
+          { sexo: { not: null } },
+        ]
+      },
     }),
 
     // Last successful sync
@@ -99,6 +114,10 @@ export async function GET() {
     })).sort((a, b) => b.total - a.total).slice(0, 10),
     porSituacao: apenadosPorSituacao.map((g) => ({
       situacao: g.situacao,
+      total: (g._count as { _all: number })._all,
+    })).sort((a, b) => b.total - a.total),
+    porMotivo: apenadosPorMotivo.map((g) => ({
+      motivo: g.motivoUltimaMovimentacao,
       total: (g._count as { _all: number })._all,
     })).sort((a, b) => b.total - a.total),
     ultimaSync,
