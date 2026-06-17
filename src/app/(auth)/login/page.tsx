@@ -3,15 +3,28 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { FaceLoginCamera } from '@/components/FaceLoginCamera';
+
+type Tab = 'password' | 'face' | 'request';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<Tab>('password');
+
+  // ── Estado: login por senha ───────────────────────────────────────────────
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // ── Estado: login facial ──────────────────────────────────────────────────
+  const [faceEmail, setFaceEmail] = useState('');
+  const [faceEmailConfirmed, setFaceEmailConfirmed] = useState(false);
+  const [faceLoading, setFaceLoading] = useState(false);
+  const [faceError, setFaceError] = useState('');
+
+  // ── Estado: solicitar acesso ──────────────────────────────────────────────
   const [showRequest, setShowRequest] = useState(false);
   const [reqName, setReqName] = useState('');
   const [reqEmail, setReqEmail] = useState('');
@@ -20,7 +33,9 @@ export default function LoginPage() {
   const [reqSuccess, setReqSuccess] = useState('');
   const [reqError, setReqError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
@@ -36,6 +51,52 @@ export default function LoginPage() {
       setError('Erro ao conectar ao servidor.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFaceEmailSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!faceEmail.trim()) return;
+    setFaceError('');
+    setFaceEmailConfirmed(true);
+  };
+
+  const handleFaceDescriptor = async (descriptor: number[]) => {
+    setFaceLoading(true);
+    setFaceError('');
+    try {
+      // 1. Envia para o servidor comparar com o embedding salvo
+      const res = await fetch('/api/auth/face-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: faceEmail, faceDescriptor: descriptor }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setFaceError(data.error || 'Reconhecimento não autorizado. Tente novamente.');
+        setFaceEmailConfirmed(false); // volta para o campo de e-mail
+        return;
+      }
+
+      // 2. Usa o faceToken para autenticar via NextAuth
+      const result = await signIn('credentials', {
+        faceToken: data.faceToken,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setFaceError('Erro na autenticação. Tente novamente.');
+        setFaceEmailConfirmed(false);
+      } else {
+        router.push('/dashboard');
+        router.refresh();
+      }
+    } catch {
+      setFaceError('Erro de conexão. Tente novamente.');
+      setFaceEmailConfirmed(false);
+    } finally {
+      setFaceLoading(false);
     }
   };
 
@@ -55,9 +116,7 @@ export default function LoginPage() {
         setReqError(data.error || 'Erro ao enviar solicitação.');
       } else {
         setReqSuccess('Solicitação enviada! Um administrador irá analisá-la em breve.');
-        setReqName('');
-        setReqEmail('');
-        setReqMessage('');
+        setReqName(''); setReqEmail(''); setReqMessage('');
       }
     } catch {
       setReqError('Erro ao conectar ao servidor.');
@@ -65,6 +124,18 @@ export default function LoginPage() {
       setReqLoading(false);
     }
   };
+
+  const switchTab = (tab: Tab) => {
+    setActiveTab(tab);
+    setShowRequest(tab === 'request');
+    setError('');
+    setFaceError('');
+    if (tab !== 'face') {
+      setFaceEmailConfirmed(false);
+    }
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gray-900">
@@ -80,23 +151,37 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-white">Portal do Cliente</h1>
-          <p className="text-gray-400 text-sm mt-1">LogiTrack Express — Acesso Restrito</p>
+          <p className="text-gray-400 text-sm mt-1">Logitrack Express — Acesso Restrito</p>
         </div>
 
         {/* Tabs */}
         <div className="flex rounded-xl mb-4 overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
           <button
-            onClick={() => setShowRequest(false)}
+            id="tab-senha"
+            onClick={() => switchTab('password')}
             className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-              !showRequest ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-gray-200'
+              activeTab === 'password' ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-gray-200'
             }`}
           >
-            Entrar
+            Senha
           </button>
           <button
-            onClick={() => setShowRequest(true)}
+            id="tab-face"
+            onClick={() => switchTab('face')}
+            className={`flex-1 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
+              activeTab === 'face' ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 3.75H6A2.25 2.25 0 003.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0120.25 6v1.5m0 9V18A2.25 2.25 0 0118 20.25h-1.5m-9 0H6A2.25 2.25 0 013.75 18v-1.5M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Rosto
+          </button>
+          <button
+            id="tab-solicitar"
+            onClick={() => switchTab('request')}
             className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-              showRequest ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-gray-200'
+              activeTab === 'request' ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-gray-200'
             }`}
           >
             Solicitar Acesso
@@ -104,18 +189,18 @@ export default function LoginPage() {
         </div>
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
-          className="rounded-2xl p-8">
+          className="rounded-2xl p-6">
 
-          {!showRequest ? (
-            /* Login Form */
-            <form onSubmit={handleSubmit} className="space-y-5">
+          {/* ── Tab: Login por Senha ── */}
+          {activeTab === 'password' && (
+            <form onSubmit={handlePasswordLogin} className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">E-mail</label>
                 <div className="relative">
                   <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
                   </svg>
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  <input id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                     placeholder="seu@email.com" required autoComplete="email"
                     style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}
                     className="w-full rounded-xl px-4 py-3 pl-10 focus:outline-none text-sm placeholder:text-gray-500 transition-all" />
@@ -128,7 +213,7 @@ export default function LoginPage() {
                   <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
                   </svg>
-                  <input type={showPassword ? 'text' : 'password'} value={password}
+                  <input id="login-password" type={showPassword ? 'text' : 'password'} value={password}
                     onChange={(e) => setPassword(e.target.value)} placeholder="••••••••"
                     required autoComplete="current-password"
                     style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}
@@ -159,7 +244,7 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <button type="submit" disabled={loading}
+              <button id="btn-entrar" type="submit" disabled={loading}
                 className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm">
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -172,14 +257,109 @@ export default function LoginPage() {
                 ) : 'Entrar'}
               </button>
             </form>
-          ) : (
-            /* Access Request Form */
+          )}
+
+          {/* ── Tab: Login por Rosto ── */}
+          {activeTab === 'face' && (
+            <div className="space-y-4">
+              {/* Passo 1: e-mail */}
+              {!faceEmailConfirmed ? (
+                <form onSubmit={handleFaceEmailSubmit} className="space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-400 mb-4">
+                      Informe seu e-mail para que o sistema localize seu perfil, depois aponte a câmera para o seu rosto.
+                    </p>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">E-mail</label>
+                    <div className="relative">
+                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                      </svg>
+                      <input
+                        id="face-email"
+                        type="email"
+                        value={faceEmail}
+                        onChange={(e) => setFaceEmail(e.target.value)}
+                        placeholder="seu@email.com"
+                        required
+                        autoComplete="email"
+                        style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}
+                        className="w-full rounded-xl px-4 py-3 pl-10 focus:outline-none text-sm placeholder:text-gray-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {faceError && (
+                    <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm text-red-400"
+                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                      </svg>
+                      {faceError}
+                    </div>
+                  )}
+
+                  <button
+                    id="btn-continuar-face"
+                    type="submit"
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 3.75H6A2.25 2.25 0 003.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0120.25 6v1.5m0 9V18A2.25 2.25 0 0118 20.25h-1.5m-9 0H6A2.25 2.25 0 013.75 18v-1.5M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Continuar com câmera
+                  </button>
+                </form>
+              ) : (
+                /* Passo 2: câmera */
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-400">
+                      Reconhecendo como <span className="text-orange-400 font-medium">{faceEmail}</span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setFaceEmailConfirmed(false); setFaceError(''); }}
+                      className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      Trocar e-mail
+                    </button>
+                  </div>
+
+                  {faceLoading ? (
+                    <div className="flex flex-col items-center justify-center py-10 gap-3">
+                      <svg className="animate-spin h-8 w-8 text-orange-400" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <p className="text-sm text-gray-400">Verificando identidade...</p>
+                    </div>
+                  ) : (
+                    <FaceLoginCamera
+                      active={!faceLoading}
+                      onDescriptor={handleFaceDescriptor}
+                    />
+                  )}
+
+                  {faceError && (
+                    <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm text-red-400"
+                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                      </svg>
+                      {faceError}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Tab: Solicitar Acesso ── */}
+          {activeTab === 'request' && (
             <form onSubmit={handleRequest} className="space-y-5">
-              <div>
-                <p className="text-sm text-gray-400 mb-4">
-                  Preencha o formulário abaixo. Seu pedido será analisado por um administrador.
-                </p>
-              </div>
+              <p className="text-sm text-gray-400">
+                Preencha o formulário abaixo. Seu pedido será analisado por um administrador.
+              </p>
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Nome completo</label>
@@ -198,7 +378,9 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Justificativa <span className="text-gray-600">(opcional)</span></label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Justificativa <span className="text-gray-600">(opcional)</span>
+                </label>
                 <textarea value={reqMessage} onChange={(e) => setReqMessage(e.target.value)}
                   placeholder="Descreva o motivo da solicitação..." rows={3}
                   style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', resize: 'none' }}
