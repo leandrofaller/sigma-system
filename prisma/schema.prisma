@@ -832,8 +832,9 @@ model AIPApenado {
 
   // ============ VÍNCULO COM SIPE ============
   // Permite atualizar dados SIPE de novo scraping
-  sipeApenadoId Int   @unique
-  sipeApenado   SipeApenadoImportado @relation("AIPApenadoToSipeApenado", fields: [sipeApenadoId], references: [sipeId], onDelete: Cascade)
+  // Nullable com SetNull: deletar o registro SIPE não apaga o AIP — apenas desvincula
+  sipeApenadoId Int?  @unique
+  sipeApenado   SipeApenadoImportado? @relation("AIPApenadoToSipeApenado", fields: [sipeApenadoId], references: [sipeId], onDelete: SetNull)
 
   // ============ DADOS DO SIPE (atualizáveis) ============
   // Copiados inicialmente de SipeApenadoImportado

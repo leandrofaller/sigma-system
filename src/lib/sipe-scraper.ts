@@ -3337,6 +3337,8 @@ async function scrapeApenadoFicha(
 
       // ============ METADATA ============
       ultimaSincAt: new Date(),
+      // Restaura o vínculo FK caso tenha sido desfeito por deleção prévia do SIPE
+      sipeApenadoId: sipeId,
     }
 
     const apenadoEmAIP = await prisma.aIPApenado.findUnique({
@@ -7768,6 +7770,8 @@ export async function scrapeApenadoFichaFast(
       cep: apenado.cep,
       photoPath: apenado.photoPath,
       ultimaSincAt: new Date(),
+      // Restaura o vínculo FK caso tenha sido desfeito por deleção prévia do SIPE
+      sipeApenadoId: sipeId,
     }
 
     const apenadoEmAIP = await prisma.aIPApenado.findUnique({
