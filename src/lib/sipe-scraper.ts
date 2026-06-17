@@ -113,7 +113,9 @@ async function requestSipeViaProxy(options: {
     })
 
     if (!res.ok) {
-      console.warn(`[PYTHON PROXY] ⚠️ Chamada ${method} falhou com status ${res.status} para o path: ${cleanPath}. Ativando fallback para Playwright.`)
+      if (res.status !== 404) {
+        console.warn(`[PYTHON PROXY] ⚠️ Chamada ${method} falhou com status ${res.status} para o path: ${cleanPath}. Ativando fallback para Playwright.`)
+      }
       return null
     }
 

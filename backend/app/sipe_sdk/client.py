@@ -519,6 +519,8 @@ class SIPEClient:
                         f"Erro HTTP {status_code} no SIPE. Tentativa {attempt}/{max_network_retries}. Retentando em {delay}s..."
                     )
                     time.sleep(delay)
+                elif status_code == 404:
+                    raise SIPENotFoundError(f"Recurso nao encontrado no SIPE: {path} (HTTP 404)") from exc
                 else:
                     raise SIPEHTTPError(f"Erro HTTP do SIPE: {status_code}") from exc
             except RequestException as exc:
