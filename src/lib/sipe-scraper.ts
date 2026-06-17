@@ -6550,7 +6550,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     if (cells.length < minCols) continue
 
     const codigo = $(cells.get(codigoIdx)).text().trim()
-    if (!codigo) continue
+    if (!codigo || isNaN(Number(codigo))) continue
 
     const regime = $(cells.get(regimeIdx)).text().trim()
     const intramuro = $(cells.get(intramuroIdx)).text().trim()
