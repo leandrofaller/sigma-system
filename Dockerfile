@@ -50,15 +50,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Stage 3: Runner — Debian slim com Python/InsightFace (glibc, compativel com wheels Python)
 FROM node:20-slim AS runner
 
-# Ferramentas gerais + dependências de sistema do Chromium headless (Playwright)
+# Ferramentas gerais + Python
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl gosu postgresql-client zip tzdata \
     python3 python3-venv \
     libglib2.0-0 tesseract-ocr tesseract-ocr-por \
-    libgbm1 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
-    libcups2 libdbus-1-3 libdrm2 libxcomposite1 libxdamage1 \
-    libxfixes3 libxkbcommon0 libxrandr2 libxtst6 libxshmfence1 \
-    libasound2 fonts-liberation libvulkan1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -75,15 +71,6 @@ COPY --from=python_builder /opt/arcface-venv /opt/arcface-venv
 # Diretorio de modelos ja com dono nextjs (pode gravar no primeiro uso se download falhar aqui)
 RUN mkdir -p /opt/arcface-models && chown 1001:1001 /opt/arcface-models
 
-# Garante que o pacote completo do playwright (incluindo cli.js) está disponível
-COPY --from=builder /app/node_modules/playwright ./node_modules/playwright
-COPY --from=builder /app/node_modules/playwright-core ./node_modules/playwright-core
-
-# Baixa o binário do Chromium como usuário nextjs (com retries tolerantes a instabilidades na CDN)
-# O Chromium (~150 MB) é baixado antes dos arquivos de código mutáveis, permitindo que a camada seja cacheada
-RUN HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium || \
-    (echo "⚠️ Falha no download. Tentando novamente em 5 segundos..." && sleep 5 && HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium) || \
-    (echo "⚠️ Segunda falha. Tentando novamente em 10 segundos..." && sleep 10 && HOME=/home/nextjs gosu nextjs node node_modules/playwright/cli.js install chromium)
 
 # Pre-baixa o modelo buffalo_l do InsightFace (~326 MB) antes da cópia do código-fonte para aproveitar o cache do Docker
 COPY scripts/download_model.py /tmp/download_model.py

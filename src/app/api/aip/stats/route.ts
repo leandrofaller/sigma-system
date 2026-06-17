@@ -18,7 +18,9 @@ export async function GET() {
   const aipEntries = await prisma.aIPApenado.findMany({
     select: { sipeApenadoId: true },
   })
-  const sipeIntIds = aipEntries.map((a) => a.sipeApenadoId)
+  const sipeIntIds = aipEntries
+    .map((a) => a.sipeApenadoId)
+    .filter((id): id is number => id !== null)
 
   // Buscar os cuid ids correspondentes em SipeApenadoImportado
   const sipeRegistros = sipeIntIds.length > 0

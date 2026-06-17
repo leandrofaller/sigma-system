@@ -5,7 +5,7 @@ import { scrapeApenadoFichaFast, resolveUnidadeIdByNome } from '@/lib/sipe-scrap
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
   if (!session?.user) {
@@ -15,7 +15,7 @@ export async function POST(
     return NextResponse.json({ error: 'Acesso restrito ao Superadmin' }, { status: 403 })
   }
 
-  const { id } = params
+  const { id } = await params
 
   try {
     const dbApenado = await prisma.sipeApenadoImportado.findUnique({

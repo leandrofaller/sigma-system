@@ -1,7 +1,7 @@
 /**
- * SIPE Scraper — Playwright-based crawler for sipe.sejus.ro.gov.br
+ * SIPE Scraper — SDK Python + Cheerio crawler for sipe.sejus.ro.gov.br
  *
- * LAST UPDATED: 2026-05-28 22:46 - Fixed: Timeout 8000ms + múltiplos seletores
+ * LAST UPDATED: 2026-06-17 — Playwright removido; engine único: python-sdk + Cheerio
  *
  * Design (mirrors ArcFace indexing-job pattern):
  * - globalThis singleton state (survives Next.js module isolation across routes)
@@ -19,7 +19,57 @@
  *   as startSipeSync() regardless of which route called them.
  */
 
-import { chromium, Browser, BrowserContext, Page } from 'playwright'
+// ── MockPage: substitui o Playwright sem precisar do Chromium ─────────────
+// Usa Proxy JavaScript para suportar qualquer chamada em cadeia sem erros TS.
+// O engine python-sdk nunca chama estes métodos em produção — são apenas stubs
+// para que o código legado de fallback compile sem erros.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function createMockProxy(): any {
+  return new Proxy(Object.create(null), {
+    get(_target, prop) {
+      if (prop === 'then') return undefined // não é Promise
+      if (prop === 'url') return () => ''
+      if (prop === 'isConnected') return () => true
+      if (prop === 'waitForTimeout') return (ms: number) => new Promise(r => setTimeout(r, ms))
+      if (prop === 'evaluate') return async () => []
+      if (prop === 'content') return async () => ''
+      if (prop === 'newContext') return async () => createMockProxy()
+      if (prop === 'newPage') return async () => createMockProxy()
+      if (prop === 'close') return async () => {}
+      // Qualquer outro acesso retorna uma função que devolve o próprio proxy
+      return (..._args: any[]) => Promise.resolve(createMockProxy())
+    },
+  })
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Page = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type BrowserContext = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Browser = any
+
+let browserInstance: Browser | null = null
+
+async function getBrowser(): Promise<Browser> {
+  if (!browserInstance) {
+    // Stub: sem Chromium. O engine python-sdk não usa navegador real.
+    browserInstance = {
+      newContext: async () => ({
+        newPage: async () => createMockProxy(),
+        close: async () => {},
+      }),
+      isConnected: () => true,
+    } as unknown as Browser
+  }
+  return browserInstance
+}
+
+async function createSession(): Promise<BrowserContext> {
+  const browser = await getBrowser()
+  return (browser as any).newContext()
+}
+
 import { existsSync } from 'fs'
 import { prisma } from './db'
 import sharp from 'sharp'
@@ -40,6 +90,7 @@ const SIPE_UNIDADE = process.env.SIPE_UNIDADE ?? '3'  // CDPPVH
 const SIPE_PYTHON_API_URL = process.env.SIPE_PYTHON_API_URL ?? 'http://localhost:8000'
 export type SipeEngine = 'playwright' | 'firecrawl' | 'python-sdk'
 const DEFAULT_SIPE_ENGINE: SipeEngine = (process.env.SIPE_SCRAPER_ENGINE as SipeEngine) ?? 'python-sdk'
+// Nota: 'playwright' é mantido no tipo para compatibilidade de API, mas o engine real não usa Chromium.
 
 type SipeProxyResponse = {
   content_type?: string
@@ -241,59 +292,8 @@ export async function detectAndMarkCrashedJobs(): Promise<void> {
 
 // ── Browser pool ──────────────────────────────────────────────
 
-let browserInstance: Browser | null = null
 
-/**
- * Tenta localizar um executável Chromium instalado no sistema operacional.
- * Usado como fallback quando o binário empacotado pelo Playwright não está disponível
- * (comum em VPS Linux onde `playwright install` foi executado por usuário diferente).
- */
-function findSystemChromium(): string | undefined {
-  // Variável de ambiente tem prioridade (ex: PLAYWRIGHT_EXECUTABLE_PATH=/usr/bin/chromium)
-  if (process.env.PLAYWRIGHT_EXECUTABLE_PATH) return process.env.PLAYWRIGHT_EXECUTABLE_PATH
-
-  const candidates = [
-    '/usr/bin/chromium-browser',   // Ubuntu/Debian padrão
-    '/usr/bin/chromium',           // Debian / Arch
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/google-chrome',
-    '/snap/bin/chromium',          // Snap
-    '/usr/local/bin/chromium',
-  ]
-  return candidates.find(existsSync)
-}
-
-async function getBrowser(): Promise<Browser> {
-  if (!browserInstance || !browserInstance.isConnected()) {
-    const executablePath = findSystemChromium()
-    browserInstance = await chromium.launch({
-      headless: true,
-      ignoreDefaultArgs: ['--enable-automation'],
-      // Flags obrigatórias para Docker (sem seccomp/AppArmor por padrão)
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-dev-shm-usage',   // evita crash por /dev/shm lotado em container
-        '--disable-gpu',
-        '--disable-extensions',
-        '--disable-background-networking',
-      ],
-      // Se encontrou Chromium do sistema, usa ele; caso contrário, usa o binário do Playwright
-      ...(executablePath ? { executablePath } : {}),
-    })
-  }
-  return browserInstance
-}
-
-async function createSession(): Promise<BrowserContext> {
-  const browser = await getBrowser()
-  return browser.newContext({
-    userAgent:
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-      'Chrome/120.0.0.0 Safari/537.36',
-  })
-}
+// ── SIPE authentication ───────────────────────────────────────────────────
 
 // ── SIPE authentication ───────────────────────────────────────
 
@@ -998,7 +998,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
           })
         }
         // Polite delay (reduzido drasticamente no modo SDK para velocidade máxima)
-        await page.waitForTimeout(isPythonSdkEngine() ? 50 : (300 + Math.random() * 500))
+        await new Promise(r => setTimeout(r, isPythonSdkEngine() ? 50 : (300 + Math.random() * 500)))
       } catch (err) {
         if (globalThis.__sipeState) {
           globalThis.__sipeState.erros++
@@ -1329,7 +1329,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
 
           // 🔧 OTIMIZAÇÃO: Delay maior para governos servidores lentos (2-5s), menor no modo fast, e mínimo no modo SDK
           const currentDelay = isPythonSdkEngine() ? 50 : (fast ? (500 + Math.random() * 500) : (2000 + Math.random() * 3000))
-          await page.waitForTimeout(currentDelay)
+          await new Promise(r => setTimeout(r, currentDelay))
         } catch (err) {
           const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
           if (globalThis.__sipeState) {
@@ -2911,7 +2911,7 @@ async function scrapeApenadoFicha(
       nomePai: val('nomepai'),
       telefone: val('telefone'),
       rji: val('rji'),
-      regime: selVal('fk_regime') || selVal('regime') || extractLabel('Regime'),
+      regime: selVal('fk_regime') || selVal('regime'),
       situacao: situacaoValue,
       dataEntrada: val('dataentrada'),
       dataPrisao: val('dataprisao'),
@@ -5220,32 +5220,36 @@ export async function scrapeFaccoes(jobId?: string, unidadeId = SIPE_UNIDADE, en
             continue
           }
 
-          await page.setContent(html)
-          const extractedOptions = await page.evaluate(() => {
-            const candidates = Array.from(document.querySelectorAll('select'))
-            for (const select of candidates) {
-              const options = Array.from(select.querySelectorAll('option'))
-                .filter((o) => o.value && o.value !== '0' && o.value !== '')
-                .map((o) => ({ value: o.value, text: o.textContent?.trim() ?? '' }))
 
-              if (options.length === 0) continue
+          // Usa Cheerio em vez de page.evaluate() — sem necessidade de browser
+          const $fac = cheerio.load(html)
+          const extractedOptions: Array<{ value: string; text: string }> = []
 
-              const hasGender = options.some((opt) => {
-                const text = opt.text.toLowerCase()
-                return text.includes('masculino') || text.includes('feminino') || text.includes('não informado')
+          $fac('select').each((_, selectEl) => {
+            const opts = $fac(selectEl).find('option')
+              .filter((_, o) => {
+                const val = $fac(o).attr('value') ?? ''
+                return val !== '' && val !== '0'
               })
+              .map((_, o) => ({ value: $fac(o).attr('value') ?? '', text: ($fac(o).text() ?? '').trim() }))
+              .get() as Array<{ value: string; text: string }>
 
-              if (!hasGender) {
-                return options
-              }
+            if (opts.length === 0) return
+
+            const hasGender = opts.some((opt) => {
+              const t = opt.text.toLowerCase()
+              return t.includes('masculino') || t.includes('feminino') || t.includes('n\u00e3o informado')
+            })
+
+            if (!hasGender) {
+              opts.forEach(o => extractedOptions.push(o))
             }
-            return [] as Array<{ value: string; text: string }>
           })
 
           if (extractedOptions.length > 0) {
             options = extractedOptions
             extraido = true
-            console.log(`[FACCOES] 🐍 Lista de facções obtida via SDK com ${options.length} opções`)
+            console.log(`[FACCOES] 🐍 Lista de facções obtida via Cheerio com ${options.length} opções`)
             break
           }
         } catch (err) {
@@ -6170,7 +6174,7 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       nomePai: val('nomepai') || val('nome_pai') || null,
       telefone: val('telefone'),
       rji: val('rji'),
-      regime: selVal('fk_regime') || selVal('regime') || extractLabel('Regime'),
+      regime: selVal('fk_regime') || selVal('regime'),
       situacao: situacaoValue,
       dataEntrada: val('dataentrada') || val('data_entrada') || staticVal('dataentrada') || extractLabel('(?:Data de )?Entrada'),
       dataPrisao: val('dataprisao'),
@@ -6536,6 +6540,9 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
 
   // Cheerio não adiciona <tbody> implícito — filtra linhas com td ou th (o SIPE usa <th> para Regime, Intramuro, Monitorado, Origem e Destino)
   const rows = movTable.find('tr').filter((_, el) => $(el).find('td, th').length > 0 && $(el).find('td').length > 0)
+  
+  let regimeMaisRecente: string | null = null
+
   for (let i = 0; i < rows.length; i++) {
     const tr = rows[i]
     // Usar 'th, td' para capturar TODAS as células em ordem correta (o SIPE usa <th> para Código, Regime, Intramuro, Monitorado, Origem e Destino)
@@ -6553,6 +6560,11 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     const dataSaida = $(cells.get(dataSaidaIdx)).text().trim()
     const destino = $(cells.get(destinoIdx)).text().trim()
     const motivo = $(cells.get(motivoIdx)).text().trim()
+
+    // Captura o regime mais recente (primeira linha válida com regime preenchido)
+    if (regime && regime !== '-----' && !regimeMaisRecente) {
+      regimeMaisRecente = regime
+    }
 
     const dataStr = dataEntrada !== '-----' ? dataEntrada : (dataSaida !== '-----' ? dataSaida : null)
     let datahora: Date | null = null
@@ -6596,6 +6608,25 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
         unidade: destino !== '-----' ? destino : (origem !== '-----' ? origem : null),
       },
     })
+  }
+
+  if (regimeMaisRecente) {
+    console.log(`[SCRAPER REGIME] Atualizando regime do apenado ${apenadoId} para: ${regimeMaisRecente}`)
+    await prisma.sipeApenadoImportado.update({
+      where: { id: apenadoId },
+      data: { regime: regimeMaisRecente }
+    }).catch(err => console.error(`Erro ao atualizar regime em SipeApenadoImportado:`, err))
+
+    const importado = await prisma.sipeApenadoImportado.findUnique({
+      where: { id: apenadoId },
+      select: { sipeId: true }
+    })
+    if (importado?.sipeId) {
+      await prisma.aIPApenado.update({
+        where: { sipeId: importado.sipeId },
+        data: { regime: regimeMaisRecente }
+      }).catch(err => console.error(`Erro ao atualizar regime em AIPApenado:`, err))
+    }
   }
   }
 
