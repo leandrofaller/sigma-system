@@ -42,18 +42,25 @@ const nextConfig = {
   experimental: {
     webpackBuildWorker: false,
   },
-  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'sharp', '@react-pdf/renderer'],
+  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'sharp', '@react-pdf/renderer', 'googleapis'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
       { protocol: 'https', hostname: 'drive.google.com' },
     ],
   },
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.externals.push({
       'utf-8-validate': 'commonjs utf-8-validate',
       bufferutil: 'commonjs bufferutil',
     });
+    if (isServer) {
+      config.externals.push({
+        googleapis: 'commonjs googleapis',
+        'google-auth-library': 'commonjs google-auth-library',
+        gaxios: 'commonjs gaxios',
+      });
+    }
     return config;
   },
 };

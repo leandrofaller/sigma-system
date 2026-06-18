@@ -183,7 +183,8 @@
       "Bash(awk '/^async function|^function/{c++; if\\(c==2\\){print NR; exit}}')",
       "Bash(awk '/^export async function parseAndSaveFichaGeralCheerio/,0{print; if\\(/^async function parseAndSaveDocumentosCheerio/ && NR>1\\) exit}')",
       "Bash(cd /F/relatorio_claude && find . -type f -name \"*.py\" | head -20)",
-      "Bash(find F:\\\\\\\\relatorio_claude\\\\\\\\src\\\\\\\\app\\\\\\\\api\\\\\\\\sipe\\\\\\\\apenados -type f -name \"route.ts\")"
+      "Bash(find F:\\\\\\\\relatorio_claude\\\\\\\\src\\\\\\\\app\\\\\\\\api\\\\\\\\sipe\\\\\\\\apenados -type f -name \"route.ts\")",
+      "Bash(npm audit *)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
