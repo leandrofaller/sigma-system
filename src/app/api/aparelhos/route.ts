@@ -187,6 +187,9 @@ export async function POST(req: NextRequest) {
       marca,
       smartwatch,
       chip,
+      responsavelRecebimento,
+      loteGrupo,
+      fotos,
     } = body
 
     if (!responsavel || !municipio || !unidadePrisional) {
@@ -208,6 +211,9 @@ export async function POST(req: NextRequest) {
         marca,
         smartwatch,
         chip,
+        responsavelRecebimento,
+        loteGrupo,
+        fotos: fotos || undefined,
       },
     })
 

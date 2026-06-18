@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { motion } from 'framer-motion'
 
 interface CalendarDayWithEvents {
   day: number
@@ -108,10 +109,8 @@ export function EventCalendar({
     onMesChange(data.toISOString().slice(0, 7))
   }
 
-  const handleNextMonth = () => {
-    const data = new Date(Date.UTC(ano, mesNum, 1))
-    onMesChange(data.toISOString().slice(0, 7))
-  }
+  const hoje = new Date()
+  const hojeKey = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
 
   return (
     <div className="space-y-4">
@@ -150,35 +149,48 @@ export function EventCalendar({
 
       {/* Calendário */}
       <div className="grid grid-cols-7 gap-2">
-        {dias.map((dia, idx) => (
-          <button
-            key={idx}
-            onClick={() => dia.day > 0 && onDateSelect(dia.date, dia.eventsCount)}
-            disabled={dia.day === 0}
-            className={`
-              aspect-square rounded-lg border-2 font-medium transition-all
-              flex flex-col items-center justify-center gap-1 text-sm
-              ${
-                dia.day === 0
-                  ? 'bg-gray-50 dark:bg-gray-900 border-transparent cursor-default'
-                  : dia.hasEvents
-                    ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-100 hover:shadow-md'
-                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white hover:border-amber-300 dark:hover:border-amber-700'
-              }
-            `}
-          >
-            {dia.day > 0 && (
-              <>
-                <span>{dia.day}</span>
-                {dia.hasEvents && (
-                  <span className="text-xs font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-full">
-                    {dia.eventsCount}
-                  </span>
-                )}
-              </>
-            )}
-          </button>
-        ))}
+        {dias.map((dia, idx) => {
+          const isHoje = dia.day > 0 && dia.date.toISOString().split('T')[0] === hojeKey
+          return (
+            <motion.button
+              key={idx}
+              onClick={() => dia.day > 0 && onDateSelect(dia.date, dia.eventsCount)}
+              disabled={dia.day === 0}
+              whileHover={dia.hasEvents ? { scale: 1.08, y: -2 } : dia.day > 0 ? { scale: 1.03 } : undefined}
+              whileTap={dia.day > 0 ? { scale: 0.95 } : undefined}
+              transition={{ type: 'spring', stiffness: 350, damping: 15 }}
+              className={`
+                aspect-square rounded-xl border-2 font-semibold transition-all
+                flex flex-col items-center justify-center gap-1 text-sm relative overflow-hidden
+                ${
+                  dia.day === 0
+                    ? 'bg-gray-50 dark:bg-gray-900 border-transparent cursor-default'
+                    : isHoje
+                      ? dia.hasEvents
+                        ? 'bg-amber-50 dark:bg-amber-950/30 border-blue-500 dark:border-blue-400 text-amber-900 dark:text-amber-100 ring-2 ring-blue-500/20 shadow-md'
+                        : 'bg-blue-50/40 dark:bg-blue-950/20 border-blue-500 dark:border-blue-400 text-blue-905 dark:text-blue-100 ring-2 ring-blue-500/20 shadow-md'
+                      : dia.hasEvents
+                        ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-100 hover:shadow-md'
+                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white hover:border-amber-300 dark:hover:border-amber-700'
+                }
+              `}
+            >
+              {dia.day > 0 && (
+                <>
+                  <span className={isHoje ? 'font-black text-blue-600 dark:text-blue-400' : ''}>{dia.day}</span>
+                  {dia.hasEvents && (
+                    <span className="text-xs font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">
+                      {dia.eventsCount}
+                    </span>
+                  )}
+                  {isHoje && (
+                    <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-blue-500 dark:bg-blue-400 rounded-full" />
+                  )}
+                </>
+              )}
+            </motion.button>
+          )
+        })}
       </div>
 
       {/* Legenda */}

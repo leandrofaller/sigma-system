@@ -29,6 +29,9 @@ interface Aparelho {
   marca: string | null
   smartwatch: string | null
   chip: string | null
+  responsavelRecebimento?: string | null
+  loteGrupo?: string | null
+  fotos?: { urlS3: string; chaveS3: string; nomeOriginal: string }[] | null
 }
 
 interface Pagination {
@@ -253,7 +256,12 @@ export function AparelhosClient() {
     chip: '',
     dataArrecadacao: '',
     dataRecebimento: '',
+    responsavelRecebimento: '',
+    loteGrupo: '',
   })
+  const [aparelhoFotos, setAparelhoFotos] = useState<{ urlS3: string; chaveS3: string; nomeOriginal: string }[]>([])
+  const [fotoUploading, setFotoUploading] = useState(false)
+  const [fotoUploadError, setFotoUploadError] = useState<string | null>(null)
   const [cadSaving, setCadSaving] = useState(false)
   const [cadError, setCadError] = useState<string | null>(null)
   const [cadSuccess, setCadSuccess] = useState(false)
@@ -420,6 +428,45 @@ export function AparelhosClient() {
     }
   }
 
+  const handleFotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setFotoUploading(true)
+    setFotoUploadError(null)
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        if (aparelhoFotos.length >= 3) {
+          throw new Error('Limite máximo de 3 fotos atingido.')
+        }
+
+        const file = files[i]
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const res = await fetch('/api/aparelhos/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error || 'Erro no upload')
+
+        setAparelhoFotos(prev => [...prev, json])
+      }
+    } catch (err: any) {
+      setFotoUploadError(err.message || 'Erro ao enviar foto.')
+    } finally {
+      setFotoUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleRemoveFoto = (idx: number) => {
+    setAparelhoFotos(prev => prev.filter((_, i) => i !== idx))
+  }
+
   // Ações de Cadastro Manual
   const handleCadSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -437,6 +484,7 @@ export function AparelhosClient() {
       const payload = {
         ...cadForm,
         unidadePrisional: finalUnidade,
+        fotos: aparelhoFotos,
       }
 
       const res = await fetch('/api/aparelhos', {
@@ -465,7 +513,10 @@ export function AparelhosClient() {
         chip: '',
         dataArrecadacao: '',
         dataRecebimento: '',
+        responsavelRecebimento: '',
+        loteGrupo: '',
       })
+      setAparelhoFotos([])
       setIsOutroUnidade(false)
       setOutroUnidadeTexto('')
 
@@ -1747,12 +1798,12 @@ export function AparelhosClient() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-6 shadow-2xl z-10 text-xs overflow-y-auto max-h-[90vh]"
+              className="relative w-full max-w-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-5 shadow-2xl z-10 text-xs overflow-y-auto max-h-[90vh]"
             >
               
-              <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex justify-between items-center pb-3 border-b border-gray-100 dark:border-gray-800">
                 <div className="flex items-center gap-2">
-                  <Smartphone className="w-5 h-5 text-sigma-600 dark:text-sigma-400" />
+                  <Smartphone className="w-4.5 h-4.5 text-sigma-600 dark:text-sigma-400" />
                   <h3 className="font-bold text-sm text-gray-900 dark:text-white">Cadastrar Aparelho / Dispositivo</h3>
                 </div>
                 {!cadSaving && (
@@ -1765,9 +1816,10 @@ export function AparelhosClient() {
                 )}
               </div>
 
-              <form onSubmit={handleCadSubmit} className="pt-4 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Responsável */}
+              <form onSubmit={handleCadSubmit} className="pt-3 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  
+                  {/* Responsável pelo Registro */}
                   <div>
                     <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
                       Responsável pelo Registro *
@@ -1776,9 +1828,26 @@ export function AparelhosClient() {
                       required
                       value={cadForm.responsavel}
                       onChange={e => setCadForm({ ...cadForm, responsavel: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
                     >
                       <option value="">Selecione o Responsável</option>
+                      {RESPONSAVEIS_OPCOES.map(resp => (
+                        <option key={resp} value={resp}>{resp}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Responsável pelo Recebimento */}
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
+                      Responsável pelo Recebimento
+                    </label>
+                    <select
+                      value={cadForm.responsavelRecebimento}
+                      onChange={e => setCadForm({ ...cadForm, responsavelRecebimento: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                    >
+                      <option value="">Selecione o Recebedor</option>
                       {RESPONSAVEIS_OPCOES.map(resp => (
                         <option key={resp} value={resp}>{resp}</option>
                       ))}
@@ -1794,7 +1863,7 @@ export function AparelhosClient() {
                       required
                       value={cadForm.municipio}
                       onChange={e => setCadForm({ ...cadForm, municipio: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
                     >
                       <option value="">Selecione o Município</option>
                       {MUNICIPIOS_OPCOES.map(mun => (
@@ -1804,7 +1873,7 @@ export function AparelhosClient() {
                   </div>
 
                   {/* Unidade Prisional */}
-                  <div className="md:col-span-2 space-y-2">
+                  <div className="space-y-1.5">
                     <label className="block text-gray-400 font-bold mb-0.5 uppercase tracking-wider text-[9px]">
                       Unidade Prisional *
                     </label>
@@ -1821,9 +1890,9 @@ export function AparelhosClient() {
                           setCadForm(prev => ({ ...prev, unidadePrisional: val }))
                         }
                       }}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
                     >
-                      <option value="">Selecione a Unidade Prisional</option>
+                      <option value="">Selecione a Unidade</option>
                       {UNIDADES_OPCOES.map(uni => (
                         <option key={uni} value={uni}>{uni}</option>
                       ))}
@@ -1835,16 +1904,13 @@ export function AparelhosClient() {
                         animate={{ opacity: 1, y: 0 }}
                         className="space-y-1"
                       >
-                        <label className="block text-gray-400 font-bold uppercase tracking-wider text-[9px]">
-                          Especifique a Unidade Prisional *
-                        </label>
                         <input
                           type="text"
                           required
-                          placeholder="Digite o nome completo da Unidade Prisional"
+                          placeholder="Digite o nome da Unidade Prisional"
                           value={outroUnidadeTexto}
                           onChange={e => setOutroUnidadeTexto(e.target.value)}
-                          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                          className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
                         />
                       </motion.div>
                     )}
@@ -1860,7 +1926,21 @@ export function AparelhosClient() {
                       placeholder="Ex: C-08, B-03"
                       value={cadForm.celaPavilhao}
                       onChange={e => setCadForm({ ...cadForm, celaPavilhao: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Lote / Grupo */}
+                  <div>
+                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
+                      Lote / Grupo
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Lote 01, Grupo B"
+                      value={cadForm.loteGrupo}
+                      onChange={e => setCadForm({ ...cadForm, loteGrupo: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
                     />
                   </div>
 
@@ -1874,7 +1954,7 @@ export function AparelhosClient() {
                       placeholder="Ex: 0033.xxxxxx/2024-xx"
                       value={cadForm.processoSei}
                       onChange={e => setCadForm({ ...cadForm, processoSei: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none font-mono"
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none font-mono"
                     />
                   </div>
 
@@ -1886,46 +1966,13 @@ export function AparelhosClient() {
                     <select
                       value={cadForm.marca || ''}
                       onChange={e => setCadForm({ ...cadForm, marca: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
                     >
                       <option value="">Sem celular / Não se aplica</option>
                       {MARCAS_OPCOES.map(marcaOpt => (
                         <option key={marcaOpt} value={marcaOpt}>{marcaOpt}</option>
                       ))}
                     </select>
-                  </div>
-
-                  {/* Smartwatch / Smartband */}
-                  <div>
-                    <label className="block text-gray-400 font-bold mb-1.5 uppercase tracking-wider text-[9px]">
-                      SmartWatch / SmartBand
-                    </label>
-                    <div className="grid grid-cols-2 gap-2 bg-gray-50/50 dark:bg-gray-850/50 p-2 border border-gray-200 dark:border-gray-750 rounded-xl">
-                      <label className="flex items-center gap-1.5 cursor-pointer py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                        <input
-                          type="radio"
-                          name="smartwatch"
-                          value=""
-                          checked={!cadForm.smartwatch}
-                          onChange={() => setCadForm({ ...cadForm, smartwatch: '' })}
-                          className="w-3.5 h-3.5 text-sigma-600 focus:ring-sigma-500 border-gray-300 accent-sigma-600"
-                        />
-                        Não se aplica
-                      </label>
-                      {SMARTWATCHES_OPCOES.map(opt => (
-                        <label key={opt} className="flex items-center gap-1.5 cursor-pointer py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                          <input
-                            type="radio"
-                            name="smartwatch"
-                            value={opt}
-                            checked={cadForm.smartwatch === opt}
-                            onChange={() => setCadForm({ ...cadForm, smartwatch: opt })}
-                            className="w-3.5 h-3.5 text-sigma-600 focus:ring-sigma-500 border-gray-300 accent-sigma-600"
-                          />
-                          {opt}
-                        </label>
-                      ))}
-                    </div>
                   </div>
 
                   {/* CHIP / Operadora */}
@@ -1936,7 +1983,7 @@ export function AparelhosClient() {
                     <select
                       value={cadForm.chip || ''}
                       onChange={e => setCadForm({ ...cadForm, chip: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-750 dark:text-gray-200"
                     >
                       <option value="">Sem CHIP / Não se aplica</option>
                       {CHIPS_OPCOES.map(chipOpt => (
@@ -1955,40 +2002,61 @@ export function AparelhosClient() {
                       placeholder="Ex: Horta, Reforma"
                       value={cadForm.unidadeExterna}
                       onChange={e => setCadForm({ ...cadForm, unidadeExterna: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none"
                     />
+                  </div>
+
+                  {/* Smartwatch / Smartband */}
+                  <div className="md:col-span-2">
+                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
+                      SmartWatch / SmartBand
+                    </label>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {['Não se aplica', ...SMARTWATCHES_OPCOES].map(opt => {
+                        const val = opt === 'Não se aplica' ? '' : opt
+                        const isActive = (!val && !cadForm.smartwatch) || (cadForm.smartwatch === val)
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setCadForm({ ...cadForm, smartwatch: val })}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                              isActive
+                                ? 'bg-sigma-600 text-white border-sigma-600 dark:bg-sigma-500 dark:border-sigma-500'
+                                : 'bg-gray-50 dark:bg-gray-850 border-gray-200 dark:border-gray-750 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700'
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
 
                   {/* Local Externo */}
                   <div className="md:col-span-2">
-                    <label className="block text-gray-400 font-bold mb-1.5 uppercase tracking-wider text-[9px]">
+                    <label className="block text-gray-400 font-bold mb-1 uppercase tracking-wider text-[9px]">
                       Local Externo à Unidade
                     </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-gray-50/50 dark:bg-gray-850/50 p-3.5 border border-gray-200 dark:border-gray-750 rounded-xl">
-                      <label className="flex items-center gap-1.5 cursor-pointer py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                        <input
-                          type="radio"
-                          name="localExterno"
-                          value=""
-                          checked={!cadForm.localExterno}
-                          onChange={() => setCadForm({ ...cadForm, localExterno: '' })}
-                          className="w-3.5 h-3.5 text-sigma-600 focus:ring-sigma-500 border-gray-300 accent-sigma-600"
-                        />
-                        Não se aplica / Nenhum
-                      </label>
-                      {LOCAIS_EXTERNOS_OPCOES.map(opt => (
-                        <label key={opt} className="flex items-center gap-1.5 cursor-pointer py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                          <input
-                            type="radio"
-                            name="localExterno"
-                            value={opt}
-                            checked={cadForm.localExterno === opt}
-                            onChange={() => setCadForm({ ...cadForm, localExterno: opt })}
-                            className="w-3.5 h-3.5 text-sigma-600 focus:ring-sigma-500 border-gray-300 accent-sigma-600"
-                          />
-                          {opt}
-                        </label>
-                      ))}
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {['Nenhum', ...LOCAIS_EXTERNOS_OPCOES].map(opt => {
+                        const val = opt === 'Nenhum' ? '' : opt
+                        const isActive = (!val && !cadForm.localExterno) || (cadForm.localExterno === opt)
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setCadForm({ ...cadForm, localExterno: val })}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                              isActive
+                                ? 'bg-sigma-600 text-white border-sigma-600 dark:bg-sigma-500 dark:border-sigma-500'
+                                : 'bg-gray-50 dark:bg-gray-850 border-gray-200 dark:border-gray-750 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700'
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
 
@@ -2001,7 +2069,7 @@ export function AparelhosClient() {
                       type="date"
                       value={cadForm.dataArrecadacao}
                       onChange={e => setCadForm({ ...cadForm, dataArrecadacao: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-600 dark:text-gray-200"
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-605 dark:text-gray-200"
                     />
                   </div>
 
@@ -2013,41 +2081,98 @@ export function AparelhosClient() {
                       type="date"
                       value={cadForm.dataRecebimento}
                       onChange={e => setCadForm({ ...cadForm, dataRecebimento: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-600 dark:text-gray-200"
+                      className="w-full px-3 py-1.5 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none text-gray-605 dark:text-gray-200"
                     />
+                  </div>
+
+                  {/* Seção de Fotos do Aparelho */}
+                  <div className="md:col-span-2 border border-gray-200 dark:border-gray-800 rounded-2xl p-3 bg-gray-50/30 dark:bg-gray-950/5">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-gray-400 font-bold uppercase tracking-wider text-[9px]">
+                        Fotos do Aparelho (Máx 3)
+                      </label>
+                      {fotoUploading && (
+                        <span className="text-[10px] text-sigma-600 dark:text-sigma-400 font-semibold flex items-center gap-1">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Enviando...
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      {/* Botão de Upload */}
+                      {aparelhoFotos.length < 3 && (
+                        <label className={`flex flex-col items-center justify-center w-16 h-16 border-2 border-dashed border-gray-200 dark:border-gray-750 rounded-xl cursor-pointer hover:border-sigma-500 transition-colors ${fotoUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                          <Plus className="w-5 h-5 text-gray-450" />
+                          <span className="text-[8px] text-gray-450 font-bold mt-0.5">Upload</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            disabled={fotoUploading || aparelhoFotos.length >= 3}
+                            onChange={handleFotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+
+                      {/* Miniaturas das Fotos */}
+                      <div className="flex flex-wrap gap-2">
+                        {aparelhoFotos.map((foto, idx) => (
+                          <div key={idx} className="relative w-16 h-16 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-100 dark:bg-gray-805">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={foto.urlS3}
+                              alt={foto.nomeOriginal}
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFoto(idx)}
+                              className="absolute top-0.5 right-0.5 p-0.5 bg-red-650 text-white rounded-full hover:bg-red-700 transition"
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {fotoUploadError && (
+                      <p className="text-[10px] text-red-550 font-semibold mt-1.5">{fotoUploadError}</p>
+                    )}
                   </div>
 
                 </div>
 
                 {/* Feedbacks */}
                 {cadError && (
-                  <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-500/20 text-red-700 dark:text-red-400 rounded-xl flex items-start gap-2">
+                  <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-500/20 text-red-700 dark:text-red-405 rounded-xl flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                     <span>{cadError}</span>
                   </div>
                 )}
                 
                 {cadSuccess && (
-                  <div className="p-3 bg-green-100 dark:bg-green-900/30 border border-green-500/20 text-green-700 dark:text-green-400 rounded-xl flex items-start gap-2">
+                  <div className="p-3 bg-green-100 dark:bg-green-900/30 border border-green-500/20 text-green-700 dark:text-green-405 rounded-xl flex items-start gap-2">
                     <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
                     <span>Dispositivo salvo com sucesso!</span>
                   </div>
                 )}
 
                 {/* Botões */}
-                <div className="flex justify-end gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+                <div className="flex justify-end gap-3 pt-2.5 border-t border-gray-100 dark:border-gray-800">
                   <button
                     type="button"
                     onClick={() => setModalCadOpen(false)}
                     disabled={cadSaving}
-                    className="px-4 py-2 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-850 text-gray-500 dark:text-gray-400 rounded-xl font-bold"
+                    className="px-4 py-2 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-850 text-gray-500 dark:text-gray-400 rounded-xl font-bold animate-none"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={cadSaving}
-                    className="px-4 py-2 bg-sigma-600 hover:bg-sigma-550 disabled:opacity-50 text-white rounded-xl font-bold flex items-center gap-1.5"
+                    className="px-4 py-2 bg-sigma-600 hover:bg-sigma-550 disabled:opacity-50 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-md shadow-sigma-600/10 active:scale-95 transition-all"
                   >
                     {cadSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     Salvar Registro
@@ -2056,7 +2181,6 @@ export function AparelhosClient() {
 
               </form>
             </motion.div>
-
           </div>
         )}
       </AnimatePresence>

@@ -1155,6 +1155,9 @@ model AparelhoApreendido {
   marca              String?   // Marca do Aparelho Celular
   smartwatch         String?   // SmartWatch / SmartBand
   chip               String?   // CHIP / Sem aparelho
+  responsavelRecebimento String? // Responsável pelo recebimento
+  loteGrupo              String? // Lote / Grupo
+  fotos                  Json?     // Fotos do aparelho em formato JSON
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
