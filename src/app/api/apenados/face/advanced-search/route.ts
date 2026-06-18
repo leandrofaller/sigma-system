@@ -104,7 +104,7 @@ function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyz
         PYTHONWARNINGS: 'ignore',
         TQDM_DISABLE: '1',
       };
-      const proc = spawn(cmd, ['-u', scriptPath, imagePath], { shell: true, env });
+      const proc = spawn(cmd, ['-u', scriptPath, imagePath], { env });
       currentProc = proc;
       let stdout = '';
       let stderr = '';
@@ -201,7 +201,7 @@ function runArcFaceAnalyze(imagePath: string): Promise<{ result: ArcFaceResult; 
         PYTHONWARNINGS: 'ignore',
         TQDM_DISABLE: '1',
       };
-      const proc = spawn(cmd, ['-u', scriptPath, imagePath], { shell: true, env });
+      const proc = spawn(cmd, ['-u', scriptPath, imagePath], { env });
       currentProc = proc;
       let stdout = '';
       let stderr = '';
@@ -265,7 +265,7 @@ export async function POST(req: NextRequest) {
 
   if (!file) return NextResponse.json({ error: 'Nenhuma imagem enviada' }, { status: 400 });
 
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const ext = (file.name.split('.').pop() || 'jpg').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || 'jpg';
   const tmpPath = join(tmpdir(), `advanced_face_${randomUUID()}.${ext}`);
 
   try {

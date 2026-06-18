@@ -22,13 +22,17 @@ import { unaccentParam } from '@/lib/search'
  * }
  */
 export async function POST(request: NextRequest) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+
   try {
     const body = await request.json()
-    const { sipeApenadoId, cadastradoPor } = body
+    const { sipeApenadoId } = body
+    const cadastradoPor = (session.user as any).id
 
-    if (!sipeApenadoId || !cadastradoPor) {
+    if (!sipeApenadoId) {
       return NextResponse.json(
-        { success: false, message: 'sipeApenadoId e cadastradoPor são obrigatórios' },
+        { success: false, message: 'sipeApenadoId é obrigatório' },
         { status: 400 }
       )
     }
@@ -186,6 +190,9 @@ export async function POST(request: NextRequest) {
  * - facaoReal: string (filtro por facção de inteligência)
  */
 export async function GET(request: NextRequest) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+
   try {
     const { searchParams } = new URL(request.url)
 

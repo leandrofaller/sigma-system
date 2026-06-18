@@ -60,6 +60,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
 
+  const user = session.user as any;
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Acesso negado. Apenas Admin pode editar registros de inteligência.' }, { status: 403 });
+  }
+
   try {
     const { id } = await params;
 
@@ -78,20 +83,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       observacoes,
       facaoRelevancia,
       vulgo,
-      atualizadoPor
     } = body
-
-    // Validar que atualizadoPor está presente
-    if (!atualizadoPor) {
-      return NextResponse.json(
-        { success: false, message: 'atualizadoPor é obrigatório' },
-        { status: 400 }
-      )
-    }
 
     // Montar update apenas com campos de inteligência
     const updateData: any = {
-      atualizadoPor,
+      atualizadoPor: user.id,
       atualizadoEm: new Date()
     }
 

@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
   const pythonChecks = await Promise.all(
     candidates.map(async (cmd) => {
       return new Promise<any>((resolve) => {
-        const proc = spawn(cmd, ['--version'], { shell: true });
+        const proc = spawn(cmd, ['--version']);
         let stdout = '';
         let stderr = '';
         
@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
             PYTHONWARNINGS: 'ignore',
             TQDM_DISABLE: '1',
           };
-          const proc = spawn(workingPython, ['-u', scriptPath], { shell: true, env });
+          const proc = spawn(workingPython, ['-u', scriptPath], { env });
           let stdout = '';
           let stderr = '';
 

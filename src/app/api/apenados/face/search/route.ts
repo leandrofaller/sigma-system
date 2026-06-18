@@ -51,7 +51,7 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
         PYTHONWARNINGS: 'ignore',
         TQDM_DISABLE: '1',
       };
-      const proc = spawn(cmd, ['-u', scriptPath, imagePath], { shell: true, env });
+      const proc = spawn(cmd, ['-u', scriptPath, imagePath], { env });
       let stdout = '';
       let stderr = '';
 
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
 
   if (!file) return NextResponse.json({ error: 'Nenhuma imagem enviada' }, { status: 400 });
 
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const ext = (file.name.split('.').pop() || 'jpg').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || 'jpg';
   const tmpPath = join(tmpdir(), `arcface_${randomUUID()}.${ext}`);
 
   try {
