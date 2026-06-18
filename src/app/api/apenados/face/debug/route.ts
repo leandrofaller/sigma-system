@@ -3,13 +3,11 @@ import { prisma } from '@/lib/db';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { getApenadosDir } from '@/lib/storage';
+import { auth } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const secret = searchParams.get('secret');
-
-  // Proteção simples por token de URL
-  if (secret !== 'owlnet_debug_123') {
+  const session = await auth();
+  if (!session?.user || (session.user as any).role !== 'SUPER_ADMIN') {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
 
@@ -53,7 +51,7 @@ export async function GET(req: NextRequest) {
     };
 
     const runPythonPromise = () => new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve) => {
-      const proc = spawn(cmd, ['-u', scriptPath], { shell: true, stdio: ['pipe', 'pipe', 'pipe'], env });
+      const proc = spawn(cmd, ['-u', scriptPath], { stdio: ['pipe', 'pipe', 'pipe'], env });
       let stdout = '';
       let stderr = '';
 
@@ -76,21 +74,12 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      debugInfo: {
-        apenadoId,
-        uploadsDir,
-        scriptPath,
-        cmd,
-        input,
-      },
-      pythonResult: {
-        code: result.code,
-        stdout: result.stdout,
-        stderr: result.stderr
-      }
+      apenadoId,
+      exitCode: result.code,
+      stdout: result.stdout,
     });
 
   } catch (err: any) {
-    return NextResponse.json({ error: err.message, stack: err.stack }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

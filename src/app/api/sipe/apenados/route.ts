@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
   const faccaoId = searchParams.get('faccaoId')
   const unidade = unaccentParam(searchParams.get('unidade'))
   const situacao = unaccentParam(searchParams.get('situacao'))
-  const page = parseInt(searchParams.get('page') || '1')
-  const limit = parseInt(searchParams.get('limit') || '20')
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
+  const limit = Math.max(1, Math.min(500, parseInt(searchParams.get('limit') || '20')))
   const skip = (page - 1) * limit
 
   // Build raw SQL WHERE clause with immutable_unaccent

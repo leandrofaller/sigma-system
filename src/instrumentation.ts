@@ -32,7 +32,7 @@ export async function register() {
         ` | índice HNSW: ${stats.indexExists ? 'ativo' : 'ausente'}`,
     );
     // Inicia a migração e geração automática de novos embeddings avançados em background
-    const { startAdvancedJob } = eval('require')('./lib/advanced-indexing-job');
+    const { startAdvancedJob } = await import('./lib/advanced-indexing-job');
     startAdvancedJob();
 
     console.log('[IA Facial] ✓ Inicialização e migração em background iniciadas.');

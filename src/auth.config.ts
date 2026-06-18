@@ -1,5 +1,13 @@
 import type { NextAuthConfig } from 'next-auth';
 
+if (!process.env.NEXTAUTH_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('NEXTAUTH_SECRET não está definida. Gere com: openssl rand -base64 32');
+  } else {
+    console.warn('[auth] ATENÇÃO: NEXTAUTH_SECRET ausente. Defina em .env.local antes de ir para produção.');
+  }
+}
+
 // Configuração Edge-compatible (sem imports Node.js: bcrypt, prisma, etc.)
 export const authConfig: NextAuthConfig = {
   trustHost: true,

@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
   const q = unaccentParam(searchParams.get('q'))
   const unidade = unaccentParam(searchParams.get('unidade'))
   const faccao = searchParams.get('faccao') || ''
-  const page = parseInt(searchParams.get('page') || '1')
-  const limit = parseInt(searchParams.get('limit') || '20')
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
+  const limit = Math.max(1, Math.min(500, parseInt(searchParams.get('limit') || '20')))
   const skip = (page - 1) * limit
 
   // Para o AIP, nós SEMPRE restringimos as junções aos apenados cadastrados na tabela aip_apenados (AIPApenado)

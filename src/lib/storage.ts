@@ -104,9 +104,9 @@ export async function getApenadosDiskUsage(): Promise<number> {
   try {
     await fs.access(dir);
     if (process.platform !== 'win32') {
-      const { execSync } = await import('child_process');
-      const out = execSync(`du -sb "${dir}"`, { timeout: 10_000 }).toString();
-      bytes = parseInt(out.split('\t')[0], 10) || 0;
+      const { spawnSync } = await import('child_process');
+      const result = spawnSync('du', ['-sb', dir], { timeout: 10_000, encoding: 'utf8' });
+      bytes = parseInt((result.stdout || '').split('\t')[0], 10) || 0;
     } else {
       bytes = await scanDirSize(dir);
     }

@@ -43,7 +43,7 @@ export function runAdvancedIndexBatch(ids: string[], uploadsDir: string): Promis
         NUMEXPR_NUM_THREADS: '1',
         ONNXRUNTIME_NUM_THREADS: '1',
       };
-      const proc = spawn(cmd, ['-u', scriptPath], { shell: true, stdio: ['pipe', 'pipe', 'pipe'], env });
+      const proc = spawn(cmd, ['-u', scriptPath], { stdio: ['pipe', 'pipe', 'pipe'], env });
 
       let buffer = '';
       let stderr = '';

@@ -52,8 +52,19 @@ export async function POST() {
 
   const rawUrl = process.env.DATABASE_URL!;
   const url = new URL(rawUrl.replace(/^postgres:\/\//, 'postgresql://'));
+
+  const sanitizeShellArg = (s: string) => {
+    if (/[^a-zA-Z0-9._\-\/:]/.test(s)) throw new Error(`Componente da DATABASE_URL contém caracteres inválidos: ${s}`);
+    return s;
+  };
+
+  const pgHost = sanitizeShellArg(url.hostname);
+  const pgPort = sanitizeShellArg(url.port || '5432');
+  const pgUser = sanitizeShellArg(decodeURIComponent(url.username));
+  const pgDb = sanitizeShellArg(url.pathname.slice(1));
+
   const env = { ...process.env, PGPASSWORD: decodeURIComponent(url.password) };
-  const cmd = `pg_dump -h "${url.hostname}" -p "${url.port || 5432}" -U "${url.username}" -d "${url.pathname.slice(1)}" -f "${filepath}"`;
+  const cmd = `pg_dump -h "${pgHost}" -p "${pgPort}" -U "${pgUser}" -d "${pgDb}" -f "${filepath}"`;
 
   try {
     await execAsync(cmd, { timeout: 120000, env });

@@ -7,6 +7,9 @@ import { auth } from '@/lib/auth';
  * Busca detalhes completos de um apenado em AIP
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
+
   try {
     const { id } = await params;
     if (!id) {
@@ -54,6 +57,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  * }
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
+
   try {
     const { id } = await params;
 
