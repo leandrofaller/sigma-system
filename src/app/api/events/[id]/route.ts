@@ -64,6 +64,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const user = session.user as any
     const body = await req.json()
 
+    // Apenas SUPER_ADMIN e ADMIN podem editar eventos
+    if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Sem permissão para editar eventos' }, { status: 403 })
+    }
+
     const evento = await prisma.occurrenceEvent.findUnique({
       where: { id },
     })

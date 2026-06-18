@@ -130,6 +130,7 @@ export function MuralClient({ userRole }: { userRole: string }) {
                 onEventUpdated={() => setRefreshTrigger((p) => p + 1)}
                 diaFilter={diaFilter}
                 onClearDiaFilter={() => setDiaFilter(null)}
+                userRole={userRole}
               />
             </div>
           </TabsContent>

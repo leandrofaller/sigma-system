@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Trash2, Eye, Download, X, FileText, FileSpreadsheet, FileArchive, Calendar } from 'lucide-react'
+import { Loader2, Trash2, Eye, Download, X, FileText, FileSpreadsheet, FileArchive, Calendar, Pencil } from 'lucide-react'
+import { EventEditModal } from './EventEditModal'
 
 interface EventListProps {
   mes: string
@@ -10,6 +11,7 @@ interface EventListProps {
   onEventUpdated: () => void
   diaFilter?: Date | null
   onClearDiaFilter?: () => void
+  userRole?: string
 }
 
 function getAttachmentIcon(mime: string, tipo: string) {
@@ -44,6 +46,7 @@ export function EventList({
   onEventUpdated,
   diaFilter,
   onClearDiaFilter,
+  userRole,
 }: EventListProps) {
   const [eventos, setEventos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,6 +55,10 @@ export function EventList({
   // Controle de exclusão
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  // Controle de edição (apenas SUPER_ADMIN)
+  const [editingEvento, setEditingEvento] = useState<any | null>(null)
+  const isSuperAdmin = userRole === 'SUPER_ADMIN'
 
   useEffect(() => {
     async function loadEvents() {
@@ -251,8 +258,20 @@ export function EventList({
                   </div>
                 </div>
 
-                {/* Ações de exclusão */}
-                <div className="flex-shrink-0 self-start">
+                {/* Ações */}
+                <div className="flex-shrink-0 self-start flex items-center gap-1">
+                  {/* Botão editar — apenas SUPER_ADMIN */}
+                  {isSuperAdmin && confirmDeleteId !== evento.id && (
+                    <button
+                      onClick={() => setEditingEvento(evento)}
+                      className="p-2 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition text-gray-400 hover:text-amber-600 dark:hover:text-amber-400"
+                      title="Editar ocorrência"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Botão excluir */}
                   {confirmDeleteId === evento.id ? (
                     <div className="flex items-center gap-1.5 bg-red-50 dark:bg-red-950/20 p-1.5 rounded-lg border border-red-200 dark:border-red-900/50">
                       <button
@@ -309,7 +328,7 @@ export function EventList({
             src={activeImage.url}
             alt={activeImage.nome}
             className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()} // impede fechar ao clicar na imagem em si
+            onClick={(e) => e.stopPropagation()}
           />
 
           {/* Rodapé com nome do arquivo */}
@@ -320,6 +339,19 @@ export function EventList({
             {activeImage.nome}
           </div>
         </div>
+      )}
+
+      {/* Modal de Edição (SUPER_ADMIN) */}
+      {editingEvento && (
+        <EventEditModal
+          evento={editingEvento}
+          isOpen={!!editingEvento}
+          onClose={() => setEditingEvento(null)}
+          onEventUpdated={() => {
+            setEditingEvento(null)
+            onEventUpdated()
+          }}
+        />
       )}
     </div>
   )
