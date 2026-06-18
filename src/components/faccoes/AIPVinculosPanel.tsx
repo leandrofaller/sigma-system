@@ -75,7 +75,8 @@ export function AIPVinculosPanel({
     if (preselectedSipeId) {
       const loadPreselected = async () => {
         try {
-          const res = await fetch(`/api/sipe/apenados?sipeId=${preselectedSipeId}`)
+          // Busca pelo AIPApenado (preserva acesso mesmo se o SIPE foi deletado)
+          const res = await fetch(`/api/aip/apenados?sipeId=${preselectedSipeId}`)
           if (res.ok) {
             const data = await res.json()
             if (data.apenados && data.apenados.length > 0) {
@@ -128,7 +129,8 @@ export function AIPVinculosPanel({
     const delayDebounce = setTimeout(async () => {
       setSearchingBase(true)
       try {
-        const res = await fetch(`/api/sipe/apenados?q=${encodeURIComponent(searchBaseQuery)}&limit=10`)
+        // Busca pelo AIPApenado — preserva vínculos mesmo se o SIPE foi deletado
+        const res = await fetch(`/api/aip/apenados?q=${encodeURIComponent(searchBaseQuery)}&limit=10`)
         if (res.ok) {
           const data = await res.json()
           setBaseSearchResults(data.apenados || [])
@@ -153,7 +155,8 @@ export function AIPVinculosPanel({
     const delayDebounce = setTimeout(async () => {
       setSearchingTarget(true)
       try {
-        const res = await fetch(`/api/sipe/apenados?q=${encodeURIComponent(searchTargetQuery)}&limit=10`)
+        // Busca pelo AIPApenado — preserva vínculos mesmo se o SIPE foi deletado
+        const res = await fetch(`/api/aip/apenados?q=${encodeURIComponent(searchTargetQuery)}&limit=10`)
         if (res.ok) {
           const data = await res.json()
           setTargetSearchResults(data.apenados || [])
@@ -298,12 +301,14 @@ export function AIPVinculosPanel({
     }
   }
 
-  // Objeto unificado contendo os dados do SIPE enriquecidos pela Inteligência do AIP
+  // Objeto unificado: quando a busca é feita via AIPApenado (comportamento padrão),
+  // selectedSipeApenado já é o AIPApenado; apenadoAip pode sobrepor campos de inteligência.
+  // O 'id' aqui é o ID do AIPApenado para rotas de foto (/api/aip/apenados/[id]/foto).
   const selectedApenado = selectedSipeApenado ? {
     ...selectedSipeApenado,
     ...(apenadoAip || {}),
-    id: selectedSipeApenado.id, // Manter o ID do SIPE (UUID) para fins de fotos e endpoints do SIPE
-    aipId: apenadoAip?.id || null // Armazenar o ID do AIP para referências do AIP
+    id: apenadoAip?.id || selectedSipeApenado.id, // ID do AIPApenado para rotas de foto
+    aipId: apenadoAip?.id || selectedSipeApenado.id // Armazenar o ID do AIP para referências do AIP
   } : null
 
   // Agrupamento de Vínculos para renderização
@@ -559,8 +564,8 @@ export function AIPVinculosPanel({
           </div>
 
           <div class="subject-section">
-            ${selectedApenado.photoPath ? `
-              <img src="/api/sipe/apenados/${selectedApenado.id}/foto" alt="${selectedApenado.nome}" class="subject-photo" />
+             ${selectedApenado.photoPath ? `
+              <img src="/api/aip/apenados/${selectedApenado.id}/foto" alt="${selectedApenado.nome}" class="subject-photo" />
             ` : `
               <div style="width: 90px; height: 120px; background-color: #ddd; border-radius: 6px; float: left; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 30px; color: #777;">${selectedApenado.nome.charAt(0)}</div>
             `}
@@ -690,7 +695,7 @@ export function AIPVinculosPanel({
             <div className="w-20 h-20 rounded-2xl overflow-hidden bg-purple-500 flex items-center justify-center text-white font-bold text-3xl shadow-md border-2 border-purple-200 dark:border-purple-800">
               {selectedApenado.photoPath ? (
                 <img
-                  src={`/api/sipe/apenados/${selectedApenado.id}/foto`}
+                   src={`/api/aip/apenados/${selectedApenado.id}/foto`}
                   alt={selectedApenado.nome}
                   className="w-full h-full object-cover"
                 />
@@ -1001,7 +1006,8 @@ export function AIPVinculosPanel({
                 onFocarApenado={(sipeId) => {
                   const loadApenado = async () => {
                     try {
-                      const res = await fetch(`/api/sipe/apenados?sipeId=${sipeId}`)
+                      // Busca pelo AIPApenado — preserva acesso mesmo se o SIPE foi deletado
+                      const res = await fetch(`/api/aip/apenados?sipeId=${sipeId}`)
                       if (res.ok) {
                         const data = await res.json()
                         if (data.apenados && data.apenados.length > 0) {

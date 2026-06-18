@@ -202,7 +202,21 @@ export async function GET(request: NextRequest) {
     const unidade = unaccentParam(searchParams.get('unidade'))
     const faccao = unaccentParam(searchParams.get('faccao'))
     const facaoReal = unaccentParam(searchParams.get('facaoReal'))
+    const sipeIdParam = searchParams.get('sipeId')
     const skip = (page - 1) * limit
+
+    // Busca direta por sipeId (retorno rápido sem paginação)
+    if (sipeIdParam) {
+      const sipeId = parseInt(sipeIdParam)
+      if (!isNaN(sipeId)) {
+        const apenado = await prisma.aIPApenado.findUnique({
+          where: { sipeId },
+          include: { fotoVisitantes: true }
+        })
+        if (!apenado) return NextResponse.json({ apenados: [], total: 0, page: 1, limit, totalPages: 0 })
+        return NextResponse.json({ apenados: [apenado], total: 1, page: 1, limit, totalPages: 1 })
+      }
+    }
 
     // Build raw SQL WHERE with immutable_unaccent
     let whereClause = 'WHERE 1=1'
