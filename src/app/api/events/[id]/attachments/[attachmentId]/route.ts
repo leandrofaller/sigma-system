@@ -1,12 +1,13 @@
 /**
  * API de Anexo Individual
+ * GET    /api/events/[id]/attachments/[attachmentId] - Servir arquivo (proxy S3)
  * DELETE /api/events/[id]/attachments/[attachmentId] - Deletar anexo
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { deleteFromS3, getDownloadUrl } from '@/lib/s3-service'
+import { deleteFromS3, streamFromS3 } from '@/lib/s3-service'
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit'
 
 interface Params {
@@ -29,10 +30,19 @@ export async function GET(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Anexo não encontrado' }, { status: 404 })
     }
 
-    // Gerar URL assinada válida por 1 hora
-    const url = await getDownloadUrl(anexo.nomeS3)
+    // Proxy: buscar o arquivo do S3 e servir diretamente
+    // Isso evita problemas de CORS / redirect com <img> e URLs pré-assinadas
+    const { stream, contentType, contentLength } = await streamFromS3(anexo.nomeS3)
 
-    return NextResponse.redirect(url)
+    const headers: Record<string, string> = {
+      'Content-Type': contentType || anexo.tipoMime || 'application/octet-stream',
+      'Cache-Control': 'private, max-age=3600',
+    }
+    if (contentLength) {
+      headers['Content-Length'] = String(contentLength)
+    }
+
+    return new NextResponse(stream as any, { status: 200, headers })
   } catch (err) {
     console.error('[Attachment GET] Erro:', err)
     return NextResponse.json({ error: 'Erro ao obter anexo' }, { status: 500 })

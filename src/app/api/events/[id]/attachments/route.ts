@@ -11,9 +11,9 @@ import {
   uploadToS3,
   generateS3Key,
   validateFile,
-  getDownloadUrl,
 } from '@/lib/s3-service'
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit'
+import sharp from 'sharp'
 
 interface Params {
   params: Promise<{ id: string }>
@@ -81,11 +81,31 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     // Converter File para Buffer
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const contentType = file.type || 'application/octet-stream'
+    let buffer = Buffer.from(await file.arrayBuffer())
+    let contentType = file.type || 'application/octet-stream'
+    let fileName = file.name
 
-    // Validar arquivo
-    const validacao = validateFile(buffer, contentType, file.name)
+    // Converter imagens para WebP automaticamente
+    if (contentType.startsWith('image/') && contentType !== 'image/webp') {
+      try {
+        buffer = (await sharp(buffer)
+          .webp({ quality: 85 })
+          .toBuffer()) as Buffer<ArrayBuffer>
+        contentType = 'image/webp'
+        // Trocar extensão pelo .webp no nome
+        fileName = fileName.replace(/\.[^/.]+$/, '') + '.webp'
+        console.log(`[S3] 🖼️ Imagem convertida para WebP: ${fileName}`)
+      } catch (sharpErr) {
+        // Se falhar a conversão, continua com o arquivo original
+        console.warn('[S3] Falha ao converter para WebP, usando original:', sharpErr)
+        buffer = Buffer.from(await file.arrayBuffer())
+        contentType = file.type
+        fileName = file.name
+      }
+    }
+
+    // Validar arquivo (usa contentType/fileName já convertidos)
+    const validacao = validateFile(buffer, contentType, fileName)
     if (!validacao.valid) {
       return NextResponse.json(
         { error: validacao.error },
@@ -93,8 +113,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       )
     }
 
-    // Gerar chave S3 e fazer upload
-    const s3Key = generateS3Key(id, file.name)
+    // Gerar chave S3 e fazer upload (usa fileName convertido)
+    const s3Key = generateS3Key(id, fileName)
     const { url } = await uploadToS3(s3Key, buffer, contentType)
 
     // Determinar tipo de anexo
@@ -114,7 +134,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const anexo = await prisma.eventAttachment.create({
       data: {
         eventId: id,
-        nomeOriginal: file.name,
+        nomeOriginal: fileName,  // nome com .webp se foi convertida
         nomeS3: s3Key,
         tipo,
         tipoMime: contentType,

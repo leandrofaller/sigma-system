@@ -138,6 +138,44 @@ export async function deleteFromS3(key: string): Promise<void> {
 }
 
 /**
+ * Faz streaming do arquivo do S3 diretamente (proxy)
+ * Retorna um ReadableStream adequado para NextResponse
+ */
+export async function streamFromS3(
+  key: string
+): Promise<{ stream: ReadableStream; contentType: string | undefined; contentLength: number | undefined }> {
+  const s3 = getS3Client()
+
+  const command = new GetObjectCommand({
+    Bucket: S3_BUCKET_NAME,
+    Key: key,
+  })
+
+  const response = await s3.send(command)
+
+  if (!response.Body) {
+    throw new Error('Arquivo não encontrado no S3')
+  }
+
+  // response.Body é um Readable (Node.js stream) no SDK v3
+  // Convertemos para Web ReadableStream para o NextResponse
+  const nodeStream = response.Body as any
+  const webStream = new ReadableStream({
+    start(controller) {
+      nodeStream.on('data', (chunk: Buffer) => controller.enqueue(chunk))
+      nodeStream.on('end', () => controller.close())
+      nodeStream.on('error', (err: Error) => controller.error(err))
+    },
+  })
+
+  return {
+    stream: webStream,
+    contentType: response.ContentType,
+    contentLength: response.ContentLength,
+  }
+}
+
+/**
  * Verifica se arquivo existe no S3
  */
 export async function fileExistsInS3(key: string): Promise<boolean> {
