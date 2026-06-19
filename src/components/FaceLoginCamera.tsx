@@ -217,7 +217,6 @@ export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) 
           if (final && final.detection.score >= 0.65 && !capturedRef.current) {
             capturedRef.current = true;
             if (intervalRef.current) clearInterval(intervalRef.current);
-            stopCamera();
             setState('done');
 
             let base64Image = '';
@@ -239,6 +238,9 @@ export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) 
             } catch (err) {
               console.error('[FaceLoginCamera] Erro ao obter screenshot em base64:', err);
             }
+
+            // Para a câmera somente APÓS capturar o frame de imagem
+            stopCamera();
 
             onDescriptor(Array.from(final.descriptor), base64Image);
           }
