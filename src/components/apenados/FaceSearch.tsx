@@ -80,7 +80,7 @@ function fmtTime(seconds: number): string {
 
 // ─── MatchCard ────────────────────────────────────────────────────────────────
 
-function MatchCard({ match, rank, onEdit }: { match: FaceMatch; rank: number; onEdit?: (id: string) => void }) {
+function MatchCard({ match, rank, onEdit, onViewPhoto }: { match: FaceMatch; rank: number; onEdit?: (id: string) => void; onViewPhoto?: (match: FaceMatch) => void }) {
   return (
     <div className={`rounded-xl border overflow-hidden ${
       match.similarity >= 70 ? 'border-green-200 dark:border-green-800'
@@ -91,7 +91,11 @@ function MatchCard({ match, rank, onEdit }: { match: FaceMatch; rank: number; on
         <span className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-subtle flex-shrink-0">
           {rank}
         </span>
-        <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-700">
+        <div
+          onClick={() => onViewPhoto?.(match)}
+          title="Clique para ampliar a foto"
+          className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-700 cursor-pointer hover:opacity-80 transition-opacity"
+        >
           {match.photoPath ? (
             <img src={`/api/apenados/${match.id}/foto`} alt={match.name} loading="lazy" className="w-full h-full object-cover" />
           ) : (
@@ -229,6 +233,9 @@ interface Props { onClose: () => void; userRole: string; onEditApenado?: (id: st
 
 export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [tab, setTab] = useState<Tab>('search');
+
+  // Visualizar foto ampliada
+  const [viewingPhotoMatch, setViewingPhotoMatch] = useState<FaceMatch | null>(null);
 
   // Search
   const [searchState, setSearchState] = useState<SearchState>('ready');
@@ -819,7 +826,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {selectedFace?.matches.map((m, i) => <MatchCard key={m.id} match={m} rank={i + 1} onEdit={onEditApenado} />)}
+                      {selectedFace?.matches.map((m, i) => <MatchCard key={m.id} match={m} rank={i + 1} onEdit={onEditApenado} onViewPhoto={setViewingPhotoMatch} />)}
                     </div>
                   )}
                 </>
@@ -1075,7 +1082,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                       ) : (
                         <div className="space-y-2">
                           {advResult.faces[0]?.matches.map((m: any, i: number) => (
-                            <MatchCard key={m.id} match={m} rank={i + 1} onEdit={onEditApenado} />
+                            <MatchCard key={m.id} match={m} rank={i + 1} onEdit={onEditApenado} onViewPhoto={setViewingPhotoMatch} />
                           ))}
                         </div>
                       )}
@@ -1584,6 +1591,59 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                 className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors">
                 Reiniciar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Visualizador de Foto Ampliada */}
+      {viewingPhotoMatch && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setViewingPhotoMatch(null)} />
+          <div className="relative z-10 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col p-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800 mb-3">
+              <h3 className="font-bold text-title text-sm line-clamp-2 pr-4">{viewingPhotoMatch.name}</h3>
+              <button 
+                onClick={() => setViewingPhotoMatch(null)}
+                className="text-subtle hover:text-body p-1 bg-gray-100 dark:bg-gray-800 rounded-lg transition-colors flex-shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            
+            <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 relative">
+              {viewingPhotoMatch.photoPath ? (
+                <img 
+                  src={`/api/apenados/${viewingPhotoMatch.id}/foto`} 
+                  alt={viewingPhotoMatch.name} 
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <ScanFace className="w-12 h-12 text-gray-400" />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-gray-100 dark:border-gray-800 space-y-1.5 text-xs text-subtle">
+              <div className="flex justify-between">
+                <span>Matrícula:</span>
+                <span className="font-semibold text-title">{viewingPhotoMatch.matricula || 'Sem matrícula'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Unidade:</span>
+                <span className="font-semibold text-title">{viewingPhotoMatch.unidade || 'Sem unidade'}</span>
+              </div>
+              {viewingPhotoMatch.faccao && (
+                <div className="flex justify-between">
+                  <span>Facção:</span>
+                  <span className="font-semibold text-orange-600 dark:text-orange-400">{viewingPhotoMatch.faccao}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span>Similaridade Busca:</span>
+                <span className="font-extrabold text-sigma-600 dark:text-sigma-400">{viewingPhotoMatch.similarity}%</span>
+              </div>
             </div>
           </div>
         </div>
