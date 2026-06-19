@@ -64,7 +64,7 @@ function runAdvancedAnalyze(imagePath: string): Promise<{ result: AdvancedAnalyz
   return new Promise((resolve, reject) => {
     const scriptPath = join(process.cwd(), 'scripts', 'advanced_face_analyze.py');
     const envPython = process.env.ARCFACE_PYTHON;
-    const candidates = envPython ? [envPython] : ['python3', 'python', 'py'];
+    const candidates = envPython ? [envPython, 'python3', 'python', 'py'] : ['python3', 'python', 'py'];
     let idx = 0;
     const errors: string[] = [];
     let currentProc: any = null;
@@ -161,7 +161,7 @@ function runArcFaceAnalyze(imagePath: string): Promise<{ result: ArcFaceResult; 
   return new Promise((resolve, reject) => {
     const scriptPath = join(process.cwd(), 'scripts', 'arcface_analyze.py');
     const envPython = process.env.ARCFACE_PYTHON;
-    const candidates = envPython ? [envPython] : ['python3', 'python', 'py'];
+    const candidates = envPython ? [envPython, 'python3', 'python', 'py'] : ['python3', 'python', 'py'];
     let idx = 0;
     const errors: string[] = [];
     let currentProc: any = null;

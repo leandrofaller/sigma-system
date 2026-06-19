@@ -19,7 +19,7 @@ export function runAdvancedIndexBatch(ids: string[], uploadsDir: string): Promis
     const scriptPath = join(process.cwd(), 'scripts', 'advanced_face_index.py');
     const input = JSON.stringify({ ids, uploads_dir: uploadsDir });
     const envPython = process.env.ARCFACE_PYTHON;
-    const candidates = envPython ? [envPython] : ['python3', 'python', 'py'];
+    const candidates = envPython ? [envPython, 'python3', 'python', 'py'] : ['python3', 'python', 'py'];
     let idx = 0;
 
     function tryNext() {

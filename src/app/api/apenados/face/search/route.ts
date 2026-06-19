@@ -31,7 +31,7 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
   return new Promise((resolve, reject) => {
     const scriptPath = join(process.cwd(), 'scripts', 'arcface_analyze.py');
     const envPython = process.env.ARCFACE_PYTHON;
-    const candidates = envPython ? [envPython] : ['python3', 'python', 'py'];
+    const candidates = envPython ? [envPython, 'python3', 'python', 'py'] : ['python3', 'python', 'py'];
     let idx = 0;
     const errors: string[] = [];
 

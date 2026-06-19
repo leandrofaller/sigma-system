@@ -17,7 +17,7 @@ export function runIndexBatch(ids: string[], uploadsDir: string): Promise<IndexR
     const scriptPath = join(process.cwd(), 'scripts', 'arcface_index.py');
     const input = JSON.stringify({ ids, uploads_dir: uploadsDir });
     const envPython = process.env.ARCFACE_PYTHON;
-    const candidates = envPython ? [envPython] : ['python3', 'python', 'py'];
+    const candidates = envPython ? [envPython, 'python3', 'python', 'py'] : ['python3', 'python', 'py'];
     let idx = 0;
 
     function tryNext() {

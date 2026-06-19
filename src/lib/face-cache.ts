@@ -37,13 +37,12 @@ async function loadFromDB(): Promise<FaceCache> {
   while (true) {
     const batch = await prisma.$queryRaw<{ id: string; fd: string }[]>`
       SELECT
-        encode(id::bytea, 'hex') AS id,
-        "faceDescriptor"          AS fd
+        id,
+        "faceDescriptor" AS fd
       FROM apenados
       WHERE "faceDescriptor" IS NOT NULL
         AND "faceDescriptor" LIKE '[%'
         AND "photoPath" IS NOT NULL
-        AND strpos(encode("faceDescriptor"::bytea, 'hex'), '00') = 0
         AND id > ${lastId}
       ORDER BY id
       LIMIT ${BATCH_SIZE}
@@ -65,12 +64,12 @@ async function loadFromDB(): Promise<FaceCache> {
       }
 
       vecsBuffer.set(arr, count * 512);
-      ids.push(Buffer.from(row.id, 'hex').toString('utf8'));
+      ids.push(row.id);
       count++;
     }
 
-    // Avança cursor para o último id do lote (decodifica hex → cuid)
-    lastId = Buffer.from(batch[batch.length - 1].id, 'hex').toString('utf8');
+    // Avança cursor para o último id do lote
+    lastId = batch[batch.length - 1].id;
     if (batch.length < BATCH_SIZE) break;
   }
 

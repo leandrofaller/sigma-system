@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
 
   // 2. Diagnóstico de Executáveis Python
   const pythonPath = process.env.ARCFACE_PYTHON;
-  const candidates = pythonPath ? [pythonPath] : ['python3', 'python', 'py'];
+  const candidates = pythonPath ? [pythonPath, 'python3', 'python', 'py'] : ['python3', 'python', 'py'];
   report.pythonStatus.configuredPath = pythonPath || 'não configurado (.env)';
   report.pythonStatus.candidatesChecked = candidates;
 
