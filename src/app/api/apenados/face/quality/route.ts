@@ -52,7 +52,6 @@ export async function GET(req: NextRequest) {
           AND fc.descricao IS NOT NULL
           AND fc.descricao ~* 'tatuagem|tattoo|tatoo|tatuag|cicatriz'
       )
-      OR ("photoQuality" >= 5 AND "ocrText" IS NULL)
     )
   `;
 
@@ -77,7 +76,6 @@ export async function GET(req: NextRequest) {
           AND fc.descricao IS NOT NULL
           AND fc.descricao ~* 'tatuagem|tattoo|tatoo|tatuag|cicatriz'
       )
-      OR ("photoQuality" >= 5 AND "ocrText" IS NULL)
     )
   `;
 
