@@ -61,8 +61,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (!session?.user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
 
   const user = session.user as any;
-  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Acesso negado. Apenas Admin pode editar registros de inteligência.' }, { status: 403 });
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN' && user.role !== 'OPERATOR') {
+    return NextResponse.json({ error: 'Acesso negado. Permissão insuficiente para editar registros de inteligência.' }, { status: 403 });
   }
 
   try {
