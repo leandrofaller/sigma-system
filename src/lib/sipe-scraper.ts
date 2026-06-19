@@ -5802,7 +5802,7 @@ export async function scrapeHistorico(
         select: { sipeId: true }
       })
       if (importado?.sipeId) {
-        await prisma.aIPApenado.update({
+        await prisma.aIPApenado.updateMany({
           where: { sipeId: importado.sipeId },
           data: updateData
         }).catch(err => console.error(`Erro ao atualizar unidade/cela em AIPApenado:`, err))
@@ -6590,7 +6590,7 @@ async function parseAndSaveMudarCelaCheerio(html: string, apenadoId: string): Pr
       select: { sipeId: true }
     })
     if (importado?.sipeId) {
-      await prisma.aIPApenado.update({
+      await prisma.aIPApenado.updateMany({
         where: { sipeId: importado.sipeId },
         data: updateData
       }).catch(err => console.error(`Erro ao atualizar unidade/cela em AIPApenado:`, err))
@@ -6734,7 +6734,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
       select: { sipeId: true }
     })
     if (importado?.sipeId) {
-      await prisma.aIPApenado.update({
+      await prisma.aIPApenado.updateMany({
         where: { sipeId: importado.sipeId },
         data: updateData
       }).catch(err => console.error(`Erro ao atualizar regime/motivo em AIPApenado:`, err))
