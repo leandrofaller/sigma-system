@@ -109,6 +109,11 @@ export function EventCalendar({
     onMesChange(data.toISOString().slice(0, 7))
   }
 
+  const handleNextMonth = () => {
+    const data = new Date(Date.UTC(ano, mesNum, 1))
+    onMesChange(data.toISOString().slice(0, 7))
+  }
+
   const hoje = new Date()
   const hojeKey = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
 
