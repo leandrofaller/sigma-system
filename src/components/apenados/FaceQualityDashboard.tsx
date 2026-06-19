@@ -240,6 +240,39 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
     }
   }, [activeTab]);
 
+  const handleReindexSelected = useCallback(async () => {
+    if (selected.size === 0) return;
+    const ids = Array.from(selected);
+    setResettingIds((prev) => new Set([...prev, ...ids]));
+    try {
+      const res = await fetch('/api/apenados/face/quality/reindex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setRecords((prev) => prev.filter((r) => !selected.has(r.id)));
+      const countReindexed = ids.length;
+      setTabTotal((t) => Math.max(0, t - countReindexed));
+      setStats((s) => {
+        if (!s) return s;
+        const updates: Partial<QualityStats> = { pending: s.pending + (data.reset ?? 0) };
+        if (activeTab === 'lowscore') updates.lowScore = Math.max(0, s.lowScore - countReindexed);
+        if (activeTab === 'blurry') updates.blurry = Math.max(0, s.blurry - countReindexed);
+        return { ...s, ...updates };
+      });
+      setSuccessCount((n) => (n ?? 0) + countReindexed);
+      setSelected(new Set());
+    } finally {
+      setResettingIds((prev) => {
+        const s = new Set(prev);
+        ids.forEach(id => s.delete(id));
+        return s;
+      });
+    }
+  }, [selected, activeTab]);
+
   const handleInitPgvec = async (migrate: boolean) => {
     if (migrate) setMigratingPgvec(true); else setInitingPgvec(true);
     try {
@@ -430,8 +463,8 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                 ))}
               </div>
 
-              {/* Toolbar para a aba Sem Rosto */}
-              {isNoFaceTab && !loading && records.length > 0 && (
+              {/* Toolbar global de seleção */}
+              {!loading && records.length > 0 && (
                 <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-100 dark:border-gray-800 flex-shrink-0">
                   <button
                     onClick={toggleAll}
@@ -451,19 +484,35 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                     {selected.size > 0 ? `${selected.size} selecionado${selected.size !== 1 ? 's' : ''}` : 'Nenhum selecionado'}
                   </span>
                   {selected.size > 0 && (
-                    <button
-                      onClick={() => setShowConfirm(true)}
-                      className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Remover {selected.size} foto{selected.size !== 1 ? 's' : ''}
-                    </button>
+                    <div className="ml-auto flex items-center gap-2">
+                      {(activeTab === 'lowscore' || activeTab === 'blurry' || activeTab === 'pending') && (
+                        <button
+                          onClick={handleReindexSelected}
+                          disabled={resettingIds.size > 0}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-white bg-sigma-600 hover:bg-sigma-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {resettingIds.size > 0 ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          )}
+                          Re-indexar {selected.size} registro{selected.size !== 1 ? 's' : ''}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowConfirm(true)}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Remover {selected.size} foto{selected.size !== 1 ? 's' : ''}
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
 
               {/* Banner de sucesso na deleção */}
-              {removedCount !== null && isNoFaceTab && (
+              {removedCount !== null && (
                 <div className="px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl flex items-center gap-2 flex-shrink-0">
                   <span className="text-green-700 dark:text-green-400 text-xs font-medium">
                     {removedCount} foto{removedCount !== 1 ? 's removidas' : ' removida'} com sucesso.
@@ -513,16 +562,10 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                         <div
                           key={record.id}
                           onClick={() => {
-                            if (isNoFaceTab) {
-                              toggleSelect(record.id);
-                            }
+                            toggleSelect(record.id);
                           }}
-                          className={`relative rounded-xl overflow-hidden border-2 bg-gray-50 dark:bg-gray-800/50 flex flex-col transition-all ${
-                            isNoFaceTab
-                              ? 'cursor-pointer'
-                              : ''
-                          } ${
-                            isNoFaceTab && isSelected
+                          className={`relative rounded-xl overflow-hidden border-2 bg-gray-50 dark:bg-gray-800/50 flex flex-col transition-all cursor-pointer ${
+                            isSelected
                               ? 'border-sigma-500 shadow-lg shadow-sigma-500/20'
                               : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'
                           }`}
@@ -545,28 +588,30 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                                 <Loader2 className="w-6 h-6 text-white animate-spin" />
                               </div>
                             )}
-                            {/* Badges */}
-                            {activeTab !== 'pending' && activeTab !== 'noface' && record.detScore !== null && (
-                              <div className={`absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold leading-none text-white pointer-events-none ${ds.cls}`}>
-                                {ds.label}
-                              </div>
-                            )}
-                            <div className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold leading-none text-white pointer-events-none ${isNoFaceTab ? 'left-1.5 right-auto' : ''} ${qi.cls}`}>
-                              {qi.label}
+                            {/* Badges empilhados no canto superior esquerdo */}
+                            <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 pointer-events-none z-10">
+                              {activeTab !== 'pending' && !isNoFaceTab && record.detScore !== null && (
+                                <div className={`px-1.5 py-0.5 rounded text-[9px] font-bold leading-none text-white ${ds.cls}`}>
+                                  {ds.label}
+                                </div>
+                              )}
+                              {record.photoQuality !== null && (
+                                <div className={`px-1.5 py-0.5 rounded text-[9px] font-bold leading-none text-white ${qi.cls}`}>
+                                  {qi.label}
+                                </div>
+                              )}
                             </div>
 
-                             {/* Checkbox de seleção para Sem Rosto */}
-                            {isNoFaceTab && (
-                              <div className={`absolute top-1.5 right-1.5 w-5 h-5 rounded flex items-center justify-center transition-all ${
-                                isSelected ? 'bg-sigma-600' : 'bg-black/40 hover:bg-black/60'
-                              }`}>
-                                {isSelected ? (
-                                  <CheckSquare className="w-3.5 h-3.5 text-white" />
-                                ) : (
-                                  <Square className="w-3.5 h-3.5 text-white/70" />
-                                )}
-                              </div>
-                            )}
+                            {/* Checkbox de seleção */}
+                            <div className={`absolute top-1.5 right-1.5 w-5 h-5 rounded flex items-center justify-center transition-all z-10 ${
+                              isSelected ? 'bg-sigma-600' : 'bg-black/40 hover:bg-black/60'
+                            }`}>
+                              {isSelected ? (
+                                <CheckSquare className="w-3.5 h-3.5 text-white" />
+                              ) : (
+                                <Square className="w-3.5 h-3.5 text-white/70" />
+                              )}
+                            </div>
 
                             {/* Name overlay */}
                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-2">
@@ -612,8 +657,8 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
         </div>
       </div>
 
-      {/* Confirm dialog para deleção em massa de sem rosto */}
-      {showConfirm && isNoFaceTab && (
+      {/* Confirm dialog para deleção em massa */}
+      {showConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowConfirm(false)} />
           <div className="relative z-10 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-800">
