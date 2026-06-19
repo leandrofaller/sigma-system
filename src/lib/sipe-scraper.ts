@@ -1125,20 +1125,45 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
         fase: 'Retomando',
       })
     } else {
-      log(jobId, 'Coletando lista completa de unidades prisionais no SIPE...')
-      await gotoSipeWithFallback(page, '/selectRole', { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(async () => {
-        await gotoSipeWithFallback(page, '/selectRole/1', { waitUntil: 'domcontentloaded' })
-      })
-      await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 15_000 })
+      let options: Array<{ id: string; nome: string }> = []
 
-      const options = await page.evaluate(() => {
-        const selects = document.querySelectorAll('select')
-        if (selects.length < 2) return [] as Array<{ id: string; nome: string }>
-        const unitSelect = selects[1] as HTMLSelectElement
-        return Array.from(unitSelect.options)
-          .filter((o) => o.value && o.value !== '' && o.value !== '0')
-          .map((o) => ({ id: o.value, nome: (o.textContent ?? '').trim() }))
-      })
+      if (isPythonSdkEngine()) {
+        log(jobId, '🐍 Coletando lista de unidades via SDK Python...')
+        let html = await fetchPageWithRetry('/selectRole', jobId)
+        if (!html) {
+          html = await fetchPageWithRetry('/selectRole/1', jobId)
+        }
+        if (!html) {
+          throw new Error('Falha crítica ao obter página selectRole via SDK Python')
+        }
+        const $ = cheerio.load(html)
+        const selects = $('select')
+        if (selects.length >= 2) {
+          const unitSelect = selects.eq(1)
+          unitSelect.find('option').each((_, opt) => {
+            const val = $(opt).attr('value')
+            const text = $(opt).text().trim()
+            if (val && val !== '' && val !== '0') {
+              options.push({ id: val, nome: text })
+            }
+          })
+        }
+      } else {
+        log(jobId, 'Coletando lista completa de unidades prisionais no SIPE...')
+        await gotoSipeWithFallback(page, '/selectRole', { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(async () => {
+          await gotoSipeWithFallback(page, '/selectRole/1', { waitUntil: 'domcontentloaded' })
+        })
+        await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 15_000 })
+
+        options = await page.evaluate(() => {
+          const selects = document.querySelectorAll('select')
+          if (selects.length < 2) return [] as Array<{ id: string; nome: string }>
+          const unitSelect = selects[1] as HTMLSelectElement
+          return Array.from(unitSelect.options)
+            .filter((o) => o.value && o.value !== '' && o.value !== '0')
+            .map((o) => ({ id: o.value, nome: (o.textContent ?? '').trim() }))
+        })
+      }
 
       if (options.length === 0) {
         throw new Error('Nenhuma unidade prisional encontrada no select do SIPE')
