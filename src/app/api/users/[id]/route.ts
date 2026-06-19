@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { createAuditLog, AUDIT_ACTIONS } from '@/lib/audit';
+import { handleApiError } from '@/lib/error-handler';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -54,10 +55,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const { passwordHash: _, ...safeUser } = user;
     return NextResponse.json(safeUser);
   } catch (err: any) {
-    const msg = err?.meta?.target
-      ? `Conflito no campo: ${err.meta.target}`
-      : err?.message || 'Erro interno';
-    return NextResponse.json({ error: msg }, { status: 500 });
+    if (err?.meta?.target) {
+      return NextResponse.json({ error: `Conflito no campo: ${err.meta.target}` }, { status: 409 });
+    }
+    return handleApiError(err, 'Erro ao atualizar usuário');
   }
 }
 
@@ -89,6 +90,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Erro interno' }, { status: 500 });
+    return handleApiError(err, 'Erro ao excluir usuário');
   }
 }

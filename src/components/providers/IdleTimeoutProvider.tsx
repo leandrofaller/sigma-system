@@ -4,8 +4,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { signOut } from 'next-auth/react';
 import { Clock, LogOut } from 'lucide-react';
 
-const WARN_AT_MS    = 18 * 60 * 1000; // 18 min → show warning
-const LOGOUT_AT_MS  = 20 * 60 * 1000; // 20 min → logout
+const WARN_AT_MS    = 10 * 60 * 1000; // 10 min → show warning
+const LOGOUT_AT_MS  = 12 * 60 * 1000; // 12 min → logout
 const WARN_SECS     = 120;             // 2-min countdown
 
 const EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'] as const;
