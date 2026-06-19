@@ -1,6 +1,7 @@
 'use client';
 
-import { Database, Square, CheckCircle, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Database, Square, CheckCircle, Clock, X } from 'lucide-react';
 import { useIndexing } from '@/contexts/IndexingContext';
 
 function fmtTime(seconds: number): string {
@@ -12,9 +13,26 @@ function fmtTime(seconds: number): string {
 
 export function IndexingStatusFloat() {
   const { isIndexing, timedOut, progress, indexError, stopIndexing } = useIndexing();
+  const [showDone, setShowDone] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   const done = !isIndexing && progress.total > 0 && progress.current >= progress.total;
-  if (!isIndexing && !done && !timedOut) return null;
+
+  useEffect(() => {
+    if (isIndexing) {
+      setDismissed(false);
+      setShowDone(false);
+    } else if (done) {
+      setShowDone(true);
+      const timer = setTimeout(() => {
+        setShowDone(false);
+      }, 5000); // 5 segundos
+      return () => clearTimeout(timer);
+    }
+  }, [isIndexing, done]);
+
+  if (dismissed) return null;
+  if (!isIndexing && !showDone && !timedOut) return null;
 
   const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
   const elapsed = progress.startTime ? (Date.now() - progress.startTime) / 1000 : 0;
@@ -37,13 +55,21 @@ export function IndexingStatusFloat() {
             {timedOut ? 'Tempo limite atingido (170min)' : done ? 'Indexação concluída!' : 'Indexando banco facial'}
           </span>
         </div>
-        {isIndexing && (
+        {isIndexing ? (
           <button
             onClick={stopIndexing}
             title="Parar indexação"
             className="text-subtle hover:text-red-500 transition-colors p-0.5"
           >
             <Square className="w-3.5 h-3.5" fill="currentColor" />
+          </button>
+        ) : (
+          <button
+            onClick={() => setDismissed(true)}
+            title="Fechar"
+            className="text-subtle hover:text-gray-500 transition-colors p-0.5"
+          >
+            <X className="w-4 h-4" />
           </button>
         )}
       </div>
