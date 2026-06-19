@@ -102,8 +102,25 @@ export async function POST(req: NextRequest) {
     return FAIL;
   }
 
+  // Busca threshold dinâmico das configurações
+  let currentThreshold = FACE_THRESHOLD;
+  try {
+    const config = await prisma.systemConfig.findUnique({
+      where: { key: 'FACE_THRESHOLD' },
+    });
+    if (config && typeof config.value === 'number') {
+      currentThreshold = config.value;
+    }
+  } catch (err) {
+    console.error('[FaceLogin] Erro ao carregar threshold do banco:', err);
+  }
+
   // Calcula distância euclidiana
   const distance = euclideanDistance(faceDescriptor, storedDescriptor);
+  const success = distance <= currentThreshold;
+
+  // Obtém user agent do cabeçalho
+  const userAgent = req.headers.get('user-agent');
 
   // Registra a tentativa no audit log (sem await para não bloquear)
   prisma.auditLog
@@ -113,13 +130,18 @@ export async function POST(req: NextRequest) {
         action: 'FACE_LOGIN_ATTEMPT',
         entity: 'User',
         entityId: user.id,
-        details: { distance: distance.toFixed(4), success: distance <= FACE_THRESHOLD },
+        details: { 
+          distance: distance.toFixed(4), 
+          threshold: currentThreshold.toFixed(2),
+          success 
+        },
         ipAddress: ip,
+        userAgent,
       },
     })
     .catch(() => {});
 
-  if (distance > FACE_THRESHOLD) return FAIL;
+  if (!success) return FAIL;
 
   // Emite um token temporário de 15 minutos para o NextAuth
   const secret = process.env.NEXTAUTH_SECRET!;

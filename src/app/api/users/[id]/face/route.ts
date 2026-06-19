@@ -23,14 +23,14 @@ export async function POST(
     return NextResponse.json({ error: 'Permissão negada.' }, { status: 403 });
   }
 
-  let body: { faceDescriptor?: number[] };
+  let body: { faceDescriptor?: number[]; faceImage?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Requisição inválida.' }, { status: 400 });
   }
 
-  const { faceDescriptor } = body;
+  const { faceDescriptor, faceImage } = body;
   if (!Array.isArray(faceDescriptor) || faceDescriptor.length !== 128) {
     return NextResponse.json(
       { error: 'Descriptor facial inválido. Esperado array de 128 números.' },
@@ -56,6 +56,7 @@ export async function POST(
     data: {
       faceDescriptor: JSON.stringify(faceDescriptor),
       faceRegisteredAt: new Date(),
+      avatar: faceImage || undefined,
     },
   });
 
@@ -100,7 +101,7 @@ export async function DELETE(
 
   await prisma.user.update({
     where: { id },
-    data: { faceDescriptor: null, faceRegisteredAt: null },
+    data: { faceDescriptor: null, faceRegisteredAt: null, avatar: null },
   });
 
   await prisma.auditLog.create({
@@ -138,7 +139,7 @@ export async function GET(
 
   const user = await prisma.user.findUnique({
     where: { id },
-    select: { faceDescriptor: true, faceRegisteredAt: true },
+    select: { faceDescriptor: true, faceRegisteredAt: true, avatar: true },
   });
 
   if (!user) {
@@ -148,5 +149,6 @@ export async function GET(
   return NextResponse.json({
     hasFace: !!user.faceDescriptor,
     registeredAt: user.faceRegisteredAt ?? null,
+    avatar: user.avatar ?? null,
   });
 }

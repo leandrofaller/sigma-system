@@ -25,11 +25,12 @@ export async function GET(req: NextRequest) {
       faceDescriptor: true,
       faceRegisteredAt: true,
       lastLogin: true,
+      avatar: true,
       group: { select: { id: true, name: true } },
     },
   });
 
-  // Retorna sem expor o descriptor em si — apenas se tem ou não
+  // Retorna sem expor o descriptor em si — apenas se tem ou não, mais o avatar
   return NextResponse.json(
     users.map((u) => ({
       id: u.id,
@@ -40,6 +41,7 @@ export async function GET(req: NextRequest) {
       hasFace: !!u.faceDescriptor,
       faceRegisteredAt: u.faceRegisteredAt ?? null,
       lastLogin: u.lastLogin ?? null,
+      avatar: u.avatar ?? null,
       group: u.group,
     }))
   );

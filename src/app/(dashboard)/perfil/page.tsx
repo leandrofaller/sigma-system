@@ -20,7 +20,7 @@ export default function PerfilPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // ── Reconhecimento facial ──────────────────────────────────────────────────
-  const [faceStatus, setFaceStatus] = useState<{ hasFace: boolean; registeredAt: string | null } | null>(null);
+  const [faceStatus, setFaceStatus] = useState<{ hasFace: boolean; registeredAt: string | null; avatar?: string | null } | null>(null);
   const [faceStatusLoading, setFaceStatusLoading] = useState(true);
   const [showFaceCamera, setShowFaceCamera] = useState(false);
   const [faceMsg, setFaceMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -78,21 +78,21 @@ export default function PerfilPage() {
     }
   }
 
-  async function handleFaceDescriptor(descriptor: number[]) {
+  async function handleFaceDescriptor(descriptor: number[], base64Image?: string) {
     setFaceRegLoading(true);
     setFaceMsg(null);
     try {
       const res = await fetch(`/api/users/${user.id}/face`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ faceDescriptor: descriptor }),
+        body: JSON.stringify({ faceDescriptor: descriptor, faceImage: base64Image }),
       });
       const data = await res.json();
       if (!res.ok) {
         setFaceMsg({ type: 'error', text: data.error || 'Erro ao cadastrar face.' });
       } else {
         setFaceMsg({ type: 'success', text: 'Rosto cadastrado com sucesso! Você já pode usar o login facial.' });
-        setFaceStatus({ hasFace: true, registeredAt: new Date().toISOString() });
+        setFaceStatus({ hasFace: true, registeredAt: new Date().toISOString(), avatar: base64Image });
         setShowFaceCamera(false);
       }
     } catch {
@@ -203,11 +203,28 @@ export default function PerfilPage() {
           <div className="space-y-4">
             {/* Info de status */}
             {faceStatus?.hasFace && faceStatus.registeredAt && (
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2">
-                <Check className="w-3.5 h-3.5 text-green-500" />
-                Cadastrado em {new Date(faceStatus.registeredAt).toLocaleDateString('pt-BR', {
-                  day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                })}
+              <div className="flex flex-col sm:flex-row items-center gap-4 bg-gray-50 dark:bg-gray-800 rounded-xl p-3">
+                {faceStatus.avatar && (
+                  <div className="w-16 h-16 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={faceStatus.avatar}
+                      alt="Face de referência"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                  <p className="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
+                    <Check className="w-3.5 h-3.5 text-green-500" />
+                    Biometria Ativa
+                  </p>
+                  <p>
+                    Cadastrado em {new Date(faceStatus.registeredAt).toLocaleDateString('pt-BR', {
+                      day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    })}
+                  </p>
+                </div>
               </div>
             )}
 

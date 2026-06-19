@@ -12,7 +12,7 @@ type FaceState =
   | 'error';
 
 interface FaceLoginCameraProps {
-  onDescriptor: (descriptor: number[]) => void;
+  onDescriptor: (descriptor: number[], image?: string) => void;
   active: boolean;
 }
 
@@ -219,7 +219,28 @@ export function FaceLoginCamera({ onDescriptor, active }: FaceLoginCameraProps) 
             if (intervalRef.current) clearInterval(intervalRef.current);
             stopCamera();
             setState('done');
-            onDescriptor(Array.from(final.descriptor));
+
+            let base64Image = '';
+            try {
+              const video = videoRef.current;
+              if (video) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = video.videoWidth || 640;
+                tempCanvas.height = video.videoHeight || 480;
+                const tempCtx = tempCanvas.getContext('2d');
+                if (tempCtx) {
+                  // Espelha horizontalmente para corresponder à visualização do usuário
+                  tempCtx.translate(tempCanvas.width, 0);
+                  tempCtx.scale(-1, 1);
+                  tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+                  base64Image = tempCanvas.toDataURL('image/jpeg', 0.8);
+                }
+              }
+            } catch (err) {
+              console.error('[FaceLoginCamera] Erro ao obter screenshot em base64:', err);
+            }
+
+            onDescriptor(Array.from(final.descriptor), base64Image);
           }
         } else {
           setState('no_face');
