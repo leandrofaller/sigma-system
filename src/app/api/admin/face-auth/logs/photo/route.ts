@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     const absolutePath = path.join(process.cwd(), details.photoPath);
     const buffer = await getLocalFile(absolutePath);
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'image/jpeg',
         'Cache-Control': 'public, max-age=31536000, immutable',

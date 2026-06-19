@@ -3166,51 +3166,55 @@ async function scrapeApenadoFicha(
     }
   }
 
-  if (!localApenado) {
-    localApenado = await prisma.apenado.create({
-      data: {
-        name: nomeFinalApenado,
-        matricula: dados.rji || dados.cpf || null,
-        unidade: unidade || null,
-        faccao: faccaoNome || null,
-        photoPath: photoPath || null,
-      }
-    });
-  } else {
-    const updateData: any = {};
-    // Só atualiza a foto local se for detectada alteração (fotoAtualizada === true)
-    // ou se o apenado local atualmente estiver sem foto cadastrada.
-    if (photoPath && (fotoAtualizada || !localApenado.photoPath)) {
-      updateData.photoPath = photoPath;
-      
-      // Reseta hashes para forçar re-indexação facial no job em background apenas se a foto mudou
-      if (fotoAtualizada) {
-        updateData.photoHash = null;
-        updateData.photoQuality = null;
-        updateData.photoHashSha = null;
-        updateData.faceDescriptor = null;
-        updateData.detScore = null;
-      }
-    }
-    
-    // 🔐 Garante que matricula está sempre definida (importante para deduplicação)
-    // Só atualiza se ainda não tem matricula ou se a nova é diferente
-    if ((dados.rji || dados.cpf) && !localApenado.matricula) {
-      updateData.matricula = dados.rji || dados.cpf;
-    }
+  const isUnidadesJob = !!(globalThis.__sipeState && (globalThis.__sipeState.tipo === 'UNIDADES' || globalThis.__sipeState.tipo === 'UNIDADES_FAST'));
 
-    if (unidade && localApenado.unidade !== unidade) {
-      updateData.unidade = unidade;
-    }
-    if (!localApenado.faccao && faccaoNome) {
-      updateData.faccao = faccaoNome;
-    }
-
-    if (Object.keys(updateData).length > 0) {
-      localApenado = await prisma.apenado.update({
-        where: { id: localApenado.id },
-        data: updateData
+  if (!isUnidadesJob) {
+    if (!localApenado) {
+      localApenado = await prisma.apenado.create({
+        data: {
+          name: nomeFinalApenado,
+          matricula: dados.rji || dados.cpf || null,
+          unidade: unidade || null,
+          faccao: faccaoNome || null,
+          photoPath: photoPath || null,
+        }
       });
+    } else {
+      const updateData: any = {};
+      // Só atualiza a foto local se for detectada alteração (fotoAtualizada === true)
+      // ou se o apenado local atualmente estiver sem foto cadastrada.
+      if (photoPath && (fotoAtualizada || !localApenado.photoPath)) {
+        updateData.photoPath = photoPath;
+        
+        // Reseta hashes para forçar re-indexação facial no job em background apenas se a foto mudou
+        if (fotoAtualizada) {
+          updateData.photoHash = null;
+          updateData.photoQuality = null;
+          updateData.photoHashSha = null;
+          updateData.faceDescriptor = null;
+          updateData.detScore = null;
+        }
+      }
+      
+      // 🔐 Garante que matricula está sempre definida (importante para deduplicação)
+      // Só atualiza se ainda não tem matricula ou se a nova é diferente
+      if ((dados.rji || dados.cpf) && !localApenado.matricula) {
+        updateData.matricula = dados.rji || dados.cpf;
+      }
+
+      if (unidade && localApenado.unidade !== unidade) {
+        updateData.unidade = unidade;
+      }
+      if (!localApenado.faccao && faccaoNome) {
+        updateData.faccao = faccaoNome;
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        localApenado = await prisma.apenado.update({
+          where: { id: localApenado.id },
+          data: updateData
+        });
+      }
     }
   }
 
@@ -3270,6 +3274,7 @@ async function scrapeApenadoFicha(
     photoPath,
     unidade: resolvedUnidade,
     cela: cela || undefined,
+    apenadoLocalId: localApenado?.id || null,
     ultimaSyncAt: new Date(),
   }
 
@@ -3289,8 +3294,9 @@ async function scrapeApenadoFicha(
   // Se existe registro em AIP para este apenado, atualizar campos SIPE
   // Se não existe, CRIAR um novo registro
   // Campos de inteligência NÃO são sobrescritos
-  try {
-    const aipSyncData = {
+  if (!isUnidadesJob) {
+    try {
+      const aipSyncData = {
       // ============ DADOS PESSOAIS ============
       nome: apenado.nome,
       nomeOutro: apenado.nomeOutro,
@@ -3369,10 +3375,11 @@ async function scrapeApenadoFicha(
   } catch (err) {
     console.error(`[AIP] Erro na sincronização AIP:`, err)
   }
+  }
 
   // Salva as fotos complementares encontradas na ficha de edição
   for (const src of complementaryPhotoSrcs) {
-    await saveAndLinkComplementaryPhoto(page, src, apenado.id, localApenado.id, 'Foto de Identificação');
+    await saveAndLinkComplementaryPhoto(page, src, apenado.id, localApenado?.id || null, 'Foto de Identificação');
   }
 
   // Executa o scraping de dados complementares de forma sequencial para evitar colisões de navegação na mesma aba (page) do Playwright
@@ -3381,7 +3388,7 @@ async function scrapeApenadoFicha(
   await scrapeEndereço(page, sipeId, apenado.id).catch(() => {});
   await scrapeHistorico(page, sipeId, apenado.id).catch(() => {});
   await scrapeDocumentos(page, sipeId, apenado.id).catch(() => {});
-  await scrapeFotosComplementares(page, sipeId, apenado.id, localApenado.id).catch(() => {});
+  await scrapeFotosComplementares(page, sipeId, apenado.id, localApenado?.id || null).catch(() => {});
   await scrapeVisitantes(page, sipeId, apenado.id).catch(() => {});
   await scrapeAdvogadosDoApenado(page, sipeId, apenado.id).catch(() => {});
 
@@ -7774,44 +7781,48 @@ export async function scrapeApenadoFichaFast(
     }
   }
 
-  if (!localApenado) {
-    localApenado = await prisma.apenado.create({
-      data: {
-        name: nomeFinalApenado,
-        matricula: dados.rji || dados.cpf || null,
-        unidade: unidade || null,
-        faccao: faccaoNome || null,
-        photoPath: photoPath || null,
-      }
-    })
-  } else {
-    const updateData: any = {}
-    if (photoPath && (fotoAtualizada || !localApenado.photoPath)) {
-      updateData.photoPath = photoPath
-      if (fotoAtualizada) {
-        updateData.photoHash = null
-        updateData.photoQuality = null
-        updateData.photoHashSha = null
-        updateData.faceDescriptor = null
-        updateData.detScore = null
-      }
-    }
-    
-    if ((dados.rji || dados.cpf) && !localApenado.matricula) {
-      updateData.matricula = dados.rji || dados.cpf
-    }
-    if (unidade && localApenado.unidade !== unidade) {
-      updateData.unidade = unidade
-    }
-    if (!localApenado.faccao && faccaoNome) {
-      updateData.faccao = faccaoNome
-    }
+  const isUnidadesJob = !!(globalThis.__sipeState && (globalThis.__sipeState.tipo === 'UNIDADES' || globalThis.__sipeState.tipo === 'UNIDADES_FAST'));
 
-    if (Object.keys(updateData).length > 0) {
-      localApenado = await prisma.apenado.update({
-        where: { id: localApenado.id },
-        data: updateData
+  if (!isUnidadesJob) {
+    if (!localApenado) {
+      localApenado = await prisma.apenado.create({
+        data: {
+          name: nomeFinalApenado,
+          matricula: dados.rji || dados.cpf || null,
+          unidade: unidade || null,
+          faccao: faccaoNome || null,
+          photoPath: photoPath || null,
+        }
       })
+    } else {
+      const updateData: any = {}
+      if (photoPath && (fotoAtualizada || !localApenado.photoPath)) {
+        updateData.photoPath = photoPath
+        if (fotoAtualizada) {
+          updateData.photoHash = null
+          updateData.photoQuality = null
+          updateData.photoHashSha = null
+          updateData.faceDescriptor = null
+          updateData.detScore = null
+        }
+      }
+      
+      if ((dados.rji || dados.cpf) && !localApenado.matricula) {
+        updateData.matricula = dados.rji || dados.cpf
+      }
+      if (unidade && localApenado.unidade !== unidade) {
+        updateData.unidade = unidade
+      }
+      if (!localApenado.faccao && faccaoNome) {
+        updateData.faccao = faccaoNome
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        localApenado = await prisma.apenado.update({
+          where: { id: localApenado.id },
+          data: updateData
+        })
+      }
     }
   }
 
@@ -7858,6 +7869,7 @@ export async function scrapeApenadoFichaFast(
     photoPath,
     unidade: resolvedUnidade,
     cela: cela || undefined,
+    apenadoLocalId: localApenado?.id || null,
     ultimaSyncAt: new Date(),
   }
 
@@ -7873,8 +7885,9 @@ export async function scrapeApenadoFichaFast(
     include: { faccao: true }
   })
 
-  try {
-    const aipSyncData = {
+  if (!isUnidadesJob) {
+    try {
+      const aipSyncData = {
       nome: apenado.nome,
       nomeOutro: apenado.nomeOutro,
       cpf: apenado.cpf,
@@ -7937,6 +7950,7 @@ export async function scrapeApenadoFichaFast(
     }
   } catch (err) {
     console.error(`[AIP] Erro na sincronização AIP:`, err)
+  }
   }
 
   const $ = cheerio.load(editHtml)
@@ -8006,10 +8020,10 @@ export async function scrapeApenadoFichaFast(
     independentPromises.push(parseAndSaveMudarCelaCheerio(mudarCelaData.html, apenado.id))
   }
   if (anexosData?.html) {
-    independentPromises.push(parseAndSaveDocumentosCheerio(anexosData.html, apenado.id, localApenado.id))
+    independentPromises.push(parseAndSaveDocumentosCheerio(anexosData.html, apenado.id, localApenado?.id || null))
   }
   for (const src of complementaryPhotoSrcs) {
-    independentPromises.push(saveAndLinkComplementaryPhotoCheerio(src, apenado.id, localApenado.id, 'Foto de Identificação'))
+    independentPromises.push(saveAndLinkComplementaryPhotoCheerio(src, apenado.id, localApenado?.id || null, 'Foto de Identificação'))
   }
 
   // Executa os dados estruturados independentes em paralelo
@@ -8365,6 +8379,7 @@ async function saveApenadoUnidadePrisional(sipeId: number, apenadoId: string): P
       cep: apenado.cep,
       celeAtual: apenado.celeAtual,
       ultimaMovimentacao: apenado.ultimaMovimentacao,
+      apenadoLocalId: apenado.apenadoLocalId,
       
       processos: processosJson,
       alcunhas: alcunhasJson,
