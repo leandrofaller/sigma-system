@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
   { label: 'Relatórios (RELINTs)', href: '/relints', icon: FileText },
   { label: 'RELINTs Recebidos', href: '/relints-recebidos', icon: Inbox, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Debriefings', href: '/debriefings', icon: BookOpen },
+  { label: 'Forças-Tarefa', href: '/forca-tarefa', icon: ClipboardList },
   { label: 'Calendário de Missões', href: '/missoes', icon: Calendar },
   { label: 'Mural de Eventos', href: '/mural', icon: CalendarDays },
   { label: 'Acompanhamento', href: '/acompanhamento', icon: Trello },

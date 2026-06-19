@@ -110,6 +110,7 @@ model User {
   devices          UserDevice[]
   aipApenadoAnexos AIPApenadoAnexo[]
   maintenanceAvisos SystemMaintenance[]
+  relatoriosForcaTarefa RelatorioForcaTarefa[]
 
   // Mural de Eventos
   eventsCreated OccurrenceEvent[] @relation("EventsCreatedBy")
@@ -138,6 +139,7 @@ model Group {
   messages        ChatMessage[]
   receivedRelints ReceivedRelint[]
   missions        Mission[]
+  relatoriosForcaTarefa RelatorioForcaTarefa[]
 
   @@map("groups")
 }
@@ -1251,6 +1253,42 @@ model SipeApenadoUnidadePrisional {
   @@index([cpf])
   @@index([faccaoId])
   @@map("sipe_apenados_unidades_prisionais")
+}
+
+model RelatorioForcaTarefa {
+  id            String       @id @default(cuid())
+  number        String       @unique // RFT Nº 001/2026/AIP/SEJUS/RO
+  date          DateTime     // Data de preenchimento
+  periodoInicio DateTime     // Data inicial da semana
+  periodoFim    DateTime     // Data final da semana
+  forcaTarefa   String       // Nome da força-tarefa (FICCO, GAECO, etc)
+  status        RelintStatus @default(DRAFT) // DRAFT | PUBLISHED
+  content       Json         // Contém todos os campos dinâmicos da especificação
+  authorId      String
+  author        User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  groupId       String
+  group         Group        @relation(fields: [groupId], references: [id])
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // ============ INTEGRAÇÃO IIP & RANKING RIP ============
+  iipScore         Int      @default(0)       // iip_score / pontuação do RIP
+  iipLevel         String   @default("LOW")   // iip_level (LOW, MEDIUM, HIGH, CRITICAL)
+  ripStatus        String   @default("PENDENTE") // Status da análise (PENDENTE, EM_ANALISE, ENCAMINHADO, CONCLUIDO)
+  iipFactors       Json?                      // iip_factors / principais fatores ativados
+  municipio        String   @default("Porto Velho") // Para filtros do Ranking
+  faccoes          String[] @default([])      // Facções envolvidas para filtros rápidos
+  alertaAtivo      Boolean  @default(false)   // Alerta crítico gerado para a Direção
+  alertaResolvido  Boolean  @default(false)   // Status de tratamento do alerta pelo Diretor
+  providencias     String?  @db.Text          // Providências adotadas pela Direção
+  observacoesAip   String?  @db.Text          // Histórico/Observações de análise complementar
+
+  @@index([groupId])
+  @@index([authorId])
+  @@index([status])
+  @@index([iipScore])
+  @@index([ripStatus])
+  @@map("relatorios_forca_tarefa")
 }
 
 
