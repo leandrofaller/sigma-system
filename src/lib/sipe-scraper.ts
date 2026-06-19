@@ -37,7 +37,7 @@ function createMockProxy(): any {
       if (prop === 'newPage') return async () => createMockProxy()
       if (prop === 'close') return async () => {}
       // Qualquer outro acesso retorna uma função que devolve o próprio proxy
-      return (..._args: any[]) => Promise.resolve(createMockProxy())
+      return (..._args: any[]) => createMockProxy()
     },
   })
 }
@@ -1281,8 +1281,8 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
           return
         }
 
-        // 🔧 OTIMIZAÇÃO: Renovar page instance a cada 25 apenados para evitar memory leak
-        if (pageRenewCount % 25 === 0 && pageRenewCount > 0) {
+        // 🔧 OTIMIZAÇÃO: Renovar page instance a cada 25 apenados para evitar memory leak (apenas se não for SDK Python)
+        if (!isPythonSdkEngine() && pageRenewCount % 25 === 0 && pageRenewCount > 0) {
           try {
             log(jobId, `🔄 Renovando page instance após ${pageRenewCount} apenados...`);
             await page.close().catch(() => {});
