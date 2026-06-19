@@ -46,14 +46,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { email?: string; faceDescriptor?: number[] };
+  let body: { email?: string; faceDescriptor?: number[]; image?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Requisição inválida.' }, { status: 400 });
   }
 
-  const { email, faceDescriptor } = body;
+  const { email, faceDescriptor, image } = body;
 
   // Validações básicas
   if (!email || typeof email !== 'string') {
@@ -122,6 +122,27 @@ export async function POST(req: NextRequest) {
   // Obtém user agent do cabeçalho
   const userAgent = req.headers.get('user-agent');
 
+  // Salva a foto se fornecida
+  let relativePhotoPath: string | null = null;
+  if (image && typeof image === 'string' && image.startsWith('data:image/')) {
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const base64Image = image.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Image, 'base64');
+      const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+      const loginFacesDir = path.join(uploadDir, 'login-faces');
+      await fs.mkdir(loginFacesDir, { recursive: true });
+
+      const filename = `login_${user.id}_${Date.now()}.jpg`;
+      const filePath = path.join(loginFacesDir, filename);
+      await fs.writeFile(filePath, buffer);
+      relativePhotoPath = `uploads/login-faces/${filename}`;
+    } catch (err) {
+      console.error('[FaceLogin] Erro ao salvar foto de login:', err);
+    }
+  }
+
   // Registra a tentativa no audit log (sem await para não bloquear)
   prisma.auditLog
     .create({
@@ -133,7 +154,8 @@ export async function POST(req: NextRequest) {
         details: { 
           distance: distance.toFixed(4), 
           threshold: currentThreshold.toFixed(2),
-          success 
+          success,
+          photoPath: relativePhotoPath
         },
         ipAddress: ip,
         userAgent,

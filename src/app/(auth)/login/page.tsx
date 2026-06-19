@@ -61,7 +61,7 @@ export default function LoginPage() {
     setFaceEmailConfirmed(true);
   };
 
-  const handleFaceDescriptor = async (descriptor: number[]) => {
+  const handleFaceDescriptor = async (descriptor: number[], image?: string) => {
     setFaceLoading(true);
     setFaceError('');
     try {
@@ -69,7 +69,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/face-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: faceEmail, faceDescriptor: descriptor }),
+        body: JSON.stringify({ email: faceEmail, faceDescriptor: descriptor, image }),
       });
       const data = await res.json();
 

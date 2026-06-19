@@ -30,6 +30,7 @@ interface FaceLog {
     distance?: string;
     threshold?: string;
     success?: boolean;
+    photoPath?: string | null;
   } | null;
   ipAddress: string | null;
   userAgent: string | null;
@@ -194,6 +195,29 @@ export function FaceAdminPanel() {
       showToast('error', 'Não foi possível obter o histórico de biometria.');
     } finally {
       setLoadingLogs(false);
+    }
+  };
+
+  const handleDeleteLoginPhoto = async (logId: string) => {
+    if (!confirm('Deseja excluir permanentemente a foto deste login?')) return;
+    try {
+      const res = await fetch(`/api/admin/face-auth/logs?id=${logId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao deletar foto');
+      
+      // Atualiza o estado local
+      setLogs((prev) =>
+        prev.map((log) =>
+          log.id === logId
+            ? { ...log, details: log.details ? { ...log.details, photoPath: null } : null }
+            : log
+        )
+      );
+      showToast('success', 'Foto de login excluída com sucesso.');
+    } catch (err: any) {
+      showToast('error', err.message || 'Erro ao deletar foto de login.');
     }
   };
 
@@ -490,6 +514,31 @@ export function FaceAdminPanel() {
                               UA: {uaInfo.browser} ({log.userAgent})
                             </div>
                           </div>
+
+                          {/* Foto Capturada no Login */}
+                          {log.details?.photoPath ? (
+                            <div className="mt-2 mb-3 relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 aspect-[4/3] max-w-[200px] group/photo">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={`/api/admin/face-auth/logs/photo?id=${log.id}`}
+                                alt="Foto do login"
+                                className="w-full h-full object-cover cursor-zoom-in"
+                                onClick={() => setPhotoModal(`/api/admin/face-auth/logs/photo?id=${log.id}`)}
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteLoginPhoto(log.id);
+                                }}
+                                title="Excluir foto de login"
+                                className="absolute top-1.5 right-1.5 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg opacity-0 group-hover/photo:opacity-100 transition-opacity shadow-lg"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : log.action === 'FACE_LOGIN_ATTEMPT' && (
+                            <p className="text-xs text-subtle italic mt-1 mb-3">Foto não disponível ou excluída pelo administrador.</p>
+                          )}
 
                           {/* Diagnóstico Inteligente */}
                           {diag && (
