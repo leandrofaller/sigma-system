@@ -360,7 +360,7 @@ function getRecordCategory(
   const isTattooPath = /tatuagem|tattoo|tatoo|tatuag/.test(pathLower);
   const hasTattooComplement = tattooApenadosSet.has(r.id);
 
-  if (isTattooPath || hasTattooComplement || (r.photoQuality !== null && r.photoQuality >= 5 && !r.ocrText)) {
+  if (isTattooPath || hasTattooComplement) {
     return 'tattoo';
   }
 
