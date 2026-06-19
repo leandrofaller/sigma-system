@@ -22,10 +22,12 @@ export interface DupRecord {
   photoPath: string | null;
   photoQuality: number | null;
   hasFace: boolean;
+  category: 'doc' | 'tattoo' | 'other';
 }
 
 export interface DupGroup {
   type: 'exact' | 'similar' | 'face';
+  category: 'doc' | 'tattoo' | 'other';
   records: DupRecord[];
 }
 
@@ -175,6 +177,7 @@ interface RawRecord {
   photoHash: string | null;
   photoQuality: number | null;
   hasFace: boolean;
+  ocrText: string | null;
 }
 
 function makeFind(parent: Map<string, string>) {
@@ -335,6 +338,35 @@ async function runFacePhase(
   }
 }
 
+function getRecordCategory(
+  r: { photoPath: string | null; photoQuality: number | null; photoHash: string | null; ocrText: string | null; id: string; hasFace: boolean },
+  dupHashesSet: Set<string>,
+  tattooApenadosSet: Set<string>
+): 'doc' | 'tattoo' | 'other' {
+  if (r.hasFace) return 'other';
+
+  const ocrLower = r.ocrText?.toLowerCase() ?? '';
+  const pathLower = r.photoPath?.toLowerCase() ?? '';
+
+  const isDocKeywords = /registro|geral|identidade|cpf|rg|nascimento|eleitor|carteira|certificado|uf|estado|republica|ministerio|filiacao|orgao|expedicao|sipe|penal|secretaria/.test(ocrLower);
+  const isDocPath = /doc|rg|cpf|documento/.test(pathLower);
+  const isLowQuality = r.photoQuality !== null && r.photoQuality < 5;
+  const isPlaceholderHash = r.photoHash !== null && dupHashesSet.has(r.photoHash);
+
+  if (isDocKeywords || isDocPath || isLowQuality || isPlaceholderHash) {
+    return 'doc';
+  }
+
+  const isTattooPath = /tatuagem|tattoo|tatoo|tatuag/.test(pathLower);
+  const hasTattooComplement = tattooApenadosSet.has(r.id);
+
+  if (isTattooPath || hasTattooComplement || (r.photoQuality !== null && r.photoQuality >= 5 && !r.ocrText)) {
+    return 'tattoo';
+  }
+
+  return 'other';
+}
+
 async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
   const idToRecord = new Map(records.map((r) => [r.id, r]));
   const parent = new Map<string, string>(records.map((r) => [r.id, r.id]));
@@ -440,6 +472,24 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
     groupMap.set(root, arr);
   }
 
+  // Obter hashes altamente duplicados (placeholders de "sem foto")
+  const dupHashes = await prisma.$queryRaw<{ photoHash: string }[]>`
+    SELECT "photoHash" FROM apenados
+    WHERE "faceDescriptor" = 'NONE' AND "photoHash" IS NOT NULL
+    GROUP BY "photoHash"
+    HAVING COUNT(*) >= 5
+  `;
+  const dupHashesSet = new Set(dupHashes.map((h) => h.photoHash));
+
+  // Obter apenados com fotos complementares de tatuagem/cicatriz
+  const tattooApenados = await prisma.$queryRaw<{ apenadoLocalId: string }[]>`
+    SELECT DISTINCT "apenadoLocalId" FROM sipe_fotos_complementares
+    WHERE "apenadoLocalId" IS NOT NULL
+      AND descricao IS NOT NULL
+      AND descricao ~* 'tatuagem|tattoo|tatoo|tatuag|cicatriz'
+  `;
+  const tattooApenadosSet = new Set(tattooApenados.map((t) => t.apenadoLocalId));
+
   return Array.from(groupMap.values())
     .filter((g) => g.length >= 2)
     .map((g) => {
@@ -456,9 +506,17 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
         : hasPixelMerge
           ? 'similar'
           : 'face';
+      
+      const firstRec = sorted[0];
+      const category = getRecordCategory(firstRec, dupHashesSet, tattooApenadosSet);
+
       return {
         type,
-        records: sorted.map(({ photoHashSha: _s, photoHash: _h, ...rest }) => rest),
+        category,
+        records: sorted.map(({ photoHashSha: _s, photoHash: _h, ocrText: _o, ...rest }) => ({
+          ...rest,
+          category: getRecordCategory({ ...rest, photoHash: _h, ocrText: _o } as any, dupHashesSet, tattooApenadosSet)
+        })),
       };
     });
 }
@@ -539,7 +597,8 @@ async function runJob(): Promise<void> {
   const records = await prisma.$queryRaw<RawRecord[]>`
     SELECT id, name, matricula, unidade, faccao, "photoPath",
            "photoHashSha", "photoHash", "photoQuality",
-           ("faceDescriptor" IS NOT NULL AND "faceDescriptor" != '') AS "hasFace"
+           ("faceDescriptor" IS NOT NULL AND "faceDescriptor" != '') AS "hasFace",
+           "ocrText"
     FROM apenados
     WHERE "photoPath" IS NOT NULL
       AND "photoHash" IS NOT NULL

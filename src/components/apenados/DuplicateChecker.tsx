@@ -16,10 +16,12 @@ interface DupRecord {
   photoPath: string | null;
   photoQuality: number | null;
   hasFace: boolean;
+  category?: 'doc' | 'tattoo' | 'other';
 }
 
 interface DupGroup {
   type: 'exact' | 'similar' | 'face';
+  category?: 'doc' | 'tattoo' | 'other';
   records: DupRecord[];
 }
 
@@ -67,6 +69,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
   const [analyzedAt, setAnalyzedAt] = useState<Date | null>(null);
   const [filterLargeGroups, setFilterLargeGroups] = useState(false);
   const [typeFilter, setTypeFilter] = useState<Set<'exact' | 'similar' | 'face'>>(new Set());
+  const [categoryFilter, setCategoryFilter] = useState<Set<'doc' | 'tattoo' | 'other'>>(new Set());
   const [dismissedGroups, setDismissedGroups] = useState<Set<string>>(new Set());
   const [showDismissed, setShowDismissed] = useState(false);
   const [rotatingId, setRotatingId] = useState<string | null>(null);
@@ -88,7 +91,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
   // Reset pagination when scan completes or filters change
   useEffect(() => {
     setDisplayedGroupCount(20);
-  }, [jobState?.phase, typeFilter, filterLargeGroups]);
+  }, [jobState?.phase, typeFilter, categoryFilter, filterLargeGroups]);
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -291,10 +294,15 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
     ? undismissedGroups
     : undismissedGroups.filter((g) => typeFilter.has(g.type));
 
-  const hiddenLargeCount = filterLargeGroups ? typeFilteredGroups.filter((g) => g.records.length > 3).length : 0;
+  // Apply category filter
+  const categoryFilteredGroups = categoryFilter.size === 0
+    ? typeFilteredGroups
+    : typeFilteredGroups.filter((g) => g.category && categoryFilter.has(g.category));
+
+  const hiddenLargeCount = filterLargeGroups ? categoryFilteredGroups.filter((g) => g.records.length > 3).length : 0;
   const activeGroups = filterLargeGroups
-    ? typeFilteredGroups.filter((g) => g.records.length <= 3)
-    : typeFilteredGroups;
+    ? categoryFilteredGroups.filter((g) => g.records.length <= 3)
+    : categoryFilteredGroups;
 
   // IntersectionObserver: load more groups when sentinel is visible
   useEffect(() => {
@@ -552,6 +560,48 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                     )}
                   </div>
 
+                  {/* Category filter chips */}
+                  <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 dark:border-gray-800/60 pt-2 mt-2">
+                    <div className="flex items-center gap-1.5 text-xs text-subtle mr-1">
+                      <Filter className="w-3.5 h-3.5" />
+                      <span>Categorias:</span>
+                    </div>
+                    {([
+                      { key: 'doc' as const, label: 'Sem Imagem ou Documento', active: 'bg-red-600 text-white border-red-600', inactive: 'border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' },
+                      { key: 'tattoo' as const, label: 'Tatuagens', active: 'bg-orange-500 text-white border-orange-500', inactive: 'border-orange-200 dark:border-orange-800 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20' },
+                      { key: 'other' as const, label: 'Com Rosto / Outras', active: 'bg-teal-600 text-white border-teal-600', inactive: 'border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20' },
+                    ] as const).map(({ key, label, active, inactive }) => {
+                      const count = undismissedGroups.filter((g) => g.category === key).length;
+                      const isOn = categoryFilter.has(key);
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            setCategoryFilter((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(key)) next.delete(key); else next.add(key);
+                              return next;
+                            });
+                          }}
+                          className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all ${isOn ? active : inactive}`}
+                        >
+                          {label}
+                          <span className={`px-1 py-0.5 rounded text-[9px] font-bold leading-none ${isOn ? 'bg-white/25' : 'bg-gray-100 dark:bg-gray-700 text-subtle'}`}>
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {categoryFilter.size > 0 && (
+                      <button
+                        onClick={() => setCategoryFilter(new Set())}
+                        className="text-xs text-subtle hover:text-body transition-colors underline underline-offset-2"
+                      >
+                        Limpar categorias
+                      </button>
+                    )}
+                  </div>
+
                   {/* Large groups toggle */}
                   <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-2 text-sm text-subtle">
@@ -657,6 +707,19 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                         )}
                         {group.type === 'exact' ? 'Idênticas' : group.type === 'face' ? 'Mesmo indivíduo' : 'Similares'}
                       </span>
+                      {group.category && (
+                        <span
+                          className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            group.category === 'doc'
+                              ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                              : group.category === 'tattoo'
+                                ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                                : 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
+                          }`}
+                        >
+                          {group.category === 'doc' ? 'Sem Imagem/Doc' : group.category === 'tattoo' ? 'Tatuagem' : 'Com Rosto'}
+                        </span>
+                      )}
                       <button
                         onClick={() => handleDismiss(group)}
                         title="Marcar como tratado — não aparece no próximo scan"

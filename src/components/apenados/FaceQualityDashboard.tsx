@@ -10,6 +10,9 @@ interface QualityStats {
   total: number;
   indexed: number;
   noFace: number;
+  noFaceDoc: number;
+  noFaceTattoo: number;
+  noFaceOther: number;
   lowScore: number;
   blurry: number;
   pending: number;
@@ -31,7 +34,7 @@ interface PgVectorStats {
   indexExists: boolean;
 }
 
-type Tab = 'lowscore' | 'blurry' | 'pending' | 'noface';
+type Tab = 'lowscore' | 'blurry' | 'pending' | 'noface_doc' | 'noface_tattoo' | 'noface';
 
 interface Props {
   onClose: () => void;
@@ -59,7 +62,9 @@ const TAB_LABELS: Record<Tab, string> = {
   lowscore: 'Score Baixo',
   blurry: 'Borradas',
   pending: 'Pendentes',
-  noface: 'Sem Rosto',
+  noface_doc: 'Documento / Sem Foto',
+  noface_tattoo: 'Tatuagens',
+  noface: 'Outras Sem Rosto',
 };
 
 export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhotosRemoved }: Props) {
@@ -194,6 +199,9 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
           ...s,
           noFace: Math.max(0, s.noFace - countRemoved),
           total: Math.max(0, s.total - countRemoved),
+          noFaceDoc: activeTab === 'noface_doc' ? Math.max(0, s.noFaceDoc - countRemoved) : s.noFaceDoc,
+          noFaceTattoo: activeTab === 'noface_tattoo' ? Math.max(0, s.noFaceTattoo - countRemoved) : s.noFaceTattoo,
+          noFaceOther: activeTab === 'noface' ? Math.max(0, s.noFaceOther - countRemoved) : s.noFaceOther,
         };
       });
 
@@ -250,12 +258,15 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
 
   const allSelected = records.length > 0 && selected.size === records.length;
   const someSelected = selected.size > 0 && !allSelected;
+  const isNoFaceTab = activeTab === 'noface' || activeTab === 'noface_doc' || activeTab === 'noface_tattoo';
 
   const tabCounts: Record<Tab, number> = {
     lowscore: stats?.lowScore ?? 0,
     blurry: stats?.blurry ?? 0,
     pending: stats?.pending ?? 0,
-    noface: stats?.noFace ?? 0,
+    noface_doc: stats?.noFaceDoc ?? 0,
+    noface_tattoo: stats?.noFaceTattoo ?? 0,
+    noface: stats?.noFaceOther ?? 0,
   };
 
   return (
@@ -420,7 +431,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
               </div>
 
               {/* Toolbar para a aba Sem Rosto */}
-              {activeTab === 'noface' && !loading && records.length > 0 && (
+              {isNoFaceTab && !loading && records.length > 0 && (
                 <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-100 dark:border-gray-800 flex-shrink-0">
                   <button
                     onClick={toggleAll}
@@ -452,7 +463,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
               )}
 
               {/* Banner de sucesso na deleção */}
-              {removedCount !== null && activeTab === 'noface' && (
+              {removedCount !== null && isNoFaceTab && (
                 <div className="px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl flex items-center gap-2 flex-shrink-0">
                   <span className="text-green-700 dark:text-green-400 text-xs font-medium">
                     {removedCount} foto{removedCount !== 1 ? 's removidas' : ' removida'} com sucesso.
@@ -464,7 +475,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
               {/* Records grid */}
               {records.length === 0 && !loading ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-                  {activeTab === 'noface' ? (
+                  {isNoFaceTab ? (
                     <>
                       <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-3">
                         <FileImage className="w-8 h-8 text-green-500" />
@@ -487,7 +498,9 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                     {activeTab === 'lowscore' && 'Rostos detectados com confiança abaixo de 50% — possivelmente mal iluminados, ocluídos ou de lado. Re-indexar após melhorar a foto.'}
                     {activeTab === 'blurry' && 'Fotos indexadas com qualidade Laplacian abaixo de 50 — embora o rosto tenha sido detectado, o embedding pode ser impreciso.'}
                     {activeTab === 'pending' && 'Fotos sem embedding ArcFace — aguardando próxima execução do job de indexação.'}
-                    {activeTab === 'noface' && 'Fotos onde o ArcFace não detectou rostos — possivelmente documentos, objetos ou fotos de baixa qualidade. Exclua para limpar o banco.'}
+                    {activeTab === 'noface_doc' && 'Documentos ou imagens sem foto detectados automaticamente. Exclua para limpar o banco.'}
+                    {activeTab === 'noface_tattoo' && 'Fotos identificadas como tatuagens ou cicatrizes. Exclua se não forem necessárias na base de faces ou se cadastradas incorretamente como foto de perfil.'}
+                    {activeTab === 'noface' && 'Fotos onde o ArcFace não detectou rostos — outras imagens não classificadas. Exclua para limpar o banco.'}
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                     {records.map((record) => {
@@ -500,16 +513,16 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                         <div
                           key={record.id}
                           onClick={() => {
-                            if (activeTab === 'noface') {
+                            if (isNoFaceTab) {
                               toggleSelect(record.id);
                             }
                           }}
                           className={`relative rounded-xl overflow-hidden border-2 bg-gray-50 dark:bg-gray-800/50 flex flex-col transition-all ${
-                            activeTab === 'noface'
+                            isNoFaceTab
                               ? 'cursor-pointer'
                               : ''
                           } ${
-                            activeTab === 'noface' && isSelected
+                            isNoFaceTab && isSelected
                               ? 'border-sigma-500 shadow-lg shadow-sigma-500/20'
                               : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'
                           }`}
@@ -538,12 +551,12 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                                 {ds.label}
                               </div>
                             )}
-                            <div className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold leading-none text-white pointer-events-none ${activeTab === 'noface' ? 'left-1.5 right-auto' : ''} ${qi.cls}`}>
+                            <div className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold leading-none text-white pointer-events-none ${isNoFaceTab ? 'left-1.5 right-auto' : ''} ${qi.cls}`}>
                               {qi.label}
                             </div>
 
-                            {/* Checkbox de seleção para Sem Rosto */}
-                            {activeTab === 'noface' && (
+                             {/* Checkbox de seleção para Sem Rosto */}
+                            {isNoFaceTab && (
                               <div className={`absolute top-1.5 right-1.5 w-5 h-5 rounded flex items-center justify-center transition-all ${
                                 isSelected ? 'bg-sigma-600' : 'bg-black/40 hover:bg-black/60'
                               }`}>
@@ -564,7 +577,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                             </div>
                           </div>
                           {/* Re-index button (only for lowscore and blurry) */}
-                          {activeTab !== 'pending' && activeTab !== 'noface' && (
+                          {activeTab !== 'pending' && !isNoFaceTab && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -600,7 +613,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
       </div>
 
       {/* Confirm dialog para deleção em massa de sem rosto */}
-      {showConfirm && activeTab === 'noface' && (
+      {showConfirm && isNoFaceTab && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowConfirm(false)} />
           <div className="relative z-10 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-gray-100 dark:border-gray-800">

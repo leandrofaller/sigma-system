@@ -70,7 +70,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
   const [dupCheckerOpen, setDupCheckerOpen] = useState(false);
   const [faceSearchOpen, setFaceSearchOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
-  const [qualityTab, setQualityTab] = useState<'lowscore' | 'blurry' | 'pending' | 'noface'>('lowscore');
+  const [qualityTab, setQualityTab] = useState<'lowscore' | 'blurry' | 'pending' | 'noface_doc' | 'noface_tattoo' | 'noface'>('lowscore');
   const [exporting, setExporting] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [lightbox, setLightbox] = useState<Apenado | null>(null);
