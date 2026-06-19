@@ -15,42 +15,49 @@ import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
 
 interface NavItem {
+  id?: string;
   label: string;
   href: string;
-  icon: React.ComponentType<any>;
+  iconName: string;
   roles?: string[];
   badge?: number;
   badgePulse?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Relatórios (RELINTs)', href: '/relints', icon: FileText },
-  { label: 'RELINTs Recebidos', href: '/relints-recebidos', icon: Inbox, roles: ['SUPER_ADMIN', 'ADMIN'] },
-  { label: 'Debriefings', href: '/debriefings', icon: BookOpen },
-  { label: 'Forças-Tarefa', href: '/forca-tarefa', icon: ClipboardList },
-  { label: 'Calendário de Missões', href: '/missoes', icon: Calendar },
-  { label: 'Mural de Eventos', href: '/mural', icon: CalendarDays },
-  { label: 'Acompanhamento', href: '/acompanhamento', icon: Trello },
-  { label: 'Chat Interno', href: '/chat', icon: MessageSquare },
-  { label: 'Consulta IA', href: '/ia', icon: Sparkles },
-  { label: 'Identificação de Apenados', href: '/apenados', icon: UserCheck },
-  { label: 'Apenados & Facções', href: '/faccoes', icon: Shield, roles: ['SUPER_ADMIN'] },
-  { label: 'SIAIP', href: '/siaip', icon: Database },
-  { label: 'Celulares Recebidos', href: '/aparelhos', icon: Smartphone },
-  { label: 'AIP', href: '/aip', icon: Brain, roles: ['SUPER_ADMIN', 'OPERATOR'] },
-  { label: 'Unidades Prisionais', href: '/unidades-prisionais', icon: Building2, roles: ['SUPER_ADMIN'] },
+const iconMap: Record<string, React.ComponentType<any>> = {
+  LayoutDashboard, FileText, Inbox, BookOpen, ClipboardList, Calendar, CalendarDays,
+  Trello, MessageSquare, Sparkles, UserCheck, Shield, Database, Smartphone, Brain, Building2,
+  Users, FolderOpen, Monitor, MapPin, AlertCircle, Settings
+};
+
+const defaultNavItems: NavItem[] = [
+  { label: 'Dashboard', href: '/dashboard', iconName: 'LayoutDashboard', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Relatórios (RELINTs)', href: '/relints', iconName: 'FileText', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'RELINTs Recebidos', href: '/relints-recebidos', iconName: 'Inbox', roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Debriefings', href: '/debriefings', iconName: 'BookOpen', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Forças-Tarefa', href: '/forca-tarefa', iconName: 'ClipboardList', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Calendário de Missões', href: '/missoes', iconName: 'Calendar', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Mural de Eventos', href: '/mural', iconName: 'CalendarDays', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Acompanhamento', href: '/acompanhamento', iconName: 'Trello', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Chat Interno', href: '/chat', iconName: 'MessageSquare', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Consulta IA', href: '/ia', iconName: 'Sparkles', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Identificação de Apenados', href: '/apenados', iconName: 'UserCheck', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Apenados & Facções', href: '/faccoes', iconName: 'Shield', roles: ['SUPER_ADMIN'] },
+  { label: 'SIAIP', href: '/siaip', iconName: 'Database', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Celulares Recebidos', href: '/aparelhos', iconName: 'Smartphone', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'AIP', href: '/aip', iconName: 'Brain', roles: ['SUPER_ADMIN', 'OPERATOR'] },
+  { label: 'Unidades Prisionais', href: '/unidades-prisionais', iconName: 'Building2', roles: ['SUPER_ADMIN'] },
 ];
 
-const baseAdminItems: NavItem[] = [
-  { label: 'Usuários', href: '/admin/usuarios', icon: Users },
-  { label: 'Grupos / Setores', href: '/admin/grupos', icon: FolderOpen, roles: ['SUPER_ADMIN'] },
-  { label: 'Dispositivos', href: '/admin/dispositivos', icon: Monitor },
-  { label: 'Monitoramento', href: '/admin/monitoramento', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
-  { label: 'Avisos de Manutenção', href: '/admin/manutencao', icon: AlertCircle, roles: ['SUPER_ADMIN'] },
-  { label: 'Auditoria', href: '/auditoria', icon: ClipboardList },
-  { label: 'Backups', href: '/admin/backups', icon: Database, roles: ['SUPER_ADMIN'] },
-  { label: 'Configurações', href: '/admin/configuracoes', icon: Settings, roles: ['SUPER_ADMIN'] },
+const defaultAdminItems: NavItem[] = [
+  { label: 'Usuários', href: '/admin/usuarios', iconName: 'Users', roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Grupos / Setores', href: '/admin/grupos', iconName: 'FolderOpen', roles: ['SUPER_ADMIN'] },
+  { label: 'Dispositivos', href: '/admin/dispositivos', iconName: 'Monitor', roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Monitoramento', href: '/admin/monitoramento', iconName: 'MapPin', roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Avisos de Manutenção', href: '/admin/manutencao', iconName: 'AlertCircle', roles: ['SUPER_ADMIN'] },
+  { label: 'Auditoria', href: '/auditoria', iconName: 'ClipboardList', roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Backups', href: '/admin/backups', iconName: 'Database', roles: ['SUPER_ADMIN'] },
+  { label: 'Configurações', href: '/admin/configuracoes', iconName: 'Settings', roles: ['SUPER_ADMIN'] },
 ];
 
 interface SidebarProps {
@@ -75,6 +82,40 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
   const prevCountRef = useRef(0);
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+
+  // Controle de Abas Dinâmicas
+  const [navItems, setNavItems] = useState<NavItem[]>(() => 
+    defaultNavItems.filter((item) => !item.roles || item.roles.includes(user?.role ?? ''))
+  );
+  const [adminItems, setAdminItems] = useState<NavItem[]>(() =>
+    defaultAdminItems.filter((item) => !item.roles || item.roles.includes(user?.role ?? ''))
+  );
+
+  // Carregar as configurações da Sidebar do banco de dados
+  useEffect(() => {
+    async function fetchSidebar() {
+      try {
+        const res = await fetch('/api/admin/sidebar');
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        // A API para SUPER_ADMIN traz tudo (incluindo desabilitados ou sem a role correspondente).
+        // Filtramos para exibir na Sidebar somente as abas habilitadas e permitidas para o papel atual.
+        const visibleItems = data.filter(
+          (item: any) => item.enabled && item.roles.includes(user?.role ?? '')
+        );
+
+        const navs = visibleItems.filter((item: any) => !item.isAdmin);
+        const admins = visibleItems.filter((item: any) => item.isAdmin);
+
+        setNavItems(navs);
+        setAdminItems(admins);
+      } catch (err) {
+        console.error('Erro ao carregar Sidebar dinamicamente:', err);
+      }
+    }
+    fetchSidebar();
+  }, [user?.role]);
 
   // Fecha o drawer mobile quando o usuário navega
   useEffect(() => { setMobileOpen(false); }, [pathname]);
@@ -150,22 +191,18 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
     }
   }, [pathname]);
 
-  const adminItems = baseAdminItems.map((item) =>
-    item.href === '/admin/dispositivos' && pendingDeviceCount > 0
-      ? { ...item, badge: pendingDeviceCount }
+  const filteredNav = navItems.map((item) =>
+    item.href === '/chat' && chatUnreadCount > 0
+      ? { ...item, badge: chatUnreadCount, badgePulse: true }
       : item
   );
 
-  const filteredNav = navItems
-    .filter((item) => !item.roles || item.roles.includes(user?.role ?? ''))
+  const filteredAdmin = adminItems
     .map((item) =>
-      item.href === '/chat' && chatUnreadCount > 0
-        ? { ...item, badge: chatUnreadCount, badgePulse: true }
+      item.href === '/admin/dispositivos' && pendingDeviceCount > 0
+        ? { ...item, badge: pendingDeviceCount }
         : item
     );
-  const filteredAdmin = adminItems.filter(
-    (item) => (!item.roles || item.roles.includes(user?.role ?? '')) && isAdmin
-  );
 
   return (
     <>
@@ -242,6 +279,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
                 <div className={cn(isMobileDashboard ? "grid grid-cols-2 gap-3" : "flex flex-col gap-2")}>
                   {filteredNav.map((item, idx) => {
                     const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                    const IconComponent = iconMap[item.iconName] || FileText;
                     return (
                       <motion.div
                         key={item.href}
@@ -267,7 +305,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
                               : "w-8 h-8 rounded-lg flex items-center justify-center transition-colors flex-shrink-0",
                             isActive ? "bg-sigma-500 text-white" : "bg-gray-800 text-gray-400 group-hover:text-white"
                           )}>
-                            <item.icon className={cn(isMobileDashboard ? "w-5 h-5" : "w-4 h-4")} />
+                            <IconComponent className={cn(isMobileDashboard ? "w-5 h-5" : "w-4 h-4")} />
                           </div>
                           <div className={isMobileDashboard ? "min-w-0" : "flex-1 min-w-0 pr-6"}>
                             <span className={cn(
@@ -298,6 +336,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
                     <div className={cn(isMobileDashboard ? "grid grid-cols-2 gap-3" : "flex flex-col gap-2")}>
                       {filteredAdmin.map((item, idx) => {
                         const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                        const IconComponent = iconMap[item.iconName] || FileText;
                         return (
                           <motion.div
                             key={item.href}
@@ -324,7 +363,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
                                   : "w-8 h-8 rounded-lg flex items-center justify-center transition-colors flex-shrink-0",
                                 isActive ? "bg-sigma-500 text-white" : "bg-gray-800 text-gray-400 group-hover:text-white"
                               )}>
-                                <item.icon className={cn(isMobileDashboard ? "w-5 h-5" : "w-4 h-4")} />
+                                <IconComponent className={cn(isMobileDashboard ? "w-5 h-5" : "w-4 h-4")} />
                               </div>
                               <div className={isMobileDashboard ? "min-w-0" : "flex-1 min-w-0 pr-6"}>
                                 <span className={cn(
@@ -505,8 +544,9 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
   );
 }
 
-function SidebarItem({ item, pathname, collapsed }: { item: NavItem; pathname: string; collapsed: boolean }) {
+function SidebarItem({ item, pathname, collapsed }: { item: any; pathname: string; collapsed: boolean }) {
   const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+  const IconComponent = iconMap[item.iconName] || FileText;
 
   return (
     <Link
@@ -519,7 +559,7 @@ function SidebarItem({ item, pathname, collapsed }: { item: NavItem; pathname: s
       )}
       title={collapsed ? item.label : undefined}
     >
-      <item.icon className="w-4 h-4 flex-shrink-0" />
+      <IconComponent className="w-4 h-4 flex-shrink-0" />
       {!collapsed && <span className="flex-1">{item.label}</span>}
       {item.badge != null && item.badge > 0 && (
         <span className={cn(

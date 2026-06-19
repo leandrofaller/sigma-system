@@ -1291,4 +1291,20 @@ model RelatorioForcaTarefa {
   @@map("relatorios_forca_tarefa")
 }
 
+model SidebarConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique // Chave interna da aba (ex: 'dashboard', 'relints')
+  label     String   // Título exibido na aba
+  href      String   // Link de redirecionamento
+  iconName  String   // Nome do ícone do Lucide-React
+  position  Int      @default(0) // Ordem de exibição
+  roles     String[] @default([]) // Papéis que possuem acesso (SUPER_ADMIN, ADMIN, OPERATOR)
+  enabled   Boolean  @default(true) // Ativa / Inativa
+  isAdmin   Boolean  @default(false) // Se pertence à seção de Administração
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("sidebar_configs")
+}
+
 
