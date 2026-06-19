@@ -1,7 +1,6 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { RelatoriosForcaTarefaList } from '@/components/forca-tarefa/RelatoriosForcaTarefaList';
-import { PainelDiretorRIP } from '@/components/forca-tarefa/PainelDiretorRIP';
+import { ForcaTarefaDashboardWrapper } from '@/components/forca-tarefa/ForcaTarefaDashboardWrapper';
 
 async function getRelatorios(role: string, groupId?: string) {
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
@@ -33,20 +32,16 @@ export default async function RelatoriosForcaTarefaPage() {
         </div>
       </div>
       
-      {isAdmin ? (
-        <PainelDiretorRIP
-          relatorios={relatorios}
-          sessionUser={{ id: user.id, name: user.name, role: user.role }}
-        />
-      ) : (
-        <RelatoriosForcaTarefaList
-          relatorios={relatorios}
-          role={user.role}
-          userId={user.id}
-          userGroupId={user.groupId}
-          userGroupName={user.groupName}
-        />
-      )}
+      <ForcaTarefaDashboardWrapper
+        relatorios={relatorios}
+        user={{
+          id: user.id,
+          name: user.name,
+          role: user.role,
+          groupId: user.groupId,
+          groupName: user.groupName,
+        }}
+      />
     </div>
   );
 }
