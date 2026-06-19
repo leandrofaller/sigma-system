@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db';
 import { unlink } from 'fs/promises';
 import { getApenadoPhotoPath } from '@/lib/storage';
 
+import { getPrismaWhereForTab, getSqlFilterForTab } from '@/lib/face-quality-filters';
+
 // GET /api/apenados/no-face?skip=0&take=50&minQuality=0
 // Returns records where faceDescriptor = 'NONE' (photo exists but no face detected),
 // ordered by photoQuality DESC so high-quality document scans appear first.
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest) {
 }
 
 // DELETE /api/apenados/no-face — removes photos only (keeps inmate records)
-// Body: { ids: string[] }
+// Body: { ids?: string[], all?: boolean, tab?: string }
 export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -55,26 +57,76 @@ export async function DELETE(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const ids: string[] = Array.isArray(body.ids) ? body.ids : [];
-  if (ids.length === 0) return NextResponse.json({ error: 'Nenhum ID informado' }, { status: 400 });
+  const isAll = !!body.all;
+  const tab = body.tab || '';
 
-  const records = await prisma.apenado.findMany({
-    where: { id: { in: ids } },
-    select: { id: true, photoPath: true },
-  });
+  let photoPathsToUnlink: string[] = [];
+  let updatedCount = 0;
 
-  // Remove photo files from disk (best-effort)
-  await Promise.allSettled(
-    records.filter((r) => r.photoPath).map((r) =>
-      unlink(getApenadoPhotoPath(r.photoPath!)).catch(() => {}),
-    ),
-  );
+  if (isAll) {
+    if (!tab) {
+      return NextResponse.json({ error: 'Aba não especificada para deleção global' }, { status: 400 });
+    }
 
-  // Clear photoPath + faceDescriptor + photoQuality in DB
-  const result = await prisma.apenado.updateMany({
-    where: { id: { in: ids } },
-    data: { photoPath: null, faceDescriptor: null, photoQuality: null },
-  });
+    const prismaWhere = getPrismaWhereForTab(tab);
+    const sqlFilter = getSqlFilterForTab(tab);
 
-  return NextResponse.json({ updated: result.count });
+    if (sqlFilter) {
+      // 1. Obter caminhos das fotos que serão limpas via SQL raw
+      const rawRecords = await prisma.$queryRawUnsafe<{ photoPath: string | null }[]>(
+        `SELECT "photoPath" FROM apenados WHERE ${sqlFilter}`
+      );
+      photoPathsToUnlink = rawRecords.map((r) => r.photoPath).filter((p): p is string => !!p);
+
+      // 2. Executar update massivo no BD
+      const result = await prisma.$executeRawUnsafe(
+        `UPDATE apenados 
+         SET "photoPath" = NULL, "faceDescriptor" = NULL, "photoQuality" = NULL 
+         WHERE ${sqlFilter}`
+      );
+      updatedCount = result;
+    } else if (Object.keys(prismaWhere).length > 0) {
+      // 1. Obter caminhos das fotos via Prisma
+      const records = await prisma.apenado.findMany({
+        where: prismaWhere,
+        select: { photoPath: true },
+      });
+      photoPathsToUnlink = records.map((r) => r.photoPath).filter((p): p is string => !!p);
+
+      // 2. Executar update massivo via Prisma
+      const result = await prisma.apenado.updateMany({
+        where: prismaWhere,
+        data: { photoPath: null, faceDescriptor: null, photoQuality: null },
+      });
+      updatedCount = result.count;
+    } else {
+      return NextResponse.json({ error: 'Aba inválida para deleção global' }, { status: 400 });
+    }
+  } else {
+    const ids: string[] = Array.isArray(body.ids) ? body.ids : [];
+    if (ids.length === 0) return NextResponse.json({ error: 'Nenhum ID informado' }, { status: 400 });
+
+    const records = await prisma.apenado.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, photoPath: true },
+    });
+    photoPathsToUnlink = records.map((r) => r.photoPath).filter((p): p is string => !!p);
+
+    const result = await prisma.apenado.updateMany({
+      where: { id: { in: ids } },
+      data: { photoPath: null, faceDescriptor: null, photoQuality: null },
+    });
+    updatedCount = result.count;
+  }
+
+  // Remove photo files from disk in the background (prevent Gateway Timeout on high-volume deletes)
+  if (photoPathsToUnlink.length > 0) {
+    Promise.allSettled(
+      photoPathsToUnlink.map((path) =>
+        unlink(getApenadoPhotoPath(path)).catch(() => {}),
+      ),
+    ).catch(() => {});
+  }
+
+  return NextResponse.json({ updated: updatedCount });
 }

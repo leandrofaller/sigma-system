@@ -86,6 +86,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
 
   // Estados de seleção múltipla para exclusão (aba noface)
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectAllGlobally, setSelectAllGlobally] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [removedCount, setRemovedCount] = useState<number | null>(null);
@@ -132,6 +133,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
     setTabTotal(0);
     setSkip(0);
     setSelected(new Set());
+    setSelectAllGlobally(false);
     setRemovedCount(null);
     fetchTab(tab);
   };
@@ -157,6 +159,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
   }, [activeTab, records.length, tabTotal, skip]);
 
   const toggleSelect = (id: string) => {
+    setSelectAllGlobally(false);
     setSelected((prev) => {
       const s = new Set(prev);
       if (s.has(id)) s.delete(id); else s.add(id);
@@ -165,22 +168,26 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
   };
 
   const toggleAll = () => {
-    if (selected.size === records.length) {
+    if (selected.size === records.length || selectAllGlobally) {
       setSelected(new Set());
+      setSelectAllGlobally(false);
     } else {
       setSelected(new Set(records.map((r) => r.id)));
     }
   };
 
   const handleRemove = async () => {
-    if (selected.size === 0) return;
+    if (selected.size === 0 && !selectAllGlobally) return;
     setRemoving(true);
     try {
-      const ids = Array.from(selected);
+      const payload = selectAllGlobally
+        ? { all: true, tab: activeTab }
+        : { ids: Array.from(selected) };
+
       const res = await fetch('/api/apenados/no-face', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -188,27 +195,38 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
         return;
       }
       const d = await res.json();
-      const countRemoved = d.updated ?? ids.length;
+      const countRemoved = selectAllGlobally ? tabTotal : d.updated ?? selected.size;
 
       setRemovedCount(countRemoved);
-      setRecords((prev) => prev.filter((r) => !selected.has(r.id)));
-      setTabTotal((t) => Math.max(0, t - countRemoved));
+      if (selectAllGlobally) {
+        setRecords([]);
+        setTabTotal(0);
+      } else {
+        setRecords((prev) => prev.filter((r) => !selected.has(r.id)));
+        setTabTotal((t) => Math.max(0, t - countRemoved));
+      }
+
       setStats((s) => {
         if (!s) return s;
+        const isNoFace = activeTab === 'noface' || activeTab === 'noface_doc' || activeTab === 'noface_tattoo';
         return {
           ...s,
-          noFace: Math.max(0, s.noFace - countRemoved),
+          noFace: isNoFace ? Math.max(0, s.noFace - countRemoved) : s.noFace,
           total: Math.max(0, s.total - countRemoved),
           noFaceDoc: activeTab === 'noface_doc' ? Math.max(0, s.noFaceDoc - countRemoved) : s.noFaceDoc,
           noFaceTattoo: activeTab === 'noface_tattoo' ? Math.max(0, s.noFaceTattoo - countRemoved) : s.noFaceTattoo,
           noFaceOther: activeTab === 'noface' ? Math.max(0, s.noFaceOther - countRemoved) : s.noFaceOther,
+          lowScore: activeTab === 'lowscore' ? Math.max(0, s.lowScore - countRemoved) : s.lowScore,
+          blurry: activeTab === 'blurry' ? Math.max(0, s.blurry - countRemoved) : s.blurry,
+          pending: activeTab === 'pending' ? Math.max(0, s.pending - countRemoved) : s.pending,
         };
       });
 
-      if (onPhotosRemoved) {
-        onPhotosRemoved(ids);
+      if (onPhotosRemoved && !selectAllGlobally) {
+        onPhotosRemoved(Array.from(selected));
       }
       setSelected(new Set());
+      setSelectAllGlobally(false);
       setShowConfirm(false);
     } finally {
       setRemoving(false);
@@ -241,37 +259,55 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
   }, [activeTab]);
 
   const handleReindexSelected = useCallback(async () => {
-    if (selected.size === 0) return;
+    if (selected.size === 0 && !selectAllGlobally) return;
     const ids = Array.from(selected);
-    setResettingIds((prev) => new Set([...prev, ...ids]));
+    
+    if (!selectAllGlobally) {
+      setResettingIds((prev) => new Set([...prev, ...ids]));
+    }
+    
     try {
+      const payload = selectAllGlobally
+        ? { all: true, tab: activeTab }
+        : { ids };
+
       const res = await fetch('/api/apenados/face/quality/reindex', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) return;
       const data = await res.json();
-      setRecords((prev) => prev.filter((r) => !selected.has(r.id)));
-      const countReindexed = ids.length;
-      setTabTotal((t) => Math.max(0, t - countReindexed));
+      const countReindexed = selectAllGlobally ? tabTotal : ids.length;
+      
+      if (selectAllGlobally) {
+        setRecords([]);
+        setTabTotal(0);
+      } else {
+        setRecords((prev) => prev.filter((r) => !selected.has(r.id)));
+        setTabTotal((t) => Math.max(0, t - countReindexed));
+      }
+      
       setStats((s) => {
         if (!s) return s;
-        const updates: Partial<QualityStats> = { pending: s.pending + (data.reset ?? 0) };
+        const updates: Partial<QualityStats> = { pending: s.pending + (data.reset ?? countReindexed) };
         if (activeTab === 'lowscore') updates.lowScore = Math.max(0, s.lowScore - countReindexed);
         if (activeTab === 'blurry') updates.blurry = Math.max(0, s.blurry - countReindexed);
         return { ...s, ...updates };
       });
       setSuccessCount((n) => (n ?? 0) + countReindexed);
       setSelected(new Set());
+      setSelectAllGlobally(false);
     } finally {
-      setResettingIds((prev) => {
-        const s = new Set(prev);
-        ids.forEach(id => s.delete(id));
-        return s;
-      });
+      if (!selectAllGlobally) {
+        setResettingIds((prev) => {
+          const s = new Set(prev);
+          ids.forEach(id => s.delete(id));
+          return s;
+        });
+      }
     }
-  }, [selected, activeTab]);
+  }, [selected, activeTab, selectAllGlobally, tabTotal]);
 
   const handleInitPgvec = async (migrate: boolean) => {
     if (migrate) setMigratingPgvec(true); else setInitingPgvec(true);
@@ -481,7 +517,11 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                   </button>
                   <span className="text-gray-300 dark:text-gray-600">|</span>
                   <span className="text-xs text-subtle">
-                    {selected.size > 0 ? `${selected.size} selecionado${selected.size !== 1 ? 's' : ''}` : 'Nenhum selecionado'}
+                    {selectAllGlobally 
+                      ? `Todos os ${tabTotal.toLocaleString('pt-BR')} registros selecionados`
+                      : selected.size > 0 
+                        ? `${selected.size} selecionado${selected.size !== 1 ? 's' : ''}` 
+                        : 'Nenhum selecionado'}
                   </span>
                   {selected.size > 0 && (
                     <div className="ml-auto flex items-center gap-2">
@@ -496,7 +536,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                           ) : (
                             <RotateCcw className="w-3.5 h-3.5" />
                           )}
-                          Re-indexar {selected.size} registro{selected.size !== 1 ? 's' : ''}
+                          Re-indexar {selectAllGlobally ? tabTotal.toLocaleString('pt-BR') : selected.size} registro{selected.size !== 1 || selectAllGlobally ? 's' : ''}
                         </button>
                       )}
                       <button
@@ -504,10 +544,35 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                         className="flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        Remover {selected.size} foto{selected.size !== 1 ? 's' : ''}
+                        Remover {selectAllGlobally ? tabTotal.toLocaleString('pt-BR') : selected.size} foto{selected.size !== 1 || selectAllGlobally ? 's' : ''}
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Banner de seleção global (estilo Gmail) */}
+              {!loading && selected.size === records.length && tabTotal > records.length && (
+                <div className="bg-sigma-50 dark:bg-sigma-950/30 border border-sigma-200 dark:border-sigma-800/80 px-4 py-2.5 rounded-xl text-center text-xs flex items-center justify-center gap-2 transition-all flex-shrink-0">
+                  <span>
+                    {selectAllGlobally ? (
+                      <>
+                        Todos os <strong>{tabTotal.toLocaleString('pt-BR')}</strong> registros de <strong>{TAB_LABELS[activeTab]}</strong> estão selecionados.
+                      </>
+                    ) : (
+                      <>
+                        Todos os <strong>{records.length}</strong> registros desta página estão selecionados.
+                      </>
+                    )}
+                  </span>
+                  <button
+                    onClick={() => setSelectAllGlobally(!selectAllGlobally)}
+                    className="text-sigma-600 dark:text-sigma-400 font-bold hover:underline"
+                  >
+                    {selectAllGlobally 
+                      ? "Limpar seleção" 
+                      : `Selecionar todos os ${tabTotal.toLocaleString('pt-BR')} registros de ${TAB_LABELS[activeTab]}`}
+                  </button>
                 </div>
               )}
 

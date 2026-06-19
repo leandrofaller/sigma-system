@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { docFilterSql, tattooFilterSql, otherNoFaceFilterSql } from '@/lib/face-quality-filters';
 
 const TAKE_MAX = 100;
 
@@ -17,67 +18,6 @@ export async function GET(req: NextRequest) {
   const tab = (sp.get('tab') || 'lowscore') as 'lowscore' | 'blurry' | 'pending' | 'noface' | 'noface_doc' | 'noface_tattoo';
   const skip = Math.max(0, parseInt(sp.get('skip') || '0', 10));
   const take = Math.min(TAKE_MAX, Math.max(1, parseInt(sp.get('take') || '50', 10)));
-
-  // SQL queries heurísticas para triagem de imagens sem rosto (faceDescriptor = 'NONE')
-  const docFilterSql = `
-    "faceDescriptor" = 'NONE' AND "photoPath" IS NOT NULL AND (
-      ("ocrText" IS NOT NULL AND "ocrText" ~* 'registro|geral|identidade|cpf|rg|nascimento|eleitor|carteira|certificado|uf|estado|republica|ministerio|filiacao|orgao|expedicao|sipe|penal|secretaria')
-      OR "photoPath" ~* 'doc|rg|cpf|documento'
-      OR "photoQuality" < 5
-      OR "photoHash" IN (
-        SELECT "photoHash" FROM apenados
-        WHERE "faceDescriptor" = 'NONE' AND "photoHash" IS NOT NULL
-        GROUP BY "photoHash"
-        HAVING COUNT(*) >= 5
-      )
-    )
-  `;
-
-  const tattooFilterSql = `
-    "faceDescriptor" = 'NONE' AND "photoPath" IS NOT NULL AND NOT (
-      ("ocrText" IS NOT NULL AND "ocrText" ~* 'registro|geral|identidade|cpf|rg|nascimento|eleitor|carteira|certificado|uf|estado|republica|ministerio|filiacao|orgao|expedicao|sipe|penal|secretaria')
-      OR "photoPath" ~* 'doc|rg|cpf|documento'
-      OR "photoQuality" < 5
-      OR "photoHash" IN (
-        SELECT "photoHash" FROM apenados
-        WHERE "faceDescriptor" = 'NONE' AND "photoHash" IS NOT NULL
-        GROUP BY "photoHash"
-        HAVING COUNT(*) >= 5
-      )
-    ) AND (
-      "photoPath" ~* 'tatuagem|tattoo|tatoo|tatuag'
-      OR EXISTS (
-        SELECT 1 FROM sipe_fotos_complementares fc
-        WHERE fc."apenadoLocalId" = apenados.id
-          AND fc.descricao IS NOT NULL
-          AND fc.descricao ~* 'tatuagem|tattoo|tatoo|tatuag|cicatriz'
-      )
-    )
-  `;
-
-  const otherNoFaceFilterSql = `
-    "faceDescriptor" = 'NONE' AND "photoPath" IS NOT NULL
-    AND NOT (
-      ("ocrText" IS NOT NULL AND "ocrText" ~* 'registro|geral|identidade|cpf|rg|nascimento|eleitor|carteira|certificado|uf|estado|republica|ministerio|filiacao|orgao|expedicao|sipe|penal|secretaria')
-      OR "photoPath" ~* 'doc|rg|cpf|documento'
-      OR "photoQuality" < 5
-      OR "photoHash" IN (
-        SELECT "photoHash" FROM apenados
-        WHERE "faceDescriptor" = 'NONE' AND "photoHash" IS NOT NULL
-        GROUP BY "photoHash"
-        HAVING COUNT(*) >= 5
-      )
-    )
-    AND NOT (
-      "photoPath" ~* 'tatuagem|tattoo|tatoo|tatuag'
-      OR EXISTS (
-        SELECT 1 FROM sipe_fotos_complementares fc
-        WHERE fc."apenadoLocalId" = apenados.id
-          AND fc.descricao IS NOT NULL
-          AND fc.descricao ~* 'tatuagem|tattoo|tatoo|tatuag|cicatriz'
-      )
-    )
-  `;
 
   // Stats em paralelo — cada contagem usa o mesmo padrão de filtro
   const [total, indexed, lowScore, blurry, pending, countDoc, countTattoo, countOther] = await Promise.all([
