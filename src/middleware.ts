@@ -6,7 +6,15 @@ import type { NextRequest } from 'next/server';
 const { auth } = NextAuth(authConfig);
 
 const publicRoutes = ['/', '/login', '/rastreamento', '/sobre', '/contato', '/device-pending'];
-const apiPublicRoutes = ['/api/auth', '/api/health', '/api/access-requests'];
+const apiPublicRoutes = [
+  '/api/auth',
+  '/api/health',
+  '/api/access-requests',
+  '/api/device/status',
+  '/api/device/location',
+  '/api/geolocation/capture',
+  '/api/geolocation/deny-permission'
+];
 
 const DEVICE_COOKIE = 'sigma-device';
 const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
@@ -67,6 +75,23 @@ export default auth((req) => {
     if (!isLoggedIn) {
       return Response.json({ error: 'Não autorizado' }, { status: 401 });
     }
+
+    const user = (req.auth as any)?.user;
+
+    // 1. Verificar se o dispositivo é autorizado
+    if (user?.deviceAuthorized === false) {
+      return Response.json({ error: 'Dispositivo não autorizado' }, { status: 403 });
+    }
+
+    // 2. Verificar geolocalização (obrigatória para não-admins)
+    const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+    if (!isAdmin) {
+      const geoStatus = user?.geoStatus || 'pending';
+      if (geoStatus === 'pending' || geoStatus === 'denied') {
+        return Response.json({ error: 'Necessário autorizar geolocalização' }, { status: 403 });
+      }
+    }
+
     return;
   }
 

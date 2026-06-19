@@ -33,7 +33,7 @@ class CapsolverService {
   constructor(apiKey: string = CAPSOLVER_API_KEY) {
     this.apiKey = apiKey
 
-    if (!this.apiKey) {
+    if (!this.apiKey && process.env.NEXT_PHASE !== 'phase-production-build' && process.env.NODE_ENV !== 'production') {
       console.warn('[Capsolver] ⚠️ CAPSOLVER_API_KEY não configurada no .env')
     }
 
