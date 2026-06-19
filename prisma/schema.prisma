@@ -86,6 +86,10 @@ model User {
   geoApprovedBy     String?
   geoApprovedAt     DateTime?
 
+  // Autenticação Multifator (2FA)
+  twoFactorEnabled  Boolean   @default(false)
+  twoFactorSecret   String?
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -274,6 +278,10 @@ model AuditLog {
   ipAddress String?
   userAgent String?
   createdAt DateTime @default(now())
+
+  // Integridade encadeada (Logs invioláveis)
+  hash       String?
+  parentHash String?
 
   @@index([userId])
   @@index([action])

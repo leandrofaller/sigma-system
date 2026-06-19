@@ -1,5 +1,5 @@
 import { prisma } from './db';
-import { headers } from 'next/headers';
+import { createHash } from 'crypto';
 
 interface AuditParams {
   userId?: string;
@@ -26,6 +26,26 @@ export async function createAuditLog({
       'unknown';
     const userAgent = headersList['user-agent'] || 'unknown';
 
+    // 1. Obter o hash do log mais recente
+    const lastLog = await prisma.auditLog.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { hash: true },
+    });
+    const parentHash = lastLog?.hash || '0'.repeat(64);
+
+    // 2. Concatenar dados do log para computar o hash único
+    const payload = JSON.stringify({
+      userId,
+      action,
+      entity,
+      entityId,
+      details,
+      ipAddress,
+      userAgent,
+      parentHash,
+    });
+    const hash = createHash('sha256').update(payload).digest('hex');
+
     await prisma.auditLog.create({
       data: {
         userId,
@@ -35,6 +55,8 @@ export async function createAuditLog({
         details: details as any,
         ipAddress,
         userAgent,
+        parentHash,
+        hash,
       },
     });
   } catch (error) {
