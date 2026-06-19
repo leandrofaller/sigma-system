@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
 
-  const targetId = searchParams.get('id');
+  const targetId = req.nextUrl.searchParams.get('id');
 
   try {
     let apenadoId = targetId;
