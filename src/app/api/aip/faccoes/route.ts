@@ -9,7 +9,7 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const role = (session.user as any).role
-  if (role !== 'SUPER_ADMIN' && role !== 'OPERATOR') {
+  if (role !== 'SUPER_ADMIN' && role !== 'OPERATOR' && role !== 'ADMIN') {
     return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
   }
 
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const role = (session.user as any).role
-  if (role !== 'SUPER_ADMIN' && role !== 'OPERATOR') {
+  if (role !== 'SUPER_ADMIN' && role !== 'OPERATOR' && role !== 'ADMIN') {
     return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
   }
 

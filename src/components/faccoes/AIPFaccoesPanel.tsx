@@ -307,7 +307,7 @@ export function AIPFaccoesPanel({ userRole }: AIPFaccoesPanelProps) {
   const [showNova, setShowNova] = useState(false)
   const [selected, setSelected] = useState<Faccao | null>(null)
 
-  const canCreate = userRole === 'SUPER_ADMIN' || userRole === 'OPERATOR'
+  const canCreate = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || userRole === 'OPERATOR'
 
   const fetchFaccoes = useCallback(async () => {
     setLoading(true)

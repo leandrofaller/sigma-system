@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const role = (session.user as any).role
-  if (role !== 'SUPER_ADMIN' && role !== 'OPERATOR') {
+  if (role !== 'SUPER_ADMIN' && role !== 'OPERATOR' && role !== 'ADMIN') {
     return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
   }
 

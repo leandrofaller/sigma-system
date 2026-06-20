@@ -9,7 +9,7 @@ export default async function AipPage() {
   if (!session?.user) redirect('/login')
 
   const user = session.user as any
-  if (user.role !== 'SUPER_ADMIN' && user.role !== 'OPERATOR') {
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN' && user.role !== 'OPERATOR') {
     redirect('/dashboard')
   }
 
