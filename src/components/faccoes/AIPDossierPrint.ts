@@ -80,6 +80,33 @@ export async function printAIPDossier(
     )
   }
 
+  // 1.2 Buscar vínculos (relacionados) do apenado no sistema
+  let vinculos: any[] = []
+  const linkedPhotos: Record<string, string> = {}
+  try {
+    const vinculosRes = await fetch(`/api/aip/vinculos?sipeId=${apenado.sipeId}`)
+    if (vinculosRes.ok) {
+      const data = await vinculosRes.json()
+      vinculos = data.vinculos || []
+    }
+  } catch (err) {
+    console.error('Erro ao buscar vínculos para o relatório:', err)
+  }
+
+  // Converter fotos dos vinculados para Base64
+  if (vinculos.length > 0) {
+    await Promise.all(
+      vinculos.map(async (v) => {
+        if (v.outroApenado && v.outroApenado.id && v.outroApenado.photoPath) {
+          const uri = await toDataUri(`/api/aip/apenados/${v.outroApenado.id}/foto`)
+          if (uri) {
+            linkedPhotos[v.outroApenado.id] = uri
+          }
+        }
+      })
+    )
+  }
+
   // Determinar rótulos e cores com base no nível de facção
   const faccaoNome = apenado.facaoRealNome || apenado.faccao || 'NÃO CONSTATADO'
   const isFaccaoConfirmada = apenado.facaoRealNome && apenado.facaoNivel === 'confirmado'
@@ -108,7 +135,7 @@ export async function printAIPDossier(
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Dossiê de Qualificação - ${apenado.nome.toUpperCase()}</title>
+  <title>Qualificação de Apenado - ${apenado.nome.toUpperCase()}</title>
   <style>
     @page {
       size: A4 portrait;
@@ -464,7 +491,7 @@ export async function printAIPDossier(
     <div class="header-text">
       <h1>Secretaria de Estado da Justiça de Rondônia</h1>
       <h2>Agência de Inteligência Penal - AIP/SEJUS/RO</h2>
-      <h3>Dossiê de Qualificação de Apenado</h3>
+      <h3>Qualificação de Apenado</h3>
     </div>
     <div>
       ${ppLogo ? `<img src="${ppLogo}" class="header-logo" alt="Polícia Penal" />` : '<div style="width:80px"></div>'}
@@ -778,6 +805,55 @@ export async function printAIPDossier(
         </div>
         `
         : '<div style="font-size: 8.5pt; color: #64748b; padding: 6px 10px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 4px;">Nenhum visitante cadastrado ou importado para este apenado.</div>'
+    }
+  </div>
+
+  <!-- SEÇÃO 7: VÍNCULOS ENCONTRADOS NO SISTEMA -->
+  <div class="avoid-break" style="margin-top: 15px;">
+    <div class="section-header">VII. VÍNCULOS E ASSOCIAÇÕES DETECTADAS NO SISTEMA</div>
+    ${
+      vinculos.length > 0
+        ? `
+        <div class="visitors-grid">
+          ${vinculos
+            .map((v) => {
+              if (!v.outroApenado) return ''
+              const outroPhotoUri = linkedPhotos[v.outroApenado.id]
+              const forcaLabel = v.forca === 'confirmado' ? 'Confirmado' : 'Suspeita'
+              const statusClass = v.forca === 'confirmado' ? 'status-active' : 'status-inactive'
+
+              return `
+              <div class="visitor-card">
+                <span class="visitor-status ${statusClass}">${v.tipo.toUpperCase()} (${forcaLabel.toUpperCase()})</span>
+                <div class="visitor-photo">
+                  ${
+                    outroPhotoUri
+                      ? `<img src="${outroPhotoUri}" alt="Foto" />`
+                      : `<svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.2" style="width: 24px; height: 24px;">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                         </svg>`
+                  }
+                </div>
+                <div class="visitor-info">
+                  <div class="visitor-name" style="font-size: 9.5pt; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px;" title="${v.outroApenado.nome || ''}">
+                    ${v.outroApenado.nome.toUpperCase()}
+                  </div>
+                  <div class="visitor-meta" style="margin-top: 4px;">SIPE ID: <strong>#${v.outroApenado.sipeId}</strong> · Facção: <strong style="color: #b91c1c;">${(v.outroApenado.facaoRealNome || 'NÃO CONSTATADO').toUpperCase()}</strong></div>
+                  <div class="visitor-meta">Custódia: ${v.outroApenado.unidade || 'NÃO INFORMADA'} - Cela: ${v.outroApenado.cela || '—'}</div>
+                  ${
+                    v.notaVinculo
+                      ? `<div class="visitor-meta" style="font-style: italic; color: #475569; margin-top: 3px; background: #f8fafc; padding: 2px 4px; border-left: 2px solid #cbd5e1; word-break: break-all;">Obs: ${v.notaVinculo}</div>`
+                      : ''
+                  }
+                </div>
+              </div>
+            `
+            })
+            .join('')}
+        </div>
+        `
+        : '<div style="font-size: 8.5pt; color: #64748b; padding: 6px 10px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 4px;">Nenhum outro apenado vinculado a este registro no sistema.</div>'
     }
   </div>
 
