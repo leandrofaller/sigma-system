@@ -12,12 +12,18 @@ export interface IndexResult {
   done?: boolean;
 }
 
-export function runIndexBatch(ids: string[], uploadsDir: string): Promise<IndexResult[]> {
+export function runIndexBatch(ids: string[], uploadsDir: string, photoPaths?: Record<string, string>): Promise<IndexResult[]> {
   return new Promise((resolve, reject) => {
     const scriptPath = join(process.cwd(), 'scripts', 'arcface_index.py');
-    const input = JSON.stringify({ ids, uploads_dir: uploadsDir });
+    const input = JSON.stringify({ ids, uploads_dir: uploadsDir, photo_paths: photoPaths });
     const envPython = process.env.ARCFACE_PYTHON;
-    const candidates = envPython ? [envPython, 'python3', 'python', 'py'] : ['python3', 'python', 'py'];
+    const localVenv = process.platform === 'win32'
+      ? join(process.cwd(), 'backend', '.venv', 'Scripts', 'python.exe')
+      : join(process.cwd(), 'backend', '.venv', 'bin', 'python');
+
+    const candidates = envPython
+      ? [envPython, localVenv, 'python3', 'python', 'py']
+      : [localVenv, 'python3', 'python', 'py'];
     let idx = 0;
 
     function tryNext() {

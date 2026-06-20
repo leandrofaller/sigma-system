@@ -335,6 +335,19 @@ class SIPEClient:
                 raise SIPEAuthError("Token CSRF de selectRole nao encontrado.")
             role_token = role_token_input.get("value")
 
+            # Resolve perfil dinâmico (último da lista)
+            if perfil in ('ultimo', 'visitas-entradas', 'last'):
+                select_role = soup_role.find("select", {"name": "app_role_id"})
+                if select_role:
+                    options = select_role.find_all("option")
+                    valid_options = [
+                        opt for opt in options 
+                        if opt.get("value") and opt.get("value") != "0" and opt.text.strip()
+                    ]
+                    if valid_options:
+                        perfil = valid_options[-1].get("value")
+                        logger.info(f"Selecionado dinamicamente o ultimo perfil da lista: {perfil} ({valid_options[-1].text.strip()})")
+
             res_role = self.session.post(
                 f"{self.base_url}/selectRole",
                 data={"_token": role_token, "app_role_id": perfil, "unidade_id": unidade},
@@ -405,6 +418,75 @@ class SIPEClient:
             return True
         except Exception as e:
             logger.warning(f"Erro ao trocar de unidade para {unidade_str}: {e}")
+            return False
+
+    def selecionar_perfil_e_unidade(self, perfil_id: str, unidade_id: str) -> bool:
+        """Altera o perfil e a unidade ativos na sessao do SIPE."""
+        if not perfil_id or not unidade_id:
+            return False
+            
+        perfil_str = str(perfil_id).strip()
+        unidade_str = str(unidade_id).strip()
+        
+        if self.perfil == perfil_str and self.unidade == unidade_str:
+            logger.debug(f"Perfil {perfil_str} e unidade {unidade_str} ja estao definidos no SIPEClient.")
+            return True
+            
+        logger.info(f"Alterando perfil para {perfil_str} e unidade para {unidade_str} no SIPE")
+        try:
+            # 1. Obter pagina selectRole para pegar o CSRF token e os perfis
+            res = self.session.get(f"{self.base_url}/selectRole", timeout=15)
+            soup = BeautifulSoup(res.text, "lxml")
+            
+            token_input = soup.find("input", {"name": "_token"})
+            if not token_input:
+                res = self.session.get(f"{self.base_url}/home", timeout=15)
+                soup = BeautifulSoup(res.text, "lxml")
+                res = self.session.get(f"{self.base_url}/selectRole", timeout=15)
+                soup = BeautifulSoup(res.text, "lxml")
+                token_input = soup.find("input", {"name": "_token"})
+                
+            if not token_input:
+                raise SIPEAuthError("Token CSRF nao encontrado para troca de perfil/unidade.")
+                
+            token = token_input.get("value")
+            
+            # Resolve perfil dinâmico (último da lista)
+            if perfil_str in ('ultimo', 'visitas-entradas', 'last'):
+                select_role = soup.find("select", {"name": "app_role_id"})
+                if select_role:
+                    options = select_role.find_all("option")
+                    valid_options = [
+                        opt for opt in options 
+                        if opt.get("value") and opt.get("value") != "0" and opt.text.strip()
+                    ]
+                    if valid_options:
+                        perfil_str = valid_options[-1].get("value")
+                        logger.info(f"Selecionado dinamicamente o ultimo perfil da lista: {perfil_str} ({valid_options[-1].text.strip()})")
+            
+            # 2. Fazer POST para selectRole
+            res_role = self.session.post(
+                f"{self.base_url}/selectRole",
+                data={"_token": token, "app_role_id": perfil_str, "unidade_id": unidade_str},
+                headers={
+                    "Referer": f"{self.base_url}/selectRole",
+                    "Origin": self.base_url,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                timeout=20,
+                allow_redirects=True,
+            )
+            
+            if "home" not in res_role.url:
+                raise SIPEAuthError(f"Falha ao selecionar papel/unidade. URL final: {res_role.url}")
+                
+            self.perfil = perfil_str
+            self.unidade = unidade_str
+            self._update_cookie_header()
+            logger.info(f"Perfil alterado para {perfil_str} e unidade alterada para {unidade_str} com sucesso.")
+            return True
+        except Exception as e:
+            logger.warning(f"Erro ao trocar de perfil/unidade para {perfil_str}/{unidade_str}: {e}")
             return False
 
     def _update_cookie_header(self, persist: bool = True) -> None:

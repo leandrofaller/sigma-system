@@ -10,6 +10,7 @@ import {
   type SipeEngine,
 } from '@/lib/sipe-scraper'
 import { runScrapeFirecrawl } from '@/lib/firecrawl-scraper'
+import { startVisitantesSync } from '@/lib/visitantes-scraper'
 
 const UNIDADES: Record<string, string> = {
   '3': 'CDPPVH - Centro de Detenção Provisório de Porto Velho',
@@ -257,6 +258,23 @@ export async function POST(req: NextRequest) {
     })
 
     startSipeSyncWithEngine(job.id, 'EXTRAMUROS', engine)
+    return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
+  }
+
+  // ── Visitantes sync ──
+  if (tipo === 'VISITANTES') {
+    const job = await prisma.sipeSyncJob.create({
+      data: {
+        tipo: 'VISITANTES',
+        unidade: 'ALL',
+        unidadeNome: 'Sincronização de Visitantes',
+        status: 'RUNNING',
+        iniciadoEm: new Date(),
+        criadoPor: session.user.id,
+      },
+    })
+
+    startVisitantesSync(job.id)
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 

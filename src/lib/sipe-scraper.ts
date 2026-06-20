@@ -124,7 +124,7 @@ export function normalizeCPF(cpf: string | null | undefined): string | null {
  * Tenta obter o HTML ou Imagem do SIPE através do Proxy Python FastAPI (curl_cffi).
  * Caso a chamada falhe ou o motor de scraping não seja "python-sdk", retorna null (para ativar o fallback).
  */
-async function requestSipeViaProxy(options: {
+export async function requestSipeViaProxy(options: {
   path: string
   method?: 'GET' | 'POST'
   params?: Record<string, string>
@@ -144,13 +144,20 @@ async function requestSipeViaProxy(options: {
       ? `${SIPE_PYTHON_API_URL}/sipe/proxy?path=${encodeURIComponent(cleanPath)}`
       : `${SIPE_PYTHON_API_URL}/sipe/proxy`
 
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      'X-Sipe-Unidade': globalThis.__sipeFallbackUnidade || SIPE_UNIDADE,
+      ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+    }
+    if (options.headers) {
+      for (const [k, v] of Object.entries(options.headers)) {
+        headers[k] = v
+      }
+    }
+
     const res = await fetch(url, {
       method,
-      headers: {
-        'Accept': 'application/json',
-        'X-Sipe-Unidade': globalThis.__sipeFallbackUnidade || SIPE_UNIDADE,
-        ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
-      },
+      headers,
       body: method === 'POST'
         ? JSON.stringify({
             path: cleanPath,

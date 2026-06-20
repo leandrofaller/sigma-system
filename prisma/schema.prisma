@@ -715,19 +715,58 @@ model SipeAdvogado {
 }
 
 model SipeVisitante {
-  id         String   @id @default(cuid())
-  nome       String
-  cpf        String?
-  parentesco String?
-  photoPath  String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  nome               String
+  cpf                String?
+  parentesco         String?
+  photoPath          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Novos campos pessoais da ficha geral
+  carteirinha        String?
+  certidaoNascimento String?
+  dataNascimento     String?
+  sexo               String?
+  telefone           String?
+  naturalidade       String?
+  dataCarteirinha    String?
+  nomeMae            String?
+  nomePai            String?
+  logradouro         String?
+  numero             String?
+  bairro             String?
+  cidadeUf           String?
+
+  // Campos de indexação e biometria facial ArcFace
+  photoHash          String?
+  photoHashSha       String?  @db.VarChar(64)
+  faceDescriptor     String?  @db.Text
+  detScore           Float?
+  photoQuality       Float?
 
   vinculos SipeVinculoVisitante[]
+  entradas SipeVisitanteEntrada[]
 
   @@index([nome])
   @@index([cpf])
   @@map("sipe_visitantes")
+}
+
+model SipeVisitanteEntrada {
+  id               String        @id @default(cuid())
+  visitanteId      String
+  visitante        SipeVisitante @relation(fields: [visitanteId], references: [id], onDelete: Cascade)
+  tipo             String?
+  nomeApenado      String?
+  unidadePrisional String?
+  dataEntrada      DateTime?
+  dia              String?
+  situacao         String?
+  createdAt        DateTime      @default(now())
+
+  @@index([visitanteId])
+  @@map("sipe_visitante_entradas")
 }
 
 model SipeVinculoAdvogado {

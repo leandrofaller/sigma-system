@@ -49,7 +49,7 @@ def parse_cookie_header(cookie_header: Optional[str]) -> dict:
 
 _global_client: Optional[SIPEClient] = None
 
-def get_client(cookie_header: Optional[str] = None, unidade_header: Optional[str] = None) -> SIPEClient:
+def get_client(cookie_header: Optional[str] = None, unidade_header: Optional[str] = None, perfil_header: Optional[str] = None) -> SIPEClient:
     """
     Retorna uma instância configurada de SIPEClient.
     Se cookies forem passados no cabeçalho Cookie da API, eles têm precedência e
@@ -64,6 +64,8 @@ def get_client(cookie_header: Optional[str] = None, unidade_header: Optional[str
         client = SIPEClient(base_url=base_url)
         client.set_cookies(req_cookies)
         logger.info("Cookies aplicados a partir da requisição HTTP (Header Cookie).")
+        if perfil_header:
+            client.perfil = perfil_header
         if unidade_header:
             client.selecionar_unidade(unidade_header)
         return client
@@ -73,8 +75,10 @@ def get_client(cookie_header: Optional[str] = None, unidade_header: Optional[str
         _global_client = SIPEClient(base_url=base_url)
         logger.info("Criada nova instância singleton global de SIPEClient.")
             
-    if unidade_header:
-        _global_client.selecionar_unidade(unidade_header)
+    if perfil_header or unidade_header:
+        p = perfil_header or _global_client.perfil
+        u = unidade_header or _global_client.unidade
+        _global_client.selecionar_perfil_e_unidade(p, u)
         
     return _global_client
 
@@ -185,13 +189,14 @@ def ficha_completa(
 def sipe_proxy(
     path: str = Query(..., description="Caminho relativo da rota do SIPE a ser requisitado"),
     cookie: Optional[str] = Header(None, alias="Cookie"),
-    unidade: Optional[str] = Header(None, alias="X-Sipe-Unidade")
+    unidade: Optional[str] = Header(None, alias="X-Sipe-Unidade"),
+    perfil: Optional[str] = Header(None, alias="X-Sipe-Perfil")
 ):
     """
     Proxy de requisição GET ao SIPE real para contornar o WAF (F5 BIG-IP).
     Retorna JSON com o HTML ou a imagem convertida em base64.
     """
-    client = get_client(cookie, unidade)
+    client = get_client(cookie, unidade, perfil)
     try:
         response = client._request("GET", path)
         return _serialize_proxy_response(response, path)
@@ -210,7 +215,8 @@ def sipe_proxy(
 def sipe_proxy_write(
     payload: Dict[str, Any] = Body(...),
     cookie: Optional[str] = Header(None, alias="Cookie"),
-    unidade: Optional[str] = Header(None, alias="X-Sipe-Unidade")
+    unidade: Optional[str] = Header(None, alias="X-Sipe-Unidade"),
+    perfil: Optional[str] = Header(None, alias="X-Sipe-Perfil")
 ):
     """
     Proxy genérico GET/POST ao SIPE real para o modo SDK-first.
@@ -224,7 +230,7 @@ def sipe_proxy_write(
     if method not in {"GET", "POST"}:
         raise HTTPException(status_code=400, detail="Método não suportado. Use GET ou POST.")
 
-    client = get_client(cookie, unidade)
+    client = get_client(cookie, unidade, perfil)
 
     try:
         req_kwargs: Dict[str, Any] = {}

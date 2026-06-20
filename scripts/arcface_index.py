@@ -72,13 +72,14 @@ def main():
 
     ids = data.get("ids", [])
     uploads_dir = data.get("uploads_dir", "")
+    photo_paths = data.get("photo_paths", {})
 
     if not ids:
         print(json.dumps({"done": True, "processed": 0}))
         return
 
-    if not uploads_dir or not os.path.isdir(uploads_dir):
-        print(json.dumps({"error": f"uploads_dir invalido: {uploads_dir!r}"}))
+    if not photo_paths and (not uploads_dir or not os.path.isdir(uploads_dir)):
+        print(json.dumps({"error": f"uploads_dir invalido: {uploads_dir!r} e photo_paths nao fornecido"}))
         sys.exit(1)
 
     try:
@@ -86,7 +87,7 @@ def main():
         from insightface.app import FaceAnalysis
     except BaseException as e:
         print(json.dumps({
-            "error": f"Erro ao importar: {type(e).__name__}: {e}",
+            "error": f"Erro ao importar no {sys.executable} (path: {sys.path}): {type(e).__name__}: {e}",
             "install": "pip install insightface onnxruntime opencv-python-headless",
         }), flush=True)
         raise SystemExit(1)
@@ -114,7 +115,7 @@ def main():
         sys.stdout = _real_stdout
 
     for id_ in ids:
-        photo_path = find_photo(uploads_dir, id_)
+        photo_path = photo_paths.get(id_) or find_photo(uploads_dir, id_)
         if photo_path is None:
             print(json.dumps({"id": id_, "no_photo": True}), flush=True)
             continue
