@@ -35,7 +35,7 @@ const defaultNavItems: NavItem[] = [
   { label: 'Relatórios (RELINTs)', href: '/relints', iconName: 'FileText', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'RELINTs Recebidos', href: '/relints-recebidos', iconName: 'Inbox', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Debriefings', href: '/debriefings', iconName: 'BookOpen', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
-  { label: 'Forças-Tarefa', href: '/forca-tarefa', iconName: 'ClipboardList', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Força-Tarefa', href: '/forca-tarefa', iconName: 'ClipboardList', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Calendário de Missões', href: '/missoes', iconName: 'Calendar', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Mural de Eventos', href: '/mural', iconName: 'CalendarDays', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Acompanhamento', href: '/acompanhamento', iconName: 'Trello', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },

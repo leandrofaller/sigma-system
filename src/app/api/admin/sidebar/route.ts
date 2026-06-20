@@ -8,7 +8,7 @@ const DEFAULT_NAV_ITEMS = [
   { key: 'relints', label: 'Relatórios (RELINTs)', href: '/relints', iconName: 'FileText', position: 20, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'relints-recebidos', label: 'RELINTs Recebidos', href: '/relints-recebidos', iconName: 'Inbox', position: 30, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: false },
   { key: 'debriefings', label: 'Debriefings', href: '/debriefings', iconName: 'BookOpen', position: 40, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
-  { key: 'forca-tarefa', label: 'Forças-Tarefa', href: '/forca-tarefa', iconName: 'ClipboardList', position: 50, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
+  { key: 'forca-tarefa', label: 'Força-Tarefa', href: '/forca-tarefa', iconName: 'ClipboardList', position: 50, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'missoes', label: 'Calendário de Missões', href: '/missoes', iconName: 'Calendar', position: 60, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'mural', label: 'Mural de Eventos', href: '/mural', iconName: 'CalendarDays', position: 70, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'acompanhamento', label: 'Acompanhamento', href: '/acompanhamento', iconName: 'Trello', position: 80, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
@@ -62,6 +62,18 @@ export async function GET(req: NextRequest) {
     if (configs.length > 0 && !hasSidebarConfig) {
       await prisma.sidebarConfig.create({
         data: { key: 'admin-sidebar', label: 'Menu de Navegação', href: '/admin/sidebar', iconName: 'Settings', position: 265, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: true }
+      });
+      configs = await prisma.sidebarConfig.findMany({
+        orderBy: { position: 'asc' }
+      });
+    }
+
+    // Atualização dinâmica: se a aba 'forca-tarefa' ainda estiver com o label antigo 'Forças-Tarefa', atualiza
+    const forcaTarefaConfig = configs.find(c => c.key === 'forca-tarefa');
+    if (forcaTarefaConfig && forcaTarefaConfig.label === 'Forças-Tarefa') {
+      await prisma.sidebarConfig.update({
+        where: { key: 'forca-tarefa' },
+        data: { label: 'Força-Tarefa' }
       });
       configs = await prisma.sidebarConfig.findMany({
         orderBy: { position: 'asc' }
