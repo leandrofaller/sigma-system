@@ -5,6 +5,19 @@ import { motion } from 'framer-motion';
 import { Plus, Pencil, X, Loader2, CheckCircle, XCircle, Trash2 } from 'lucide-react';
 import { formatDate, getRoleName } from '@/lib/utils';
 
+function getOperatorCode(email: string): string {
+  if (!email) return 'OP-DESCONHECIDO';
+  let hash = 0;
+  const str = email.toLowerCase().trim();
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const hex = Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
+  return `OP-${hex.slice(0, 8)}`;
+}
+
+
 interface Props {
   users: any[];
   groups: any[];
@@ -175,7 +188,12 @@ export function UsersTable({ users: initialUsers, groups, currentUserRole, curre
                     </div>
                     <div>
                       <p className="text-sm font-medium text-title">{user.name}</p>
-                      <p className="text-xs text-subtle">{user.email}</p>
+                      <p className="text-xs text-subtle flex items-center gap-1.5 flex-wrap">
+                        {user.email}
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30" title="Código de Operador de Inteligência">
+                          {getOperatorCode(user.email)}
+                        </span>
+                      </p>
                     </div>
                   </div>
                 </td>

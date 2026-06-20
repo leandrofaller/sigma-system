@@ -37,7 +37,27 @@ async function toDataUri(url: string): Promise<string | null> {
 const LEGAL_TEXT =
   'O teor sigiloso deste documento é protegido e controlado pela Lei nº 12.527, de 18.11.2011, que restringe o acesso, a divulgação e o tratamento deste documento a pessoas devidamente credenciadas que tenham necessidade de conhecê-lo. A divulgação, a revelação, o fornecimento, a utilização ou a reprodução desautorizada das informações e conhecimentos utilizados, contidos ou veiculados por meio deste documento, a qualquer tempo, meio e modo, inclusive mediante acesso ou facilitação de acessos indevidos, caracterizam os crimes de violação de sigilo funcional ou de divulgação de segredo tipificados no Código Penal, bem como configuram condutas de improbidade administrativa.'
 
-export async function printAIPDossier(apenado: AIPApenado, userEmail?: string | null): Promise<void> {
+function generateOperatorCode(email: string): string {
+  if (!email) return 'OP-DESCONHECIDO'
+  let hash = 0
+  const str = email.toLowerCase().trim()
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0
+  }
+  const hex = Math.abs(hash).toString(16).toUpperCase().padStart(8, '0')
+  return `OP-${hex.slice(0, 8)}`
+}
+
+export async function printAIPDossier(
+  apenado: AIPApenado,
+  userEmail?: string | null,
+  userRole?: string | null
+): Promise<void> {
+  const opCode = generateOperatorCode(userEmail || '')
+  const showIdentity = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN'
+  const operatorText = showIdentity && userEmail ? `${opCode} (${userEmail})` : opCode
+
   // 1. Converter fotos e logotipos para Base64 para evitar problemas de CORS/sessão
   const [photoUri, sejusLogo, aipLogo, ppLogo] = await Promise.all([
     apenado.photoPath ? toDataUri(`/api/aip/apenados/${apenado.id}/foto`) : Promise.resolve(null),
@@ -766,7 +786,7 @@ export async function printAIPDossier(apenado: AIPApenado, userEmail?: string | 
   <div class="footer-container">
     <p class="footer-text">${LEGAL_TEXT}</p>
     <div class="footer-metadata">
-      <span>GERADO EM: ${new Date().toLocaleString('pt-BR')} ${userEmail ? `· USUÁRIO: ${userEmail}` : ''}</span>
+      <span>GERADO EM: ${new Date().toLocaleString('pt-BR')} · OPERADOR: ${operatorText}</span>
       <span>CLASSIFICAÇÃO: CONFIDENCIAL / AIP / SEJUS</span>
     </div>
   </div>

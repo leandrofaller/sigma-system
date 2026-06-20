@@ -238,7 +238,7 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
     setGerandoDossie(true)
     const toastId = toast.loading('Gerando Ficha de Qualificação (Dossiê)...')
     try {
-      await printAIPDossier(apenado, session?.user?.email || session?.user?.name)
+      await printAIPDossier(apenado, session?.user?.email || session?.user?.name, userRole)
       toast.success('Dossiê enviado para impressão com sucesso!', { id: toastId })
     } catch (err: any) {
       console.error(err)
