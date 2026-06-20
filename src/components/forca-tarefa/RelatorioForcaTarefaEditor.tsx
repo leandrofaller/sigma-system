@@ -26,19 +26,21 @@ const ALVOS_OPTIONS = [
   'Lavagem de dinheiro',
   'Crimes contra agentes públicos',
   'Fuga ou resgate de presos',
+  'Outros',
 ];
 
 const FACCOES_OPTIONS = [
   'PCC',
   'CV',
-  'TDR',
-  'Comando Vermelho local',
+  'TCP',
+  'Primeiro Comando do Panda',
+  'Comando Classe A',
   'Grupo independente',
   'Não identificado',
 ];
 
 const RESULTADOS_OPTIONS = [
-  'Prisões efatas',
+  'Prisões Efetuadas',
   'Mandados cumpridos',
   'Drogas apreendidas',
   'Armas apreendidas',
