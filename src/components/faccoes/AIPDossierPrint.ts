@@ -55,8 +55,7 @@ export async function printAIPDossier(
   userRole?: string | null
 ): Promise<void> {
   const opCode = generateOperatorCode(userEmail || '')
-  const showIdentity = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN'
-  const operatorText = showIdentity && userEmail ? `${opCode} (${userEmail})` : opCode
+  const operatorText = opCode
 
   // 1. Converter fotos e logotipos para Base64 para evitar problemas de CORS/sessão
   const [photoUri, aipLogo, ppLogo] = await Promise.all([
@@ -465,11 +464,12 @@ export async function printAIPDossier(
     .footer-metadata {
       display: flex;
       justify-content: space-between;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 7.5pt;
+      font-family: Arial, sans-serif;
+      font-size: 7pt;
       color: #64748b;
       border-top: 1px dashed #cbd5e1;
       padding-top: 5px;
+      white-space: nowrap;
     }
 
     /* Forçar quebras de página controladas */
