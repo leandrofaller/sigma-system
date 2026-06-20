@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download, Link2, RefreshCw } from 'lucide-react'
+import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download, Link2, RefreshCw, FileText } from 'lucide-react'
 import { toast } from 'sonner'
+import { useSession } from 'next-auth/react'
+import { printAIPDossier } from './AIPDossierPrint'
 
 interface AIPFotoVisitante {
   id: string
@@ -229,6 +231,22 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [faccoes, setFaccoes] = useState<{ id: string; nome: string; cor: string }[]>([])
   const [sincronizando, setSincronizando] = useState(false)
+  const { data: session } = useSession()
+  const [gerandoDossie, setGerandoDossie] = useState(false)
+
+  const handleGerarDossie = async () => {
+    setGerandoDossie(true)
+    const toastId = toast.loading('Gerando Ficha de Qualificação (Dossiê)...')
+    try {
+      await printAIPDossier(apenado, session?.user?.email || session?.user?.name)
+      toast.success('Dossiê enviado para impressão com sucesso!', { id: toastId })
+    } catch (err: any) {
+      console.error(err)
+      toast.error('Erro ao gerar dossiê de qualificação.', { id: toastId })
+    } finally {
+      setGerandoDossie(false)
+    }
+  }
 
   useEffect(() => {
     setApenadoState(initialApenado)
@@ -521,6 +539,14 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
             <div className="flex items-center gap-2 shrink-0">
               {!editing ? (
                 <>
+                  <button
+                    onClick={handleGerarDossie}
+                    disabled={gerandoDossie}
+                    className="p-2 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg text-purple-600 dark:text-purple-400 disabled:opacity-50"
+                    title="Gerar Dossiê (Ficha de Qualificação)"
+                  >
+                    {gerandoDossie ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  </button>
                   <button
                     onClick={handleSincronizarSipe}
                     disabled={sincronizando}
