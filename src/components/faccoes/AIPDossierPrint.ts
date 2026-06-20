@@ -59,9 +59,8 @@ export async function printAIPDossier(
   const operatorText = showIdentity && userEmail ? `${opCode} (${userEmail})` : opCode
 
   // 1. Converter fotos e logotipos para Base64 para evitar problemas de CORS/sessão
-  const [photoUri, sejusLogo, aipLogo, ppLogo] = await Promise.all([
+  const [photoUri, aipLogo, ppLogo] = await Promise.all([
     apenado.photoPath ? toDataUri(`/api/aip/apenados/${apenado.id}/foto`) : Promise.resolve(null),
-    toDataUri('/logos/badge-sejus.png'),
     toDataUri('/logos/badge-aip.png'),
     toDataUri('/logos/badge-policia-penal.png')
   ])
@@ -139,7 +138,7 @@ export async function printAIPDossier(
       padding-bottom: 8px;
     }
     .header-logo {
-      width: 65px;
+      width: 80px;
       height: auto;
       object-fit: contain;
     }
@@ -460,7 +459,7 @@ export async function printAIPDossier(
   <!-- CABEÇALHO -->
   <div class="header-container">
     <div>
-      ${sejusLogo ? `<img src="${sejusLogo}" class="header-logo" alt="SEJUS" />` : '<div style="width:65px"></div>'}
+      ${aipLogo ? `<img src="${aipLogo}" class="header-logo" alt="AIP" />` : '<div style="width:80px"></div>'}
     </div>
     <div class="header-text">
       <h1>Secretaria de Estado da Justiça de Rondônia</h1>
@@ -468,7 +467,7 @@ export async function printAIPDossier(
       <h3>Dossiê de Qualificação de Apenado</h3>
     </div>
     <div>
-      ${ppLogo ? `<img src="${ppLogo}" class="header-logo" alt="Polícia Penal" />` : '<div style="width:65px"></div>'}
+      ${ppLogo ? `<img src="${ppLogo}" class="header-logo" alt="Polícia Penal" />` : '<div style="width:80px"></div>'}
     </div>
   </div>
 
