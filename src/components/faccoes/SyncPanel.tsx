@@ -294,6 +294,34 @@ export function SyncPanel() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [checkingPhotos, setCheckingPhotos] = useState(false)
+
+  const checkAndSyncMissingPhotos = async () => {
+    setCheckingPhotos(true)
+    try {
+      const res = await fetch('/api/admin/apenados/verificar-fotos?sync=true')
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Erro ao verificar fotos')
+        return
+      }
+      if (data.syncStatus === 'started') {
+        toast.success(`Detectadas ${data.totalFotosAusentes} fotos ausentes. Sincronização iniciada!`)
+        setActiveJobId(data.syncJobId)
+        fetchJobs()
+      } else if (data.syncStatus === 'skipped') {
+        toast.info(`Nenhuma foto ausente detectada. Todos os ${data.totalComCaminho} registros estão ok!`)
+      } else if (data.syncStatus === 'error_another_job_running') {
+        toast.error('Já existe uma sincronização ativa em andamento. Aguarde antes de verificar fotos.')
+      } else {
+        toast.info(`Verificação concluída. ${data.totalFotosAusentes} fotos ausentes. Sincronização não iniciada.`)
+      }
+    } catch {
+      toast.error('Erro de conexão com a API de verificação')
+    } finally {
+      setCheckingPhotos(false)
+    }
+  }
   const [confirmType, setConfirmType] = useState<'apenados' | 'advogados' | 'faccoes' | 'todos' | null>(null)
   const [clearingType, setClearingType] = useState<string | null>(null)
   const [unidades, setUnidades] = useState<Unidade[]>(UNIDADES_FALLBACK)
@@ -637,6 +665,20 @@ export function SyncPanel() {
           >
             <Play className="w-4 h-4" />
             🧪 Scraping Global TESTE (150 IDs)
+          </button>
+
+          <button
+            onClick={checkAndSyncMissingPhotos}
+            disabled={isActive || loading || checkingPhotos}
+            title="Varre a pasta de uploads do servidor para detectar fotos apagadas ou ausentes e inicia o download delas do SIPE"
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            {checkingPhotos ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            Recuperar Fotos Ausentes
           </button>
         </div>
       </div>
