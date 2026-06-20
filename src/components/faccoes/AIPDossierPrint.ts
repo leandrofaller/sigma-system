@@ -395,9 +395,8 @@ export async function printAIPDossier(
       font-weight: bold;
       color: #0f172a;
       text-transform: uppercase;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: normal;
+      word-wrap: break-word;
     }
     .visitor-meta {
       font-size: 7.5pt;
@@ -405,14 +404,14 @@ export async function printAIPDossier(
       margin-top: 2px;
     }
     .visitor-status {
-      position: absolute;
-      top: 5px;
-      right: 5px;
-      font-size: 7pt;
+      display: inline-block;
+      font-size: 7.5pt;
       font-weight: bold;
-      padding: 1px 4px;
+      padding: 2px 6px;
       border-radius: 2px;
       text-transform: uppercase;
+      margin-top: 4px;
+      margin-bottom: 4px;
     }
     .status-active {
       background-color: #dcfce7;
@@ -782,7 +781,6 @@ export async function printAIPDossier(
 
               return `
               <div class="visitor-card">
-                <span class="visitor-status ${statusClass}">${statusText}</span>
                 <div class="visitor-photo">
                   ${
                     visitorPhotoUri
@@ -794,7 +792,10 @@ export async function printAIPDossier(
                   }
                 </div>
                 <div class="visitor-info">
-                  <div class="visitor-name" title="${v.nomeVisitante || '—'}">${v.nomeVisitante || '—'}</div>
+                  <div class="visitor-name" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 2px; margin-bottom: 4px;" title="${v.nomeVisitante || '—'}">${v.nomeVisitante || '—'}</div>
+                  <div>
+                    <span class="visitor-status ${statusClass}">${statusText}</span>
+                  </div>
                   <div class="visitor-meta">Parentesco: <strong>${v.parentescoVisitante || '—'}</strong></div>
                   <div class="visitor-meta">CPF: ${v.cpfVisitante || '—'}</div>
                 </div>
@@ -824,7 +825,6 @@ export async function printAIPDossier(
 
               return `
               <div class="visitor-card">
-                <span class="visitor-status ${statusClass}">${v.tipo.toUpperCase()} (${forcaLabel.toUpperCase()})</span>
                 <div class="visitor-photo">
                   ${
                     outroPhotoUri
@@ -836,10 +836,13 @@ export async function printAIPDossier(
                   }
                 </div>
                 <div class="visitor-info">
-                  <div class="visitor-name" style="font-size: 9.5pt; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px;" title="${v.outroApenado.nome || ''}">
+                  <div class="visitor-name" style="font-size: 9.5pt; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px; margin-bottom: 4px;" title="${v.outroApenado.nome || ''}">
                     ${v.outroApenado.nome.toUpperCase()}
                   </div>
-                  <div class="visitor-meta" style="margin-top: 4px;">SIPE ID: <strong>#${v.outroApenado.sipeId}</strong> · Facção: <strong style="color: #b91c1c;">${(v.outroApenado.facaoRealNome || 'NÃO CONSTATADO').toUpperCase()}</strong></div>
+                  <div>
+                    <span class="visitor-status ${statusClass}">${v.tipo.toUpperCase()} (${forcaLabel.toUpperCase()})</span>
+                  </div>
+                  <div class="visitor-meta">SIPE ID: <strong>#${v.outroApenado.sipeId}</strong> · Facção: <strong style="color: #b91c1c;">${(v.outroApenado.facaoRealNome || 'NÃO CONSTATADO').toUpperCase()}</strong></div>
                   <div class="visitor-meta">Custódia: ${v.outroApenado.unidade || 'NÃO INFORMADA'} - Cela: ${v.outroApenado.cela || '—'}</div>
                   ${
                     v.notaVinculo
