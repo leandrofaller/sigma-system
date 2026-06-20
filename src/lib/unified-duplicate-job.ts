@@ -500,8 +500,13 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
       });
       const sha = sorted[0].photoHashSha;
       const allSameSha = sha != null && sorted.every((r) => r.photoHashSha === sha);
+      const keeperHash = sorted[0].photoHash;
+      const allIdenticalDHash = keeperHash != null && sorted.every((r) => {
+        if (!r.photoHash) return false;
+        return hammingDistance(keeperHash, r.photoHash) <= 1;
+      });
       const hasPixelMerge = sorted.some((r) => pixelMergedIds.has(r.id));
-      const type: 'exact' | 'similar' | 'face' = allSameSha
+      const type: 'exact' | 'similar' | 'face' = (allSameSha || allIdenticalDHash)
         ? 'exact'
         : hasPixelMerge
           ? 'similar'
