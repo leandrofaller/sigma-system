@@ -127,6 +127,29 @@ def main():
 
             faces = app.get(img)
             if not faces:
+                # FALLBACK 1: CLAHE (Equalização de Contraste Adaptativo Local) para fotos muito escuras
+                try:
+                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                    cl_img = clahe.apply(gray)
+                    cl_img_3ch = cv2.cvtColor(cl_img, cv2.COLOR_GRAY2BGR)
+                    faces = app.get(cl_img_3ch)
+                except Exception:
+                    pass
+
+            if not faces:
+                # FALLBACK 2: Ajuste temporário de det_size para 1024x1024 (para fotos grandes ou rostos pequenos)
+                try:
+                    app.prepare(ctx_id=0, det_size=(1024, 1024))
+                    faces = app.get(img)
+                    app.prepare(ctx_id=0, det_size=(640, 640))
+                except Exception:
+                    try:
+                        app.prepare(ctx_id=0, det_size=(640, 640))
+                    except Exception:
+                        pass
+
+            if not faces:
                 print(json.dumps({"id": id_, "no_face": True}), flush=True)
                 continue
 
