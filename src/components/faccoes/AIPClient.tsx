@@ -88,6 +88,7 @@ export function AIPClient({ userRole }: AIPClientProps) {
 
           <TabsContent value="vinculos" className="flex-1 min-h-0 mt-0">
             <AIPVinculosPanel
+              userRole={userRole}
               preselectedSipeId={preselectedSipeId}
               onClearPreselected={() => setPreselectedSipeId(null)}
             />

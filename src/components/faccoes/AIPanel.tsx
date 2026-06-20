@@ -78,8 +78,10 @@ export interface AIPApenado {
 
   cadastradoEm: string
   cadastradoPor: string
+  cadastradoPorNome?: string | null
   atualizadoEm: string
   atualizadoPor?: string
+  atualizadoPorNome?: string | null
 
   // Relacionamento com visitantes
   fotoVisitantes?: AIPFotoVisitante[]
@@ -208,18 +210,20 @@ function AIApenadoCard({
 
 // ── Modal de Detalhes do Apenado em AIP ──────────────────────────────
 
-export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpdate, onDelete }: {
+export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpdate, onDelete, userRole }: {
   apenado: AIPApenado
   layout?: any
   onClose: () => void
   onUpdate: (apenado: AIPApenado) => void
   onDelete?: (id: string) => Promise<void>
+  userRole?: string
 }) {
   const [apenadoState, setApenadoState] = useState(initialApenado)
   const apenado = apenadoState // Mantém compatibilidade com todos os usos de 'apenado.' no componente
 
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState(initialApenado)
+  const canSeeCreator = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN'
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -842,6 +846,34 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
                         )}
                       </div>
 
+                      {/* Metadados do Registro (Criador / Última Atualização) - Visível apenas para SUPER_ADMIN e ADMIN */}
+                      {canSeeCreator && (
+                        <div className="bg-purple-50/20 dark:bg-purple-950/10 rounded-xl p-3 border border-purple-100/40 dark:border-purple-900/30 text-xs text-gray-500 space-y-1.5 mt-2 shrink-0">
+                          <div className="flex flex-wrap items-center gap-x-2">
+                            <span className="font-bold text-purple-700 dark:text-purple-400">Adicionado por:</span>
+                            <span className="text-gray-900 dark:text-white font-medium">
+                              {apenado.cadastradoPorNome || apenado.cadastradoPor || 'Sistema/Desconhecido'}
+                            </span>
+                            {apenado.cadastradoEm && (
+                              <span className="text-[10px] text-gray-450 dark:text-gray-550">
+                                em {new Date(apenado.cadastradoEm).toLocaleString('pt-BR')}
+                              </span>
+                            )}
+                          </div>
+                          {apenado.atualizadoPorNome && (
+                            <div className="flex flex-wrap items-center gap-x-2 border-t border-purple-150/20 dark:border-purple-900/10 pt-1.5 mt-1.5">
+                              <span className="font-bold text-purple-700 dark:text-purple-400">Última atualização por:</span>
+                              <span className="text-gray-900 dark:text-white font-medium">{apenado.atualizadoPorNome}</span>
+                              {apenado.atualizadoEm && (
+                                <span className="text-[10px] text-gray-450 dark:text-gray-550">
+                                  em {new Date(apenado.atualizadoEm).toLocaleString('pt-BR')}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Anexos - Dados de Inteligência */}
                       <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
@@ -1308,6 +1340,7 @@ export function AIPanel({ userRole, onViewVinculos }: { userRole?: string; onVie
           onClose={() => setSelectedApenado(null)}
           onUpdate={handleUpdate}
           onDelete={handleDelete}
+          userRole={userRole}
         />
       )}
 

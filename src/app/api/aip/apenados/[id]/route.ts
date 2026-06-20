@@ -36,7 +36,29 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Apenado não encontrado' }, { status: 404 })
     }
 
-    return NextResponse.json(apenado)
+    let cadastradoPorNome = apenado.cadastradoPor
+    if (apenado.cadastradoPor) {
+      const userCreator = await prisma.user.findUnique({
+        where: { id: apenado.cadastradoPor },
+        select: { name: true }
+      })
+      if (userCreator) cadastradoPorNome = userCreator.name
+    }
+
+    let atualizadoPorNome = apenado.atualizadoPor
+    if (apenado.atualizadoPor) {
+      const userUpdater = await prisma.user.findUnique({
+        where: { id: apenado.atualizadoPor },
+        select: { name: true }
+      })
+      if (userUpdater) atualizadoPorNome = userUpdater.name
+    }
+
+    return NextResponse.json({
+      ...apenado,
+      cadastradoPorNome,
+      atualizadoPorNome
+    })
   } catch (error) {
     console.error('[AIP] Erro ao buscar apenado por ID:', error)
     return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
@@ -120,9 +142,33 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     })
 
+    let cadastradoPorNome = apenado.cadastradoPor
+    if (apenado.cadastradoPor) {
+      const userCreator = await prisma.user.findUnique({
+        where: { id: apenado.cadastradoPor },
+        select: { name: true }
+      })
+      if (userCreator) cadastradoPorNome = userCreator.name
+    }
+
+    let atualizadoPorNome = apenado.atualizadoPor
+    if (apenado.atualizadoPor) {
+      const userUpdater = await prisma.user.findUnique({
+        where: { id: apenado.atualizadoPor },
+        select: { name: true }
+      })
+      if (userUpdater) atualizadoPorNome = userUpdater.name
+    }
+
+    const apenadoFormatado = {
+      ...apenado,
+      cadastradoPorNome,
+      atualizadoPorNome
+    }
+
     return NextResponse.json({
       success: true,
-      apenado,
+      apenado: apenadoFormatado,
       message: 'Apenado atualizado com sucesso'
     })
   } catch (error: any) {

@@ -214,7 +214,32 @@ export async function GET(request: NextRequest) {
           include: { fotoVisitantes: true }
         })
         if (!apenado) return NextResponse.json({ apenados: [], total: 0, page: 1, limit, totalPages: 0 })
-        return NextResponse.json({ apenados: [apenado], total: 1, page: 1, limit, totalPages: 1 })
+        
+        let cadastradoPorNome = apenado.cadastradoPor
+        if (apenado.cadastradoPor) {
+          const userCreator = await prisma.user.findUnique({
+            where: { id: apenado.cadastradoPor },
+            select: { name: true }
+          })
+          if (userCreator) cadastradoPorNome = userCreator.name
+        }
+
+        let atualizadoPorNome = apenado.atualizadoPor
+        if (apenado.atualizadoPor) {
+          const userUpdater = await prisma.user.findUnique({
+            where: { id: apenado.atualizadoPor },
+            select: { name: true }
+          })
+          if (userUpdater) atualizadoPorNome = userUpdater.name
+        }
+
+        const apenadoFormatado = {
+          ...apenado,
+          cadastradoPorNome,
+          atualizadoPorNome
+        }
+
+        return NextResponse.json({ apenados: [apenadoFormatado], total: 1, page: 1, limit, totalPages: 1 })
       }
     }
 
@@ -295,9 +320,25 @@ export async function GET(request: NextRequest) {
       if (v.vinculadoComId) idsComVinculos.add(v.vinculadoComId)
     }
 
+    // Coleta IDs de cadastradoPor e atualizadoPor para carregar nomes correspondentes
+    const userIds = [...new Set([
+      ...apenados.map(a => a.cadastradoPor),
+      ...apenados.map(a => a.atualizadoPor).filter(Boolean) as string[]
+    ])].filter(Boolean)
+
+    const usuarios = userIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true }
+        })
+      : []
+    const usuarioMap = new Map(usuarios.map(u => [u.id, u.name]))
+
     const apenadosFormatados = apenados.map(a => ({
       ...a,
-      temVinculos: idsComVinculos.has(a.id)
+      temVinculos: idsComVinculos.has(a.id),
+      cadastradoPorNome: usuarioMap.get(a.cadastradoPor) || a.cadastradoPor,
+      atualizadoPorNome: a.atualizadoPor ? (usuarioMap.get(a.atualizadoPor) || a.atualizadoPor) : null
     }))
 
     return NextResponse.json({

@@ -59,10 +59,12 @@ const VINCULO_OPCOES = {
 
 export function AIPVinculosPanel({
   preselectedSipeId,
-  onClearPreselected
+  onClearPreselected,
+  userRole
 }: {
   preselectedSipeId?: number | null
   onClearPreselected?: () => void
+  userRole?: string
 }) {
   const [selectedSipeApenado, setSelectedSipeApenado] = useState<any | null>(null)
   const [apenadoAip, setApenadoAip] = useState<any | null>(null)
@@ -1103,6 +1105,7 @@ export function AIPVinculosPanel({
         <AIApenadoModal
           apenado={modalApenado}
           layout={layout}
+          userRole={userRole}
           onClose={() => setModalApenado(null)}
           onUpdate={(updated) => {
             // Atualizar o apenado no state se ele for o base
