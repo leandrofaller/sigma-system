@@ -7,54 +7,117 @@ import { Clock, LogOut } from 'lucide-react';
 const WARN_AT_MS    = 10 * 60 * 1000; // 10 min → show warning
 const LOGOUT_AT_MS  = 12 * 60 * 1000; // 12 min → logout
 const WARN_SECS     = 120;             // 2-min countdown
+const LAST_ACTIVE_KEY = 'sigma_last_active';
 
 const EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'] as const;
 
 export function IdleTimeoutProvider() {
   const [showWarning, setShowWarning] = useState(false);
   const [remaining, setRemaining] = useState(WARN_SECS);
-  const warnTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const logoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const countdown   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mainCheckInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastActiveRef = useRef<number>(0);
 
   const doLogout = useCallback(async () => {
+    if (countdownInterval.current) clearInterval(countdownInterval.current);
+    if (mainCheckInterval.current) clearInterval(mainCheckInterval.current);
+    localStorage.removeItem(LAST_ACTIVE_KEY);
     await signOut({ redirect: false });
     window.location.href = '/login';
   }, []);
 
+  // Atualiza o timestamp de atividade localmente e no localStorage (com throttle de 5s)
+  const updateActivity = useCallback(() => {
+    const now = Date.now();
+    if (now - lastActiveRef.current > 5000) { 
+      lastActiveRef.current = now;
+      try {
+        localStorage.setItem(LAST_ACTIVE_KEY, now.toString());
+      } catch (e) {
+        console.error('Erro ao salvar lastActive no localStorage', e);
+      }
+    }
+  }, []);
+
+  // Compara o tempo atual com a última atividade gravada
+  const checkActivity = useCallback(() => {
+    const lastActiveStr = localStorage.getItem(LAST_ACTIVE_KEY);
+    if (!lastActiveStr) {
+      localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString());
+      return;
+    }
+
+    const lastActive = parseInt(lastActiveStr, 10);
+    const elapsed = Date.now() - lastActive;
+
+    if (elapsed >= LOGOUT_AT_MS) {
+      doLogout();
+    } else if (elapsed >= WARN_AT_MS) {
+      if (!showWarning) {
+        setShowWarning(true);
+        // Calcula os segundos reais restantes com base no tempo decorrido
+        const remainingSecs = Math.max(0, Math.floor((LOGOUT_AT_MS - elapsed) / 1000));
+        setRemaining(remainingSecs);
+
+        if (countdownInterval.current) clearInterval(countdownInterval.current);
+        countdownInterval.current = setInterval(() => {
+          const currentElapsed = Date.now() - parseInt(localStorage.getItem(LAST_ACTIVE_KEY) || '0', 10);
+          const currentRemaining = Math.max(0, Math.floor((LOGOUT_AT_MS - currentElapsed) / 1000));
+          
+          setRemaining(currentRemaining);
+          if (currentRemaining <= 0) {
+            clearInterval(countdownInterval.current!);
+            doLogout();
+          }
+        }, 1000);
+      }
+    } else {
+      if (showWarning) {
+        setShowWarning(false);
+        if (countdownInterval.current) {
+          clearInterval(countdownInterval.current);
+          countdownInterval.current = null;
+        }
+      }
+    }
+  }, [doLogout, showWarning]);
+
   const resetTimers = useCallback(() => {
+    const now = Date.now();
+    lastActiveRef.current = now;
+    try {
+      localStorage.setItem(LAST_ACTIVE_KEY, now.toString());
+    } catch (e) {}
     setShowWarning(false);
-    setRemaining(WARN_SECS);
-
-    if (warnTimer.current)   clearTimeout(warnTimer.current);
-    if (logoutTimer.current) clearTimeout(logoutTimer.current);
-    if (countdown.current)   clearInterval(countdown.current);
-
-    warnTimer.current = setTimeout(() => {
-      setShowWarning(true);
-      setRemaining(WARN_SECS);
-      countdown.current = setInterval(() => {
-        setRemaining((r) => {
-          if (r <= 1) { clearInterval(countdown.current!); return 0; }
-          return r - 1;
-        });
-      }, 1000);
-    }, WARN_AT_MS);
-
-    logoutTimer.current = setTimeout(doLogout, LOGOUT_AT_MS);
-  }, [doLogout]);
+    if (countdownInterval.current) {
+      clearInterval(countdownInterval.current);
+      countdownInterval.current = null;
+    }
+  }, []);
 
   useEffect(() => {
-    resetTimers();
-    const handle = () => resetTimers();
-    EVENTS.forEach((e) => window.addEventListener(e, handle, { passive: true }));
-    return () => {
-      EVENTS.forEach((e) => window.removeEventListener(e, handle));
-      if (warnTimer.current)   clearTimeout(warnTimer.current);
-      if (logoutTimer.current) clearTimeout(logoutTimer.current);
-      if (countdown.current)   clearInterval(countdown.current);
+    // Inicialização ao carregar a página
+    const now = Date.now();
+    lastActiveRef.current = now;
+    
+    // Verifica imediatamente na montagem do componente (ex: quando religa a máquina)
+    checkActivity();
+
+    // Roda verificação a cada 5 segundos para detectar suspensão ou abas em segundo plano
+    mainCheckInterval.current = setInterval(checkActivity, 5000);
+
+    const handleEvent = () => {
+      updateActivity();
     };
-  }, [resetTimers]);
+
+    EVENTS.forEach((e) => window.addEventListener(e, handleEvent, { passive: true }));
+
+    return () => {
+      EVENTS.forEach((e) => window.removeEventListener(e, handleEvent));
+      if (mainCheckInterval.current) clearInterval(mainCheckInterval.current);
+      if (countdownInterval.current) clearInterval(countdownInterval.current);
+    };
+  }, [checkActivity, updateActivity]);
 
   if (!showWarning) return null;
 
