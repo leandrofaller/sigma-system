@@ -113,12 +113,91 @@ export function startVisitantesSync(jobId: string): void {
       throw new Error('Não foi possível obter o token CSRF (input _token) da página do SIPE.');
     }
 
+    // Identifica o total de páginas na paginação
+    let totalPages = 1;
+    $list('ul.pagination li a').each((_, a) => {
+      const href = $list(a).attr('href') || '';
+      const match = href.match(/page=(\d+)/);
+      if (match) {
+        const pageNum = parseInt(match[1]);
+        if (pageNum > totalPages) {
+          totalPages = pageNum;
+        }
+      }
+    });
+
+    console.log(`[VISITANTES SCRAPER] Identificado o total de ${totalPages} páginas.`);
+
     // Coleta os IDs de visitantes
     const visitaIds: string[] = [];
     $list('td[data-visita_id]').each((_, td) => {
       const id = $list(td).attr('data-visita_id');
       if (id) visitaIds.push(id.trim());
     });
+
+    // Se houver mais de 1 página, faz a paginação para obter todos os IDs
+    if (totalPages > 1) {
+      const batchSize = 3;
+      const pagesToFetch: number[] = [];
+      for (let p = 2; p <= totalPages; p++) {
+        pagesToFetch.push(p);
+      }
+
+      for (let i = 0; i < pagesToFetch.length; i += batchSize) {
+        if (globalThis.__sipeStopFlag) {
+          const msg = 'Sincronização interrompida pelo usuário durante a coleta de IDs.';
+          await dbProgress(jobId, {
+            status: 'INTERRUPTED',
+            fase: 'Interrompido',
+            log: msg,
+            finalizadoEm: new Date(),
+          });
+          refreshMemory(jobId, { status: 'INTERRUPTED', fase: 'Interrompido', ultimoLog: msg });
+          return;
+        }
+
+        const batch = pagesToFetch.slice(i, i + batchSize);
+        const logMsg = `Coletando IDs das páginas: lote ${Math.floor(i / batchSize) + 1}/${Math.ceil(pagesToFetch.length / batchSize)} (Páginas ${batch[0]} a ${batch[batch.length - 1]} de ${totalPages})`;
+        console.log(`[VISITANTES SCRAPER] ${logMsg}`);
+
+        refreshMemory(jobId, {
+          fase: 'Coletando IDs',
+          ultimoLog: logMsg,
+        });
+        await dbProgress(jobId, {
+          fase: 'Coletando IDs',
+          log: logMsg,
+        });
+
+        await Promise.all(
+          batch.map(async (page) => {
+            try {
+              const resPage = await requestSipeViaProxy({
+                path: `/visitas/apenadosporvisita?page=${page}`,
+                method: 'GET',
+                headers: {
+                  'X-Sipe-Perfil': 'visitas-entradas',
+                },
+              });
+
+              if (resPage && !resPage.is_binary) {
+                const htmlPage = resPage.html || resPage.text || '';
+                const $page = cheerio.load(htmlPage);
+                $page('td[data-visita_id]').each((_, td) => {
+                  const id = $page(td).attr('data-visita_id');
+                  if (id) visitaIds.push(id.trim());
+                });
+              }
+            } catch (pageErr: any) {
+              console.error(`[VISITANTES SCRAPER] Erro ao carregar página de visitante ${page}:`, pageErr.message || pageErr);
+            }
+          })
+        );
+
+        // Delay para evitar sobrecarga no SIPE/Proxy
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    }
 
     const uniqueIds = [...new Set(visitaIds)].filter(Boolean);
     console.log(`[VISITANTES SCRAPER] Encontrados ${uniqueIds.length} visitantes na listagem.`);

@@ -137,8 +137,10 @@ class SIPEClient:
             "Accept-Encoding": "gzip, deflate, br",
         }
         self.session = self._create_session(headers)
-        # Lock para serializar re-autenticações concorrentes (singleton compartilhado entre threads)
+        # Locks para sincronização entre threads
         self._auth_lock = threading.Lock()
+        self._role_lock = threading.Lock()
+        self.perfil_alias = None
 
         # Tenta carregar cookies persistidos (Redis ou arquivo local JSON)
         persisted_cookies = self._load_persisted_cookies()
@@ -282,6 +284,7 @@ class SIPEClient:
         """Realiza a autenticacao automatica no SIPE e seleciona perfil e unidade."""
         cpf = cpf or self.cpf
         password = password or self.senha
+        perfil_id_original = perfil
         perfil = perfil or self.perfil
         unidade = unidade or self.unidade
 
@@ -364,6 +367,9 @@ class SIPEClient:
                 raise SIPEAuthError(f"Falha ao selecionar papel no SIPE. URL final: {res_role.url}")
 
             logger.info("Login e selecao de papel efetuados com sucesso via HTTP.")
+            self.perfil = perfil
+            self.perfil_alias = perfil_id_original
+            self.unidade = unidade
             self._update_cookie_header()
             return True
         except RequestException as exc:
@@ -428,66 +434,72 @@ class SIPEClient:
         perfil_str = str(perfil_id).strip()
         unidade_str = str(unidade_id).strip()
         
-        if self.perfil == perfil_str and self.unidade == unidade_str:
-            logger.debug(f"Perfil {perfil_str} e unidade {unidade_str} ja estao definidos no SIPEClient.")
-            return True
-            
-        logger.info(f"Alterando perfil para {perfil_str} e unidade para {unidade_str} no SIPE")
-        try:
-            # 1. Obter pagina selectRole para pegar o CSRF token e os perfis
-            res = self.session.get(f"{self.base_url}/selectRole", timeout=15)
-            soup = BeautifulSoup(res.text, "lxml")
-            
-            token_input = soup.find("input", {"name": "_token"})
-            if not token_input:
-                res = self.session.get(f"{self.base_url}/home", timeout=15)
-                soup = BeautifulSoup(res.text, "lxml")
+        with self._role_lock:
+            if (self.perfil == perfil_str or getattr(self, 'perfil_alias', None) == perfil_str) and self.unidade == unidade_str:
+                logger.debug(f"Perfil {perfil_str} e unidade {unidade_str} ja estao definidos no SIPEClient.")
+                return True
+                
+            logger.info(f"Alterando perfil para {perfil_str} e unidade para {unidade_str} no SIPE")
+            try:
+                # 1. Obter pagina selectRole para pegar o CSRF token e os perfis
                 res = self.session.get(f"{self.base_url}/selectRole", timeout=15)
+                if res.url and ("/login" in res.url or res.url.rstrip("/") == self.base_url.rstrip("/")):
+                    logger.info("Redirecionado para o login ao acessar selectRole. Fazendo login direto com o perfil desejado...")
+                    return self.login(perfil=perfil_str, unidade=unidade_str)
                 soup = BeautifulSoup(res.text, "lxml")
+                
                 token_input = soup.find("input", {"name": "_token"})
+                if not token_input:
+                    res = self.session.get(f"{self.base_url}/home", timeout=15)
+                    soup = BeautifulSoup(res.text, "lxml")
+                    res = self.session.get(f"{self.base_url}/selectRole", timeout=15)
+                    soup = BeautifulSoup(res.text, "lxml")
+                    token_input = soup.find("input", {"name": "_token"})
+                    
+                if not token_input:
+                    logger.info("Token CSRF nao encontrado para selectRole. Provavelmente a sessao expirou. Tentando login direto com perfil/unidade desejados...")
+                    return self.login(perfil=perfil_str, unidade=unidade_str)
+                    
+                token = token_input.get("value")
                 
-            if not token_input:
-                raise SIPEAuthError("Token CSRF nao encontrado para troca de perfil/unidade.")
+                # Resolve perfil dinâmico (último da lista)
+                if perfil_str in ('ultimo', 'visitas-entradas', 'last'):
+                    select_role = soup.find("select", {"name": "app_role_id"})
+                    if select_role:
+                        options = select_role.find_all("option")
+                        valid_options = [
+                            opt for opt in options 
+                            if opt.get("value") and opt.get("value") != "0" and opt.text.strip()
+                        ]
+                        if valid_options:
+                            perfil_str = valid_options[-1].get("value")
+                            logger.info(f"Selecionado dinamicamente o ultimo perfil da lista: {perfil_str} ({valid_options[-1].text.strip()})")
                 
-            token = token_input.get("value")
-            
-            # Resolve perfil dinâmico (último da lista)
-            if perfil_str in ('ultimo', 'visitas-entradas', 'last'):
-                select_role = soup.find("select", {"name": "app_role_id"})
-                if select_role:
-                    options = select_role.find_all("option")
-                    valid_options = [
-                        opt for opt in options 
-                        if opt.get("value") and opt.get("value") != "0" and opt.text.strip()
-                    ]
-                    if valid_options:
-                        perfil_str = valid_options[-1].get("value")
-                        logger.info(f"Selecionado dinamicamente o ultimo perfil da lista: {perfil_str} ({valid_options[-1].text.strip()})")
-            
-            # 2. Fazer POST para selectRole
-            res_role = self.session.post(
-                f"{self.base_url}/selectRole",
-                data={"_token": token, "app_role_id": perfil_str, "unidade_id": unidade_str},
-                headers={
-                    "Referer": f"{self.base_url}/selectRole",
-                    "Origin": self.base_url,
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                timeout=20,
-                allow_redirects=True,
-            )
-            
-            if "home" not in res_role.url:
-                raise SIPEAuthError(f"Falha ao selecionar papel/unidade. URL final: {res_role.url}")
+                # 2. Fazer POST para selectRole
+                res_role = self.session.post(
+                    f"{self.base_url}/selectRole",
+                    data={"_token": token, "app_role_id": perfil_str, "unidade_id": unidade_str},
+                    headers={
+                        "Referer": f"{self.base_url}/selectRole",
+                        "Origin": self.base_url,
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    timeout=20,
+                    allow_redirects=True,
+                )
                 
-            self.perfil = perfil_str
-            self.unidade = unidade_str
-            self._update_cookie_header()
-            logger.info(f"Perfil alterado para {perfil_str} e unidade alterada para {unidade_str} com sucesso.")
-            return True
-        except Exception as e:
-            logger.warning(f"Erro ao trocar de perfil/unidade para {perfil_str}/{unidade_str}: {e}")
-            return False
+                if "home" not in res_role.url:
+                    raise SIPEAuthError(f"Falha ao selecionar papel/unidade. URL final: {res_role.url}")
+                    
+                self.perfil = perfil_str
+                self.perfil_alias = perfil_id
+                self.unidade = unidade_str
+                self._update_cookie_header()
+                logger.info(f"Perfil alterado para {perfil_str} e unidade alterada para {unidade_str} com sucesso.")
+                return True
+            except Exception as e:
+                logger.warning(f"Erro ao trocar de perfil/unidade para {perfil_str}/{unidade_str}: {e}")
+                return False
 
     def _update_cookie_header(self, persist: bool = True) -> None:
         cookies_dict = self.session.cookies.get_dict()
