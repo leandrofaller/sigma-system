@@ -262,7 +262,11 @@ function ActiveJobCard({
         <div className="flex justify-between text-xs text-blue-700 dark:text-blue-300 mb-1">
           <span>
             {live.processado.toLocaleString('pt-BR')} / {(live.total || 0).toLocaleString('pt-BR')}{' '}
-            {live.fase?.toLowerCase().includes('advogado') ? 'advogados' : 'apenados'}
+            {live.fase?.toLowerCase().includes('advogado')
+              ? 'advogados'
+              : live.fase?.toLowerCase().includes('visitante')
+                ? 'visitantes'
+                : 'apenados'}
           </span>
           <span className="font-bold">{pct}%</span>
         </div>
@@ -594,6 +598,15 @@ export function SyncPanel() {
           >
             {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
             Sincronizar Apenas Advogados
+          </button>
+
+          <button
+            onClick={() => startSync('VISITANTES')}
+            disabled={isActive || loading}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            Sincronizar Visitantes
           </button>
 
           <button
