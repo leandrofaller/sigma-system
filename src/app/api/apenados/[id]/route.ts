@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { unlink } from 'fs/promises';
 import { getApenadoPhotoPath } from '@/lib/storage';
 import { z } from 'zod';
+import { isPhotoReferenced } from '@/lib/photo-helpers';
 
 const apenadoSchema = z.object({
   name: z.string().min(1).max(200),
@@ -77,7 +78,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   if (apenado.photoPath) {
     try {
-      await unlink(getApenadoPhotoPath(apenado.photoPath));
+      const referenced = await isPhotoReferenced(apenado.photoPath, id);
+      if (!referenced) {
+        await unlink(getApenadoPhotoPath(apenado.photoPath));
+      }
     } catch {}
   }
 

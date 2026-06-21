@@ -263,10 +263,18 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
     setInlineError('');
     try {
       const idsToDelete = activeGroups.flatMap((g) => g.records.slice(1).map((r) => r.id));
+      const merges = activeGroups.flatMap((g) => {
+        const keepId = g.records[0].id;
+        return g.records.slice(1).map((r) => ({
+          idToDelete: r.id,
+          keepId,
+        }));
+      });
+
       const res = await fetch('/api/apenados/duplicates', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idsToDelete }),
+        body: JSON.stringify({ idsToDelete, merges }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao excluir registros');

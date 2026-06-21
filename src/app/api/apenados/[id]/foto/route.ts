@@ -9,6 +9,7 @@ import { assertUploadAllowed } from '@/lib/security';
 import { getApenadosDir, getApenadoPhotoPath } from '@/lib/storage';
 import { pgvectorAvailable, clearVector } from '@/lib/pgvector';
 import { invalidateFaceCache } from '@/lib/face-cache';
+import { isPhotoReferenced } from '@/lib/photo-helpers';
 
 
 const PHOTO_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'] as const;
@@ -99,7 +100,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!apenado.photoPath) return NextResponse.json({ error: 'Sem foto' }, { status: 404 });
 
   try {
-    await unlink(getApenadoPhotoPath(apenado.photoPath));
+    const referenced = await isPhotoReferenced(apenado.photoPath, id);
+    if (!referenced) {
+      await unlink(getApenadoPhotoPath(apenado.photoPath));
+    }
   } catch {}
 
   await prisma.apenado.update({
