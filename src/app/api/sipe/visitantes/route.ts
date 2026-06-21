@@ -14,10 +14,11 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? parseInt(limitParam) : undefined;
     const search = searchParams.get('search') || '';
 
-    const skip = (page - 1) * limit;
+    const skip = limit ? (page - 1) * limit : undefined;
 
     const where: any = {};
     if (search) {
@@ -36,6 +37,17 @@ export async function GET(req: NextRequest) {
         skip,
         take: limit,
         include: {
+          vinculos: {
+            include: {
+              apenado: {
+                select: {
+                  id: true,
+                  nome: true,
+                  photoPath: true
+                }
+              }
+            }
+          },
           _count: {
             select: { entradas: true }
           }
@@ -44,10 +56,37 @@ export async function GET(req: NextRequest) {
       prisma.sipeVisitante.count({ where })
     ]);
 
+    // Mapeia o resultado no formato esperado pelo frontend SipeVisitantesPanel
+    const mappedVisitantes = visitantes.map((v) => {
+      const primeiroVinculo = v.vinculos.find((vin) => vin.ativo) || v.vinculos[0];
+      
+      return {
+        id: v.id,
+        visitanteId: v.id,
+        nomeVisitante: v.nome,
+        cpfVisitante: v.cpf,
+        parentescoVisitante: v.parentesco,
+        ativoVisitante: primeiroVinculo ? primeiroVinculo.ativo : true,
+        photoPath: v.photoPath,
+        descricao: v.carteirinha ? `Carteirinha: ${v.carteirinha}` : null,
+        apenado: primeiroVinculo?.apenado
+          ? {
+              id: primeiroVinculo.apenado.id,
+              nome: primeiroVinculo.apenado.nome,
+              photoPath: primeiroVinculo.apenado.photoPath
+            }
+          : {
+              id: '',
+              nome: 'Não informado',
+              photoPath: null
+            }
+      };
+    });
+
     return NextResponse.json({
-      visitantes,
+      visitantes: mappedVisitantes,
       total,
-      pages: Math.ceil(total / limit),
+      pages: limit ? Math.ceil(total / limit) : 1,
       currentPage: page
     });
   } catch (err: any) {
