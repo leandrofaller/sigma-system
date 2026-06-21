@@ -21,8 +21,8 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const user = session.user as any;
-  if (user.role !== 'SUPER_ADMIN') {
-    return NextResponse.json({ error: 'Apenas super administrador pode criar grupos' }, { status: 403 });
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
   const body = await req.json();

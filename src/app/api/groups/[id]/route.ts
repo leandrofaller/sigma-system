@@ -8,7 +8,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const user = session.user as any;
-  if (user.role !== 'SUPER_ADMIN') {
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
@@ -33,7 +33,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const user = session.user as any;
-  if (user.role !== 'SUPER_ADMIN') {
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 

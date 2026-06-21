@@ -15,7 +15,7 @@ export default async function GruposPage() {
   const session = await auth();
   const user = session!.user as any;
 
-  if (user.role !== 'SUPER_ADMIN') {
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
     redirect('/dashboard');
   }
 

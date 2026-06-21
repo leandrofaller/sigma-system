@@ -25,7 +25,7 @@ const DEFAULT_NAV_ITEMS = [
 
 const DEFAULT_ADMIN_ITEMS = [
   { key: 'admin-usuarios', label: 'Usuários', href: '/admin/usuarios', iconName: 'Users', position: 210, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: true },
-  { key: 'admin-grupos', label: 'Grupos / Setores', href: '/admin/grupos', iconName: 'FolderOpen', position: 220, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: true },
+  { key: 'admin-grupos', label: 'Grupos / Setores', href: '/admin/grupos', iconName: 'FolderOpen', position: 220, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: true },
   { key: 'admin-dispositivos', label: 'Dispositivos', href: '/admin/dispositivos', iconName: 'Monitor', position: 230, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: true },
   { key: 'admin-monitoramento', label: 'Monitoramento', href: '/admin/monitoramento', iconName: 'MapPin', position: 240, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: true },
   { key: 'admin-manutencao', label: 'Avisos de Manutenção', href: '/admin/manutencao', iconName: 'AlertCircle', position: 250, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: true },
@@ -85,6 +85,19 @@ export async function GET(req: NextRequest) {
       await prisma.sidebarConfig.update({
         where: { key: 'forca-tarefa' },
         data: { label: 'Força-Tarefa' }
+      });
+      configs = await prisma.sidebarConfig.findMany({
+        orderBy: { position: 'asc' }
+      });
+    }
+
+    // Atualização dinâmica: garante que admin-grupos tenha 'ADMIN' nas roles no banco de dados
+    const adminGruposConfig = configs.find(c => c.key === 'admin-grupos');
+    if (adminGruposConfig && !adminGruposConfig.roles.includes('ADMIN')) {
+      const newRoles = [...adminGruposConfig.roles, 'ADMIN'];
+      await prisma.sidebarConfig.update({
+        where: { key: 'admin-grupos' },
+        data: { roles: newRoles }
       });
       configs = await prisma.sidebarConfig.findMany({
         orderBy: { position: 'asc' }
