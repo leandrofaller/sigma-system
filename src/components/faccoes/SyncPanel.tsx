@@ -309,16 +309,26 @@ export function SyncPanel() {
         toast.error(data.error || 'Erro ao verificar fotos')
         return
       }
+
+      // Mensagem opcional de auto-heal
+      const autoHealMsg = data.totalAutoVinculados > 0 
+        ? ` (${data.totalAutoVinculados} vínculo(s) corrigido(s) automaticamente no banco)`
+        : '';
+
       if (data.syncStatus === 'started') {
-        toast.success(`Detectadas ${data.totalFotosAusentes} fotos ausentes. Sincronização iniciada!`)
+        toast.success(`Detectadas ${data.totalFotosAusentes} fotos ausentes${autoHealMsg}. Sincronização iniciada!`)
         setActiveJobId(data.syncJobId)
         fetchJobs()
       } else if (data.syncStatus === 'skipped') {
-        toast.info(`Nenhuma foto ausente detectada. Todos os ${data.totalComCaminho} registros estão ok!`)
+        if (data.totalAutoVinculados > 0) {
+          toast.success(`Sucesso! ${data.totalAutoVinculados} vínculo(s) corrigido(s) automaticamente. Todas as fotos físicas estão em ordem!`)
+        } else {
+          toast.info(`Nenhuma foto ausente detectada. Todos os ${data.totalComCaminho} registros estão ok!`)
+        }
       } else if (data.syncStatus === 'error_another_job_running') {
-        toast.error('Já existe uma sincronização ativa em andamento. Aguarde antes de verificar fotos.')
+        toast.error(`Já existe uma sincronização ativa. ${data.totalAutoVinculados > 0 ? `${data.totalAutoVinculados} vínculo(s) corrigido(s), mas a ` : ''}sincronização de fotos foi pulada.`)
       } else {
-        toast.info(`Verificação concluída. ${data.totalFotosAusentes} fotos ausentes. Sincronização não iniciada.`)
+        toast.info(`Verificação concluída. ${data.totalFotosAusentes} fotos ausentes${autoHealMsg}.`)
       }
     } catch {
       toast.error('Erro de conexão com a API de verificação')

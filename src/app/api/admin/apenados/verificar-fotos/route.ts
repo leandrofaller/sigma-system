@@ -26,6 +26,65 @@ export async function GET(req: NextRequest) {
   const sync = req.nextUrl.searchParams.get('sync') === 'true';
 
   try {
+    // --- AUTO-CORREÇÃO (AUTO-HEAL) DE VÍNCULOS ÓRFÃOS ---
+    console.log('[FOTOS-CHECK] Iniciando auto-correção de apenados locais sem vínculo com o SIPE...');
+    const apenadosSemVinculo = await prisma.apenado.findMany({
+      where: {
+        AND: [
+          { photoPath: { not: null } },
+          { photoPath: { not: '' } },
+          { sipeImportacoes: { none: {} } }
+        ]
+      },
+      select: {
+        id: true,
+        name: true,
+        photoPath: true
+      }
+    });
+
+    let totalAutoVinculados = 0;
+
+    for (const a of apenadosSemVinculo) {
+      // Limpa sufixos numéricos comuns como " (1)", " (2)" no final do nome
+      const cleanName = a.name.replace(/\s*\(\d+\)\s*$/, '').trim().toUpperCase();
+      if (!cleanName) continue;
+
+      // Busca um registro SIPE importado com o mesmo nome que ainda esteja desvinculado
+      const sipeImportado = await prisma.sipeApenadoImportado.findFirst({
+        where: {
+          nome: { equals: cleanName, mode: 'insensitive' },
+          apenadoLocalId: null
+        },
+        select: {
+          id: true,
+          sipeId: true
+        }
+      });
+
+      if (sipeImportado) {
+        await prisma.$transaction([
+          prisma.sipeApenadoImportado.update({
+            where: { id: sipeImportado.id },
+            data: { apenadoLocalId: a.id }
+          }),
+          prisma.apenado.update({
+            where: { id: a.id },
+            data: {
+              name: cleanName,
+              photoPath: `uploads/apenados/sipe-${sipeImportado.sipeId}.webp`
+            }
+          })
+        ]);
+        totalAutoVinculados++;
+        console.log(`[FOTOS-CHECK] [AUTO-HEAL] Vinculado apenado "${cleanName}" ao SIPE ID ${sipeImportado.sipeId}`);
+      }
+    }
+
+    if (totalAutoVinculados > 0) {
+      console.log(`[FOTOS-CHECK] Auto-correção finalizada. Vinculados ${totalAutoVinculados} apenados.`);
+    }
+
     console.log('[FOTOS-CHECK] Iniciando varredura física de caminhos de fotos...');
 
     // 1. Buscar apenados com photoPath preenchido (não nulo e não vazio)
@@ -128,6 +187,7 @@ export async function GET(req: NextRequest) {
       success: true,
       totalComCaminho: apenados.length,
       totalFotosAusentes: missingPhotos.length,
+      totalAutoVinculados,
       sipeIdsIdentificados: sipeIdsToSync.length,
       syncStatus,
       syncJobId,
