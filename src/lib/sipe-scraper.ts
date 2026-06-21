@@ -624,6 +624,13 @@ export function startSipeSync(jobId: string, unidadeId: string, engine: SipeEngi
     const job = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
     if (!job) throw new Error('Job não encontrado')
 
+    if (job.tipo === 'VISITANTES') {
+      globalThis.__sipeState = null
+      const { startVisitantesSync } = await import('./visitantes-scraper')
+      startVisitantesSync(jobId)
+      return
+    }
+
     if (globalThis.__sipeState) {
       globalThis.__sipeState.tipo = job.tipo
     }

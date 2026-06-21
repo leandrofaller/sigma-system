@@ -125,7 +125,11 @@ export async function POST(req: NextRequest) {
       data: { status: 'RUNNING', ultimaAtividade: new Date() },
     })
 
-    startSipeSyncWithEngine(resumeJobId, existing.unidade ?? unidadeId, engine)
+    if (existing.tipo === 'VISITANTES') {
+      startVisitantesSync(resumeJobId)
+    } else {
+      startSipeSyncWithEngine(resumeJobId, existing.unidade ?? unidadeId, engine)
+    }
     return NextResponse.json({ jobId: resumeJobId, status: 'RUNNING', resumed: true })
   }
 

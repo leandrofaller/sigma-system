@@ -32,7 +32,7 @@ async function dbProgress(
     total?: number;
     log?: string;
     idsColetados?: string;
-    ultimoIdProcessado?: number;
+    ultimoIdProcessado?: number | null;
     iniciadoEm?: Date;
     finalizadoEm?: Date;
   }
@@ -87,6 +87,10 @@ export function startVisitantesSync(jobId: string): void {
     await dbProgress(jobId, {
       status: 'RUNNING',
       fase: 'Login',
+      processado: 0,
+      erros: 0,
+      total: 0,
+      ultimoIdProcessado: null,
       log: 'Iniciando scraping de visitantes no SIPE. Mudando perfil para Visitas-Entradas...',
     });
 
