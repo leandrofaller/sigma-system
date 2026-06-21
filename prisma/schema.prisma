@@ -492,6 +492,7 @@ model Apenado {
   groups           ApenadoGroupMember[]
   sipeImportacoes  SipeApenadoImportado[]
   fotosComplementares SipeFotoComplementar[]
+  sanitizations    ImageSanitization[]
 
   @@index([name])
   @@index([matricula])
@@ -501,6 +502,27 @@ model Apenado {
   @@index([photoQuality])
   @@index([detScore])
   @@map("apenados")
+}
+
+model ImageSanitization {
+  id              String   @id @default(cuid())
+  apenadoId       String?  // ID do apenado local correspondente (opcional)
+  photoPath       String   // Caminho físico atual (ex: uploads/quarentena/sem_rosto/...)
+  originalPath    String   // Caminho original da imagem (ex: uploads/apenados/...)
+  status          String   // "CLEAN" | "NO_FACE" | "LOW_QUALITY" | "DUPLICATE" | "APPROVED" | "REJECTED"
+  reason          String?  // Motivo da classificação
+  score           Float?   // Score de detecção facial ou de qualidade
+  hashPerceptual  String?  // pHash da imagem
+  duplicateOfId   String?  // ID do apenado do qual é duplicada
+  analyzedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  apenado         Apenado? @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([apenadoId])
+  @@map("image_sanitizations")
 }
 
 model UserDevice {

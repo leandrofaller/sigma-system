@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -27,7 +27,7 @@ interface NavItem {
 const iconMap: Record<string, React.ComponentType<any>> = {
   LayoutDashboard, FileText, Inbox, BookOpen, ClipboardList, Calendar, CalendarDays,
   Trello, MessageSquare, Sparkles, UserCheck, Shield, Database, Smartphone, Brain, Building2,
-  Users, FolderOpen, Monitor, MapPin, AlertCircle, Settings
+  Users, FolderOpen, Monitor, MapPin, AlertCircle, Settings, ShieldAlert
 };
 
 const defaultNavItems: NavItem[] = [
@@ -56,6 +56,7 @@ const defaultAdminItems: NavItem[] = [
   { label: 'Monitoramento', href: '/admin/monitoramento', iconName: 'MapPin', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Avisos de Manutenção', href: '/admin/manutencao', iconName: 'AlertCircle', roles: ['SUPER_ADMIN'] },
   { label: 'Auditoria', href: '/auditoria', iconName: 'ClipboardList', roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Higienização de Fotos', href: '/admin/sanitizacao', iconName: 'ShieldAlert', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Backups', href: '/admin/backups', iconName: 'Database', roles: ['SUPER_ADMIN'] },
   { label: 'Configurações', href: '/admin/configuracoes', iconName: 'Settings', roles: ['SUPER_ADMIN'] },
 ];
