@@ -13,11 +13,15 @@ import {
 interface FaceMatch {
   id: string;
   name: string;
-  matricula: string | null;
-  unidade: string | null;
-  faccao: string | null;
+  matricula?: string | null;
+  unidade?: string | null;
+  faccao?: string | null;
   photoPath: string | null;
   similarity: number;
+  cpf?: string | null;
+  parentesco?: string | null;
+  vinculos?: Array<{ apenado: { id: string; nome: string } }> | null;
+  targetType?: 'apenados' | 'visitantes';
 }
 
 interface DetectedFace {
@@ -81,6 +85,11 @@ function fmtTime(seconds: number): string {
 // ─── MatchCard ────────────────────────────────────────────────────────────────
 
 function MatchCard({ match, rank, onEdit, onViewPhoto }: { match: FaceMatch; rank: number; onEdit?: (id: string) => void; onViewPhoto?: (match: FaceMatch) => void }) {
+  const isVisitante = match.targetType === 'visitantes';
+  const photoUrl = isVisitante
+    ? `/api/sipe/visitantes/${match.id}/foto`
+    : `/api/apenados/${match.id}/foto`;
+
   return (
     <div className={`rounded-xl border overflow-hidden ${
       match.similarity >= 70 ? 'border-green-200 dark:border-green-800'
@@ -97,24 +106,39 @@ function MatchCard({ match, rank, onEdit, onViewPhoto }: { match: FaceMatch; ran
           className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-700 cursor-pointer hover:opacity-80 transition-opacity"
         >
           {match.photoPath ? (
-            <img src={`/api/apenados/${match.id}/foto`} alt={match.name} loading="lazy" className="w-full h-full object-cover" />
+            <img src={photoUrl} alt={match.name} loading="lazy" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center"><ScanFace className="w-5 h-5 text-gray-400" /></div>
           )}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-title truncate">{match.name}</p>
-          <p className="text-xs text-subtle truncate">
-            {[match.matricula, match.unidade].filter(Boolean).join(' · ') || 'Sem matrícula'}
-          </p>
-          {match.faccao && <p className="text-[10px] text-orange-600 dark:text-orange-400 font-medium mt-0.5">{match.faccao}</p>}
+          {isVisitante ? (
+            <>
+              <p className="text-xs text-subtle truncate">
+                {[match.parentesco, match.cpf ? `CPF: ${match.cpf}` : null].filter(Boolean).join(' · ') || 'Sem parentesco'}
+              </p>
+              {match.vinculos && match.vinculos.length > 0 && (
+                <p className="text-[10px] text-sigma-600 dark:text-sigma-400 font-medium truncate mt-0.5" title={match.vinculos.map(v => v.apenado.nome).join(', ')}>
+                  Vinculado a: {match.vinculos.map(v => v.apenado.nome).join(', ')}
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-subtle truncate">
+                {[match.matricula, match.unidade].filter(Boolean).join(' · ') || 'Sem matrícula'}
+              </p>
+              {match.faccao && <p className="text-[10px] text-orange-600 dark:text-orange-400 font-medium mt-0.5">{match.faccao}</p>}
+            </>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
           <div className="flex flex-col items-end gap-0.5">
             <span className={`text-xl font-black tabular-nums ${simColor(match.similarity)}`}>{match.similarity}%</span>
             <span className={`text-[10px] font-semibold ${simColor(match.similarity)}`}>{simLabel(match.similarity)}</span>
           </div>
-          {onEdit && (
+          {onEdit && !isVisitante && (
             <button
               onClick={() => onEdit(match.id)}
               title="Editar registro"
@@ -233,6 +257,7 @@ interface Props { onClose: () => void; userRole: string; onEditApenado?: (id: st
 
 export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [tab, setTab] = useState<Tab>('search');
+  const [targetType, setTargetType] = useState<'apenados' | 'visitantes'>('apenados');
 
   // Visualizar foto ampliada
   const [viewingPhotoMatch, setViewingPhotoMatch] = useState<FaceMatch | null>(null);
@@ -365,6 +390,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
       form.append('image', file);
       form.append('topN', '20');
       form.append('minSimilarity', String(minSim));
+      form.append('targetType', targetType);
 
       const res = await fetch('/api/apenados/face/search', { method: 'POST', body: form });
 
@@ -399,7 +425,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     } finally {
       clearTimeout(slowTimer);
     }
-  }, []);
+  }, [targetType]);
 
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return;
@@ -435,6 +461,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
       form.append('topN', '20');
       form.append('minSimilarity', String(minSim));
       form.append('compare', 'true'); // ativa comparação com ArcFace
+      form.append('targetType', targetType);
 
       const res = await fetch('/api/apenados/face/advanced-search', { method: 'POST', body: form });
       const text = await res.text();
@@ -478,7 +505,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
       setAdvErrorMsg(err.message || 'Erro no processamento da busca facial avançada.');
       setAdvSearchState('error');
     }
-  }, [fetchDashboard]);
+  }, [fetchDashboard, targetType]);
 
   const handleAdvFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return;
@@ -650,6 +677,34 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
           ════════════════════════════════════════════════════════════════════ */}
           {tab === 'search' && (
             <>
+              {/* Seletor de Base de Dados Premium */}
+              <div className="flex justify-center gap-2 mb-4 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[280px] mx-auto border border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => { setTargetType('apenados'); reset(); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                    targetType === 'apenados'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Apenados
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTargetType('visitantes'); reset(); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                    targetType === 'visitantes'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Visitantes
+                </button>
+              </div>
+
               {searchState === 'ready' && (
                 <div
                   onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
@@ -839,6 +894,33 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
           ════════════════════════════════════════════════════════════════════ */}
           {tab === 'advanced' && (
             <div className="space-y-6">
+              {/* Seletor de Base de Dados Premium */}
+              <div className="flex justify-center gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[280px] mx-auto border border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => { setTargetType('apenados'); resetAdvanced(); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                    targetType === 'apenados'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Apenados
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTargetType('visitantes'); resetAdvanced(); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                    targetType === 'visitantes'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Visitantes
+                </button>
+              </div>
               {/* Dashboard Grid */}
               {dashboard && (
                 <div className="grid grid-cols-5 gap-3">
@@ -1614,7 +1696,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
             <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 relative">
               {viewingPhotoMatch.photoPath ? (
                 <img 
-                  src={`/api/apenados/${viewingPhotoMatch.id}/foto`} 
+                  src={viewingPhotoMatch.targetType === 'visitantes' ? `/api/sipe/visitantes/${viewingPhotoMatch.id}/foto` : `/api/apenados/${viewingPhotoMatch.id}/foto`} 
                   alt={viewingPhotoMatch.name} 
                   className="w-full h-full object-contain"
                 />
@@ -1626,21 +1708,46 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
             </div>
 
             <div className="mt-3 pt-2.5 border-t border-gray-100 dark:border-gray-800 space-y-1.5 text-xs text-subtle">
-              <div className="flex justify-between">
-                <span>Matrícula:</span>
-                <span className="font-semibold text-title">{viewingPhotoMatch.matricula || 'Sem matrícula'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Unidade:</span>
-                <span className="font-semibold text-title">{viewingPhotoMatch.unidade || 'Sem unidade'}</span>
-              </div>
-              {viewingPhotoMatch.faccao && (
-                <div className="flex justify-between">
-                  <span>Facção:</span>
-                  <span className="font-semibold text-orange-600 dark:text-orange-400">{viewingPhotoMatch.faccao}</span>
-                </div>
+              {viewingPhotoMatch.targetType === 'visitantes' ? (
+                <>
+                  <div className="flex justify-between">
+                    <span>Parentesco:</span>
+                    <span className="font-semibold text-title">{viewingPhotoMatch.parentesco || 'Sem parentesco'}</span>
+                  </div>
+                  {viewingPhotoMatch.cpf && (
+                    <div className="flex justify-between">
+                      <span>CPF:</span>
+                      <span className="font-semibold text-title">{viewingPhotoMatch.cpf}</span>
+                    </div>
+                  )}
+                  {viewingPhotoMatch.vinculos && viewingPhotoMatch.vinculos.length > 0 && (
+                    <div className="flex justify-between flex-col gap-0.5">
+                      <span>Apenados Vinculados:</span>
+                      <span className="font-semibold text-title text-right text-xs break-all">
+                        {viewingPhotoMatch.vinculos.map(v => v.apenado.nome).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between">
+                    <span>Matrícula:</span>
+                    <span className="font-semibold text-title">{viewingPhotoMatch.matricula || 'Sem matrícula'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Unidade:</span>
+                    <span className="font-semibold text-title">{viewingPhotoMatch.unidade || 'Sem unidade'}</span>
+                  </div>
+                  {viewingPhotoMatch.faccao && (
+                    <div className="flex justify-between">
+                      <span>Facção:</span>
+                      <span className="font-semibold text-orange-600 dark:text-orange-400">{viewingPhotoMatch.faccao}</span>
+                    </div>
+                  )}
+                </>
               )}
-              <div className="flex justify-between">
+              <div className="flex justify-between border-t border-gray-100 dark:border-gray-800 pt-1.5 mt-1.5">
                 <span>Similaridade Busca:</span>
                 <span className="font-extrabold text-sigma-600 dark:text-sigma-400">{viewingPhotoMatch.similarity}%</span>
               </div>

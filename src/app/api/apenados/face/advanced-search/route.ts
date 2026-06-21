@@ -7,7 +7,8 @@ import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import { warmAdvancedFaceCache, awaitAdvancedFaceCache, getAdvancedCacheStatus } from '@/lib/advanced-face-cache';
-import { pgvectorAdvancedAvailable, searchByVectorAdvanced } from '@/lib/pgvector';
+import { warmVisitanteFaceCache, awaitVisitanteFaceCache } from '@/lib/visitante-face-cache';
+import { pgvectorAdvancedAvailable, searchByVectorAdvanced, searchByVectorAdvancedForVisitantes } from '@/lib/pgvector';
 import { createAuditLog } from '@/lib/audit';
 
 export const maxDuration = 120;
@@ -255,13 +256,18 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  warmAdvancedFaceCache();
-
   const formData = await req.formData();
   const file = formData.get('image') as File | null;
   const topN = Math.min(50, Math.max(1, parseInt((formData.get('topN') as string) || '20', 10)));
   const minSimilarity = parseInt((formData.get('minSimilarity') as string) || '40', 10);
   const compareArcFace = formData.get('compare') === 'true'; // Se true, roda o ArcFace em paralelo
+  const targetType = (formData.get('targetType') as string) || 'apenados';
+
+  if (targetType === 'visitantes') {
+    warmVisitanteFaceCache();
+  } else {
+    warmAdvancedFaceCache();
+  }
 
   if (!file) return NextResponse.json({ error: 'Nenhuma imagem enviada' }, { status: 400 });
 
@@ -286,7 +292,7 @@ export async function POST(req: NextRequest) {
       await createAuditLog({
         userId: session.user.id,
         action: 'FACE_ADVANCED_SEARCH',
-        details: { success: false, error: 'Nenhum rosto detectado', executionTimeMs: advDuration }
+        details: { success: false, error: 'Nenhum rosto detectado', targetType, executionTimeMs: advDuration }
       });
       return NextResponse.json({
         faces: [],
@@ -310,6 +316,7 @@ export async function POST(req: NextRequest) {
           success: false, 
           livenessBlocked: true, 
           livenessScore: face.liveness_score, 
+          targetType,
           executionTimeMs: advDuration 
         }
       });
@@ -330,6 +337,7 @@ export async function POST(req: NextRequest) {
           success: false, 
           qualityRejected: true, 
           qualityScore: face.quality.score, 
+          targetType,
           executionTimeMs: advDuration 
         }
       });
@@ -344,53 +352,156 @@ export async function POST(req: NextRequest) {
     let matches: any[] = [];
     const searchStartTime = Date.now();
 
-    if (pvecAvail) {
-      // Busca via pgvector
-      const hits = await searchByVectorAdvanced(face.embedding, minSim01, topN);
-      if (hits.length > 0) {
-        const records = await prisma.apenado.findMany({
-          where: { id: { in: hits.map((h) => h.id) } },
-          select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true }
-        });
-        const metaMap = new Map(records.map((r) => [r.id, r]));
-        matches = hits
-          .map(({ id, similarity }) => {
-            const meta = metaMap.get(id);
-            if (!meta) return null;
-            return { ...meta, similarity: toPercent(similarity) };
-          })
-          .filter(Boolean);
+    if (targetType === 'visitantes') {
+      if (pvecAvail) {
+        // Busca via pgvector para visitantes
+        const hits = await searchByVectorAdvancedForVisitantes(face.embedding, minSim01, topN);
+        if (hits.length > 0) {
+          const records = await prisma.sipeVisitante.findMany({
+            where: { id: { in: hits.map((h) => h.id) } },
+            select: {
+              id: true,
+              nome: true,
+              cpf: true,
+              parentesco: true,
+              photoPath: true,
+              vinculos: {
+                select: {
+                  apenado: {
+                    select: {
+                      id: true,
+                      nome: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
+          const metaMap = new Map(records.map((r) => [r.id, r]));
+          matches = hits
+            .map(({ id, similarity }) => {
+              const meta = metaMap.get(id);
+              if (!meta) return null;
+              return {
+                id: meta.id,
+                name: meta.nome,
+                cpf: meta.cpf,
+                parentesco: meta.parentesco,
+                photoPath: meta.photoPath,
+                vinculos: meta.vinculos,
+                targetType: 'visitantes',
+                similarity: toPercent(similarity),
+              };
+            })
+            .filter(Boolean);
+        }
+      } else {
+        // Fallback em memória para visitantes
+        const cache = await awaitVisitanteFaceCache(25_000);
+        const { ids, vecs, count } = cache;
+        const queryVec = new Float32Array(face.embedding);
+        const hits: Array<{ idx: number; similarity: number }> = [];
+
+        for (let i = 0; i < count; i++) {
+          const offset = i * 512;
+          let dot = 0;
+          for (let j = 0; j < 512; j++) dot += queryVec[j] * vecs[offset + j];
+          if (dot >= minSim01) hits.push({ idx: i, similarity: dot });
+        }
+
+        hits.sort((a, b) => b.similarity - a.similarity);
+        const topHits = hits.slice(0, topN);
+
+        if (topHits.length > 0) {
+          const records = await prisma.sipeVisitante.findMany({
+            where: { id: { in: topHits.map((h) => ids[h.idx]) } },
+            select: {
+              id: true,
+              nome: true,
+              cpf: true,
+              parentesco: true,
+              photoPath: true,
+              vinculos: {
+                select: {
+                  apenado: {
+                    select: {
+                      id: true,
+                      nome: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
+          const metaMap = new Map(records.map((r) => [r.id, r]));
+          matches = topHits
+            .map(({ idx, similarity }) => {
+              const meta = metaMap.get(ids[idx]);
+              if (!meta) return null;
+              return {
+                id: meta.id,
+                name: meta.nome,
+                cpf: meta.cpf,
+                parentesco: meta.parentesco,
+                photoPath: meta.photoPath,
+                vinculos: meta.vinculos,
+                targetType: 'visitantes',
+                similarity: toPercent(similarity),
+              };
+            })
+            .filter(Boolean);
+        }
       }
     } else {
-      // Fallback em memória
-      const cache = await awaitAdvancedFaceCache(25_000);
-      const { ids, vecs, count } = cache;
-      const queryVec = new Float32Array(face.embedding);
-      const hits: Array<{ idx: number; similarity: number }> = [];
+      // Busca Apenados
+      if (pvecAvail) {
+        // Busca via pgvector
+        const hits = await searchByVectorAdvanced(face.embedding, minSim01, topN);
+        if (hits.length > 0) {
+          const records = await prisma.apenado.findMany({
+            where: { id: { in: hits.map((h) => h.id) } },
+            select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true }
+          });
+          const metaMap = new Map(records.map((r) => [r.id, r]));
+          matches = hits
+            .map(({ id, similarity }) => {
+              const meta = metaMap.get(id);
+              if (!meta) return null;
+              return { ...meta, targetType: 'apenados', similarity: toPercent(similarity) };
+            })
+            .filter(Boolean);
+        }
+      } else {
+        // Fallback em memória
+        const cache = await awaitAdvancedFaceCache(25_000);
+        const { ids, vecs, count } = cache;
+        const queryVec = new Float32Array(face.embedding);
+        const hits: Array<{ idx: number; similarity: number }> = [];
 
-      for (let i = 0; i < count; i++) {
-        const offset = i * 512;
-        let dot = 0;
-        for (let j = 0; j < 512; j++) dot += queryVec[j] * vecs[offset + j];
-        if (dot >= minSim01) hits.push({ idx: i, similarity: dot });
-      }
+        for (let i = 0; i < count; i++) {
+          const offset = i * 512;
+          let dot = 0;
+          for (let j = 0; j < 512; j++) dot += queryVec[j] * vecs[offset + j];
+          if (dot >= minSim01) hits.push({ idx: i, similarity: dot });
+        }
 
-      hits.sort((a, b) => b.similarity - a.similarity);
-      const topHits = hits.slice(0, topN);
+        hits.sort((a, b) => b.similarity - a.similarity);
+        const topHits = hits.slice(0, topN);
 
-      if (topHits.length > 0) {
-        const records = await prisma.apenado.findMany({
-          where: { id: { in: topHits.map((h) => ids[h.idx]) } },
-          select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true }
-        });
-        const metaMap = new Map(records.map((r) => [r.id, r]));
-        matches = topHits
-          .map(({ idx, similarity }) => {
-            const meta = metaMap.get(ids[idx]);
-            if (!meta) return null;
-            return { ...meta, similarity: toPercent(similarity) };
-          })
-          .filter(Boolean);
+        if (topHits.length > 0) {
+          const records = await prisma.apenado.findMany({
+            where: { id: { in: topHits.map((h) => ids[h.idx]) } },
+            select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true }
+          });
+          const metaMap = new Map(records.map((r) => [r.id, r]));
+          matches = topHits
+            .map(({ idx, similarity }) => {
+              const meta = metaMap.get(ids[idx]);
+              if (!meta) return null;
+              return { ...meta, targetType: 'apenados', similarity: toPercent(similarity) };
+            })
+            .filter(Boolean);
+        }
       }
     }
 
@@ -419,7 +530,8 @@ export async function POST(req: NextRequest) {
         highestSimilarity,
         matchesCount: matches.length,
         livenessScore: face.liveness_score,
-        qualityScore: face.quality.score
+        qualityScore: face.quality.score,
+        targetType
       }
     });
 

@@ -1,6 +1,8 @@
 import { prisma } from './db';
 import { runIndexBatch } from './arcface-batch';
 import * as path from 'path';
+import { upsertVisitanteVector } from './pgvector';
+import { invalidateVisitanteFaceCache } from './visitante-face-cache';
 
 export async function runVisitantesIndexing(jobId: string, visitanteIds: string[]): Promise<void> {
   const baseDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
@@ -51,6 +53,7 @@ export async function runVisitantesIndexing(jobId: string, visitanteIds: string[
             },
           })
         );
+        updates.push(upsertVisitanteVector(r.id, r.embedding));
       } else if (r.no_face || r.no_photo) {
         updates.push(
           prisma.sipeVisitante.update({
@@ -61,10 +64,17 @@ export async function runVisitantesIndexing(jobId: string, visitanteIds: string[
             },
           })
         );
+        updates.push(
+          prisma.$executeRawUnsafe(
+            `UPDATE sipe_visitantes SET "faceVector" = NULL WHERE id = $1`,
+            r.id
+          ).catch(() => {})
+        );
       }
     }
 
     await Promise.all(updates);
+    invalidateVisitanteFaceCache();
     console.log(`[ARCFACE VISITANTES] Indexação concluída para ${updates.length} visitante(s).`);
   } catch (err) {
     console.error('[ARCFACE VISITANTES] Erro na indexação facial de visitantes:', err);

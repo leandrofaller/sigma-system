@@ -109,6 +109,16 @@ export async function initPgVector(): Promise<{ ok: boolean; error?: string }> {
       WITH (m = 32, ef_construction = 128)
     `);
 
+    // Inicializa suporte para visitantes
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE sipe_visitantes ADD COLUMN IF NOT EXISTS "faceVector" vector(512)`,
+    );
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS visitantes_face_hnsw_idx
+      ON sipe_visitantes USING hnsw ("faceVector" vector_cosine_ops)
+      WITH (m = 32, ef_construction = 128)
+    `);
+
     _available = true;
     _availableAdvanced = true;
     return { ok: true };
@@ -329,4 +339,109 @@ export async function clearVectorAdvanced(id: string): Promise<void> {
       id,
     );
   } catch {}
+}
+
+/** Salva um embedding como faceVector para um visitante. */
+export async function upsertVisitanteVector(id: string, embedding: number[]): Promise<void> {
+  const vec = `[${embedding.join(',')}]`;
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE sipe_visitantes SET "faceVector" = $1::vector WHERE id = $2`,
+      vec,
+      id,
+    );
+  } catch {}
+}
+
+/** Remove o faceVector de um visitante. */
+export async function clearVisitanteVector(id: string): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE sipe_visitantes SET "faceVector" = NULL WHERE id = $1`,
+      id,
+    );
+  } catch {}
+}
+
+/**
+ * Busca visitantes com faceVector mais próximo ao embedding fornecido.
+ */
+export async function searchByVectorForVisitantes(
+  embedding: number[],
+  threshold: number,
+  topN: number,
+): Promise<VectorMatch[]> {
+  const vec = `[${embedding.join(',')}]`;
+  const maxDist = 1 - threshold;
+
+  try {
+    const rows = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET LOCAL hnsw.ef_search = 100');
+      return tx.$queryRawUnsafe<Array<{ id: string; sim: number }>>(
+        `SELECT id, (1 - ("faceVector" <=> $1::vector)) AS sim
+         FROM sipe_visitantes
+         WHERE "faceVector" IS NOT NULL
+           AND "photoPath" IS NOT NULL
+           AND ("faceVector" <=> $1::vector) <= $2
+         ORDER BY "faceVector" <=> $1::vector ASC
+         LIMIT $3`,
+        vec,
+        maxDist,
+        topN,
+      );
+    });
+
+    return rows.map((r) => ({ id: r.id, similarity: r.sim }));
+  } catch {
+    return [];
+  }
+}
+
+/** Busca visitantes para o pipeline de IA avançado usando o mesmo faceVector. */
+export async function searchByVectorAdvancedForVisitantes(
+  embedding: number[],
+  threshold: number,
+  topN: number,
+): Promise<VectorMatch[]> {
+  // Para visitantes, como não há vetor avançado específico, usamos o faceVector normal
+  return searchByVectorForVisitantes(embedding, threshold, topN);
+}
+
+/**
+ * Popula faceVector a partir do faceDescriptor existente para visitantes.
+ */
+export async function populateVisitantesVectorsFromDescriptors(batchSize = 500): Promise<number> {
+  let total = 0;
+  let lastId = '';
+
+  while (true) {
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: string; faceDescriptor: string }>>(
+      `SELECT id, "faceDescriptor" FROM sipe_visitantes
+       WHERE "faceDescriptor" LIKE '[%'
+         AND "faceVector" IS NULL
+         AND id > $1
+       ORDER BY id ASC
+       LIMIT $2`,
+      lastId,
+      batchSize,
+    );
+
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      try {
+        const vec = row.faceDescriptor.trim();
+        await prisma.$executeRawUnsafe(
+          `UPDATE sipe_visitantes SET "faceVector" = $1::vector WHERE id = $2`,
+          vec,
+          row.id,
+        );
+        total++;
+      } catch {}
+    }
+
+    lastId = rows[rows.length - 1].id;
+  }
+
+  return total;
 }

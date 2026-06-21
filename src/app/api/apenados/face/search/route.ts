@@ -7,7 +7,8 @@ import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import { warmFaceCache, awaitFaceCache, getCacheStatus } from '@/lib/face-cache';
-import { pgvectorAvailable, searchByVector } from '@/lib/pgvector';
+import { warmVisitanteFaceCache, awaitVisitanteFaceCache, getVisitanteCacheStatus } from '@/lib/visitante-face-cache';
+import { pgvectorAvailable, searchByVector, searchByVectorForVisitantes } from '@/lib/pgvector';
 
 export const maxDuration = 60;
 
@@ -97,13 +98,18 @@ export async function POST(req: NextRequest) {
   // Threshold padrão configurável via env — 0.4 (40%) por padrão
   const envDefaultSim = Math.round(parseFloat(process.env.FACE_SIMILARITY_THRESHOLD || '0.4') * 100);
 
-  // Inicia carregamento do cache em background (no-op se pgvector disponível e cache já carregado)
-  warmFaceCache();
-
   const formData = await req.formData();
   const file = formData.get('image') as File | null;
   const topN = Math.min(50, Math.max(1, parseInt((formData.get('topN') as string) || '20', 10)));
   const minSimilarity = parseInt((formData.get('minSimilarity') as string) || String(envDefaultSim), 10);
+  const targetType = (formData.get('targetType') as string) || 'apenados';
+
+  // Inicia carregamento do cache em background (no-op se pgvector disponível e cache já carregado)
+  if (targetType === 'visitantes') {
+    warmVisitanteFaceCache();
+  } else {
+    warmFaceCache();
+  }
 
   if (!file) return NextResponse.json({ error: 'Nenhuma imagem enviada' }, { status: 400 });
 
@@ -122,7 +128,7 @@ export async function POST(req: NextRequest) {
     ]);
 
     if (!analysis.faces || analysis.faces.length === 0) {
-      const cacheStatus = getCacheStatus();
+      const cacheStatus = targetType === 'visitantes' ? getVisitanteCacheStatus() : getCacheStatus();
       return NextResponse.json({
         faces: [],
         imageWidth: analysis.imageWidth,
@@ -134,8 +140,158 @@ export async function POST(req: NextRequest) {
 
     let facesResult: any[];
 
+    if (targetType === 'visitantes') {
+      if (pvecAvail) {
+        // ── Caminho pgvector Visitantes: busca SQL com índice HNSW ──
+        const allMatchIds = new Set<string>();
+        const facesWithHits = await Promise.all(
+          analysis.faces.map(async (face) => {
+            const hits = await searchByVectorForVisitantes(face.embedding, minSim01, topN);
+            hits.forEach((h) => allMatchIds.add(h.id));
+            return { face, hits };
+          }),
+        );
+
+        const matchedRecords = allMatchIds.size > 0
+          ? await prisma.sipeVisitante.findMany({
+              where: { id: { in: Array.from(allMatchIds) } },
+              select: {
+                id: true,
+                nome: true,
+                cpf: true,
+                parentesco: true,
+                photoPath: true,
+                vinculos: {
+                  select: {
+                    apenado: {
+                      select: {
+                        id: true,
+                        nome: true,
+                      },
+                    },
+                  },
+                },
+              },
+            })
+          : [];
+        const metaMap = new Map(matchedRecords.map((r) => [r.id, r]));
+
+        facesResult = facesWithHits.map(({ face, hits }) => ({
+          index: face.index,
+          det_score: face.det_score,
+          bbox: face.bbox,
+          kps: face.kps,
+          liveness_score: face.liveness_score ?? null,
+          matches: hits
+            .map(({ id, similarity }) => {
+              const meta = metaMap.get(id);
+              if (!meta) return null;
+              return {
+                id: meta.id,
+                name: meta.nome,
+                cpf: meta.cpf,
+                parentesco: meta.parentesco,
+                photoPath: meta.photoPath,
+                vinculos: meta.vinculos,
+                targetType: 'visitantes',
+                similarity: toPercent(similarity),
+              };
+            })
+            .filter(Boolean),
+        }));
+
+        const countQuery = await prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM sipe_visitantes WHERE "faceVector" IS NOT NULL`;
+        return NextResponse.json({
+          faces: facesResult,
+          imageWidth: analysis.imageWidth,
+          imageHeight: analysis.imageHeight,
+          indexed: countQuery[0]?.c ?? 0,
+          backend: 'pgvector',
+        });
+      }
+
+      // ── Caminho em memória Visitantes: varredura Float32Array (fallback) ──
+      const faceCache = await awaitVisitanteFaceCache(25_000);
+      const { ids, vecs, count } = faceCache;
+
+      const allMatchIds = new Set<string>();
+      const facesWithHits = analysis.faces.map((face) => {
+        const queryVec = new Float32Array(face.embedding);
+        const hits: Array<{ idx: number; similarity: number }> = [];
+
+        for (let i = 0; i < count; i++) {
+          const offset = i * 512;
+          let dot = 0;
+          for (let j = 0; j < 512; j++) dot += queryVec[j] * vecs[offset + j];
+          if (dot >= minSim01) hits.push({ idx: i, similarity: dot });
+        }
+
+        hits.sort((a, b) => b.similarity - a.similarity);
+        const topHits = hits.slice(0, topN);
+        topHits.forEach((h) => allMatchIds.add(ids[h.idx]));
+        return { face, topHits };
+      });
+
+      const matchedRecords = allMatchIds.size > 0
+        ? await prisma.sipeVisitante.findMany({
+            where: { id: { in: Array.from(allMatchIds) } },
+            select: {
+              id: true,
+              nome: true,
+              cpf: true,
+              parentesco: true,
+              photoPath: true,
+              vinculos: {
+                select: {
+                  apenado: {
+                    select: {
+                      id: true,
+                      nome: true,
+                    },
+                  },
+                },
+              },
+            },
+          })
+        : [];
+      const metaMap = new Map(matchedRecords.map((r) => [r.id, r]));
+
+      facesResult = facesWithHits.map(({ face, topHits }) => ({
+        index: face.index,
+        det_score: face.det_score,
+        bbox: face.bbox,
+        kps: face.kps,
+        liveness_score: face.liveness_score ?? null,
+        matches: topHits
+          .map(({ idx, similarity }) => {
+            const meta = metaMap.get(ids[idx]);
+            if (!meta) return null;
+            return {
+              id: meta.id,
+              name: meta.nome,
+              cpf: meta.cpf,
+              parentesco: meta.parentesco,
+              photoPath: meta.photoPath,
+              vinculos: meta.vinculos,
+              targetType: 'visitantes',
+              similarity: toPercent(similarity),
+            };
+          })
+          .filter(Boolean),
+      }));
+
+      return NextResponse.json({
+        faces: facesResult,
+        imageWidth: analysis.imageWidth,
+        imageHeight: analysis.imageHeight,
+        indexed: count,
+        backend: 'memory',
+      });
+    }
+
+    // ── Caminho Apenados (Existente) ──
     if (pvecAvail) {
-      // ── Caminho pgvector: busca SQL com índice HNSW (rápido, sem RAM) ──
+      // ── Caminho pgvector Apenados ──
       const allMatchIds = new Set<string>();
       const facesWithHits = await Promise.all(
         analysis.faces.map(async (face) => {
@@ -163,7 +319,7 @@ export async function POST(req: NextRequest) {
           .map(({ id, similarity }) => {
             const meta = metaMap.get(id);
             if (!meta) return null;
-            return { ...meta, similarity: toPercent(similarity) };
+            return { ...meta, targetType: 'apenados', similarity: toPercent(similarity) };
           })
           .filter(Boolean),
       }));
@@ -177,8 +333,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── Caminho em memória: varredura Float32Array (fallback) ──
-    // maxDuration=60s → deixa 35s para análise Python + DB queries após o cache carregar
+    // ── Caminho em memória Apenados ──
     const faceCache = await awaitFaceCache(25_000);
     const { ids, vecs, count } = faceCache;
 
@@ -218,7 +373,7 @@ export async function POST(req: NextRequest) {
         .map(({ idx, similarity }) => {
           const meta = metaMap.get(ids[idx]);
           if (!meta) return null;
-          return { ...meta, similarity: toPercent(similarity) };
+          return { ...meta, targetType: 'apenados', similarity: toPercent(similarity) };
         })
         .filter(Boolean),
     }));
@@ -238,8 +393,15 @@ export async function POST(req: NextRequest) {
 }
 
 // GET — status do cache (debug)
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  
+  const { searchParams } = new URL(req.url);
+  const type = searchParams.get('type') || 'apenados';
+
+  if (type === 'visitantes') {
+    return NextResponse.json(getVisitanteCacheStatus());
+  }
   return NextResponse.json(getCacheStatus());
 }
