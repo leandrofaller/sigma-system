@@ -43,6 +43,14 @@ export async function POST() {
   }
 }
 
+// Função auxiliar para processar um array em lotes com concorrência limitada
+async function runInChunks<T>(items: T[], chunkSize: number, fn: (item: T) => Promise<any>) {
+  for (let i = 0; i < items.length; i += chunkSize) {
+    const chunk = items.slice(i, i + chunkSize);
+    await Promise.allSettled(chunk.map(fn));
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   try {
     const session = await auth();
@@ -71,11 +79,16 @@ export async function DELETE(req: NextRequest) {
     const apenadosMap = new Map(apenados.map((a) => [a.id, a]));
 
     // 2. Processar cada par de mesclagem para atualizar as referências do SIAIP e inteligência
-    for (const merge of merges) {
+    const validMerges = merges.filter(merge => {
       const apenadoToDelete = apenadosMap.get(merge.idToDelete);
       const apenadoToKeep = apenadosMap.get(merge.keepId);
+      return apenadoToDelete && apenadoToKeep;
+    });
 
-      if (!apenadoToDelete || !apenadoToKeep) continue;
+    // Processar merges em lotes de 40 para evitar gargalos sequenciais ou saturação do pool
+    await runInChunks(validMerges, 40, async (merge) => {
+      const apenadoToDelete = apenadosMap.get(merge.idToDelete)!;
+      const apenadoToKeep = apenadosMap.get(merge.keepId)!;
 
       // Re-vincular os apenados importados do SIPE/SIAIP para o apenado mantido
       await prisma.sipeApenadoImportado.updateMany({
@@ -112,30 +125,22 @@ export async function DELETE(req: NextRequest) {
           data: { photoPath: keepPhotoPath },
         });
       }
-    }
+    });
 
     // 3. Deletar arquivos físicos de fotos, mas APENAS se não houver referências a eles no banco
-    const apenadosToDelete = apenados.filter((a) => idsToDelete.includes(a.id));
+    const apenadosToDelete = apenados.filter((a) => idsToDelete.includes(a.id) && a.photoPath);
     
-    await Promise.allSettled(
-      apenadosToDelete
-        .filter((a) => a.photoPath)
-        .map(
-          (a) =>
-            new Promise<void>(async (res) => {
-              try {
-                const referenced = await isPhotoReferenced(a.photoPath!, a.id);
-                if (!referenced) {
-                  unlink(getApenadoPhotoPath(a.photoPath!), () => res());
-                } else {
-                  res();
-                }
-              } catch {
-                res();
-              }
-            }),
-        ),
-    );
+    // Processar em blocos de 30 para evitar timeout de pool de conexões do Prisma
+    await runInChunks(apenadosToDelete, 30, async (a) => {
+      try {
+        const referenced = await isPhotoReferenced(a.photoPath!, a.id);
+        if (!referenced) {
+          unlink(getApenadoPhotoPath(a.photoPath!), () => {});
+        }
+      } catch (err) {
+        console.error(`Erro ao verificar/deletar foto física para apenado ${a.id}:`, err);
+      }
+    });
 
     // 4. Deletar registros locais do banco
     const result = await prisma.apenado.deleteMany({ where: { id: { in: idsToDelete } } });
