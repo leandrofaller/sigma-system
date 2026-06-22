@@ -152,13 +152,23 @@ class SgpHttpClient {
     };
   }
 
+  private formatCpf(cpf: string): string {
+    const clean = cpf.replace(/\D/g, '');
+    if (clean.length === 11) {
+      return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9)}`;
+    }
+    return cpf;
+  }
+
   public async login(): Promise<boolean> {
-    const username = process.env.SEJUS_SGP_USER || process.env.SIPE_CPF || '';
+    const rawUsername = process.env.SEJUS_SGP_USER || process.env.SIPE_CPF || '';
     const password = process.env.SEJUS_SGP_PASS || process.env.SIPE_SENHA || '';
 
-    if (!username || !password) {
+    if (!rawUsername || !password) {
       throw new Error('Credenciais de acesso ao SGP (SEJUS_SGP_USER / SIPE_CPF) não configuradas no arquivo .env.');
     }
+
+    const username = this.formatCpf(rawUsername);
 
     // 1. GET /login para obter o CSRF token
     const loginPageRes = await this.request('/login');
