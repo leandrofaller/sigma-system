@@ -17,6 +17,7 @@ const DEFAULT_NAV_ITEMS = [
   { key: 'apenados', label: 'Identificação de Apenados', href: '/apenados', iconName: 'UserCheck', position: 110, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'faccoes', label: 'Apenados & Facções', href: '/faccoes', iconName: 'Shield', position: 120, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: false },
   { key: 'visitantes', label: 'Visitantes', href: '/visitantes', iconName: 'Users', position: 125, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: false },
+  { key: 'servidores', label: 'Servidores', href: '/servidores', iconName: 'Briefcase', position: 128, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: false },
   { key: 'siaip', label: 'SIAIP', href: '/siaip', iconName: 'Database', position: 130, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'aparelhos', label: 'Celulares Recebidos', href: '/aparelhos', iconName: 'Smartphone', position: 140, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'aip', label: 'AIP', href: '/aip', iconName: 'Brain', position: 150, roles: ['SUPER_ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
@@ -73,6 +74,16 @@ export async function GET(req: NextRequest) {
     if (configs.length > 0 && !hasVisitantesConfig) {
       await prisma.sidebarConfig.create({
         data: { key: 'visitantes', label: 'Visitantes', href: '/visitantes', iconName: 'Users', position: 125, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: false }
+      });
+      configs = await prisma.sidebarConfig.findMany({
+        orderBy: { position: 'asc' }
+      });
+    }
+
+    const hasServidoresConfig = configs.some(c => c.key === 'servidores');
+    if (configs.length > 0 && !hasServidoresConfig) {
+      await prisma.sidebarConfig.create({
+        data: { key: 'servidores', label: 'Servidores', href: '/servidores', iconName: 'Briefcase', position: 128, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: false }
       });
       configs = await prisma.sidebarConfig.findMany({
         orderBy: { position: 'asc' }

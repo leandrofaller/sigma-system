@@ -21,7 +21,9 @@ interface FaceMatch {
   cpf?: string | null;
   parentesco?: string | null;
   vinculos?: Array<{ apenado: { id: string; nome: string } }> | null;
-  targetType?: 'apenados' | 'visitantes';
+  targetType?: 'apenados' | 'visitantes' | 'servidores';
+  cargo?: string | null;
+  lotacao?: string | null;
 }
 
 interface DetectedFace {
@@ -86,8 +88,11 @@ function fmtTime(seconds: number): string {
 
 function MatchCard({ match, rank, onEdit, onViewPhoto }: { match: FaceMatch; rank: number; onEdit?: (id: string) => void; onViewPhoto?: (match: FaceMatch) => void }) {
   const isVisitante = match.targetType === 'visitantes';
+  const isServidor = match.targetType === 'servidores';
   const photoUrl = isVisitante
     ? `/api/sipe/visitantes/${match.id}/foto`
+    : isServidor
+    ? `/api/sejus/servidores/${match.id}/foto`
     : `/api/apenados/${match.id}/foto`;
 
   return (
@@ -124,6 +129,15 @@ function MatchCard({ match, rank, onEdit, onViewPhoto }: { match: FaceMatch; ran
                 </p>
               )}
             </>
+          ) : isServidor ? (
+            <>
+              <p className="text-xs text-subtle truncate">
+                {[match.cargo, match.lotacao].filter(Boolean).join(' · ') || 'Sem cargo/lotação'}
+              </p>
+              <p className="text-[10px] text-sigma-600 dark:text-sigma-400 font-medium truncate mt-0.5">
+                {[match.matricula ? `Matrícula: ${match.matricula}` : null, match.cpf ? `CPF: ${match.cpf}` : null].filter(Boolean).join(' · ') || 'Servidor SEJUS'}
+              </p>
+            </>
           ) : (
             <>
               <p className="text-xs text-subtle truncate">
@@ -138,7 +152,7 @@ function MatchCard({ match, rank, onEdit, onViewPhoto }: { match: FaceMatch; ran
             <span className={`text-xl font-black tabular-nums ${simColor(match.similarity)}`}>{match.similarity}%</span>
             <span className={`text-[10px] font-semibold ${simColor(match.similarity)}`}>{simLabel(match.similarity)}</span>
           </div>
-          {onEdit && !isVisitante && (
+          {onEdit && !isVisitante && !isServidor && (
             <button
               onClick={() => onEdit(match.id)}
               title="Editar registro"
@@ -257,7 +271,7 @@ interface Props { onClose: () => void; userRole: string; onEditApenado?: (id: st
 
 export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [tab, setTab] = useState<Tab>('search');
-  const [targetType, setTargetType] = useState<'apenados' | 'visitantes'>('apenados');
+  const [targetType, setTargetType] = useState<'apenados' | 'visitantes' | 'servidores'>('apenados');
 
   // Visualizar foto ampliada
   const [viewingPhotoMatch, setViewingPhotoMatch] = useState<FaceMatch | null>(null);
@@ -678,7 +692,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
           {tab === 'search' && (
             <>
               {/* Seletor de Base de Dados Premium */}
-              <div className="flex justify-center gap-2 mb-4 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[280px] mx-auto border border-gray-200 dark:border-gray-700">
+              <div className="flex justify-center gap-2 mb-4 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[380px] mx-auto border border-gray-200 dark:border-gray-700">
                 <button
                   type="button"
                   onClick={() => { setTargetType('apenados'); reset(); }}
@@ -702,6 +716,18 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                 >
                   <Users className="w-3.5 h-3.5" />
                   Visitantes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTargetType('servidores'); reset(); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                    targetType === 'servidores'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Servidores
                 </button>
               </div>
 

@@ -8,7 +8,8 @@ import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import { warmFaceCache, awaitFaceCache, getCacheStatus } from '@/lib/face-cache';
 import { warmVisitanteFaceCache, awaitVisitanteFaceCache, getVisitanteCacheStatus } from '@/lib/visitante-face-cache';
-import { pgvectorAvailable, searchByVector, searchByVectorForVisitantes } from '@/lib/pgvector';
+import { warmServidorFaceCache, awaitServidorFaceCache, getServidorCacheStatus } from '@/lib/servidor-face-cache';
+import { pgvectorAvailable, searchByVector, searchByVectorForVisitantes, searchByVectorForServidores } from '@/lib/pgvector';
 
 export const maxDuration = 60;
 
@@ -107,6 +108,8 @@ export async function POST(req: NextRequest) {
   // Inicia carregamento do cache em background (no-op se pgvector disponível e cache já carregado)
   if (targetType === 'visitantes') {
     warmVisitanteFaceCache();
+  } else if (targetType === 'servidores') {
+    warmServidorFaceCache();
   } else {
     warmFaceCache();
   }
@@ -128,7 +131,11 @@ export async function POST(req: NextRequest) {
     ]);
 
     if (!analysis.faces || analysis.faces.length === 0) {
-      const cacheStatus = targetType === 'visitantes' ? getVisitanteCacheStatus() : getCacheStatus();
+      const cacheStatus = targetType === 'visitantes' 
+        ? getVisitanteCacheStatus() 
+        : targetType === 'servidores' 
+        ? getServidorCacheStatus() 
+        : getCacheStatus();
       return NextResponse.json({
         faces: [],
         imageWidth: analysis.imageWidth,
@@ -139,6 +146,141 @@ export async function POST(req: NextRequest) {
     }
 
     let facesResult: any[];
+
+    if (targetType === 'servidores') {
+      if (pvecAvail) {
+        // ── Caminho pgvector Servidores: busca SQL com índice HNSW ──
+        const allMatchIds = new Set<string>();
+        const facesWithHits = await Promise.all(
+          analysis.faces.map(async (face) => {
+            const hits = await searchByVectorForServidores(face.embedding, minSim01, topN);
+            hits.forEach((h) => allMatchIds.add(h.id));
+            return { face, hits };
+          }),
+        );
+
+        const matchedRecords = allMatchIds.size > 0
+          ? await prisma.sejusServidor.findMany({
+              where: { id: { in: Array.from(allMatchIds) } },
+              select: {
+                id: true,
+                nome: true,
+                cpf: true,
+                matricula: true,
+                cargo: true,
+                lotacao: true,
+                photoPath: true,
+              },
+            })
+          : [];
+        const metaMap = new Map(matchedRecords.map((r) => [r.id, r]));
+
+        facesResult = facesWithHits.map(({ face, hits }) => ({
+          index: face.index,
+          det_score: face.det_score,
+          bbox: face.bbox,
+          kps: face.kps,
+          liveness_score: face.liveness_score ?? null,
+          matches: hits
+            .map(({ id, similarity }) => {
+              const meta = metaMap.get(id);
+              if (!meta) return null;
+              return {
+                id: meta.id,
+                name: meta.nome,
+                cpf: meta.cpf,
+                matricula: meta.matricula,
+                cargo: meta.cargo,
+                lotacao: meta.lotacao,
+                photoPath: meta.photoPath,
+                targetType: 'servidores',
+                similarity: toPercent(similarity),
+              };
+            })
+            .filter(Boolean),
+        }));
+
+        const countQuery = await prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM sejus_servidores WHERE "faceVector" IS NOT NULL`;
+        return NextResponse.json({
+          faces: facesResult,
+          imageWidth: analysis.imageWidth,
+          imageHeight: analysis.imageHeight,
+          indexed: countQuery[0]?.c ?? 0,
+          backend: 'pgvector',
+        });
+      }
+
+      // ── Caminho em memória Servidores: varredura Float32Array (fallback) ──
+      const faceCache = await awaitServidorFaceCache(25_000);
+      const { ids, vecs, count } = faceCache;
+
+      const allMatchIds = new Set<string>();
+      const facesWithHits = analysis.faces.map((face) => {
+        const queryVec = new Float32Array(face.embedding);
+        const hits: Array<{ idx: number; similarity: number }> = [];
+
+        for (let i = 0; i < count; i++) {
+          const offset = i * 512;
+          let dot = 0;
+          for (let j = 0; j < 512; j++) dot += queryVec[j] * vecs[offset + j];
+          if (dot >= minSim01) hits.push({ idx: i, similarity: dot });
+        }
+
+        hits.sort((a, b) => b.similarity - a.similarity);
+        const topHits = hits.slice(0, topN);
+        topHits.forEach((h) => allMatchIds.add(ids[h.idx]));
+        return { face, topHits };
+      });
+
+      const matchedRecords = allMatchIds.size > 0
+        ? await prisma.sejusServidor.findMany({
+            where: { id: { in: Array.from(allMatchIds) } },
+            select: {
+              id: true,
+              nome: true,
+              cpf: true,
+              matricula: true,
+              cargo: true,
+              lotacao: true,
+              photoPath: true,
+            },
+          })
+        : [];
+      const metaMap = new Map(matchedRecords.map((r) => [r.id, r]));
+
+      facesResult = facesWithHits.map(({ face, topHits }) => ({
+        index: face.index,
+        det_score: face.det_score,
+        bbox: face.bbox,
+        kps: face.kps,
+        liveness_score: face.liveness_score ?? null,
+        matches: topHits
+          .map(({ idx, similarity }) => {
+            const meta = metaMap.get(ids[idx]);
+            if (!meta) return null;
+            return {
+              id: meta.id,
+              name: meta.nome,
+              cpf: meta.cpf,
+              matricula: meta.matricula,
+              cargo: meta.cargo,
+              lotacao: meta.lotacao,
+              photoPath: meta.photoPath,
+              targetType: 'servidores',
+              similarity: toPercent(similarity),
+            };
+          })
+          .filter(Boolean),
+      }));
+
+      return NextResponse.json({
+        faces: facesResult,
+        imageWidth: analysis.imageWidth,
+        imageHeight: analysis.imageHeight,
+        indexed: count,
+        backend: 'memory',
+      });
+    }
 
     if (targetType === 'visitantes') {
       if (pvecAvail) {
@@ -402,6 +544,9 @@ export async function GET(req: NextRequest) {
 
   if (type === 'visitantes') {
     return NextResponse.json(getVisitanteCacheStatus());
+  }
+  if (type === 'servidores') {
+    return NextResponse.json(getServidorCacheStatus());
   }
   return NextResponse.json(getCacheStatus());
 }

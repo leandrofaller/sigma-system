@@ -896,6 +896,33 @@ model SipeSyncJob {
   @@map("sipe_sync_jobs")
 }
 
+model SejusServidor {
+  id                 String   @id @default(cuid())
+  sejusId            Int      @unique // ID numérico do servidor no SGP
+  nome               String
+  cpf                String?
+  matricula          String?
+  cargo              String?
+  lotacao            String?
+  situacao           String?  // Ativo, inativo, afastado
+  regime             String?  // Efetivo, comissionado, CLT
+  dataAdmissao       String?
+  photoPath          String?  // uploads/servidores/id.webp
+  
+  // Metadados do ArcFace
+  faceDescriptor     String?  @db.Text
+  detScore           Float?
+  photoQuality       Float?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([nome])
+  @@index([cpf])
+  @@index([matricula])
+  @@map("sejus_servidores")
+}
+
 // ============================================================
 // AIP (Análise de Inteligência Penitenciária)
 // Sistema dual de dados: SIPE (sincronizável) + Inteligência (permanente)
