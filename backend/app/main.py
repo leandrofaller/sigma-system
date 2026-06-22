@@ -288,6 +288,11 @@ def sgp_proxy_write(
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
     }
+    custom_headers = payload.get("headers")
+    if isinstance(custom_headers, dict) and custom_headers:
+        for k, v in custom_headers.items():
+            if k.lower() not in {"content-length", "host"}:
+                headers[k] = str(v)
     if cookie:
         headers["Cookie"] = cookie
 
