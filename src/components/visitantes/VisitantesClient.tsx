@@ -363,7 +363,7 @@ export function VisitantesClient() {
               </div>
             ) : (
               <div className="mt-4 overflow-hidden border border-gray-100 dark:border-gray-700 rounded-xl">
-                <div className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-850">
+                <div className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-900">
                   {visitantes.map((v) => (
                     <div
                       key={v.id}
@@ -374,7 +374,7 @@ export function VisitantesClient() {
                     >
                       <div className="flex items-center gap-4 min-w-0">
                         {/* Foto */}
-                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-750 flex-shrink-0 flex items-center justify-center border border-gray-200/50 dark:border-gray-700">
+                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center border border-gray-200/50 dark:border-gray-700">
                           {v.photoPath ? (
                             <img
                               src={`/api/sipe/visitantes/${v.id}/foto`}
@@ -546,7 +546,7 @@ export function VisitantesClient() {
                     <h4 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-gray-700/80 pb-1 flex items-center gap-1.5">
                       <MapPin className="w-3.5 h-3.5" /> Endereço Residencial
                     </h4>
-                    <p className="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-750/30 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700 leading-normal">
+                    <p className="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/30 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700 leading-normal">
                       {selected.logradouro}
                       {selected.numero && `, Nº ${selected.numero}`}
                       {selected.bairro && ` - Bairro ${selected.bairro}`}
@@ -564,7 +564,7 @@ export function VisitantesClient() {
                     <div className="space-y-2">
                       {selected.vinculos.map((v) => (
                         <div key={v.id} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/30 p-2 rounded-lg border border-gray-100 dark:border-gray-700 text-xs">
-                          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-250 flex-shrink-0 flex items-center justify-center text-gray-400 select-none">
+                          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center text-gray-400 select-none">
                             {v.apenado.photoPath ? (
                               <img
                                 src={`/api/sipe/apenados/${v.apenado.id}/foto`}
@@ -595,7 +595,7 @@ export function VisitantesClient() {
                   ) : (
                     <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
                       {selected.entradas.map((e) => (
-                        <div key={e.id} className="p-3 bg-gray-50 dark:bg-gray-750/30 rounded-xl border border-gray-100 dark:border-gray-750 text-xs">
+                        <div key={e.id} className="p-3 bg-gray-50 dark:bg-gray-800/30 rounded-xl border border-gray-100 dark:border-gray-700 text-xs">
                           <div className="flex justify-between items-start mb-1 flex-wrap gap-2">
                             <span className="font-bold text-[10px] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">
                               {e.tipo}
@@ -716,7 +716,7 @@ export function VisitantesClient() {
                       {activeJob.status === 'RUNNING' && (
                         <button
                           onClick={handleStopSync}
-                          className="mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-550 text-white rounded-lg hover:bg-red-650 transition-all font-semibold active:scale-95 text-[11px]"
+                          className="mt-4 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-semibold active:scale-95 text-[11px]"
                         >
                           <StopCircle className="w-4 h-4" /> Parar Sincronização
                         </button>
