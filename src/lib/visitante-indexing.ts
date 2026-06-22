@@ -8,15 +8,21 @@ export async function runVisitantesIndexing(jobId: string, visitanteIds: string[
   const baseDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
   const visitantesDir = path.join(baseDir, 'visitantes');
 
-  // Coleta as informações físicas de cada visitante
-  const visitantes = await prisma.sipeVisitante.findMany({
-    where: {
-      id: { in: visitanteIds },
-      photoPath: { not: null },
-      faceDescriptor: null,
-    },
-    select: { id: true, photoPath: true },
-  });
+  // Coleta as informações físicas de cada visitante em lotes para evitar estouro de parâmetros da query no Postgres
+  const visitantes: Array<{ id: string; photoPath: string | null }> = [];
+  const chunkSize = 1000;
+  for (let i = 0; i < visitanteIds.length; i += chunkSize) {
+    const chunk = visitanteIds.slice(i, i + chunkSize);
+    const chunkVisitantes = await prisma.sipeVisitante.findMany({
+      where: {
+        id: { in: chunk },
+        photoPath: { not: null },
+        faceDescriptor: null,
+      },
+      select: { id: true, photoPath: true },
+    });
+    visitantes.push(...chunkVisitantes);
+  }
 
   if (visitantes.length === 0) return;
 
