@@ -1,5 +1,6 @@
 import { prisma } from './db';
 import * as cheerio from 'cheerio';
+import dotenv from 'dotenv';
 import sharp from 'sharp';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
@@ -161,6 +162,13 @@ class SgpHttpClient {
   }
 
   public async login(): Promise<boolean> {
+    // Força a recarga do arquivo .env diretamente do disco para ler credenciais recém-salvas
+    try {
+      dotenv.config({ path: join(process.cwd(), '.env'), override: true });
+    } catch (envErr) {
+      console.warn('[SERVIDORES SCRAPER] Erro ao recarregar .env dinamicamente:', envErr);
+    }
+
     const rawUsername = process.env.SEJUS_SGP_USER || process.env.SIPE_CPF || '';
     const password = process.env.SEJUS_SGP_PASS || process.env.SIPE_SENHA || '';
 
