@@ -667,6 +667,12 @@ export function ApenadoModal({
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {apenado.fotosComplementares.map((foto) => {
                   const url = getPhotoUrl(foto.photoPath);
+                  const getFileName = (p: string | null | undefined) => p ? p.split('/').pop() || '' : '';
+                  const isMainPhoto = getFileName(foto.photoPath) && (
+                    getFileName(foto.photoPath) === getFileName(apenado.photoPath) ||
+                    getFileName(foto.photoPath) === getFileName(apenado.apenado?.photoPath)
+                  );
+
                   return (
                     <div
                       key={foto.id}
@@ -674,8 +680,17 @@ export function ApenadoModal({
                         setZoomedPhotoUrl(url);
                         setZoomedPhotoTitle(foto.descricao || 'Foto Complementar');
                       }}
-                      className="group relative aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 cursor-zoom-in border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200"
+                      className={`group relative aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 cursor-zoom-in border shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all duration-200 ${
+                        isMainPhoto
+                          ? 'border-purple-300 dark:border-purple-700 ring-2 ring-purple-500/20'
+                          : 'border-gray-200 dark:border-gray-700'
+                      }`}
                     >
+                      {isMainPhoto && (
+                        <div className="absolute top-1.5 left-1.5 z-10 bg-purple-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+                          FOTO PRINCIPAL
+                        </div>
+                      )}
                       <img
                         src={url}
                         alt={foto.descricao || 'Foto Complementar'}

@@ -16,7 +16,82 @@ export async function GET() {
       return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
     }
 
-    return NextResponse.json(getUnifiedDupState());
+    const state = getUnifiedDupState();
+    if (state.phase === 'done' && state.groups.length > 0) {
+      const ids = state.groups.flatMap(g => g.records.map(r => r.id));
+
+      const apenados = await prisma.apenado.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          sipeImportacoes: {
+            select: {
+              sipeId: true,
+              situacao: true,
+              aipApenado: {
+                select: {
+                  id: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const infoMap = new Map();
+      for (const a of apenados) {
+        const primaryImport = a.sipeImportacoes[0];
+        const hasSipe = a.sipeImportacoes.length > 0;
+        const hasAip = a.sipeImportacoes.some(imp => imp.aipApenado !== null);
+        const sipeId = primaryImport ? primaryImport.sipeId : null;
+        const situacao = primaryImport ? primaryImport.situacao : null;
+
+        infoMap.set(a.id, {
+          hasAip,
+          hasSipe,
+          sipeId,
+          situacao
+        });
+      }
+
+      const enrichedGroups = state.groups.map(g => {
+        const sortedRecords = g.records.map(r => {
+          const info = infoMap.get(r.id);
+          return {
+            ...r,
+            hasAip: info ? info.hasAip : r.hasAip,
+            hasSipe: info ? info.hasSipe : false,
+            sipeId: info ? info.sipeId : null,
+            situacao: info ? info.situacao : null,
+          };
+        });
+
+        const sorted = sortedRecords.sort((a, b) => {
+          const hasAipA = a.hasAip ? 1 : 0;
+          const hasAipB = b.hasAip ? 1 : 0;
+          if (hasAipA !== hasAipB) return hasAipB - hasAipA;
+
+          const hasSipeA = a.hasSipe ? 1 : 0;
+          const hasSipeB = b.hasSipe ? 1 : 0;
+          if (hasSipeA !== hasSipeB) return hasSipeB - hasSipeA;
+
+          if (a.hasFace !== b.hasFace) return a.hasFace ? -1 : 1;
+          return (b.photoQuality ?? 0) - (a.photoQuality ?? 0);
+        });
+
+        return {
+          ...g,
+          records: sorted
+        };
+      });
+
+      return NextResponse.json({
+        ...state,
+        groups: enrichedGroups
+      });
+    }
+
+    return NextResponse.json(state);
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? 'Erro interno' }, { status: 500 });
   }

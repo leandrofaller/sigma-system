@@ -23,6 +23,10 @@ export interface DupRecord {
   photoQuality: number | null;
   hasFace: boolean;
   category: 'doc' | 'tattoo' | 'other';
+  hasAip?: boolean;
+  hasSipe?: boolean;
+  sipeId?: number | null;
+  situacao?: string | null;
 }
 
 export interface DupGroup {
@@ -178,6 +182,10 @@ interface RawRecord {
   photoQuality: number | null;
   hasFace: boolean;
   ocrText: string | null;
+  hasAip: boolean;
+  hasSipe: boolean;
+  sipeId: number | null;
+  situacao: string | null;
 }
 
 function makeFind(parent: Map<string, string>) {
@@ -495,6 +503,14 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
     .map((g) => {
       // Keeper: foto com rosto primeiro; dentro de cada tier, maior qualidade primeiro
       const sorted = g.sort((a, b) => {
+        const hasAipA = a.hasAip ? 1 : 0;
+        const hasAipB = b.hasAip ? 1 : 0;
+        if (hasAipA !== hasAipB) return hasAipB - hasAipA;
+
+        const hasSipeA = a.hasSipe ? 1 : 0;
+        const hasSipeB = b.hasSipe ? 1 : 0;
+        if (hasSipeA !== hasSipeB) return hasSipeB - hasSipeA;
+
         if (a.hasFace !== b.hasFace) return a.hasFace ? -1 : 1;
         return (b.photoQuality ?? 0) - (a.photoQuality ?? 0);
       });
@@ -600,15 +616,34 @@ async function runJob(): Promise<void> {
   state = { ...state, phase: 'detecting' };
 
   const records = await prisma.$queryRaw<RawRecord[]>`
-    SELECT id, name, matricula, unidade, faccao, "photoPath",
-           "photoHashSha", "photoHash", "photoQuality",
-           ("faceDescriptor" IS NOT NULL AND "faceDescriptor" != '') AS "hasFace",
-           "ocrText"
-    FROM apenados
-    WHERE "photoPath" IS NOT NULL
-      AND "photoHash" IS NOT NULL
-      AND "photoHashSha" IS NOT NULL
-    ORDER BY name ASC
+    SELECT a.id, a.name, a.matricula, a.unidade, a.faccao, a."photoPath",
+           a."photoHashSha", a."photoHash", a."photoQuality",
+           (a."faceDescriptor" IS NOT NULL AND a."faceDescriptor" != '') AS "hasFace",
+           a."ocrText",
+           EXISTS (
+             SELECT 1 FROM sipe_apenados_importados s
+             JOIN aip_apenados ai ON s."sipeId" = ai."sipeApenadoId"
+             WHERE s."apenadoLocalId" = a.id
+           ) AS "hasAip",
+           EXISTS (
+             SELECT 1 FROM sipe_apenados_importados s
+             WHERE s."apenadoLocalId" = a.id
+           ) AS "hasSipe",
+           (
+             SELECT s."sipeId" FROM sipe_apenados_importados s
+             WHERE s."apenadoLocalId" = a.id
+             LIMIT 1
+           ) AS "sipeId",
+           (
+             SELECT s.situacao FROM sipe_apenados_importados s
+             WHERE s."apenadoLocalId" = a.id
+             LIMIT 1
+           ) AS "situacao"
+    FROM apenados a
+    WHERE a."photoPath" IS NOT NULL
+      AND a."photoHash" IS NOT NULL
+      AND a."photoHashSha" IS NOT NULL
+    ORDER BY a.name ASC
   `;
 
   const groups = await buildGroupsAsync(records);

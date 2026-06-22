@@ -17,6 +17,10 @@ interface DupRecord {
   photoQuality: number | null;
   hasFace: boolean;
   category?: 'doc' | 'tattoo' | 'other';
+  hasAip?: boolean;
+  hasSipe?: boolean;
+  sipeId?: number | null;
+  situacao?: string | null;
 }
 
 interface DupGroup {
@@ -760,6 +764,15 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                                 MANTER
                               </div>
                             )}
+                            {record.hasAip ? (
+                              <div className={`absolute top-1.5 ${isKeeper ? 'left-16' : 'left-1.5'} z-10 bg-purple-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm`}>
+                                FICHA ATIVA (AIP)
+                              </div>
+                            ) : record.hasSipe ? (
+                              <div className={`absolute top-1.5 ${isKeeper ? 'left-16' : 'left-1.5'} z-10 bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm`}>
+                                FICHA SIPE
+                              </div>
+                            ) : null}
                             {!record.hasFace && (
                               <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 bg-gray-800/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
                                 <UserX className="w-2.5 h-2.5" />
@@ -829,6 +842,9 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                                   </button>
                                 </div>
                               )}
+                              {record.sipeId && (
+                                <p className="text-[9px] text-gray-500 dark:text-gray-400 font-mono font-bold">SIPE ID: #{record.sipeId}</p>
+                              )}
                               {record.matricula && (
                                 <p className="text-[10px] text-subtle font-mono">{record.matricula}</p>
                               )}
@@ -838,6 +854,17 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
                               {record.faccao && (
                                 <p className="text-[10px] text-orange-600 dark:text-orange-400 font-medium truncate">
                                   {record.faccao}
+                                </p>
+                              )}
+                              {record.situacao && (
+                                <p className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded w-max mt-1 ${
+                                  record.situacao.toLowerCase().includes('preso')
+                                    ? 'bg-green-100 dark:bg-green-950/45 text-green-700 dark:text-green-300'
+                                    : record.situacao.toLowerCase().includes('fuga') || record.situacao.toLowerCase().includes('evasão')
+                                      ? 'bg-red-100 dark:bg-red-950/45 text-red-700 dark:text-red-300'
+                                      : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                                }`}>
+                                  {record.situacao}
                                 </p>
                               )}
                               {record.photoQuality !== null && (
