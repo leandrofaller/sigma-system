@@ -569,21 +569,29 @@ async function dbProgress(
     finalizadoEm?: Date
   }
 ) {
-  const current = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
-  if (!current) return
+  if (patch.log) {
+    const current = await prisma.sipeSyncJob.findUnique({
+      where: { id: jobId },
+      select: { log: true }
+    });
 
-  await prisma.sipeSyncJob.update({
-    where: { id: jobId },
-    data: {
-      ...patch,
-      ultimaAtividade: new Date(),
-      log: patch.log
-        ? current.log
-          ? current.log + '\n' + patch.log
-          : patch.log
-        : undefined,
-    },
-  })
+    await prisma.sipeSyncJob.update({
+      where: { id: jobId },
+      data: {
+        ...patch,
+        log: current?.log ? current.log + '\n' + patch.log : patch.log,
+        ultimaAtividade: new Date(),
+      },
+    });
+  } else {
+    await prisma.sipeSyncJob.update({
+      where: { id: jobId },
+      data: {
+        ...patch,
+        ultimaAtividade: new Date(),
+      },
+    });
+  }
 }
 
 /** Sync DB → in-memory state */

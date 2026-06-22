@@ -37,21 +37,29 @@ async function dbProgress(
     finalizadoEm?: Date;
   }
 ) {
-  const current = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } });
-  if (!current) return;
+  if (patch.log) {
+    const current = await prisma.sipeSyncJob.findUnique({
+      where: { id: jobId },
+      select: { log: true }
+    });
 
-  await prisma.sipeSyncJob.update({
-    where: { id: jobId },
-    data: {
-      ...patch,
-      ultimaAtividade: new Date(),
-      log: patch.log
-        ? current.log
-          ? current.log + '\n' + patch.log
-          : patch.log
-        : undefined,
-    },
-  });
+    await prisma.sipeSyncJob.update({
+      where: { id: jobId },
+      data: {
+        ...patch,
+        log: current?.log ? current.log + '\n' + patch.log : patch.log,
+        ultimaAtividade: new Date(),
+      },
+    });
+  } else {
+    await prisma.sipeSyncJob.update({
+      where: { id: jobId },
+      data: {
+        ...patch,
+        ultimaAtividade: new Date(),
+      },
+    });
+  }
 }
 
 function refreshMemory(jobId: string, patch: Partial<VisitantesSyncProgress>) {
@@ -257,10 +265,16 @@ export function startVisitantesSync(jobId: string): void {
         processado: i,
         ultimoLog: logMsg,
       });
-      await dbProgress(jobId, {
-        processado: i,
-        log: logMsg,
-      });
+      if (i % 100 === 0 || i === uniqueIds.length - 1) {
+        await dbProgress(jobId, {
+          processado: i,
+          log: logMsg,
+        });
+      } else {
+        await dbProgress(jobId, {
+          processado: i,
+        });
+      }
 
       try {
         // Gera a ficha geral do visitante via POST

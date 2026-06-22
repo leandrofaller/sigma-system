@@ -140,6 +140,7 @@ class SIPEClient:
         # Locks para sincronização entre threads
         self._auth_lock = threading.Lock()
         self._role_lock = threading.Lock()
+        self._request_lock = threading.RLock()
         self.perfil_alias = None
 
         # Tenta carregar cookies persistidos (Redis ou arquivo local JSON)
@@ -510,6 +511,10 @@ class SIPEClient:
                 self._persist_cookies()
 
     def _request(self, method: str, path: str, **kwargs):
+        with self._request_lock:
+            return self._request_unlocked(method, path, **kwargs)
+
+    def _request_unlocked(self, method: str, path: str, **kwargs):
         """Helper centralizado com retry exponencial, renovacao de sessao e cache Redis opcional."""
         url = f"{self.base_url}/{path.lstrip('/')}"
         is_cacheable = (
