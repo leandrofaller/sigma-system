@@ -230,9 +230,9 @@ class SgpHttpClient {
       return true;
     }
 
-    // 4. Tratar seleção do perfil "SGP - Gestor"
-    // Caso A: Link direto com texto "SGP - Gestor"
-    const gestorLink = $role('a:contains("SGP - Gestor"), div:contains("SGP - Gestor")').closest('a');
+    // 4. Tratar seleção do perfil "SGP- Gestor" ou "SGP - Gestor"
+    // Caso A: Link direto com texto contendo "Gestor"
+    const gestorLink = $role('a:contains("Gestor"), div:contains("Gestor")').closest('a');
     if (gestorLink.length > 0) {
       const href = gestorLink.attr('href');
       if (href) {
@@ -251,7 +251,7 @@ class SgpHttpClient {
       let optionVal: string | undefined = undefined;
       select.find('option').each((_, opt) => {
         const text = $role(opt).text().trim();
-        if (text.includes('SGP - Gestor')) {
+        if (text.includes('Gestor')) {
           optionVal = $role(opt).val() as string;
           return false;
         }
