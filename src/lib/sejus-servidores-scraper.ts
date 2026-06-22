@@ -180,140 +180,32 @@ class SgpHttpClient {
     }
 
     const username = this.formatCpf(cleanUsername);
+    const pythonApiUrl = process.env.SIPE_PYTHON_API_URL || 'http://localhost:8000';
 
-    const correctPass = 'ZHW5pmq3njh1bdb-vyr';
-    const isMainUser = cleanUsername === '77032055249';
-
-    if (isMainUser) {
-      if (cleanPassword === correctPass) {
-        console.log('[DEBUG] A senha lida coincide com a senha esperada do SGP.');
-      } else {
-        console.warn(`[DEBUG] A senha lida difere da senha esperada do SGP. Tamanho lido: ${cleanPassword.length}`);
-      }
-    }
-
-    try {
-      await this.attemptAuth(username, cleanPassword);
-      return true;
-    } catch (authErr: any) {
-      if (isMainUser && cleanPassword !== correctPass) {
-        console.log('[DEBUG] Login falhou com a senha lida. Tentando fallback de segurança com a senha correta estática...');
-        try {
-          await this.attemptAuth(username, correctPass);
-          console.log('[DEBUG] Login efetuado com sucesso via fallback de contingência.');
-          return true;
-        } catch (fallbackErr) {
-          console.error('[DEBUG] Falha no login mesmo com a senha de fallback.');
-          throw authErr;
-        }
-      }
-      throw authErr;
-    }
-  }
-
-  private async attemptAuth(username: string, passwordToUse: string): Promise<void> {
-    const loginPageRes = await this.request('/login');
-    const loginHtml = await loginPageRes.text();
-    
-    const $login = cheerio.load(loginHtml);
-    const token = $login('input[name="_token"]').val();
-
-    if (!token) {
-      throw new Error(`Token CSRF não encontrado na página de login do SGP.`);
-    }
-
-    const bodyParams = new URLSearchParams();
-    bodyParams.append('_token', String(token));
-    bodyParams.append('cpf', username);
-    bodyParams.append('senha', passwordToUse);
-
-    const authRes = await this.request('/auth', {
+    const loginRes = await fetch(`${pythonApiUrl}/sgp/login`, {
       method: 'POST',
-      body: bodyParams.toString(),
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Referer': `${this.baseUrl}/login`,
-        'Origin': this.baseUrl
+        'Content-Type': 'application/json'
       },
-      redirect: 'manual'
+      body: JSON.stringify({
+        cpf: username,
+        senha: cleanPassword
+      })
     });
 
-    if (authRes.status !== 302) {
-      throw new Error(`Login rejeitado pelo servidor SGP (Status: ${authRes.status}).`);
+    if (!loginRes.ok) {
+      const errData = await loginRes.json().catch(() => ({}));
+      throw new Error(errData.detail || `Erro ao efetuar login no SGP via API Python (Status: ${loginRes.status}).`);
     }
 
-    const redirectLocation = authRes.headers.get('location');
-    if (!redirectLocation || redirectLocation.includes('/login')) {
-      const errorPageRes = await this.request(redirectLocation || '/login');
-      const errorHtml = await errorPageRes.text();
-      const $error = cheerio.load(errorHtml);
-      const toastMsg = $error('#toast, .toast-body, .alert').text().trim().replace(/\s+/g, ' ');
-      throw new Error(`Falha na autenticação no SGP: ${toastMsg || 'Credenciais inválidas ou CPF não cadastrado.'}`);
+    const data = await loginRes.json();
+    if (data.cookies && data.cookies.length > 0) {
+      this.updateCookies(data.cookies);
+      console.log('[SERVIDORES SCRAPER] Login efetuado com sucesso via API Python SGP.');
+      return true;
     }
 
-    const selectRoleRes = await this.request(redirectLocation);
-    const selectRoleHtml = await selectRoleRes.text();
-    const $role = cheerio.load(selectRoleHtml);
-
-    if (redirectLocation.includes('/home') || selectRoleHtml.includes('/servidor') || selectRoleHtml.toLowerCase().includes('sair')) {
-      return;
-    }
-
-    const gestorLink = $role('a:contains("Gestor"), div:contains("Gestor")').closest('a');
-    if (gestorLink.length > 0) {
-      const href = gestorLink.attr('href');
-      if (href) {
-        const finalRes = await this.request(href, { redirect: 'manual' });
-        const finalLoc = finalRes.headers.get('location') || '';
-        if (finalLoc) {
-          await this.request(finalLoc);
-        }
-        return;
-      }
-    }
-
-    const select = $role('select');
-    if (select.length > 0) {
-      let optionVal: string | undefined = undefined;
-      select.find('option').each((_, opt) => {
-        const text = $role(opt).text().trim();
-        if (text.includes('Gestor')) {
-          optionVal = $role(opt).val() as string;
-          return false;
-        }
-      });
-
-      if (optionVal !== undefined) {
-        const form = select.closest('form');
-        const formAction = form.attr('action') || '/selectRole';
-        const formMethod = (form.attr('method') || 'POST').toUpperCase() as 'GET' | 'POST';
-
-        const roleParams = new URLSearchParams();
-        form.find('input').each((_, el) => {
-          const name = $role(el).attr('name');
-          const val = $role(el).attr('value');
-          if (name) roleParams.append(name, val ?? '');
-        });
-
-        const selectName = select.attr('name') || 'perfil';
-        roleParams.append(selectName, optionVal);
-
-        const rolePostRes = await this.request(formAction, {
-          method: formMethod,
-          body: roleParams.toString(),
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          redirect: 'manual'
-        });
-
-        const finalLoc = rolePostRes.headers.get('location');
-        if (finalLoc) {
-          await this.request(finalLoc);
-        }
-        return;
-      }
-    }
+    throw new Error('Nenhum cookie de sessão retornado pela API de login do SGP.');
   }
 }
 

@@ -358,6 +358,139 @@ def sgp_proxy_write(
         logger.error(f"Erro no SGP proxy {method} para {url}: {str(e)}")
         raise HTTPException(status_code=502, detail=f"Erro de comunicação com SGP: {str(e)}")
 
+@app.post("/sgp/login")
+def sgp_login(payload: Dict[str, Any] = Body(...)):
+    """
+    Efetua o login completo no SGP SEJUS usando curl_cffi Session e retorna os cookies de sucesso.
+    """
+    cpf = str(payload.get("cpf") or "").strip()
+    senha = str(payload.get("senha") or "").strip()
+    
+    if not cpf or not senha:
+        raise HTTPException(status_code=400, detail="CPF e senha são obrigatórios.")
+        
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    }
+    
+    from curl_cffi import requests as curl_requests
+    from bs4 import BeautifulSoup
+    
+    session = curl_requests.Session()
+    
+    try:
+        # 1. GET /login para obter o CSRF token
+        res_login = session.get("https://sgp.sejus.ro.gov.br/login", headers=headers, impersonate="chrome", timeout=20.0)
+        if res_login.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Erro ao acessar página de login do SGP (Status: {res_login.status_code})")
+            
+        soup = BeautifulSoup(res_login.text, "html.parser")
+        token_input = soup.find("input", {"name": "_token"})
+        if not token_input or not token_input.get("value"):
+            raise HTTPException(status_code=502, detail="Token CSRF não encontrado na página de login do SGP.")
+            
+        token = token_input.get("value")
+        
+        # 2. POST /auth para logar
+        auth_data = {
+            "_token": token,
+            "cpf": cpf,
+            "senha": senha
+        }
+        
+        auth_headers = headers.copy()
+        auth_headers["Referer"] = "https://sgp.sejus.ro.gov.br/login"
+        auth_headers["Origin"] = "https://sgp.sejus.ro.gov.br"
+        
+        res_auth = session.post(
+            "https://sgp.sejus.ro.gov.br/auth",
+            headers=auth_headers,
+            data=auth_data,
+            impersonate="chrome",
+            allow_redirects=False,
+            timeout=20.0
+        )
+        
+        if res_auth.status_code != 302:
+            raise HTTPException(status_code=401, detail=f"Login rejeitado pelo servidor SGP (Status: {res_auth.status_code}).")
+            
+        redirect_loc = res_auth.headers.get("location") or res_auth.headers.get("Location") or ""
+        if not redirect_loc or "login" in redirect_loc:
+            # Login falhou. Vamos tentar obter a mensagem de erro da página de login
+            err_page = session.get("https://sgp.sejus.ro.gov.br/login", headers=headers, impersonate="chrome", timeout=20.0)
+            err_soup = BeautifulSoup(err_page.text, "html.parser")
+            toast = err_soup.find(id="toast") or err_soup.select_one(".toast-body") or err_soup.select_one(".alert")
+            err_msg = toast.text.strip() if toast else "Credenciais inválidas ou CPF não cadastrado."
+            raise HTTPException(status_code=401, detail=f"Falha na autenticação no SGP: {err_msg}")
+            
+        # 3. Acessa a URL de redirect pós-login (geralmente profile/change_profile?repeat=1)
+        res_redirect = session.get(redirect_loc, headers=headers, impersonate="chrome", timeout=20.0)
+        
+        # Se contiver a seleção de perfil, selecionamos o perfil "Gestor" automaticamente
+        if "change_profile" in redirect_loc or "profile" in redirect_loc:
+            redirect_soup = BeautifulSoup(res_redirect.text, "html.parser")
+            
+            # Tenta encontrar o link contendo "Gestor"
+            gestor_link = None
+            for a in redirect_soup.find_all("a"):
+                if "Gestor" in a.text:
+                    gestor_link = a.get("href")
+                    break
+            
+            if gestor_link:
+                # Faz o GET no link do gestor
+                res_gestor = session.get(gestor_link, headers=headers, impersonate="chrome", allow_redirects=False, timeout=20.0)
+                final_loc = res_gestor.headers.get("location") or res_gestor.headers.get("Location")
+                if final_loc:
+                    session.get(final_loc, headers=headers, impersonate="chrome", timeout=20.0)
+            else:
+                # Tenta via formulário select/option
+                select = redirect_soup.find("select")
+                if select:
+                    option_val = None
+                    for opt in select.find_all("option"):
+                        if "Gestor" in opt.text:
+                            option_val = opt.get("value")
+                            break
+                            
+                    if option_val:
+                        form = select.find_parent("form")
+                        form_action = form.get("action") if form else "/selectRole"
+                        # Envia o formulário
+                        role_data = {
+                            select.get("name") or "perfil": option_val
+                        }
+                        if form:
+                            for inp in form.find_all("input"):
+                                if inp.get("name") and inp.get("value"):
+                                    role_data[inp.get("name")] = inp.get("value")
+                                    
+                        session.post(
+                            f"https://sgp.sejus.ro.gov.br{form_action}",
+                            headers=headers,
+                            data=role_data,
+                            impersonate="chrome",
+                            timeout=20.0
+                        )
+
+        # Devolve todos os cookies acumulados na Session
+        cookies_list = []
+        for name, value in session.cookies.items():
+            cookies_list.append(f"{name}={value}")
+            
+        return {
+            "status": "success",
+            "cookies": cookies_list
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Erro no processo de login do SGP: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro interno de autenticação no SGP: {str(e)}")
+
 @app.get("/sipe/diagnose")
 
 def diagnose():
