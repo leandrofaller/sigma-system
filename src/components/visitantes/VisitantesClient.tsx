@@ -22,6 +22,8 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ApenadoModal } from '../faccoes/ApenadosImportados';
+import type { ApenadoImportado } from '../faccoes/ApenadosImportados';
 
 interface Visitante {
   id: string;
@@ -97,6 +99,10 @@ export function VisitantesClient() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [zoomedPhoto, setZoomedPhoto] = useState<{ url: string; nome: string } | null>(null);
 
+  // Detalhe do Apenado selecionado para a Ficha (SIAIP)
+  const [selectedApenado, setSelectedApenado] = useState<ApenadoImportado | null>(null);
+  const [loadingApenado, setLoadingApenado] = useState(false);
+
   // Controle de Sincronização
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [activeJob, setActiveJob] = useState<SyncJob | null>(null);
@@ -168,6 +174,24 @@ export function VisitantesClient() {
       toast.error('Erro ao obter dados do visitante');
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  // 2.5 Carrega ficha do apenado (SIAIP)
+  const handleOpenApenado = async (apenadoId: string) => {
+    setLoadingApenado(true);
+    try {
+      const res = await fetch(`/api/sipe/apenados/${apenadoId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedApenado(data);
+      } else {
+        toast.error('Erro ao buscar detalhes do apenado');
+      }
+    } catch (err) {
+      toast.error('Erro de conexão ao buscar apenado');
+    } finally {
+      setLoadingApenado(false);
     }
   };
 
@@ -609,8 +633,12 @@ export function VisitantesClient() {
                     </h4>
                     <div className="space-y-2">
                       {selected.vinculos.map((v) => (
-                        <div key={v.id} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/30 p-2 rounded-lg border border-gray-100 dark:border-gray-700 text-xs">
-                          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center text-gray-400 select-none">
+                        <div
+                          key={v.id}
+                          onClick={() => handleOpenApenado(v.apenado.id)}
+                          className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/30 p-2 rounded-lg border border-gray-100 dark:border-gray-700 text-xs cursor-pointer hover:border-indigo-500/50 hover:bg-indigo-50/5 dark:hover:bg-indigo-950/5 transition-all duration-200"
+                        >
+                          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center text-gray-400 select-none border border-gray-150 dark:border-gray-700">
                             {v.apenado.photoPath ? (
                               <img
                                 src={`/api/sipe/apenados/${v.apenado.id}/foto`}
@@ -622,7 +650,9 @@ export function VisitantesClient() {
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-gray-800 dark:text-gray-200 truncate">{v.apenado.nome}</p>
+                            <p className="font-semibold text-gray-800 dark:text-gray-200 truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                              {v.apenado.nome}
+                            </p>
                             {v.apenado.unidade && <p className="text-[10px] text-gray-400 truncate">{v.apenado.unidade}</p>}
                           </div>
                         </div>
@@ -885,6 +915,47 @@ export function VisitantesClient() {
             <div className="w-full bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 text-white text-center">
               <p className="font-semibold text-lg drop-shadow-md text-slate-100">{zoomedPhoto.nome}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal da ficha do Apenado */}
+      {selectedApenado && (
+        <ApenadoModal
+          apenado={selectedApenado}
+          onClose={() => setSelectedApenado(null)}
+          apiPhotoPrefix="/api/sipe/apenados"
+          onUpdate={(updated) => {
+            setSelectedApenado(updated);
+            if (selected) {
+              setSelected((prev) => {
+                if (!prev) return null;
+                const nextVinculos = prev.vinculos.map((v) =>
+                  v.apenado.id === updated.id
+                    ? {
+                        ...v,
+                        apenado: {
+                          ...v.apenado,
+                          nome: updated.nome,
+                          photoPath: updated.photoPath || updated.apenado?.photoPath || null,
+                          unidade: updated.unidade,
+                        },
+                      }
+                    : v
+                );
+                return { ...prev, vinculos: nextVinculos };
+              });
+            }
+          }}
+        />
+      )}
+
+      {/* Indicador de carregamento da ficha do apenado */}
+      {loadingApenado && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-xl border border-gray-150 dark:border-gray-700 flex items-center gap-3 animate-in fade-in duration-150">
+            <Loader2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400 animate-spin" />
+            <span className="text-sm font-medium text-gray-900 dark:text-white">Buscando ficha do apenado...</span>
           </div>
         </div>
       )}
