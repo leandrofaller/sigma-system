@@ -172,11 +172,15 @@ class SgpHttpClient {
     const rawUsername = process.env.SEJUS_SGP_USER || process.env.SIPE_CPF || '';
     const password = process.env.SEJUS_SGP_PASS || process.env.SIPE_SENHA || '';
 
-    if (!rawUsername || !password) {
+    // Limpa aspas extras que possam ter sido salvas por engano no .env
+    const cleanUsername = rawUsername.replace(/^['"]|['"]$/g, '').trim();
+    const cleanPassword = password.replace(/^['"]|['"]$/g, '').trim();
+
+    if (!cleanUsername || !cleanPassword) {
       throw new Error('Credenciais de acesso ao SGP (SEJUS_SGP_USER / SIPE_CPF) não configuradas no arquivo .env.');
     }
 
-    const username = this.formatCpf(rawUsername);
+    const username = this.formatCpf(cleanUsername);
 
     // 1. GET /login para obter o CSRF token
     const loginPageRes = await this.request('/login');
@@ -193,7 +197,7 @@ class SgpHttpClient {
     const bodyParams = new URLSearchParams();
     bodyParams.append('_token', String(token));
     bodyParams.append('cpf', username);
-    bodyParams.append('senha', password);
+    bodyParams.append('senha', cleanPassword);
 
     const authRes = await this.request('/auth', {
       method: 'POST',
@@ -312,6 +316,17 @@ export function startServidoresSync(jobId: string): void {
   };
 
   const runPromise = async () => {
+    // Força a recarga do .env local
+    try {
+      dotenv.config({ path: join(process.cwd(), '.env'), override: true });
+    } catch {}
+
+    const rawUsername = process.env.SEJUS_SGP_USER || process.env.SIPE_CPF || '';
+    const password = process.env.SEJUS_SGP_PASS || process.env.SIPE_SENHA || '';
+    const cleanUser = rawUsername.replace(/^['"]|['"]$/g, '').trim();
+    const cleanPass = password.replace(/^['"]|['"]$/g, '').trim();
+    const obfuscatedPass = cleanPass ? `${cleanPass.slice(0, 2)}...${cleanPass.slice(-2)}` : '(vazia)';
+
     await dbProgress(jobId, {
       status: 'RUNNING',
       fase: 'Login',
@@ -319,7 +334,7 @@ export function startServidoresSync(jobId: string): void {
       erros: 0,
       total: 0,
       ultimoIdProcessado: null,
-      log: 'Conectando ao SGP SEJUS via requisições HTTP...',
+      log: `Conectando ao SGP SEJUS via requisições HTTP...\n[DEBUG] Utilizando CPF: "${cleanUser}" | Senha: "${obfuscatedPass}"`,
     });
 
     const client = new SgpHttpClient();
