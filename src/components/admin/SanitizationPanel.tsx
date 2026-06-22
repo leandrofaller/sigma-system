@@ -22,6 +22,7 @@ interface LogRecord {
     matricula: string | null;
     unidade: string | null;
     faccao: string | null;
+    photoPath: string | null;
   } | null;
 }
 
@@ -158,8 +159,16 @@ export function SanitizationPanel() {
 
   // Decisão manual de auditoria: Aprovar ou Rejeitar imagem
   const handleAuditorDecision = async (id: string, action: 'approve' | 'reject') => {
-    if (action === 'reject' && !confirm('Tem certeza de que deseja descartar permanentemente esta imagem? O arquivo físico será removido do disco.')) {
-      return;
+    if (action === 'reject') {
+      const record = logs.find(item => item.id === id);
+      const isMainPhoto = record && record.originalPath && record.apenado && record.originalPath === record.apenado.photoPath;
+      const confirmMsg = isMainPhoto
+        ? '⚠️ ALERTA CRÍTICO: Esta foto está ativa na FICHA PRINCIPAL do apenado!\nSe você rejeitar e apagar, a ficha dele ficará sem foto.\n\nDeseja mesmo prosseguir e apagar permanentemente?'
+        : 'Tem certeza de que deseja descartar permanentemente esta imagem? O arquivo físico será removido do disco.';
+      
+      if (!confirm(confirmMsg)) {
+        return;
+      }
     }
     setProcessingId(id);
     try {
@@ -408,6 +417,14 @@ export function SanitizationPanel() {
                         {badge.label}
                       </span>
                     </div>
+
+                    {/* Badge de Foto da Ficha Principal */}
+                    {log.originalPath && log.apenado && log.originalPath === log.apenado.photoPath && (
+                      <div className="absolute top-2 right-2 flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-sm backdrop-blur-md bg-purple-50 dark:bg-purple-950/80 border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400">
+                        <CheckCircle className="w-2.5 h-2.5 text-purple-500" />
+                        Ficha Ativa
+                      </div>
+                    )}
 
                     {isProcessing && (
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">

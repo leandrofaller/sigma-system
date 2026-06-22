@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
               matricula: true,
               unidade: true,
               faccao: true,
+              photoPath: true,
             },
           },
         },
