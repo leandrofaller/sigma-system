@@ -56,19 +56,36 @@ export async function GET(req: NextRequest) {
       prisma.sipeVisitante.count({ where })
     ]);
 
-    // Mapeia o resultado no formato esperado pelo frontend SipeVisitantesPanel
+    // Mapeia o resultado no formato esperado pelo frontend SipeVisitantesPanel e VisitantesClient
     const mappedVisitantes = visitantes.map((v) => {
       const primeiroVinculo = v.vinculos.find((vin) => vin.ativo) || v.vinculos[0];
       
       return {
         id: v.id,
         visitanteId: v.id,
+        nome: v.nome,
         nomeVisitante: v.nome,
+        cpf: v.cpf,
         cpfVisitante: v.cpf,
+        parentesco: v.parentesco,
         parentescoVisitante: v.parentesco,
-        ativoVisitante: primeiroVinculo ? primeiroVinculo.ativo : true,
         photoPath: v.photoPath,
+        carteirinha: v.carteirinha,
+        certidaoNascimento: v.certidaoNascimento,
+        dataNascimento: v.dataNascimento,
+        sexo: v.sexo,
+        telefone: v.telefone,
+        naturalidade: v.naturalidade,
+        dataCarteirinha: v.dataCarteirinha,
+        nomeMae: v.nomeMae,
+        nomePai: v.nomePai,
+        logradouro: v.logradouro,
+        numero: v.numero,
+        bairro: v.bairro,
+        cidadeUf: v.cidadeUf,
         descricao: v.carteirinha ? `Carteirinha: ${v.carteirinha}` : null,
+        ativoVisitante: primeiroVinculo ? primeiroVinculo.ativo : true,
+        _count: v._count,
         apenado: primeiroVinculo?.apenado
           ? {
               id: primeiroVinculo.apenado.id,
