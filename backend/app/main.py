@@ -440,10 +440,14 @@ def sgp_login(payload: Dict[str, Any] = Body(...)):
                     break
             
             if gestor_link:
+                if not gestor_link.startswith("http"):
+                    gestor_link = f"https://sgp.sejus.ro.gov.br{gestor_link}"
                 # Faz o GET no link do gestor
                 res_gestor = session.get(gestor_link, headers=headers, impersonate="chrome", allow_redirects=False, timeout=20.0)
                 final_loc = res_gestor.headers.get("location") or res_gestor.headers.get("Location")
                 if final_loc:
+                    if not final_loc.startswith("http"):
+                        final_loc = f"https://sgp.sejus.ro.gov.br{final_loc}"
                     session.get(final_loc, headers=headers, impersonate="chrome", timeout=20.0)
             else:
                 # Tenta via formulário select/option
@@ -467,8 +471,9 @@ def sgp_login(payload: Dict[str, Any] = Body(...)):
                                 if inp.get("name") and inp.get("value"):
                                     role_data[inp.get("name")] = inp.get("value")
                                     
+                        url_post = form_action if form_action.startswith("http") else f"https://sgp.sejus.ro.gov.br{form_action}"
                         session.post(
-                            f"https://sgp.sejus.ro.gov.br{form_action}",
+                            url_post,
                             headers=headers,
                             data=role_data,
                             impersonate="chrome",
