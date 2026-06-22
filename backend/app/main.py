@@ -264,6 +264,95 @@ def sipe_proxy_write(
         logger.error(f"Erro no proxy {method} para o path {path}: {str(e)}")
         raise HTTPException(status_code=502, detail=f"Erro de comunicação com o SIPE: {str(e)}")
 
+@app.post("/sgp/proxy")
+def sgp_proxy_write(
+    payload: Dict[str, Any] = Body(...),
+    cookie: Optional[str] = Header(None, alias="Cookie")
+):
+    """
+    Proxy genérico para o SGP SEJUS usando curl_cffi para contornar o bloqueio da SETIC.
+    """
+    path = str(payload.get("path") or "").strip()
+    method = str(payload.get("method") or "GET").upper()
+
+    if not path:
+        raise HTTPException(status_code=400, detail="Campo 'path' é obrigatório.")
+    if method not in {"GET", "POST"}:
+        raise HTTPException(status_code=400, detail="Método não suportado. Use GET ou POST.")
+
+    clean_path = path.lstrip('/')
+    url = f"https://sgp.sejus.ro.gov.br/{clean_path}"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    }
+    if cookie:
+        headers["Cookie"] = cookie
+
+    from curl_cffi import requests as curl_requests
+
+    req_kwargs = {
+        "headers": headers,
+        "impersonate": "chrome",
+        "timeout": 20.0,
+        "allow_redirects": False
+    }
+
+    form = payload.get("form")
+    if form:
+        form_data = []
+        for k, v in form.items():
+            if isinstance(v, list):
+                for item in v:
+                    form_data.append((k, str(item)))
+            else:
+                form_data.append((k, str(v)))
+        req_kwargs["data"] = form_data
+
+    try:
+        if method == "POST":
+            response = curl_requests.post(url, **req_kwargs)
+        else:
+            response = curl_requests.get(url, **req_kwargs)
+
+        content_type = response.headers.get("content-type", "")
+        
+        set_cookies = []
+        try:
+            for name, value in response.cookies.items():
+                set_cookies.append(f"{name}={value}")
+        except Exception:
+            pass
+
+        # Também verifica se há cookies adicionais no cabeçalho set-cookie
+        for k, v in response.headers.items():
+            if k.lower() == 'set-cookie':
+                set_cookies.append(v.split(';')[0])
+
+        is_binary = "image" in content_type or path.endswith((".jpg", ".jpeg", ".png", ".webp"))
+        
+        payload_res = {
+            "status": response.status_code,
+            "content_type": content_type,
+            "set_cookies": list(set(set_cookies)),
+            "is_binary": is_binary,
+            "url": response.url
+        }
+
+        if is_binary:
+            payload_res["data"] = base64.b64encode(response.content).decode("utf-8")
+        else:
+            payload_res["html"] = response.text
+            payload_res["text"] = response.text
+            
+        return payload_res
+
+    except Exception as e:
+        logger.error(f"Erro no SGP proxy {method} para {url}: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Erro de comunicação com SGP: {str(e)}")
+
 @app.get("/sipe/diagnose")
 
 def diagnose():

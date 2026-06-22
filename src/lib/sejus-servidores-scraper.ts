@@ -5,7 +5,6 @@ import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { writeFile, readFile } from 'fs/promises';
 import { createHash } from 'crypto';
-import { chromium } from 'playwright';
 import { runServidoresIndexing } from './servidor-indexing';
 
 export interface ServidoresSyncProgress {
@@ -72,6 +71,210 @@ function refreshMemory(jobId: string, patch: Partial<ServidoresSyncProgress>) {
   }
 }
 
+// ── Cliente HTTP Customizado para o SGP ─────────────────────────────────────
+class SgpHttpClient {
+  private cookies = new Map<string, string>();
+  private userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  private baseUrl = 'https://sgp.sejus.ro.gov.br';
+
+  public updateCookies(setCookieHeader: string[] | null | undefined) {
+    if (!setCookieHeader) return;
+    setCookieHeader.forEach(cookieStr => {
+      const parts = cookieStr.split(';')[0].split('=');
+      if (parts.length >= 2) {
+        this.cookies.set(parts[0].trim(), parts.slice(1).join('=').trim());
+      }
+    });
+  }
+
+  public getCookieHeader(): string {
+    return Array.from(this.cookies.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
+  }
+
+  public async request(path: string, options: {
+    method?: 'GET' | 'POST';
+    body?: string | URLSearchParams;
+    headers?: Record<string, string>;
+    redirect?: 'manual' | 'follow';
+  } = {}) {
+    const method = options.method ?? 'GET';
+    const cleanPath = path.startsWith('http') 
+      ? path.replace('https://sgp.sejus.ro.gov.br', '') 
+      : path;
+    const pythonApiUrl = process.env.SIPE_PYTHON_API_URL || 'http://localhost:8000';
+
+    let form: Record<string, string> | undefined = undefined;
+    if (options.body) {
+      form = {};
+      const params = new URLSearchParams(options.body.toString());
+      params.forEach((value, key) => {
+        if (form) form[key] = value;
+      });
+    }
+
+    const res = await fetch(`${pythonApiUrl}/sgp/proxy`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': this.getCookieHeader()
+      },
+      body: JSON.stringify({
+        path: cleanPath,
+        method: method,
+        form: form
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`SGP Proxy error: ${res.status} ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    this.updateCookies(data.set_cookies);
+
+    return {
+      status: data.status,
+      ok: data.status >= 200 && data.status < 300,
+      headers: {
+        get: (key: string) => {
+          if (key.toLowerCase() === 'location') return data.headers?.['location'] || data.headers?.['Location'];
+          return data.headers?.[key] || null;
+        },
+        entries: () => Object.entries(data.headers || {})
+      },
+      text: async () => data.html || data.text || '',
+      arrayBuffer: async () => {
+        if (data.is_binary && data.data) {
+          return Buffer.from(data.data, 'base64') as any;
+        }
+        return Buffer.from(data.html || data.text || '') as any;
+      }
+    };
+  }
+
+  public async login(): Promise<boolean> {
+    const username = process.env.SEJUS_SGP_USER || process.env.SIPE_CPF || '';
+    const password = process.env.SEJUS_SGP_PASS || process.env.SIPE_SENHA || '';
+
+    if (!username || !password) {
+      throw new Error('Credenciais de acesso ao SGP (SEJUS_SGP_USER / SIPE_CPF) não configuradas no arquivo .env.');
+    }
+
+    // 1. GET /login para obter o CSRF token
+    const loginPageRes = await this.request('/login');
+    const loginHtml = await loginPageRes.text();
+    
+    const $login = cheerio.load(loginHtml);
+    const token = $login('input[name="_token"]').val();
+
+    if (!token) {
+      throw new Error(`Token CSRF não encontrado na página de login do SGP. HTML obtido: ${loginHtml.slice(0, 500)}`);
+    }
+
+    // 2. POST /auth
+    const bodyParams = new URLSearchParams();
+    bodyParams.append('_token', String(token));
+    bodyParams.append('cpf', username);
+    bodyParams.append('senha', password);
+
+    const authRes = await this.request('/auth', {
+      method: 'POST',
+      body: bodyParams.toString(),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Referer': `${this.baseUrl}/login`,
+        'Origin': this.baseUrl
+      },
+      redirect: 'manual'
+    });
+
+    if (authRes.status !== 302) {
+      throw new Error(`Login rejeitado pelo servidor SGP (Status: ${authRes.status}).`);
+    }
+
+    const redirectLocation = authRes.headers.get('location');
+    if (!redirectLocation || redirectLocation.includes('/login')) {
+      // Falha no login, carrega a página para ler o aviso
+      const errorPageRes = await this.request(redirectLocation || '/login');
+      const errorHtml = await errorPageRes.text();
+      const $error = cheerio.load(errorHtml);
+      const toastMsg = $error('#toast, .toast-body, .alert').text().trim().replace(/\s+/g, ' ');
+      throw new Error(`Falha na autenticação no SGP: ${toastMsg || 'Credenciais inválidas ou CPF não cadastrado.'}`);
+    }
+
+    // 3. Carrega página de redirecionamento (costuma ser seleção de perfil)
+    const selectRoleRes = await this.request(redirectLocation);
+    const selectRoleHtml = await selectRoleRes.text();
+    const $role = cheerio.load(selectRoleHtml);
+
+    // Se já estiver na Home, não precisa de seleção de perfil
+    if (redirectLocation.includes('/home') || selectRoleHtml.includes('/servidor') || selectRoleHtml.toLowerCase().includes('sair')) {
+      return true;
+    }
+
+    // 4. Tratar seleção do perfil "SGP - Gestor"
+    // Caso A: Link direto com texto "SGP - Gestor"
+    const gestorLink = $role('a:contains("SGP - Gestor"), div:contains("SGP - Gestor")').closest('a');
+    if (gestorLink.length > 0) {
+      const href = gestorLink.attr('href');
+      if (href) {
+        const finalRes = await this.request(href, { redirect: 'manual' });
+        const finalLoc = finalRes.headers.get('location') || '';
+        if (finalLoc) {
+          await this.request(finalLoc);
+        }
+        return true;
+      }
+    }
+
+    // Caso B: Formulário com Select de Perfil
+    const select = $role('select');
+    if (select.length > 0) {
+      let optionVal: string | undefined = undefined;
+      select.find('option').each((_, opt) => {
+        const text = $role(opt).text().trim();
+        if (text.includes('SGP - Gestor')) {
+          optionVal = $role(opt).val() as string;
+          return false;
+        }
+      });
+
+      if (optionVal !== undefined) {
+        const form = select.closest('form');
+        const formAction = form.attr('action') || '/selectRole';
+        const formMethod = (form.attr('method') || 'POST').toUpperCase() as 'GET' | 'POST';
+
+        const roleParams = new URLSearchParams();
+        form.find('input').each((_, el) => {
+          const name = $role(el).attr('name');
+          const val = $role(el).attr('value');
+          if (name) roleParams.append(name, val ?? '');
+        });
+
+        const selectName = select.attr('name') || 'perfil';
+        roleParams.append(selectName, optionVal);
+
+        const rolePostRes = await this.request(formAction, {
+          method: formMethod,
+          body: roleParams.toString(),
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          redirect: 'manual'
+        });
+
+        const finalLoc = rolePostRes.headers.get('location');
+        if (finalLoc) {
+          await this.request(finalLoc);
+        }
+        return true;
+      }
+    }
+
+    return true;
+  }
+}
+
 export function startServidoresSync(jobId: string): void {
   // Previne múltiplas execuções simultâneas
   if (globalThis.__sipeState?.status === 'RUNNING') return;
@@ -98,65 +301,15 @@ export function startServidoresSync(jobId: string): void {
       erros: 0,
       total: 0,
       ultimoIdProcessado: null,
-      log: 'Iniciando Playwright para login no SGP SEJUS...',
+      log: 'Conectando ao SGP SEJUS via requisições HTTP...',
     });
 
-    let browser;
+    const client = new SgpHttpClient();
     try {
-      browser = await chromium.launch({
-        headless: true,
-        args: ['--disable-blink-features=AutomationControlled', '--no-sandbox']
-      });
-      const context = await browser.newContext({
-        viewport: { width: 1280, height: 720 }
-      });
-      const page = await context.newPage();
+      // 1 e 2. Login e seleção do perfil
+      await client.login();
 
-      // 1. Acessa Login
-      const loginUrl = 'https://sgp.sejus.ro.gov.br/login';
-      console.log(`[SERVIDORES SCRAPER] Navegando para ${loginUrl}...`);
-      await page.goto(loginUrl, { waitUntil: 'networkidle' });
-
-      const username = process.env.SEJUS_SGP_USER || '';
-      const password = process.env.SEJUS_SGP_PASS || '';
-
-      if (!username || !password) {
-        throw new Error('Credenciais SEJUS_SGP_USER ou SEJUS_SGP_PASS não configuradas no arquivo .env.');
-      }
-
-      // Preenche CPF/Login e Senha
-      const cpfInput = page.locator('input[name="cpf"], input[name="username"], input[placeholder*="CPF"], input[type="text"]').first();
-      const passInput = page.locator('input[name="password"], input[name="senha"], input[type="password"]').first();
-      const submitBtn = page.locator('button[type="submit"], input[type="submit"], button:has-text("Entrar")').first();
-
-      await cpfInput.fill(username);
-      await passInput.fill(password);
-      await submitBtn.click();
-
-      console.log('[SERVIDORES SCRAPER] Submetendo credenciais de login...');
-      await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }).catch(() => {});
-
-      // 2. Seleção do perfil "SGP - Gestor"
-      const gestorOption = page.locator('text="SGP - Gestor", a:has-text("SGP - Gestor"), div:has-text("SGP - Gestor")').first();
-      if (await gestorOption.count() > 0) {
-        console.log('[SERVIDORES SCRAPER] Perfil SGP - Gestor encontrado na tela. Clicando...');
-        await gestorOption.click();
-        await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 10000 }).catch(() => {});
-      } else {
-        const selectElement = page.locator('select');
-        if (await selectElement.count() > 0) {
-          console.log('[SERVIDORES SCRAPER] Select de perfil encontrado. Escolhendo SGP - Gestor...');
-          await page.selectOption('select', { label: 'SGP - Gestor' }).catch(() => {});
-          const prosseguir = page.locator('button:has-text("Prosseguir"), button:has-text("Entrar"), button[type="submit"]').first();
-          if (await prosseguir.count() > 0) {
-            await prosseguir.click();
-            await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 10000 }).catch(() => {});
-          }
-        }
-      }
-
-      const currentUrl = page.url();
-      console.log(`[SERVIDORES SCRAPER] Logado com sucesso. URL Atual: ${currentUrl}`);
+      console.log('[SERVIDORES SCRAPER] Logado com sucesso via HTTP.');
       await dbProgress(jobId, {
         fase: 'Coletando IDs',
         log: 'Login efetuado com sucesso. Acessando listagem de servidores...',
@@ -164,13 +317,11 @@ export function startServidoresSync(jobId: string): void {
       refreshMemory(jobId, { fase: 'Coletando IDs', ultimoLog: 'Login efetuado com sucesso.' });
 
       // 3. Acessa listagem de servidores para coletar os IDs
-      await page.goto('https://sgp.sejus.ro.gov.br/servidor', { waitUntil: 'networkidle' });
-
       const sejusIds: number[] = [];
-      let hasNextPage = true;
       let pageCount = 1;
+      let currentPath = '/servidor';
 
-      while (hasNextPage && pageCount <= 50) {
+      while (pageCount <= 50) {
         if (globalThis.__sipeStopFlag) {
           const msg = 'Sincronização interrompida pelo usuário durante a coleta de IDs.';
           await dbProgress(jobId, {
@@ -180,7 +331,6 @@ export function startServidoresSync(jobId: string): void {
             finalizadoEm: new Date(),
           });
           refreshMemory(jobId, { status: 'INTERRUPTED', fase: 'Interrompido', ultimoLog: msg });
-          await browser.close().catch(() => {});
           return;
         }
 
@@ -189,7 +339,8 @@ export function startServidoresSync(jobId: string): void {
         refreshMemory(jobId, { ultimoLog: logMsg });
         await dbProgress(jobId, { log: logMsg });
 
-        const html = await page.content();
+        const res = await client.request(currentPath);
+        const html = await res.text();
         const $ = cheerio.load(html);
 
         $('a').each((_, a) => {
@@ -201,16 +352,31 @@ export function startServidoresSync(jobId: string): void {
           }
         });
 
-        // Tenta ir para a próxima página
-        const nextBtn = page.locator('a:has-text("Próximo"), li.next a, button:has-text("Próxima"), i.fa-angle-right').first();
-        if (await nextBtn.count() > 0 && await nextBtn.isEnabled()) {
-          await nextBtn.click();
-          await page.waitForLoadState('networkidle').catch(() => {});
+        // Tenta ir para a próxima página buscando o link de paginação
+        let nextHref: string | undefined = undefined;
+        $('a').each((_, el) => {
+          const txt = $(el).text().trim().toLowerCase();
+          if (txt === 'próximo' || txt === 'próxima' || txt.includes('próximo') || txt.includes('próxima') || txt.includes('next')) {
+            nextHref = $(el).attr('href');
+            if (nextHref && nextHref !== '#') return false; // break loop
+          }
+        });
+
+        if (!nextHref) {
+          nextHref = $('li.next a, li.page-item.next a, a.next').attr('href');
+        }
+
+        if (!nextHref) {
+          nextHref = $('i.fa-angle-right, i.fa-chevron-right').closest('a').attr('href');
+        }
+
+        if (nextHref && nextHref !== '#' && nextHref !== currentPath) {
+          currentPath = nextHref;
           pageCount++;
           // Pequeno delay preventivo
-          await page.waitForTimeout(300);
+          await new Promise(r => setTimeout(r, 300));
         } else {
-          hasNextPage = false;
+          break;
         }
       }
 
@@ -226,7 +392,6 @@ export function startServidoresSync(jobId: string): void {
           finalizadoEm: new Date(),
         });
         refreshMemory(jobId, { status: 'COMPLETED', fase: 'Concluído', ultimoLog: msg });
-        await browser.close().catch(() => {});
         return;
       }
 
@@ -258,7 +423,6 @@ export function startServidoresSync(jobId: string): void {
             finalizadoEm: new Date(),
           });
           refreshMemory(jobId, { status: 'INTERRUPTED', fase: 'Interrompido', ultimoLog: msg });
-          await browser.close().catch(() => {});
           return;
         }
 
@@ -274,10 +438,9 @@ export function startServidoresSync(jobId: string): void {
         }
 
         try {
-          const vinculoUrl = `https://sgp.sejus.ro.gov.br/vinculo/${sejusId}`;
-          await page.goto(vinculoUrl, { waitUntil: 'networkidle' });
-
-          const htmlDetails = await page.content();
+          const vinculoUrl = `/vinculo/${sejusId}`;
+          const detailsRes = await client.request(vinculoUrl);
+          const htmlDetails = await detailsRes.text();
           const $details = cheerio.load(htmlDetails);
 
           // Função inteligente de extração baseada em regex
@@ -345,9 +508,9 @@ export function startServidoresSync(jobId: string): void {
                 ? photoUrl 
                 : new URL(photoUrl, 'https://sgp.sejus.ro.gov.br').toString();
 
-              const photoResponse = await page.request.get(absolutePhotoUrl);
-              if (photoResponse.ok()) {
-                const imageBuffer = await photoResponse.body();
+              const photoResponse = await client.request(absolutePhotoUrl);
+              if (photoResponse.ok) {
+                const imageBuffer = Buffer.from(await photoResponse.arrayBuffer());
 
                 const webpBuffer = await sharp(imageBuffer)
                   .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
@@ -471,10 +634,6 @@ export function startServidoresSync(jobId: string): void {
         finalizadoEm: new Date(),
         log: `Erro fatal no scraper de servidores: ${msg}`,
       });
-    } finally {
-      if (browser) {
-        await browser.close().catch(() => {});
-      }
     }
   };
 
@@ -482,3 +641,4 @@ export function startServidoresSync(jobId: string): void {
     console.error('[SERVIDORES SCRAPER] Promessa de execução falhou:', err);
   });
 }
+
