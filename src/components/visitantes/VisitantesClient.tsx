@@ -19,6 +19,7 @@ import {
   Phone,
   FileText,
   MapPin,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -94,6 +95,7 @@ export function VisitantesClient() {
   // Detalhe do Visitante selecionado
   const [selected, setSelected] = useState<VisitanteDetalhe | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [zoomedPhoto, setZoomedPhoto] = useState<{ url: string; nome: string } | null>(null);
 
   // Controle de Sincronização
   const [showSyncModal, setShowSyncModal] = useState(false);
@@ -128,6 +130,21 @@ export function VisitantesClient() {
   useEffect(() => {
     fetchVisitantes(page, search);
   }, [page]);
+
+  // Fechar modal de zoom com a tecla Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setZoomedPhoto(null);
+      }
+    };
+    if (zoomedPhoto) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [zoomedPhoto]);
 
   // Handler para busca com debounce opcional ou direta
   const handleSearch = (e: React.FormEvent) => {
@@ -374,7 +391,22 @@ export function VisitantesClient() {
                     >
                       <div className="flex items-center gap-4 min-w-0">
                         {/* Foto */}
-                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center border border-gray-200/50 dark:border-gray-700">
+                        <div
+                          onClick={(e) => {
+                            if (v.photoPath) {
+                              e.stopPropagation();
+                              setZoomedPhoto({
+                                url: `/api/sipe/visitantes/${v.id}/foto`,
+                                nome: v.nome,
+                              });
+                            }
+                          }}
+                          className={`w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0 flex items-center justify-center border border-gray-200/50 dark:border-gray-700 transition-all duration-200 ${
+                            v.photoPath
+                              ? 'cursor-zoom-in hover:scale-105 hover:border-indigo-500'
+                              : ''
+                          }`}
+                        >
                           {v.photoPath ? (
                             <img
                               src={`/api/sipe/visitantes/${v.id}/foto`}
@@ -470,7 +502,21 @@ export function VisitantesClient() {
               <div className="p-4 space-y-6">
                 {/* Foto e Nome */}
                 <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-900 border-2 border-indigo-500/20 flex-shrink-0 flex items-center justify-center">
+                  <div
+                    onClick={() => {
+                      if (selected.photoPath) {
+                        setZoomedPhoto({
+                          url: `/api/sipe/visitantes/${selected.id}/foto`,
+                          nome: selected.nome,
+                        });
+                      }
+                    }}
+                    className={`w-20 h-20 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-900 border-2 border-indigo-500/20 flex-shrink-0 flex items-center justify-center transition-all duration-200 ${
+                      selected.photoPath
+                        ? 'cursor-zoom-in hover:scale-105 hover:border-indigo-500'
+                        : ''
+                    }`}
+                  >
                     {selected.photoPath ? (
                       <img
                         src={`/api/sipe/visitantes/${selected.id}/foto`}
@@ -804,6 +850,40 @@ export function VisitantesClient() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox / Foto em tamanho real */}
+      {zoomedPhoto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md transition-all duration-300 animate-in fade-in"
+          onClick={() => setZoomedPhoto(null)}
+        >
+          <div
+            className="relative max-w-3xl max-h-[85vh] bg-slate-900/90 rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex flex-col items-center justify-center animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Botão de Fechar */}
+            <button
+              onClick={() => setZoomedPhoto(null)}
+              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 hover:bg-black/80 text-white/80 hover:text-white border border-white/10 transition-all active:scale-95 shadow-lg"
+              title="Fechar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Imagem em tamanho real */}
+            <img
+              src={zoomedPhoto.url}
+              alt={zoomedPhoto.nome}
+              className="max-w-full max-h-[75vh] object-contain select-none"
+            />
+
+            {/* Nome do visitante */}
+            <div className="w-full bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 text-white text-center">
+              <p className="font-semibold text-lg drop-shadow-md text-slate-100">{zoomedPhoto.nome}</p>
             </div>
           </div>
         </div>
