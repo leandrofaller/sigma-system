@@ -40,6 +40,17 @@ Promise.all([
 ]).then(() => { console.log('Colunas OK'); }).catch(e => { console.error('AVISO colunas:', e.message); }).finally(() => p.\$disconnect());
 " || echo "AVISO: script de colunas falhou (nao critico)"
 
+echo "Garantindo item de sidebar Ordens de Missão (idempotente)..."
+gosu nextjs node -e "
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+p.\$executeRawUnsafe(\`
+  INSERT INTO sidebar_configs (id, key, label, href, \"iconName\", position, roles, enabled, \"isAdmin\", \"createdAt\", \"updatedAt\")
+  SELECT 'cm_ordens_missao_sidebar', 'ordens-missao', 'Ordens de Missão', '/ordens-missao', 'ClipboardList', 49, ARRAY['SUPER_ADMIN','ADMIN','OPERATOR'], true, false, NOW(), NOW()
+  WHERE NOT EXISTS (SELECT 1 FROM sidebar_configs WHERE key = 'ordens-missao')
+\`).then(() => { console.log('Sidebar Ordens de Missão OK'); }).catch(e => { console.error('AVISO sidebar:', e.message); }).finally(() => p.\$disconnect());
+" || echo "AVISO: sidebar insert falhou (nao critico)"
+
 echo "Iniciando API Python FastAPI em background..."
 PYTHONPATH=/app/backend/app gosu nextjs /opt/arcface-venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 

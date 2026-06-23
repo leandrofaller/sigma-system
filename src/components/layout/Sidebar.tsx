@@ -46,6 +46,7 @@ const defaultNavItems: NavItem[] = [
   { label: 'SIAIP', href: '/siaip', iconName: 'Database', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Celulares Recebidos', href: '/aparelhos', iconName: 'Smartphone', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'AIP', href: '/aip', iconName: 'Brain', roles: ['SUPER_ADMIN', 'OPERATOR'] },
+  { label: 'Ordens de Missão', href: '/ordens-missao', iconName: 'ClipboardList', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Unidades Prisionais', href: '/unidades-prisionais', iconName: 'Building2', roles: ['SUPER_ADMIN'] },
 ];
 

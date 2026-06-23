@@ -12,6 +12,8 @@ import { Brain, BarChart2, Users, Shield, Briefcase, Camera, Link2 } from 'lucid
 
 interface AIPClientProps {
   userRole: string
+  userId?: string
+  userName?: string
 }
 
 export function AIPClient({ userRole }: AIPClientProps) {
@@ -22,6 +24,8 @@ export function AIPClient({ userRole }: AIPClientProps) {
     setPreselectedSipeId(sipeId)
     setActiveTab('vinculos')
   }
+
+  const triggerClass = "gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start"
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -45,38 +49,37 @@ export function AIPClient({ userRole }: AIPClientProps) {
       {/* Tabs */}
       <div className="flex-1 min-h-0 p-3 md:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
-        <div className="relative w-full overflow-hidden mb-4 shrink-0">
-          {/* Indicadores sutis de rolagem lateral para mobile */}
-          <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-50 dark:from-gray-950 to-transparent pointer-events-none md:hidden z-10" />
-          <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-gray-50 dark:from-gray-950 to-transparent pointer-events-none md:hidden z-10" />
-          
-          <TabsList className="w-full md:w-fit overflow-x-auto flex md:inline-flex justify-start whitespace-nowrap scrollbar-none gap-1.5 bg-gray-100/80 dark:bg-gray-800/80 p-1 rounded-2xl h-auto snap-x snap-mandatory scroll-smooth">
-            <TabsTrigger value="dashboard" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
-              <BarChart2 className="w-4 h-4" />
-              Dashboard
-            </TabsTrigger>
-            <TabsTrigger value="apenados" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
-              <Users className="w-4 h-4" />
-              Apenados
-            </TabsTrigger>
-            <TabsTrigger value="vinculos" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
-              <Link2 className="w-4 h-4" />
-              Vínculos
-            </TabsTrigger>
-            <TabsTrigger value="faccoes" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
-              <Shield className="w-4 h-4" />
-              Facções
-            </TabsTrigger>
-            <TabsTrigger value="advogados" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
-              <Briefcase className="w-4 h-4" />
-              Advogados
-            </TabsTrigger>
-            <TabsTrigger value="visitantes" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-950 dark:text-white data-[state=active]:shadow-sm snap-start">
-              <Camera className="w-4 h-4" />
-              Visitantes
-            </TabsTrigger>
-          </TabsList>
-        </div>
+          <div className="relative w-full overflow-hidden mb-4 shrink-0">
+            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-50 dark:from-gray-950 to-transparent pointer-events-none md:hidden z-10" />
+            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-gray-50 dark:from-gray-950 to-transparent pointer-events-none md:hidden z-10" />
+
+            <TabsList className="w-full md:w-fit overflow-x-auto flex md:inline-flex justify-start whitespace-nowrap scrollbar-none gap-1.5 bg-gray-100/80 dark:bg-gray-800/80 p-1 rounded-2xl h-auto snap-x snap-mandatory scroll-smooth">
+              <TabsTrigger value="dashboard" className={triggerClass}>
+                <BarChart2 className="w-4 h-4" />
+                Dashboard
+              </TabsTrigger>
+              <TabsTrigger value="apenados" className={triggerClass}>
+                <Users className="w-4 h-4" />
+                Apenados
+              </TabsTrigger>
+              <TabsTrigger value="vinculos" className={triggerClass}>
+                <Link2 className="w-4 h-4" />
+                Vínculos
+              </TabsTrigger>
+              <TabsTrigger value="faccoes" className={triggerClass}>
+                <Shield className="w-4 h-4" />
+                Facções
+              </TabsTrigger>
+              <TabsTrigger value="advogados" className={triggerClass}>
+                <Briefcase className="w-4 h-4" />
+                Advogados
+              </TabsTrigger>
+              <TabsTrigger value="visitantes" className={triggerClass}>
+                <Camera className="w-4 h-4" />
+                Visitantes
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="dashboard" className="flex-1 min-h-0 mt-0 overflow-y-auto">
             <AIPDashboard />

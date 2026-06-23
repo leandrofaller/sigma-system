@@ -185,7 +185,15 @@
       "Bash(cd /F/relatorio_claude && find . -type f -name \"*.py\" | head -20)",
       "Bash(find F:\\\\\\\\relatorio_claude\\\\\\\\src\\\\\\\\app\\\\\\\\api\\\\\\\\sipe\\\\\\\\apenados -type f -name \"route.ts\")",
       "Bash(npm audit *)",
-      "Bash(xargs grep -l \"CORS\\\\|cross-origin\\\\|fetch.*map\\\\|fetch.*tile\")"
+      "Bash(xargs grep -l \"CORS\\\\|cross-origin\\\\|fetch.*map\\\\|fetch.*tile\")",
+      "Bash(Get-Content .env)",
+      "Bash(Select-String \"DATABASE_URL\")",
+      "Bash(Select-Object -First 2)",
+      "Bash(mkdir -p \"D:\\\\AIP\\\\sigma-system\\\\src\\\\app\\\\api\\\\aip\\\\ordens-missao\\\\proximo-numero\" \"D:\\\\AIP\\\\sigma-system\\\\src\\\\app\\\\api\\\\aip\\\\ordens-missao\\\\[id]\\\\ciencia\")",
+      "PowerShell(cd \"D:\\\\AIP\\\\sigma-system\"; $env:DATABASE_URL=\"postgresql://u:p@localhost:5432/db\"; npx prisma generate 2>&1)",
+      "PowerShell(cd \"D:\\\\AIP\\\\sigma-system\"; $env:DATABASE_URL=\"postgresql://u:p@localhost:5432/db\"; npx tsc --noEmit 2>&1 | Where-Object { $_ -notmatch \"sipe-scraper|playwright\" } | Select-Object -First 30)",
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/db\" rtk tsc --noEmit)",
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/db\" rtk proxy npx tsc --noEmit)"
     ],
     "additionalDirectories": [
       "f:\\relatorio_claude\\src\\app\\api\\uploads",
