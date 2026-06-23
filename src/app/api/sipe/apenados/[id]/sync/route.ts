@@ -72,7 +72,7 @@ export async function POST(
       }
     })
 
-    console.log(`[SYNC INDIVIDUAL] ✅ Sincronização concluída com sucesso para #${sipeId}.`)
+    console.log(`[SYNC INDIVIDUAL] ✅ Sincronização concluída para #${sipeId}. nomeMae="${updated?.nomeMae ?? 'NULL'}" nomePai="${updated?.nomePai ?? 'NULL'}"`)
 
     return NextResponse.json({ success: true, apenado: updated })
   } catch (err: any) {

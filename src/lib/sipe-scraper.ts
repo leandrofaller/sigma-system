@@ -6258,9 +6258,13 @@ function parseApenadoFichaHtmlCheerio(html: string) {
     return null
   }
 
+  const nomeMaeVal = val('nomemae') || val('nome_mae') || staticVal('nomemae') || staticVal('nome_mae') || extractLabel('Nome\\s+[Dd]a\\s+M[ãa]e') || extractLabel('M[ãa]e') || null
+  const nomeApenadoVal = val('nomeapenado')
+  console.log(`[PARSE FICHA] nome="${nomeApenadoVal}" nomeMae="${nomeMaeVal ?? 'NULL'}" nomemae_input_count=${$('[name="nomemae"]').length} nomemae_input_value="${$('[name="nomemae"]').attr('value') ?? $('[name="nomemae"]').val() ?? 'SEM VALUE'}"`)
+
   return {
     dados: {
-      nome: val('nomeapenado'),
+      nome: nomeApenadoVal,
       nomeOutro: val('nomefalso'),
       cpf: val('cpf'),
       rg: val('rg'),
@@ -6277,7 +6281,7 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       religiao: religiaoValue,
       estadoCivil: estadoCivilValue,
       qtdFilhos: parseInt(val('qtdfilhos') || val('qtd_filhos') || val('num_filhos') || '0') || null,
-      nomeMae: val('nomemae') || val('nome_mae') || staticVal('nomemae') || staticVal('nome_mae') || extractLabel('Nome\\s+[Dd]a\\s+M[ãa]e') || extractLabel('M[ãa]e') || null,
+      nomeMae: nomeMaeVal,
       nomePai: val('nomepai') || val('nome_pai') || staticVal('nomepai') || staticVal('nome_pai') || extractLabel('Nome\\s+[Dd]o\\s+[Pp]ai') || extractLabel('Pai') || null,
       telefone: val('telefone'),
       rji: val('rji'),
@@ -7060,6 +7064,25 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     if (!isNaN(n)) dpData.qtdFilhos = n
   }
 
+  // Fallback: se nomeMae ainda nulo, tenta extrair do texto do HTML por regex
+  if (!dpData.nomeMae) {
+    const rawText = $.root().text()
+    const patterns = [
+      /nome\s+da\s+m[ãa]e\s*[:\-]?\s*([A-ZÀ-Ú][A-ZÀ-Ú\s]{3,60})/i,
+      /m[ãa]e\s*[:\-]\s*([A-ZÀ-Ú][A-ZÀ-Ú\s]{3,60})/i,
+    ]
+    for (const pat of patterns) {
+      const m = rawText.match(pat)
+      if (m) {
+        const candidate = m[1].trim().replace(/\s+/g, ' ')
+        if (candidate.length > 3 && candidate.length < 80) {
+          dpData.nomeMae = candidate
+          break
+        }
+      }
+    }
+  }
+
   // Monta objeto de atualização apenas com valores extraídos (não-nulos)
   const dpUpdate: Record<string, any> = {}
   for (const [key, value] of Object.entries(dpData)) {
@@ -7067,6 +7090,8 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
       dpUpdate[key] = value
     }
   }
+
+  console.log(`[FICHA GERAL DP] apenadoId=${apenadoId} nomeMae="${dpData.nomeMae ?? 'NULL'}" campos encontrados:`, Object.keys(dpUpdate))
 
   if (Object.keys(dpUpdate).length > 0) {
     await prisma.sipeApenadoImportado.update({
@@ -8057,6 +8082,12 @@ export async function scrapeApenadoFichaFast(
     fetchSipeViaProxy(`/apenados/${sipeId}/credenciados`),
   ]
 
+  console.log(`[SCRAPER FAST] csrfToken para #${sipeId}: ${csrfToken ? csrfToken.substring(0, 12) + '…' : 'NÃO ENCONTRADO'}`)
+
+  // Reativa o apenado na sessão do proxy imediatamente antes do POST para fichaGeral,
+  // garantindo que o SIPE aceite o apenado_id sem retornar 422.
+  await fetchSipeViaProxy(`/apenados/${sipeId}/selecionarOpcao`).catch(() => {})
+
   let fichaGeralPromise: Promise<SipeProxyResponse | null> = Promise.resolve(null)
   if (csrfToken) {
     fichaGeralPromise = requestSipeViaProxy({
@@ -8134,8 +8165,22 @@ export async function scrapeApenadoFichaFast(
   }
 
   // Por último, executa a Ficha Geral consolidada (evitando duplicar advogados e visitantes criados acima)
+  console.log(`[SCRAPER FAST] fichaGeralData para #${sipeId}: ${fichaGeralData?.html ? `HTML ${fichaGeralData.html.length} chars` : 'NÃO RETORNOU'}`)
   if (fichaGeralData?.html) {
     await parseAndSaveFichaGeralCheerio(fichaGeralData.html, apenado.id)
+  }
+
+  // Fallback: se fichaGeral não retornou, tenta a página /show do apenado para extrair dados pessoais
+  if (!fichaGeralData?.html) {
+    const showData = await fetchSipeViaProxy(`/apenados/${sipeId}/show`).catch(() => null)
+    if (showData?.html) {
+      console.log(`[SCRAPER FAST] /show para #${sipeId}: ${showData.html.length} chars — tentando extrair DP`)
+      await parseAndSaveFichaGeralCheerio(showData.html, apenado.id)
+    } else {
+      // Último recurso: re-parseia o próprio editHtml como fichaGeral
+      console.log(`[SCRAPER FAST] /show indisponível — extraindo DP do editHtml #${sipeId}`)
+      await parseAndSaveFichaGeralCheerio(editHtml, apenado.id)
+    }
   }
 
   console.log(`[SCRAPER FAST] 🚀 Apenado #${sipeId} processado de forma sequencial-segura com sucesso!`)
