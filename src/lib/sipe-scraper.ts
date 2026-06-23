@@ -3340,10 +3340,14 @@ async function scrapeApenadoFicha(
     ultimaSyncAt: new Date(),
   }
 
-  // Em re-sync, não sobrescrever campos com null — preserva dados existentes se o parser falhar
-  const updateData = Object.fromEntries(
-    Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
-  )
+  // Em re-sync, não sobrescrever campos com null — preserva dados existentes se o parser falhar.
+  // Exceção: nomeConjuge é extraído explicitamente e pode ser null para limpar valores antigos incorretos.
+  const updateData = {
+    ...Object.fromEntries(
+      Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
+    ),
+    nomeConjuge: dados.nomeConjuge,
+  }
 
   const apenado = await prisma.sipeApenadoImportado.upsert({
     where: { sipeId },
@@ -8015,10 +8019,14 @@ export async function scrapeApenadoFichaFast(
     ultimaSyncAt: new Date(),
   }
 
-  // Em re-sync, não sobrescrever campos com null — preserva dados existentes se o parser falhar
-  const updateData = Object.fromEntries(
-    Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
-  )
+  // Em re-sync, não sobrescrever campos com null — preserva dados existentes se o parser falhar.
+  // Exceção: nomeConjuge é extraído explicitamente e pode ser null para limpar valores antigos incorretos.
+  const updateData = {
+    ...Object.fromEntries(
+      Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
+    ),
+    nomeConjuge: dados.nomeConjuge,
+  }
 
   const apenado = await prisma.sipeApenadoImportado.upsert({
     where: { sipeId },
