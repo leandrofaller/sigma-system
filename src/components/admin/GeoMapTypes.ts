@@ -21,19 +21,19 @@ export const TILE_LAYERS = {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   },
   googleSatellite: {
-    label: 'Google Híbrido (Satélite)',
-    url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-    attribution: '© Google Maps',
+    label: 'Híbrido (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '© <a href="https://www.esri.com">Esri</a>, Maxar, GeoEye, Earthstar Geographics',
   },
   googleSatellitePure: {
-    label: 'Google Satélite (Limpo)',
-    url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-    attribution: '© Google Maps',
+    label: 'Satélite (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '© <a href="https://www.esri.com">Esri</a>, Maxar, GeoEye, Earthstar Geographics',
   },
   googleTerrain: {
-    label: 'Google Terreno (Físico)',
-    url: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
-    attribution: '© Google Maps',
+    label: 'Terreno (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: '© <a href="https://www.esri.com">Esri</a>, HERE, Garmin, © OpenStreetMap contributors',
   },
   satellite: {
     label: 'Esri (Satélite)',
@@ -42,12 +42,12 @@ export const TILE_LAYERS = {
   },
   dark: {
     label: 'Escuro (CartoDB)',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
   },
   light: {
     label: 'Minimalista (CartoDB)',
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
   },
   topo: {
