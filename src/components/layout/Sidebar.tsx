@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -85,6 +85,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
   const prevCountRef = useRef(0);
   const prevOrdemRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const pendingOrdemSoundRef = useRef(false);
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
@@ -196,12 +197,12 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
     }
   }, [pathname]);
 
-  // Som de alerta para Ordem de Missão (3 tons ascendentes — mais formal que o chat)
-  const playOrdemSound = () => {
+  // Toca os 3 tons de alerta. Retorna true se tocou, false se o contexto ainda não estava ativo.
+  const playOrdemSoundNow = useCallback(() => {
     try {
-      if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
       const ctx = audioCtxRef.current;
-      const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+      if (!ctx || ctx.state !== 'running') return false;
+      const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 — acorde maior ascendente
       notes.forEach((freq, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -211,13 +212,38 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
         osc.frequency.value = freq;
         const t = ctx.currentTime + i * 0.18;
         gain.gain.setValueAtTime(0, t);
-        gain.gain.linearRampToValueAtTime(0.25, t + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        gain.gain.linearRampToValueAtTime(0.28, t + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
         osc.start(t);
-        osc.stop(t + 0.36);
+        osc.stop(t + 0.39);
       });
-    } catch {}
-  };
+      return true;
+    } catch { return false; }
+  }, []);
+
+  // Na primeira interação do usuário: cria/retoma o AudioContext e toca qualquer som pendente
+  useEffect(() => {
+    const activate = async () => {
+      try {
+        if (!audioCtxRef.current) {
+          audioCtxRef.current = new AudioContext();
+        }
+        if (audioCtxRef.current.state === 'suspended') {
+          await audioCtxRef.current.resume();
+        }
+        if (pendingOrdemSoundRef.current) {
+          pendingOrdemSoundRef.current = false;
+          playOrdemSoundNow();
+        }
+      } catch {}
+    };
+    document.addEventListener('click', activate, { passive: true });
+    document.addEventListener('keydown', activate, { passive: true });
+    return () => {
+      document.removeEventListener('click', activate);
+      document.removeEventListener('keydown', activate);
+    };
+  }, [playOrdemSoundNow]);
 
   // Polling de Ordens de Missão pendentes
   useEffect(() => {
@@ -228,7 +254,10 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
         const { count, latest } = await res.json() as { count: number; latest: { numero: string; titulo: string } | null };
 
         if (count > prevOrdemRef.current) {
-          playOrdemSound();
+          // Tenta tocar imediatamente; se o contexto ainda não foi ativado, fica pendente
+          const played = playOrdemSoundNow();
+          if (!played) pendingOrdemSoundRef.current = true;
+
           if (Notification.permission === 'granted' && document.hidden && latest) {
             new Notification('🎯 Nova Ordem de Missão', {
               body: `${latest.numero} — ${latest.titulo}\nAcesse Ordens de Missão para dar ciência.`,
@@ -244,7 +273,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
     pollOrdens();
     const id = setInterval(pollOrdens, 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [playOrdemSoundNow]);
 
   const filteredNav = navItems.map((item) => {
     if (item.href === '/chat' && chatUnreadCount > 0)

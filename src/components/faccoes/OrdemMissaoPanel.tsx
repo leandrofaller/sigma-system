@@ -1121,7 +1121,7 @@ export function OrdemMissaoPanel({ userRole, currentUserId, currentUserName }: O
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-            placeholder="Buscar por título, número, vítima..."
+            placeholder="Buscar por título, número, objetivo..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
