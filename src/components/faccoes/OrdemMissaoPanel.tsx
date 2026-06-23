@@ -1,12 +1,22 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import {
   ClipboardList, Plus, Eye, Pencil, Trash2, Printer,
   CheckCircle2, XCircle, AlertTriangle, Clock, Users,
   Search, X, Check, Loader2, ChevronRight, Shield,
-  FileText, Calendar, MapPin, User, AlertCircle,
+  FileText, Calendar, MapPin, User, AlertCircle, Map,
 } from 'lucide-react'
+
+const MiniMapPicker = dynamic(() => import('./MiniMapPicker'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[348px] rounded-xl border border-gray-200 dark:border-gray-600 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+    </div>
+  ),
+})
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -440,6 +450,7 @@ function EditorModal({
   })
   const [saving, setSaving] = useState(false)
   const [userSearch, setUserSearch] = useState('')
+  const [mapOpen, setMapOpen] = useState(false)
   const printRef = useRef<HTMLDivElement>(null)
 
   const previewOrdem: OrdemMissao = {
@@ -549,7 +560,7 @@ function EditorModal({
                 <label className={label}>Natureza do Fato</label>
                 <input className={input} value={form.naturezaFato}
                   onChange={e => setForm(f => ({ ...f, naturezaFato: e.target.value }))}
-                  placeholder="Homicídio qualificado..." />
+                  placeholder="Coleta de Dados, Cumprimento de Mandado, etc." />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -569,6 +580,28 @@ function EditorModal({
                 <input className={input} value={form.localFato}
                   onChange={e => setForm(f => ({ ...f, localFato: e.target.value }))}
                   placeholder="Av. Principal, próx. ao Hotel..." />
+                <button
+                  type="button"
+                  onClick={() => setMapOpen(v => !v)}
+                  className={`mt-1.5 flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${
+                    mapOpen
+                      ? 'bg-purple-100 border-purple-300 text-purple-700 dark:bg-purple-900/30 dark:border-purple-600 dark:text-purple-300'
+                      : 'bg-gray-50 border-gray-200 text-gray-500 hover:text-purple-600 hover:border-purple-300 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  <Map className="w-3.5 h-3.5" />
+                  {mapOpen ? 'Fechar mapa' : 'Localizar no mapa'}
+                </button>
+                {mapOpen && (
+                  <div className="mt-2">
+                    <MiniMapPicker
+                      onSelect={address => {
+                        setForm(f => ({ ...f, localFato: address }))
+                        setMapOpen(false)
+                      }}
+                    />
+                  </div>
+                )}
               </div>
               <div>
                 <label className={label}>Objetivo</label>
@@ -589,7 +622,7 @@ function EditorModal({
                 <label className={label}>Instrução / Determinação *</label>
                 <textarea className={textarea} rows={5} value={form.naturezaInvestigacao}
                   onChange={e => setForm(f => ({ ...f, naturezaInvestigacao: e.target.value }))}
-                  placeholder="Deverá a equipe de investigadores, a que esta for distribuída, diligenciar no sentido de verificar a procedência..." />
+                  placeholder="Deverá a equipe de inteligência encarregada da missão empregar os meios e técnicas legalmente disponíveis para a obtenção e produção de conhecimentos relacionados ao objeto da demanda, observando os princípios da necessidade, oportunidade, compartimentação e proteção do conhecimento." />
               </div>
               <div>
                 <label className={label}>Observações Complementares</label>
