@@ -282,7 +282,7 @@ export function AIPVinculosGraph({
           id: advNodeId,
           sipeId: adv.sipeId,
           dbId: adv.advogadoId,
-          photoUrl: `/api/sipe/advogados/${adv.sipeId}/foto`,
+          photoUrl: `/api/sipe/advogados/${adv.advogadoId}/foto`,
           nome: adv.nome,
           vulgo: adv.oab ? `OAB: ${adv.oab}` : '',
           unidade: adv.telefone || '—',
@@ -1112,12 +1112,17 @@ export function AIPVinculosGraph({
               width="1"
               height="1"
             >
-              {node.isAdvogado ? (
-                <rect
+              {node.isAdvogado && node.photoPath ? (
+                <image
+                  href={node.photoUrl}
+                  x="0"
+                  y="0"
                   width="44"
                   height="44"
-                  fill="#f59e0b"
+                  preserveAspectRatio="xMidYMid slice"
                 />
+              ) : node.isAdvogado ? (
+                <rect width="44" height="44" fill="#f59e0b" />
               ) : node.photoPath ? (
                 <image
                   href={node.photoUrl}
@@ -1321,8 +1326,8 @@ export function AIPVinculosGraph({
                     className="transition-all duration-200"
                   />
 
-                  {/* Ícone ⚖ sobreposto para nós de advogado */}
-                  {node.isAdvogado && (
+                  {/* Ícone ⚖ sobreposto para nós de advogado sem foto */}
+                  {node.isAdvogado && !node.photoPath && (
                     <text
                       textAnchor="middle"
                       dominantBaseline="central"

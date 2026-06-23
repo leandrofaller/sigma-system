@@ -1,10 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { writeFile, mkdir } from 'fs/promises'
+import { readFile, writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { assertUploadAllowed } from '@/lib/security'
+import { getApenadoPhotoPath } from '@/lib/storage'
 import sharp from 'sharp'
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  const internalToken = req.headers.get('X-Sigma-Internal-Token')
+  const isAuthorizedInternal = internalToken && internalToken === process.env.NEXTAUTH_SECRET
+
+  if (!session && !isAuthorizedInternal) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
+
+  const { id } = await params
+  const advogado = await prisma.sipeAdvogado.findUnique({
+    where: { id },
+    select: { photoPath: true, nome: true },
+  })
+
+  if (!advogado?.photoPath) {
+    return NextResponse.json({ error: 'Sem foto' }, { status: 404 })
+  }
+
+  const filePath = getApenadoPhotoPath(advogado.photoPath)
+  let buffer: Buffer
+  try {
+    buffer = await readFile(filePath)
+  } catch {
+    return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 })
+  }
+
+  const fileExt = filePath.split('.').pop()?.toLowerCase() ?? 'webp'
+  const contentType = fileExt === 'webp' ? 'image/webp' : 'image/jpeg'
+
+  return new Response(new Uint8Array(buffer), {
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'private, max-age=3600',
+    },
+  })
+}
 
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'] as const
 
