@@ -6122,7 +6122,9 @@ function parseApenadoFichaHtmlCheerio(html: string) {
   const $ = cheerio.load(html)
   
   // Detecção de redirecionamento para o index / listagem
-  const isListagem = $('table').length > 0 && $('[name="nomemae"]').length === 0 && $('[name="nomepai"]').length === 0
+  // Só considera listagem se não houver nenhum campo de identificação individual do apenado
+  const hasApenadoField = $('[name="nomeapenado"], [name="nomemae"], [name="nomepai"], [name="cpf"], [name="rji"], [name="datanascimento"]').length > 0
+  const isListagem = $('table').length > 0 && !hasApenadoField
   if (isListagem) {
     return {
       dados: { nome: null } as any,
@@ -6275,8 +6277,8 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       religiao: religiaoValue,
       estadoCivil: estadoCivilValue,
       qtdFilhos: parseInt(val('qtdfilhos') || val('qtd_filhos') || val('num_filhos') || '0') || null,
-      nomeMae: val('nomemae') || val('nome_mae') || null,
-      nomePai: val('nomepai') || val('nome_pai') || null,
+      nomeMae: val('nomemae') || val('nome_mae') || staticVal('nomemae') || staticVal('nome_mae') || extractLabel('Nome\\s+[Dd]a\\s+M[ãa]e') || extractLabel('M[ãa]e') || null,
+      nomePai: val('nomepai') || val('nome_pai') || staticVal('nomepai') || staticVal('nome_pai') || extractLabel('Nome\\s+[Dd]o\\s+[Pp]ai') || extractLabel('Pai') || null,
       telefone: val('telefone'),
       rji: val('rji'),
       regime: selVal('fk_regime') || selVal('regime'),
