@@ -144,20 +144,17 @@ export async function requestSipeViaProxy(options: {
       ? `${SIPE_PYTHON_API_URL}/sipe/proxy?path=${encodeURIComponent(cleanPath)}`
       : `${SIPE_PYTHON_API_URL}/sipe/proxy`
 
-    const headers: Record<string, string> = {
+    // Cabeçalhos da requisição Next.js → proxy Python: sempre application/json
+    // (options.headers é para o SIPE via proxy, não para o proxy em si)
+    const proxyHeaders: Record<string, string> = {
       'Accept': 'application/json',
       'X-Sipe-Unidade': globalThis.__sipeFallbackUnidade || SIPE_UNIDADE,
       ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
     }
-    if (options.headers) {
-      for (const [k, v] of Object.entries(options.headers)) {
-        headers[k] = v
-      }
-    }
 
     const res = await fetch(url, {
       method,
-      headers,
+      headers: proxyHeaders,
       body: method === 'POST'
         ? JSON.stringify({
             path: cleanPath,
@@ -172,7 +169,8 @@ export async function requestSipeViaProxy(options: {
 
     if (!res.ok) {
       if (res.status !== 404) {
-        console.warn(`[PYTHON PROXY] ⚠️ Chamada ${method} falhou com status ${res.status} para o path: ${cleanPath}. Ativando fallback para Playwright.`)
+        const errBody = await res.text().catch(() => '(sem corpo)')
+        console.warn(`[PYTHON PROXY] ⚠️ ${method} ${cleanPath} → ${res.status}: ${errBody.substring(0, 400)}`)
       }
       return null
     }
@@ -6260,7 +6258,37 @@ function parseApenadoFichaHtmlCheerio(html: string) {
 
   const nomeMaeVal = val('nomemae') || val('nome_mae') || staticVal('nomemae') || staticVal('nome_mae') || extractLabel('Nome\\s+[Dd]a\\s+M[ãa]e') || extractLabel('M[ãa]e') || null
   const nomeApenadoVal = val('nomeapenado')
-  console.log(`[PARSE FICHA] nome="${nomeApenadoVal}" nomeMae="${nomeMaeVal ?? 'NULL'}" nomemae_input_count=${$('[name="nomemae"]').length} nomemae_input_value="${$('[name="nomemae"]').attr('value') ?? $('[name="nomemae"]').val() ?? 'SEM VALUE'}"`)
+
+  // Diagnóstico: mostra o estado real do campo nomemae no HTML do SIPE
+  const nomemaeEl = $('[name="nomemae"]')
+  const nomemaeAttrs: Record<string, string | undefined> = {}
+  if (nomemaeEl.length) {
+    ;['value', 'data-value', 'data-text', 'data-id', 'type', 'class', 'readonly', 'id'].forEach(a => {
+      const v = nomemaeEl.attr(a)
+      if (v !== undefined) nomemaeAttrs[a] = v
+    })
+  }
+  // Fallback: extrair nomeMae de dados JSON embutidos em <script> (SIPE preenche inputs via JS)
+  let nomeMaeFinal = nomeMaeVal
+  if (!nomeMaeFinal) {
+    const scriptContent = $('script').map((_, el) => $(el).html() || '').get().join('\n')
+    const scriptPatterns = [
+      /"nomemae"\s*:\s*"([^"]+)"/i,
+      /"nome_mae"\s*:\s*"([^"]+)"/i,
+      /nomemae\s*[:=]\s*['"]([^'"]+)['"]/i,
+      /nome_mae\s*[:=]\s*['"]([^'"]+)['"]/i,
+      /\bnomemae\b[^'"]*['"]([A-ZÀ-Ú][A-ZÀ-Ú\s]{3,60})['"]/i,
+    ]
+    for (const pat of scriptPatterns) {
+      const m = scriptContent.match(pat)
+      if (m?.[1]) { nomeMaeFinal = m[1].trim(); break }
+    }
+  }
+
+  const maeSnippets = bodyText.match(/.{0,40}(?:mãe|mae|nomemae|nome_mae).{0,80}/gi)?.slice(0, 5) ?? []
+  console.log(`[PARSE FICHA] nome="${nomeApenadoVal}" nomeMae="${nomeMaeFinal ?? 'NULL'}"`)
+  console.log(`[PARSE FICHA] [name=nomemae] count=${nomemaeEl.length} attrs=${JSON.stringify(nomemaeAttrs)}`)
+  console.log(`[PARSE FICHA] bodyText snippets mãe:`, maeSnippets)
 
   return {
     dados: {
@@ -6281,7 +6309,7 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       religiao: religiaoValue,
       estadoCivil: estadoCivilValue,
       qtdFilhos: parseInt(val('qtdfilhos') || val('qtd_filhos') || val('num_filhos') || '0') || null,
-      nomeMae: nomeMaeVal,
+      nomeMae: nomeMaeFinal,
       nomePai: val('nomepai') || val('nome_pai') || staticVal('nomepai') || staticVal('nome_pai') || extractLabel('Nome\\s+[Dd]o\\s+[Pp]ai') || extractLabel('Pai') || null,
       telefone: val('telefone'),
       rji: val('rji'),
@@ -8170,15 +8198,21 @@ export async function scrapeApenadoFichaFast(
     await parseAndSaveFichaGeralCheerio(fichaGeralData.html, apenado.id)
   }
 
-  // Fallback: se fichaGeral não retornou, tenta a página /show do apenado para extrair dados pessoais
+  // Fallback: se fichaGeral não retornou, tenta endpoints alternativos para extrair dados pessoais
   if (!fichaGeralData?.html) {
-    const showData = await fetchSipeViaProxy(`/apenados/${sipeId}/show`).catch(() => null)
+    const [showData, dpData] = await Promise.all([
+      fetchSipeViaProxy(`/apenados/${sipeId}/show`).catch(() => null),
+      fetchSipeViaProxy(`/apenados/${sipeId}/dadosPessoais`).catch(() => null),
+    ])
     if (showData?.html) {
       console.log(`[SCRAPER FAST] /show para #${sipeId}: ${showData.html.length} chars — tentando extrair DP`)
       await parseAndSaveFichaGeralCheerio(showData.html, apenado.id)
+    } else if (dpData?.html) {
+      console.log(`[SCRAPER FAST] /dadosPessoais para #${sipeId}: ${dpData.html.length} chars — tentando extrair DP`)
+      await parseAndSaveFichaGeralCheerio(dpData.html, apenado.id)
     } else {
       // Último recurso: re-parseia o próprio editHtml como fichaGeral
-      console.log(`[SCRAPER FAST] /show indisponível — extraindo DP do editHtml #${sipeId}`)
+      console.log(`[SCRAPER FAST] /show e /dadosPessoais indisponíveis — extraindo DP do editHtml #${sipeId}`)
       await parseAndSaveFichaGeralCheerio(editHtml, apenado.id)
     }
   }
