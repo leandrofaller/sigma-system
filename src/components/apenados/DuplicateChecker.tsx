@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, ScanSearch, Loader2, Trash2, AlertTriangle, CheckCircle,
   RefreshCw, Users, Fingerprint, Waves, Zap, Clock, UserX,
@@ -171,7 +172,9 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok && res.status !== 409) throw new Error(data.error || `Erro ${res.status}`);
       setJobState((prev) =>
-        prev ? { ...prev, phase: 'indexing', error: '' } : null,
+        prev
+          ? { ...prev, phase: 'indexing', error: '' }
+          : { phase: 'indexing', indexingCurrent: 0, indexingTotal: 0, groups: [], totalGroups: 0, totalAnalyzed: 0, faceGroupsCount: 0, error: '' },
       );
       startPolling();
     } catch (err: any) {
@@ -335,7 +338,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
       ? Math.round((jobState.indexingCurrent / jobState.indexingTotal) * 100)
       : 0;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
@@ -1056,6 +1059,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
