@@ -2628,7 +2628,14 @@ async function scrapeApenadoFicha(
 
   if (useSearch) {
     // ── Busca cross-unit: contorna restrição de unidade da sessão ──
-    const searchPath = `/apenados/index?escolha=nomeapenado&parametro=${sipeId}`
+    let searchTerm = String(sipeId)
+    const localImport = await prisma.sipeApenadoImportado.findUnique({
+      where: { sipeId }
+    })
+    if (localImport && localImport.nome) {
+      searchTerm = localImport.nome
+    }
+    const searchPath = `/apenados/index?escolha=nomeapenado&parametro=${encodeURIComponent(searchTerm)}`
     const proxyData = await fetchSipeViaProxy(searchPath)
     
     if (proxyData && !proxyData.is_binary && proxyData.html) {
@@ -7541,7 +7548,14 @@ export async function scrapeApenadoFichaFast(
   let editHtml = ''
   
   if (useSearch) {
-    const searchPath = `/apenados/index?escolha=nomeapenado&parametro=${sipeId}`
+    let searchTerm = String(sipeId)
+    const localImport = await prisma.sipeApenadoImportado.findUnique({
+      where: { sipeId }
+    })
+    if (localImport && localImport.nome) {
+      searchTerm = localImport.nome
+    }
+    const searchPath = `/apenados/index?escolha=nomeapenado&parametro=${encodeURIComponent(searchTerm)}`
     const proxyData = await fetchSipeViaProxy(searchPath)
     if (!proxyData || proxyData.is_binary || !proxyData.html) {
       throw new Error('APENADO_NAO_ENCONTRADO')
