@@ -342,47 +342,11 @@ async function runLoop(): Promise<void> {
           });
           state.progress.clean++;
         } else {
-          // Inadequada: Mover arquivo para pasta de quarentena
-          const folderMap = {
-            NO_FACE: 'sem_rosto',
-            LOW_QUALITY: 'baixa_qualidade',
-            DUPLICATE: 'duplicadas',
-          };
-          const subfolder = folderMap[status as 'NO_FACE' | 'LOW_QUALITY' | 'DUPLICATE'];
-          const baseUploads = uploadsDir.replace(/apenados$/, ''); // uploads/
-          const destDir = join(baseUploads, 'quarentena', subfolder);
-          await mkdir(destDir, { recursive: true });
-
-          const fileBase = basename(record.photoPath);
-          const destPathAbs = join(destDir, fileBase);
-          const srcPathAbs = getApenadoPhotoPath(record.photoPath);
-
-          if (existsSync(srcPathAbs)) {
-            await rename(srcPathAbs, destPathAbs);
-          }
-
-          const relativeDestPath = `uploads/quarentena/${subfolder}/${fileBase}`;
-
-          // Desvincular foto e embedding do apenado local para retirar do ArcFace
-          await prisma.apenado.update({
-            where: { id: res.id },
-            data: {
-              photoPath: null,
-              faceDescriptor: null,
-              detScore: null,
-            },
-          });
-
-          // Se pgvector estiver disponível, remove o vetor do índice
-          if (pvecAvail) {
-            await clearVector(res.id);
-          }
-
-          // Grava a sanitização e o log de quarentena
+          // Inadequada: Apenas registra a sanitização com o caminho original (não move nem limpa dados)
           await prisma.imageSanitization.create({
             data: {
               apenadoId: res.id,
-              photoPath: relativeDestPath,
+              photoPath: record.photoPath, // Mantém o caminho original da foto
               originalPath: record.photoPath,
               status,
               score,
