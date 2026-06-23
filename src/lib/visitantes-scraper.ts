@@ -381,10 +381,13 @@ export function startVisitantesSync(jobId: string): void {
 
         if (imgSrc && !imgSrc.includes('semfoto') && !imgSrc.includes('Undefined')) {
           try {
+            // Remove o sufixo _fotoUsuario da URL para baixar a imagem original sem o filtro/marca d'água do SIPE
+            const cleanImgSrc = imgSrc.replace(/_fotoUsuario/i, '');
+
             // Obtém caminho relativo para a foto no proxy
-            let photoRelativePath = imgSrc;
-            if (imgSrc.startsWith('http')) {
-              const urlObj = new URL(imgSrc);
+            let photoRelativePath = cleanImgSrc;
+            if (cleanImgSrc.startsWith('http')) {
+              const urlObj = new URL(cleanImgSrc);
               photoRelativePath = urlObj.pathname;
             }
 
