@@ -1171,7 +1171,7 @@ function AdvogadoRelationCard({ advogado }: { advogado: AdvogadoVinculo }) {
       <div className="w-12 h-16 rounded-lg overflow-hidden bg-amber-100 dark:bg-amber-900/30 flex-shrink-0 flex items-center justify-center text-amber-500 border border-amber-200 dark:border-amber-700 shadow-sm">
         {advogado.photoPath ? (
           <img
-            src={`/api/sipe/advogados/${advogado.advogadoId}/foto`}
+            src={advogado.photoPath.startsWith('uploads/') ? `/api/${advogado.photoPath}` : `/api/uploads/${advogado.photoPath}`}
             alt={advogado.nome}
             className="w-full h-full object-cover"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}

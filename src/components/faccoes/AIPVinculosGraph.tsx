@@ -282,7 +282,9 @@ export function AIPVinculosGraph({
           id: advNodeId,
           sipeId: adv.sipeId,
           dbId: adv.advogadoId,
-          photoUrl: `/api/sipe/advogados/${adv.advogadoId}/foto`,
+          photoUrl: adv.photoPath
+            ? (adv.photoPath.startsWith('uploads/') ? `/api/${adv.photoPath}` : `/api/uploads/${adv.photoPath}`)
+            : '',
           nome: adv.nome,
           vulgo: adv.oab ? `OAB: ${adv.oab}` : '',
           unidade: adv.telefone || '—',
