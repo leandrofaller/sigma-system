@@ -829,7 +829,7 @@ export function ApenadosImportados({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar por nome, CPF, RG ou alcunha..."
+            placeholder="Buscar por nome, CPF, RG, nome da mãe ou alcunha..."
             value={q}
             onChange={e => { setQ(e.target.value); setPage(1) }}
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"

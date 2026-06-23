@@ -145,7 +145,7 @@ function ApenadosFaccaoModal({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar por nome, CPF ou alcunha..."
+              placeholder="Buscar por nome, CPF, nome da mãe ou alcunha..."
               value={q}
               onChange={e => handleSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"

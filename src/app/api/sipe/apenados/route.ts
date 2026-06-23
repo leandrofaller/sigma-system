@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
       immutable_unaccent(nome) ILIKE immutable_unaccent($${idx})
       OR COALESCE(cpf,'') ILIKE $${idx}
       OR COALESCE(rg,'') ILIKE $${idx}
+      OR immutable_unaccent(COALESCE("nomeMae",'')) ILIKE immutable_unaccent($${idx})
       OR id IN (SELECT "apenadoId" FROM sipe_alcunhas WHERE immutable_unaccent(alcunha) ILIKE immutable_unaccent($${idx}))
     )`
     params.push(pattern)
