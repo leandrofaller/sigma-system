@@ -48,6 +48,18 @@ interface AIPVinculo {
   direction: 'outgoing' | 'incoming'
 }
 
+interface AdvogadoVinculo {
+  id: string
+  advogadoId: string
+  sipeId: number
+  nome: string
+  oab: string | null
+  cpf: string | null
+  telefone: string | null
+  photoPath: string | null
+  ativo: boolean
+}
+
 interface GraphNode {
   id: string
   sipeId: number
@@ -61,6 +73,9 @@ interface GraphNode {
   facaoRealNome: string
   photoPath: string | null
   isCentral: boolean
+  isAdvogado?: boolean
+  oab?: string | null
+  telefone?: string | null
   expanded: boolean
   x: number
   y: number
@@ -82,6 +97,7 @@ interface GraphLink {
 interface AIPVinculosGraphProps {
   selectedApenado: AIPApenado & { aipId?: string | null }
   initialVinculos: AIPVinculo[]
+  advogados?: AdvogadoVinculo[]
   onApenadoClick: (id: string) => void
   onFocarApenado: (sipeId: number) => void
   onDeleteLink?: (linkId: string) => Promise<void>
@@ -90,6 +106,7 @@ interface AIPVinculosGraphProps {
 export function AIPVinculosGraph({
   selectedApenado,
   initialVinculos,
+  advogados = [],
   onApenadoClick,
   onFocarApenado,
   onDeleteLink
@@ -254,6 +271,48 @@ export function AIPVinculosGraph({
       })
     })
 
+    // Adicionar nós e links para advogados (dados do SIPE)
+    const totalNodes = initialVinculos.length + advogados.length
+    advogados.forEach((adv, index) => {
+      const advNodeId = `adv-${adv.advogadoId}`
+      if (!initialNodes[advNodeId]) {
+        const angle = ((initialVinculos.length + index) * 2 * Math.PI) / Math.max(totalNodes, 1)
+        const radius = 220
+        initialNodes[advNodeId] = {
+          id: advNodeId,
+          sipeId: adv.sipeId,
+          dbId: adv.advogadoId,
+          photoUrl: `/api/sipe/advogados/${adv.sipeId}/foto`,
+          nome: adv.nome,
+          vulgo: adv.oab ? `OAB: ${adv.oab}` : '',
+          unidade: adv.telefone || '—',
+          regime: '—',
+          cela: '—',
+          facaoRealNome: '—',
+          photoPath: adv.photoPath,
+          isCentral: false,
+          isAdvogado: true,
+          oab: adv.oab,
+          telefone: adv.telefone,
+          expanded: false,
+          x: Math.cos(angle) * radius,
+          y: Math.sin(angle) * radius,
+          vx: 0,
+          vy: 0,
+          fx: null,
+          fy: null
+        }
+      }
+      initialLinks.push({
+        id: `adv-link-${adv.id}`,
+        source: centralId,
+        target: advNodeId,
+        tipo: 'Advogado',
+        forca: 'confirmado',
+        direction: 'outgoing'
+      })
+    })
+
     setNodes(initialNodes)
     setLinks(initialLinks)
     nodesRef.current = initialNodes
@@ -268,7 +327,7 @@ export function AIPVinculosGraph({
     }
 
     setPhysicsEnabled(true)
-  }, [selectedApenado, initialVinculos])
+  }, [selectedApenado, initialVinculos, advogados])
 
   // Algoritmo simplificado de física de forças rodando em frame
   useEffect(() => {
@@ -1053,7 +1112,13 @@ export function AIPVinculosGraph({
               width="1"
               height="1"
             >
-              {node.photoPath ? (
+              {node.isAdvogado ? (
+                <rect
+                  width="44"
+                  height="44"
+                  fill="#f59e0b"
+                />
+              ) : node.photoPath ? (
                 <image
                   href={node.photoUrl}
                   x="0"
@@ -1063,10 +1128,10 @@ export function AIPVinculosGraph({
                   preserveAspectRatio="xMidYMid slice"
                 />
               ) : (
-                <rect 
-                  width={node.isCentral ? "60" : "44"} 
-                  height={node.isCentral ? "60" : "44"} 
-                  fill="#cbd5e1" 
+                <rect
+                  width={node.isCentral ? "60" : "44"}
+                  height={node.isCentral ? "60" : "44"}
+                  fill="#cbd5e1"
                 />
               )}
             </pattern>
@@ -1179,12 +1244,12 @@ export function AIPVinculosGraph({
           <g>
             {Object.values(visibleNodes).map(node => {
               const borderSize = node.isCentral ? 4 : 2
-              const nodeRadius = node.isCentral ? 30 : 22
-              
-              // Descobre a cor da borda baseado no vínculo principal dele (ou roxo se for central)
-              let nodeColor = '#a855f7' // roxo padrão para central
-              if (!node.isCentral) {
-                const linkComCentral = links.find(l => 
+              const nodeRadius = node.isCentral ? 30 : (node.isAdvogado ? 20 : 22)
+
+              // Advogado: sempre âmbar; central: roxo; outros: cor da categoria do vínculo
+              let nodeColor = node.isAdvogado ? '#f59e0b' : '#a855f7'
+              if (!node.isCentral && !node.isAdvogado) {
+                const linkComCentral = links.find(l =>
                   (l.source === node.id || l.target === node.id)
                 )
                 if (linkComCentral) {
@@ -1256,8 +1321,20 @@ export function AIPVinculosGraph({
                     className="transition-all duration-200"
                   />
 
+                  {/* Ícone ⚖ sobreposto para nós de advogado */}
+                  {node.isAdvogado && (
+                    <text
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize="14px"
+                      className="pointer-events-none select-none"
+                    >
+                      ⚖️
+                    </text>
+                  )}
+
                   {/* Indicador de "Pendente" ou "Expandido" */}
-                  {node.expanded && !node.isCentral && (
+                  {node.expanded && !node.isCentral && !node.isAdvogado && (
                     <circle
                       cx={nodeRadius - 2}
                       cy={-nodeRadius + 2}
@@ -1310,7 +1387,18 @@ export function AIPVinculosGraph({
                     </text>
 
                     {/* Vulgo (Se houver) */}
-                    {node.vulgo && (
+                    {node.isAdvogado && node.oab ? (
+                      <text
+                        textAnchor="middle"
+                        y={10}
+                        fill="#d97706"
+                        fontSize="7.5px"
+                        fontWeight="bold"
+                        className="pointer-events-none select-none"
+                      >
+                        OAB: {node.oab.length > 18 ? `${node.oab.substring(0, 16)}...` : node.oab}
+                      </text>
+                    ) : node.vulgo ? (
                       <text
                         textAnchor="middle"
                         y={10}
@@ -1321,7 +1409,7 @@ export function AIPVinculosGraph({
                       >
                         Vulgo: {node.vulgo.length > 20 ? `${node.vulgo.substring(0, 18)}...` : node.vulgo}
                       </text>
-                    )}
+                    ) : null}
                   </g>
                 </g>
               )
@@ -1332,13 +1420,23 @@ export function AIPVinculosGraph({
 
       {/* 4. Caixa Flutuante de Detalhes (Tooltip Elegante) */}
       {hoveredNode && (
-        <div 
-          className="absolute bottom-4 left-4 right-4 md:right-auto md:max-w-sm bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border border-gray-200 dark:border-gray-700 p-3.5 rounded-2xl shadow-xl z-20 flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 pointer-events-none text-xs"
+        <div
+          className={`absolute bottom-4 left-4 right-4 md:right-auto md:max-w-sm bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border p-3.5 rounded-2xl shadow-xl z-20 flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 pointer-events-none text-xs ${
+            hoveredNode.isAdvogado
+              ? 'border-amber-300 dark:border-amber-700'
+              : 'border-gray-200 dark:border-gray-700'
+          }`}
         >
-          {/* Foto Miniatura */}
-          <div className="w-12 h-16 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden shrink-0 flex items-center justify-center text-gray-400">
-            {hoveredNode.photoPath ? (
-              <img 
+          {/* Foto / Ícone Miniatura */}
+          <div className={`w-12 h-16 border rounded-lg overflow-hidden shrink-0 flex items-center justify-center ${
+            hoveredNode.isAdvogado
+              ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 text-amber-500'
+              : 'bg-gray-100 dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-400'
+          }`}>
+            {hoveredNode.isAdvogado ? (
+              <span className="text-2xl select-none">⚖️</span>
+            ) : hoveredNode.photoPath ? (
+              <img
                 src={hoveredNode.photoUrl}
                 alt={hoveredNode.nome}
                 className="w-full h-full object-cover"
@@ -1348,50 +1446,66 @@ export function AIPVinculosGraph({
             )}
           </div>
 
-          {/* Dados do Apenado */}
-          <div className="flex-1 min-w-0 space-y-1">
-            <h5 className="font-bold text-gray-900 dark:text-white truncate uppercase text-[11px] leading-snug">{hoveredNode.nome}</h5>
-            {hoveredNode.vulgo && (
-              <p className="text-[10px] text-purple-600 dark:text-purple-400 font-bold italic">Vulgo: {hoveredNode.vulgo}</p>
-            )}
-            
-            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-gray-500 dark:text-gray-400">
-              <span className="truncate"><strong className="text-gray-700 dark:text-gray-300">Custódia:</strong> {hoveredNode.unidade}</span>
-              <span><strong className="text-gray-700 dark:text-gray-300">Regime:</strong> {hoveredNode.regime}</span>
-              <span><strong className="text-gray-700 dark:text-gray-300">Cela:</strong> {hoveredNode.cela}</span>
-              <span className="truncate flex items-center gap-0.5 font-semibold text-purple-700 dark:text-purple-400">
-                <Shield className="w-2.5 h-2.5 shrink-0" /> {hoveredNode.facaoRealNome}
-              </span>
-            </div>
-            
-            {/* Informações da Relação se não for central */}
-            {!hoveredNode.isCentral && (
-              <div className="mt-1.5 pt-1.5 border-t border-gray-100 dark:border-gray-800 text-[10px]">
-                {(() => {
-                  const link = links.find(l => 
-                    (l.source === hoveredNode.id || l.target === hoveredNode.id)
-                  )
-                  if (!link) return null
-                  const isConfirmado = link.forca === 'confirmado'
-                  return (
-                    <div className="flex flex-wrap gap-1.5 items-center">
-                      <span className="font-bold text-gray-600 dark:text-gray-400">Relação:</span>
-                      <span className="px-1.5 py-0.5 bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 font-bold rounded">
-                        {link.tipo}
-                      </span>
-                      <span className={`px-1 py-0.5 rounded text-[8px] font-bold uppercase ${
-                        isConfirmado 
-                          ? 'bg-green-50 text-green-700 dark:bg-green-950/20 dark:text-green-400' 
-                          : 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400'
-                      }`}>
-                        {isConfirmado ? 'Confirmado' : 'Suspeita'}
-                      </span>
-                    </div>
-                  )
-                })()}
+          {hoveredNode.isAdvogado ? (
+            /* Dados do Advogado */
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center gap-1.5">
+                <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded">Advogado</span>
+                <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 rounded">SIPE</span>
               </div>
-            )}
-          </div>
+              <h5 className="font-bold text-gray-900 dark:text-white truncate uppercase text-[11px] leading-snug">{hoveredNode.nome}</h5>
+              {hoveredNode.oab && (
+                <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold">OAB: {hoveredNode.oab}</p>
+              )}
+              {hoveredNode.telefone && (
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">{hoveredNode.telefone}</p>
+              )}
+            </div>
+          ) : (
+            /* Dados do Apenado */
+            <div className="flex-1 min-w-0 space-y-1">
+              <h5 className="font-bold text-gray-900 dark:text-white truncate uppercase text-[11px] leading-snug">{hoveredNode.nome}</h5>
+              {hoveredNode.vulgo && (
+                <p className="text-[10px] text-purple-600 dark:text-purple-400 font-bold italic">Vulgo: {hoveredNode.vulgo}</p>
+              )}
+
+              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+                <span className="truncate"><strong className="text-gray-700 dark:text-gray-300">Custódia:</strong> {hoveredNode.unidade}</span>
+                <span><strong className="text-gray-700 dark:text-gray-300">Regime:</strong> {hoveredNode.regime}</span>
+                <span><strong className="text-gray-700 dark:text-gray-300">Cela:</strong> {hoveredNode.cela}</span>
+                <span className="truncate flex items-center gap-0.5 font-semibold text-purple-700 dark:text-purple-400">
+                  <Shield className="w-2.5 h-2.5 shrink-0" /> {hoveredNode.facaoRealNome}
+                </span>
+              </div>
+
+              {!hoveredNode.isCentral && (
+                <div className="mt-1.5 pt-1.5 border-t border-gray-100 dark:border-gray-800 text-[10px]">
+                  {(() => {
+                    const link = links.find(l =>
+                      (l.source === hoveredNode.id || l.target === hoveredNode.id)
+                    )
+                    if (!link) return null
+                    const isConfirmado = link.forca === 'confirmado'
+                    return (
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="font-bold text-gray-600 dark:text-gray-400">Relação:</span>
+                        <span className="px-1.5 py-0.5 bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 font-bold rounded">
+                          {link.tipo}
+                        </span>
+                        <span className={`px-1 py-0.5 rounded text-[8px] font-bold uppercase ${
+                          isConfirmado
+                            ? 'bg-green-50 text-green-700 dark:bg-green-950/20 dark:text-green-400'
+                            : 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400'
+                        }`}>
+                          {isConfirmado ? 'Confirmado' : 'Suspeita'}
+                        </span>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1426,29 +1540,42 @@ export function AIPVinculosGraph({
 
           {nodes[contextMenuNodeId] && !nodes[contextMenuNodeId].isCentral && (
             <>
-              <button
-                type="button"
-                onClick={() => {
-                  onFocarApenado(nodes[contextMenuNodeId].sipeId)
-                  setContextMenuNodeId(null)
-                }}
-                className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"
-              >
-                <Eye className="w-3.5 h-3.5 text-purple-500" />
-                Focar como Central
-              </button>
+              {/* Opções exclusivas para apenados (não advogados) */}
+              {!nodes[contextMenuNodeId].isAdvogado && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onFocarApenado(nodes[contextMenuNodeId].sipeId)
+                      setContextMenuNodeId(null)
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-purple-500" />
+                    Focar como Central
+                  </button>
 
-              <button
-                type="button"
-                disabled={nodes[contextMenuNodeId].expanded}
-                onClick={() => handleExpandNode(contextMenuNodeId)}
-                className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2 disabled:opacity-50"
-              >
-                <Network className="w-3.5 h-3.5 text-emerald-500" />
-                {nodes[contextMenuNodeId].expanded ? 'Já Expandido (2º Grau)' : 'Expandir Vínculos (2º Grau)'}
-              </button>
+                  <button
+                    type="button"
+                    disabled={nodes[contextMenuNodeId].expanded}
+                    onClick={() => handleExpandNode(contextMenuNodeId)}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Network className="w-3.5 h-3.5 text-emerald-500" />
+                    {nodes[contextMenuNodeId].expanded ? 'Já Expandido (2º Grau)' : 'Expandir Vínculos (2º Grau)'}
+                  </button>
+                </>
+              )}
 
-              {onDeleteLink && (() => {
+              {/* Info para advogados */}
+              {nodes[contextMenuNodeId].isAdvogado && (
+                <div className="px-3 py-2 text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                  <span>⚖️</span>
+                  <span>Vínculo via SIPE — dados somente leitura</span>
+                </div>
+              )}
+
+              {onDeleteLink && !nodes[contextMenuNodeId].isAdvogado && (() => {
                 const centralId = selectedApenado.sipeId.toString()
                 const nodeId = contextMenuNodeId
                 const linksComEsteNo = links.filter(l =>

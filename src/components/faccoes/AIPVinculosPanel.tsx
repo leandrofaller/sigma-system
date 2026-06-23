@@ -19,6 +19,18 @@ interface AIPVinculo {
   direction: 'outgoing' | 'incoming'
 }
 
+interface AdvogadoVinculo {
+  id: string
+  advogadoId: string
+  sipeId: number
+  nome: string
+  oab: string | null
+  cpf: string | null
+  telefone: string | null
+  photoPath: string | null
+  ativo: boolean
+}
+
 const VINCULO_OPCOES = {
   "Família / Relacionamentos": [
     "Mãe",
@@ -69,6 +81,7 @@ export function AIPVinculosPanel({
   const [selectedSipeApenado, setSelectedSipeApenado] = useState<any | null>(null)
   const [apenadoAip, setApenadoAip] = useState<any | null>(null)
   const [vinculos, setVinculos] = useState<AIPVinculo[]>([])
+  const [advogados, setAdvogados] = useState<AdvogadoVinculo[]>([])
   const [loading, setLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'graph'>('graph')
 
@@ -200,6 +213,7 @@ export function AIPVinculosPanel({
         const data = await res.json()
         setVinculos(data.vinculos || [])
         setApenadoAip(data.apenadoAip || null)
+        setAdvogados(data.advogados || [])
       }
     } catch (error) {
       console.error('Erro ao buscar vínculos:', error)
@@ -215,6 +229,7 @@ export function AIPVinculosPanel({
     } else {
       setVinculos([])
       setApenadoAip(null)
+      setAdvogados([])
     }
   }, [selectedSipeApenado, fetchVinculos])
 
@@ -1004,6 +1019,7 @@ export function AIPVinculosPanel({
               <AIPVinculosGraph
                 selectedApenado={selectedApenado}
                 initialVinculos={vinculos}
+                advogados={advogados}
                 onApenadoClick={handleApenadoClick}
                 onDeleteLink={async (linkId) => {
                   const res = await fetch(`/api/aip/vinculos/${linkId}`, { method: 'DELETE' })
@@ -1033,7 +1049,7 @@ export function AIPVinculosPanel({
               />
             ) : (
               <div className="flex-1 overflow-y-auto space-y-6">
-                {vinculos.length === 0 ? (
+                {vinculos.length === 0 && advogados.length === 0 ? (
                   <div className="h-60 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl flex flex-col items-center justify-center p-8 text-center text-gray-400 gap-2 shadow-sm animate-fade-in">
                     <Users className="w-10 h-10 opacity-30 text-purple-500" />
                     <p className="text-sm font-semibold">Nenhum vínculo documentado</p>
@@ -1100,6 +1116,22 @@ export function AIPVinculosPanel({
                         </div>
                       </div>
                     )}
+
+                    {/* Categoria 5: Advogados (dados SIPE) */}
+                    {advogados.length > 0 && (
+                      <div className="bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5 border-b border-amber-100 dark:border-amber-900/30 pb-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-500" />
+                          ⚖️ Advogados ({advogados.length})
+                          <span className="ml-auto text-[10px] font-normal text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-md border border-amber-200 dark:border-amber-800">SIPE</span>
+                        </h4>
+                        <div className="space-y-3">
+                          {advogados.map(adv => (
+                            <AdvogadoRelationCard key={adv.id} advogado={adv} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1128,6 +1160,47 @@ export function AIPVinculosPanel({
           }}
         />
       )}
+    </div>
+  )
+}
+
+function AdvogadoRelationCard({ advogado }: { advogado: AdvogadoVinculo }) {
+  return (
+    <div className="flex items-start gap-3 bg-amber-50/60 dark:bg-amber-950/10 border border-amber-200/60 dark:border-amber-800/40 rounded-xl p-3.5 transition-all duration-200">
+      {/* Ícone / Foto */}
+      <div className="w-12 h-16 rounded-lg overflow-hidden bg-amber-100 dark:bg-amber-900/30 flex-shrink-0 flex items-center justify-center text-amber-500 border border-amber-200 dark:border-amber-700 shadow-sm">
+        {advogado.photoPath ? (
+          <img
+            src={`/api/sipe/advogados/${advogado.sipeId}/foto`}
+            alt={advogado.nome}
+            className="w-full h-full object-cover"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+          />
+        ) : (
+          <span className="text-xl select-none">⚖️</span>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-bold text-gray-900 dark:text-white uppercase truncate">{advogado.nome}</p>
+
+        {advogado.oab && (
+          <p className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold mt-0.5">OAB: {advogado.oab}</p>
+        )}
+        {advogado.telefone && (
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{advogado.telefone}</p>
+        )}
+
+        <div className="flex items-center gap-1.5 mt-2">
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 flex items-center gap-1">
+            <Link2 className="w-2.5 h-2.5" />
+            Advogado
+          </span>
+          <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50">
+            Confirmado
+          </span>
+        </div>
+      </div>
     </div>
   )
 }

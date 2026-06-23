@@ -187,7 +187,34 @@ export async function GET(req: NextRequest) {
         }
       }))
 
-      return NextResponse.json({ vinculos: vinculosFormatados, apenadoAip: aipAp })
+      // Buscar advogados vinculados via SIPE (separado dos AIPVinculos)
+      let advogados: any[] = []
+      if (aipAp?.sipeId) {
+        const sipeAp = await prisma.sipeApenadoImportado.findUnique({
+          where: { sipeId: aipAp.sipeId },
+          include: {
+            vinculosAdvogado: {
+              where: { ativo: true },
+              include: { advogado: true }
+            }
+          }
+        })
+        if (sipeAp?.vinculosAdvogado) {
+          advogados = sipeAp.vinculosAdvogado.map(v => ({
+            id: v.id,
+            advogadoId: v.advogado.id,
+            sipeId: v.advogado.sipeId,
+            nome: v.advogado.nome,
+            oab: v.advogado.oab,
+            cpf: v.advogado.cpf,
+            telefone: v.advogado.telefone,
+            photoPath: v.advogado.photoPath,
+            ativo: v.ativo
+          }))
+        }
+      }
+
+      return NextResponse.json({ vinculos: vinculosFormatados, apenadoAip: aipAp, advogados })
     } else {
       // Retorna todos os vínculos se não for passado apenadoId/sipeId
       const vinculos = await prisma.aIPVinculo.findMany({
