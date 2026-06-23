@@ -265,11 +265,15 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
   }, [activeLetter, editing]);
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!confirm('Excluir este registro? Esta ação não pode ser desfeita.')) return;
+    const record = letterData.find((a) => a.id === id) ?? searchResults.find((a) => a.id === id);
+    const isLinked = record?.isLinkedToSipe;
+    const confirmMsg = isLinked
+      ? 'Atenção: Este apenado está vinculado a uma ficha oficial do SIPE (Apenados & Facções). Excluir este registro removerá a vinculação visual da ficha dele. Deseja realmente excluir?'
+      : 'Excluir este registro? Esta ação não pode ser desfeita.';
+    if (!confirm(confirmMsg)) return;
     const res = await fetch(`/api/apenados/${id}`, { method: 'DELETE' });
     if (!res.ok) { alert('Erro ao excluir.'); return; }
 
-    const record = letterData.find((a) => a.id === id) ?? searchResults.find((a) => a.id === id);
     const letter = record?.name.charAt(0).toUpperCase();
 
     if (letter) {
@@ -643,7 +647,15 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-title truncate">{a.name}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-title truncate">{a.name}</p>
+                      {a.isLinkedToSipe && (
+                        <span className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[9px] font-bold rounded flex items-center gap-1 shrink-0">
+                          <span className="w-1 h-1 bg-green-500 rounded-full" />
+                          SIPE
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-subtle">
                       {[a.matricula, a.unidade].filter(Boolean).join(' · ') || 'Sem matrícula'}
                     </p>

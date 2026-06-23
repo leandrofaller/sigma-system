@@ -42,7 +42,11 @@ export async function GET(req: NextRequest) {
   const countQuery = `SELECT COUNT(*)::int AS total FROM apenados ${whereClause}`;
   const dataQuery = `
     SELECT id, name, matricula, unidade, faccao, "photoPath", notes, "createdAt",
-           "photoQuality", "faceDescriptor"
+           "photoQuality", "faceDescriptor",
+           EXISTS (
+             SELECT 1 FROM sipe_apenados_importados s 
+             WHERE s."apenadoLocalId" = apenados.id
+           ) AS "isLinkedToSipe"
     FROM apenados
     ${whereClause}
     ORDER BY name ASC
@@ -57,11 +61,12 @@ export async function GET(req: NextRequest) {
   const total = countResult[0]?.total ?? 0;
 
   const mappedApenados = apenados.map((a: any) => {
-    const { faceDescriptor, ...rest } = a;
+    const { faceDescriptor, isLinkedToSipe, ...rest } = a;
     return {
       ...rest,
       isFaceIndexed: faceDescriptor !== null && faceDescriptor !== 'NONE',
       noFaceDetected: faceDescriptor === 'NONE',
+      isLinkedToSipe: !!isLinkedToSipe,
     };
   });
 

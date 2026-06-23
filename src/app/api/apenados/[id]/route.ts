@@ -24,11 +24,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     select: {
       id: true, name: true, matricula: true, unidade: true,
       faccao: true, notes: true, photoPath: true, photoQuality: true, createdAt: true,
+      sipeImportacoes: {
+        select: { id: true }
+      }
     },
   });
 
   if (!apenado) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
-  return NextResponse.json(apenado);
+  
+  const { sipeImportacoes, ...rest } = apenado;
+  return NextResponse.json({
+    ...rest,
+    isLinkedToSipe: sipeImportacoes.length > 0
+  });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

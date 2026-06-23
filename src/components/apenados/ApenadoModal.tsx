@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Upload, Camera, Loader2, CheckCircle, User, Trash2, RotateCcw, RotateCw, FolderOpen } from 'lucide-react';
+import { X, Upload, Camera, Loader2, CheckCircle, User, Trash2, RotateCcw, RotateCw, FolderOpen, AlertTriangle } from 'lucide-react';
 import type { Apenado } from './ApenadoCard';
 
 interface Props {
@@ -141,7 +141,10 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
 
   const handleDeletePhoto = async () => {
     if (!isEdit || !apenado?.id) return;
-    if (!confirm('Remover permanentemente a foto deste registro?')) return;
+    const confirmMsg = (apenado as any).isLinkedToSipe
+      ? 'Atenção: Este apenado está vinculado a uma ficha oficial do SIPE (Apenados & Facções). Remover a foto afetará a identificação visual dessa ficha. Deseja realmente remover permanentemente a foto?'
+      : 'Remover permanentemente a foto deste registro?';
+    if (!confirm(confirmMsg)) return;
     setUploading(true);
     try {
       const res = await fetch(`/api/apenados/${apenado.id}/foto`, { method: 'DELETE' });
@@ -219,6 +222,14 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
                 </button>
               )}
             </div>
+            {isEdit && (apenado as any).isLinkedToSipe && (
+              <div className="mb-3 p-2.5 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-xl flex items-start gap-2 animate-fade-in">
+                <AlertTriangle className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-purple-700 dark:text-purple-300 leading-normal">
+                  Este registro está vinculado à ficha oficial do SIPE (<strong>Apenados & Facções</strong>). Remover ou trocar a foto afetará a identificação visual vinculada.
+                </p>
+              </div>
+            )}
             <div
               className={`relative rounded-xl border-2 border-dashed transition-all cursor-pointer overflow-hidden
                 ${dragging
