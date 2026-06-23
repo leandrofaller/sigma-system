@@ -220,7 +220,7 @@ function DocumentPreview({
               Histórico da Ocorrência
             </p>
             {ordem.ipNumero && (
-              <p style={field}><strong>Referente ao IP nº</strong> {ordem.ipNumero}</p>
+              <p style={field}><strong>Documentos Vinculados:</strong> {ordem.ipNumero}</p>
             )}
             {ordem.naturezaFato && (
               <p style={field}><strong>Natureza do fato:</strong> {ordem.naturezaFato}</p>
@@ -235,17 +235,17 @@ function DocumentPreview({
               <p style={field}><strong>Local:</strong> {ordem.localFato}</p>
             )}
             {ordem.vitima && (
-              <p style={field}><strong>Vítima/Alvo:</strong> <strong style={{ textTransform: 'uppercase' }}>{ordem.vitima}</strong></p>
+              <p style={field}><strong>Objetivo:</strong> <strong style={{ textTransform: 'uppercase' }}>{ordem.vitima}</strong></p>
             )}
           </div>
           <hr style={{ margin: '0 0 14px', borderTop: '1px solid #555', borderBottom: 'none' }} />
         </>
       )}
 
-      {/* Natureza da Investigação */}
+      {/* Natureza da Missão */}
       <div style={{ marginBottom: '20px' }}>
         <p style={{ fontWeight: 'bold', fontSize: '12pt', textTransform: 'uppercase', textDecoration: 'underline', textAlign: 'center', margin: '0 0 14px' }}>
-          Natureza da Missão / Investigação
+          Natureza da Missão
         </p>
         <p style={{ ...para, textIndent: '1.5cm' }}>
           {ordem.naturezaInvestigacao || 'Deverá a equipe de investigadores, a que esta for distribuída, diligenciar no sentido de verificar a procedência da determinação.'}
@@ -540,10 +540,10 @@ function EditorModal({
             </h3>
             <div className="space-y-3">
               <div>
-                <label className={label}>Referente ao IP nº</label>
+                <label className={label}>Documentos Vinculados</label>
                 <input className={input} value={form.ipNumero}
                   onChange={e => setForm(f => ({ ...f, ipNumero: e.target.value }))}
-                  placeholder="83/2011" />
+                  placeholder="IP nº 83/2011, Processo SEI..." />
               </div>
               <div>
                 <label className={label}>Natureza do Fato</label>
@@ -571,10 +571,10 @@ function EditorModal({
                   placeholder="Av. Principal, próx. ao Hotel..." />
               </div>
               <div>
-                <label className={label}>Vítima / Alvo</label>
+                <label className={label}>Objetivo</label>
                 <input className={input} value={form.vitima}
                   onChange={e => setForm(f => ({ ...f, vitima: e.target.value }))}
-                  placeholder="Nome completo" />
+                  placeholder="Descreva o objetivo da missão" />
               </div>
             </div>
           </section>
