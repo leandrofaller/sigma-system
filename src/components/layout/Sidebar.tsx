@@ -81,7 +81,10 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [chatChannels, setChatChannels] = useState<ChatChannel[]>([]);
   const [isMobileDashboard, setIsMobileDashboard] = useState(false);
+  const [ordemPendente, setOrdemPendente] = useState(0);
   const prevCountRef = useRef(0);
+  const prevOrdemRef = useRef(0);
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
@@ -193,11 +196,63 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
     }
   }, [pathname]);
 
-  const filteredNav = navItems.map((item) =>
-    item.href === '/chat' && chatUnreadCount > 0
-      ? { ...item, badge: chatUnreadCount, badgePulse: true }
-      : item
-  );
+  // Som de alerta para Ordem de Missão (3 tons ascendentes — mais formal que o chat)
+  const playOrdemSound = () => {
+    try {
+      if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+      const ctx = audioCtxRef.current;
+      const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const t = ctx.currentTime + i * 0.18;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.25, t + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        osc.start(t);
+        osc.stop(t + 0.36);
+      });
+    } catch {}
+  };
+
+  // Polling de Ordens de Missão pendentes
+  useEffect(() => {
+    async function pollOrdens() {
+      try {
+        const res = await fetch('/api/aip/ordens-missao/pendentes-ciencia');
+        if (!res.ok) return;
+        const { count, latest } = await res.json() as { count: number; latest: { numero: string; titulo: string } | null };
+
+        if (count > prevOrdemRef.current) {
+          playOrdemSound();
+          if (Notification.permission === 'granted' && document.hidden && latest) {
+            new Notification('🎯 Nova Ordem de Missão', {
+              body: `${latest.numero} — ${latest.titulo}\nAcesse Ordens de Missão para dar ciência.`,
+              icon: '/logos/badge-aip.png',
+            });
+          }
+        }
+        prevOrdemRef.current = count;
+        setOrdemPendente(count);
+      } catch {}
+    }
+
+    pollOrdens();
+    const id = setInterval(pollOrdens, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const filteredNav = navItems.map((item) => {
+    if (item.href === '/chat' && chatUnreadCount > 0)
+      return { ...item, badge: chatUnreadCount, badgePulse: true };
+    if (item.href === '/ordens-missao' && ordemPendente > 0)
+      return { ...item, badge: ordemPendente, badgePulse: true };
+    return item;
+  });
 
   const filteredAdmin = adminItems
     .map((item) =>
