@@ -278,10 +278,10 @@ function DocumentPreview({
       <div style={{ textAlign: 'center', marginBottom: '40px' }}>
         <p style={{ fontSize: '11pt', marginBottom: '30px' }}>Cumpra-se</p>
         <p style={{ fontSize: '11pt', marginBottom: '2px' }}>
-          <strong>{ordem.emitidoPor.name}</strong>
+          <strong style={{ textTransform: 'uppercase' }}>{ordem.emitidoPor.name}</strong>
         </p>
-        <p style={{ fontSize: '10pt' }}>{ROLE_LABEL[ordem.emitidoPor.role] || ordem.emitidoPor.role}</p>
-        <p style={{ fontSize: '10pt' }}>Agência de Inteligência Penal — AIP/SEJUS/RO</p>
+        <p style={{ fontSize: '10pt' }}>Diretor da Agência de Inteligência Penal</p>
+        <p style={{ fontSize: '10pt' }}>AIP/SEJUS/RO</p>
       </div>
 
       <p style={{ fontSize: '10pt', textAlign: 'justify' }}>
