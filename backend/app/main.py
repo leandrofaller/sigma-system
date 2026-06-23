@@ -302,7 +302,7 @@ def sgp_proxy_write(
         "headers": headers,
         "impersonate": "chrome",
         "timeout": 20.0,
-        "allow_redirects": False
+        "allow_redirects": True
     }
 
     form = payload.get("form")
