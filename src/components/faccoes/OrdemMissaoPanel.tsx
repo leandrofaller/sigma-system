@@ -405,6 +405,7 @@ const EMPTY_FORM = {
 
 function EditorModal({
   ordem,
+  defaultNumero = '',
   users,
   badgeSizes,
   badgeTs,
@@ -412,6 +413,7 @@ function EditorModal({
   onClose,
 }: {
   ordem: OrdemMissao | null
+  defaultNumero?: string
   users: UserOption[]
   badgeSizes: { sejus: number; aip: number; policiaPenal: number }
   badgeTs: number
@@ -419,7 +421,7 @@ function EditorModal({
   onClose: () => void
 }) {
   const [form, setForm] = useState(() => {
-    if (!ordem) return EMPTY_FORM
+    if (!ordem) return { ...EMPTY_FORM, numero: defaultNumero }
     return {
       numero: ordem.numero,
       titulo: ordem.titulo,
@@ -432,8 +434,8 @@ function EditorModal({
       vitima: ordem.vitima || '',
       naturezaInvestigacao: ordem.naturezaInvestigacao || '',
       observacoes: ordem.observacoes || '',
-      prazo: ordem.prazo ? ordem.prazo.split('T')[0] : '',
-      participanteIds: ordem.participantes.map(p => p.userId),
+      prazo: ordem.prazo ? ordem.prazo.slice(0, 16) : '',
+      participanteIds: (ordem.participantes ?? []).map(p => p.userId),
     }
   })
   const [saving, setSaving] = useState(false)
@@ -960,17 +962,6 @@ export function OrdemMissaoPanel({ userRole, currentUserId, currentUserName }: O
     }
   }, [editorOpen])
 
-  const handleOpenNew = async () => {
-    const res = await fetch('/api/aip/ordens-missao/proximo-numero')
-    const data = res.ok ? await res.json() : { numero: '' }
-    setEditingOrdem(null)
-    setEditorOpen(true)
-    // Pass numero as default via state trick — handled in EditorModal initial state
-    ;(handleOpenNew as any)._nextNumero = data.numero
-  }
-
-  // Since we can't easily inject the numero into EditorModal after its initial render,
-  // let's use a key + nextNumero ref approach
   const [nextNumero, setNextNumero] = useState('')
 
   const openNew = async () => {
@@ -1168,9 +1159,8 @@ export function OrdemMissaoPanel({ userRole, currentUserId, currentUserName }: O
       {editorOpen && (
         <EditorModal
           key={editingOrdem?.id ?? `new-${nextNumero}`}
-          ordem={editingOrdem
-            ? editingOrdem
-            : { ...({} as OrdemMissao), numero: nextNumero } as any}
+          ordem={editingOrdem ?? null}
+          defaultNumero={nextNumero}
           users={users}
           badgeSizes={badgeSizes}
           badgeTs={badgeTs}
