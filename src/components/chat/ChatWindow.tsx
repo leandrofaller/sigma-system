@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Users, User, Hash, Loader2, Search, Paperclip, Download, FileText, Image as ImageIcon, Trash2, SmilePlus, Smile } from 'lucide-react';
+import { Send, Users, User, Hash, Loader2, Search, Paperclip, Download, FileText, Image as ImageIcon, Trash2, SmilePlus, Smile, Volume2, VolumeX } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 import { containsNormalized } from '@/lib/search';
 
@@ -92,6 +92,10 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
   const [emojiPicker, setEmojiPicker] = useState<{ msgId: string; top: number; left: number } | null>(null);
   const [emojiInsert, setEmojiInsert] = useState<{ top: number; left: number } | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('chat-sound') !== 'off';
+    return true;
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const bgPollRef = useRef<NodeJS.Timeout | null>(null);
@@ -102,7 +106,48 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const emojiInsertRef = useRef<HTMLDivElement>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const soundEnabledRef = useRef(soundEnabled);
   const emojiSmileBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Keep soundEnabledRef in sync so closures see the latest value
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+
+  const playNotificationSound = useCallback(() => {
+    if (!soundEnabledRef.current) return;
+    try {
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      const tone = (freq: number, start: number, dur: number, vol = 0.22) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(vol, start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+        osc.start(start);
+        osc.stop(start + dur);
+      };
+      const t = ctx.currentTime;
+      // Dois tons suaves: A5 (880Hz) → E6 (1318Hz) — intervalo de quinta, discreto e claro
+      tone(880, t, 0.18);
+      tone(1318.5, t + 0.13, 0.25, 0.18);
+    } catch {}
+  }, []);
+
+  const toggleSound = () => {
+    setSoundEnabled(prev => {
+      const next = !prev;
+      soundEnabledRef.current = next;
+      localStorage.setItem('chat-sound', next ? 'on' : 'off');
+      return next;
+    });
+  };
 
   // Close emoji pickers on outside click
   useEffect(() => {
@@ -154,6 +199,7 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
           if (Array.isArray(data) && data.length > 0) {
             lastSeenRef.current[ckKey(ch)] = data[data.length - 1].createdAt;
             setUnreadCounts(prev => ({ ...prev, [ckKey(ch)]: (prev[ckKey(ch)] || 0) + data.length }));
+            playNotificationSound();
           }
         } catch {}
       }
@@ -191,11 +237,15 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
         const existingIds = new Set(prev.map((m: any) => m.id));
         const newMsgs = data.filter((m: any) => !existingIds.has(m.id));
         if (newMsgs.length === 0) return prev;
+        // Som apenas para mensagens de outros usuários no canal ativo
+        if (newMsgs.some((m: any) => m.senderId !== currentUser.id)) {
+          playNotificationSound();
+        }
         lastMessageRef.current = newMsgs[newMsgs.length - 1].createdAt;
         return [...prev, ...newMsgs];
       });
     }
-  }, [activeChannel]);
+  }, [activeChannel, currentUser.id, playNotificationSound]);
 
   const fullRefresh = useCallback(async () => {
     if (!activeChannel) return;
@@ -375,13 +425,24 @@ export function ChatWindow({ currentUser, contacts, groups }: Props) {
 
       {/* Sidebar */}
       <div className={`w-full md:w-64 border-r border-gray-100 dark:border-gray-800 flex flex-col flex-shrink-0 ${activeChannel ? 'hidden md:flex' : 'flex'}`}>
-        <div className="p-3 border-b border-gray-100 dark:border-gray-800">
-          <div className="relative">
+        <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
+          <div className="relative flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar..."
               className="w-full pl-8 pr-3 py-2 input-base text-xs" />
           </div>
+          <button
+            onClick={toggleSound}
+            title={soundEnabled ? 'Silenciar alertas de mensagem' : 'Ativar alertas de mensagem'}
+            className={`flex-shrink-0 p-2 rounded-lg border transition-all ${
+              soundEnabled
+                ? 'border-sigma-200 dark:border-sigma-800 bg-sigma-50 dark:bg-sigma-900/20 text-sigma-600 dark:text-sigma-400 hover:bg-sigma-100 dark:hover:bg-sigma-900/40'
+                : 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+            }`}
+          >
+            {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto">
           {groups.length > 0 && (
