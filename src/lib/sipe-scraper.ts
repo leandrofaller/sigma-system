@@ -3182,12 +3182,22 @@ async function scrapeApenadoFicha(
     faccaoNome = faccaoObj?.nome ?? null;
   }
 
-  // 🔐 Estratégia de busca: matricula (CPF/RJI) é ÚNICO e seguro
-  // Primeiro tenta por matricula, depois por nome (compatibilidade com dados antigos)
-  const matriculaIdentifier = dados.rji || dados.cpf || null;
-  let localApenado = null;
+  // 🔐 Estratégia de busca: primeiro pelo link existente no SipeApenadoImportado,
+  // depois por matricula (CPF/RJI), e por fim por nome.
+  const existingImport = await prisma.sipeApenadoImportado.findUnique({
+    where: { sipeId },
+    select: { apenadoLocalId: true }
+  });
 
-  if (matriculaIdentifier) {
+  let localApenado = null;
+  if (existingImport?.apenadoLocalId) {
+    localApenado = await prisma.apenado.findUnique({
+      where: { id: existingImport.apenadoLocalId }
+    });
+  }
+
+  const matriculaIdentifier = dados.rji || dados.cpf || null;
+  if (!localApenado && matriculaIdentifier) {
     localApenado = await prisma.apenado.findFirst({
       where: { matricula: matriculaIdentifier }
     });
@@ -3228,13 +3238,12 @@ async function scrapeApenadoFicha(
       });
     } else {
       const updateData: any = {};
-      // Só atualiza a foto local se for detectada alteração (fotoAtualizada === true)
-      // ou se o apenado local atualmente estiver sem foto cadastrada.
-      if (photoPath && (fotoAtualizada || !localApenado.photoPath)) {
+      const pathDiffers = localApenado.photoPath !== photoPath;
+      if (photoPath && (fotoAtualizada || !localApenado.photoPath || pathDiffers)) {
         updateData.photoPath = photoPath;
         
-        // Reseta hashes para forçar re-indexação facial no job em background apenas se a foto mudou
-        if (fotoAtualizada) {
+        // Reseta hashes para forçar re-indexação facial no job em background se a foto mudou, foi atribuída ou difere
+        if (fotoAtualizada || pathDiffers || !localApenado.faceDescriptor) {
           updateData.photoHash = null;
           updateData.photoQuality = null;
           updateData.photoHashSha = null;
@@ -7804,13 +7813,25 @@ export async function scrapeApenadoFichaFast(
     faccaoNome = faccaoObj?.nome ?? null
   }
 
-  const matriculaIdentifier = dados.rji || dados.cpf || null
-  let localApenado = null
+  // 🔐 Estratégia de busca: primeiro pelo link existente no SipeApenadoImportado,
+  // depois por matricula (CPF/RJI), e por fim por nome.
+  const existingImport = await prisma.sipeApenadoImportado.findUnique({
+    where: { sipeId },
+    select: { apenadoLocalId: true }
+  });
 
-  if (matriculaIdentifier) {
+  let localApenado = null;
+  if (existingImport?.apenadoLocalId) {
+    localApenado = await prisma.apenado.findUnique({
+      where: { id: existingImport.apenadoLocalId }
+    });
+  }
+
+  const matriculaIdentifier = dados.rji || dados.cpf || null;
+  if (!localApenado && matriculaIdentifier) {
     localApenado = await prisma.apenado.findFirst({
       where: { matricula: matriculaIdentifier }
-    })
+    });
   }
 
   let nomeFinalApenado = nomeApenadoUpper
@@ -7843,9 +7864,10 @@ export async function scrapeApenadoFichaFast(
       })
     } else {
       const updateData: any = {}
-      if (photoPath && (fotoAtualizada || !localApenado.photoPath)) {
+      const pathDiffers = localApenado.photoPath !== photoPath;
+      if (photoPath && (fotoAtualizada || !localApenado.photoPath || pathDiffers)) {
         updateData.photoPath = photoPath
-        if (fotoAtualizada) {
+        if (fotoAtualizada || pathDiffers || !localApenado.faceDescriptor) {
           updateData.photoHash = null
           updateData.photoQuality = null
           updateData.photoHashSha = null
