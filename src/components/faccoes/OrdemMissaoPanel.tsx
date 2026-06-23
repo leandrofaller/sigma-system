@@ -258,7 +258,7 @@ function DocumentPreview({
           Natureza da Missão
         </p>
         <p style={{ ...para, textIndent: '1.5cm' }}>
-          {ordem.naturezaInvestigacao || 'Deverá a equipe de investigadores, a que esta for distribuída, diligenciar no sentido de verificar a procedência da determinação.'}
+          {ordem.naturezaInvestigacao || 'Deverá a equipe de inteligência encarregada da missão empregar os meios e técnicas legalmente disponíveis para a obtenção e produção de conhecimentos relacionados ao objeto da demanda, observando os princípios da necessidade, oportunidade, compartimentação e proteção do conhecimento.'}
         </p>
         {ordem.observacoes && (
           <p style={{ ...para, textIndent: '1.5cm', marginTop: '8px' }}>
