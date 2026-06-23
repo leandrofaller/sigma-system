@@ -1005,6 +1005,14 @@ export function AIPVinculosPanel({
                 selectedApenado={selectedApenado}
                 initialVinculos={vinculos}
                 onApenadoClick={handleApenadoClick}
+                onDeleteLink={async (linkId) => {
+                  const res = await fetch(`/api/aip/vinculos/${linkId}`, { method: 'DELETE' })
+                  if (!res.ok) {
+                    const data = await res.json()
+                    throw new Error(data.error || 'Erro ao remover vínculo')
+                  }
+                  if (selectedSipeApenado) fetchVinculos(selectedSipeApenado.sipeId)
+                }}
                 onFocarApenado={(sipeId) => {
                   const loadApenado = async () => {
                     try {
@@ -1141,7 +1149,7 @@ function RelationCard({ link, onDelete, onClick }: RelationCardProps) {
       {/* Botão de Excluir Vínculo no Hover */}
       <button
         onClick={() => onDelete(link.id)}
-        className="absolute top-3 right-3 p-1.5 bg-red-50 hover:bg-red-150 dark:bg-red-950/30 text-red-500 dark:text-red-400 hover:text-red-650 dark:hover:text-red-300 rounded-lg transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+        className="absolute top-3 right-3 p-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 text-red-400 dark:text-red-500 hover:text-red-600 dark:hover:text-red-300 rounded-lg transition-all opacity-40 group-hover:opacity-100 focus:opacity-100"
         title="Remover este vínculo"
       >
         <Trash2 className="w-3.5 h-3.5" />

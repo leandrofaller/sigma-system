@@ -1,22 +1,25 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { 
-  ZoomIn, 
-  ZoomOut, 
-  Maximize2, 
-  Play, 
-  Pause, 
-  Download, 
-  Shield, 
-  User, 
-  Calendar, 
-  FileText, 
+import {
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Play,
+  Pause,
+  Download,
+  Shield,
+  User,
+  Calendar,
+  FileText,
   Network,
   Users,
   Eye,
   Info,
-  Search
+  Search,
+  Trash2,
+  Link2,
+  Loader2
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -81,13 +84,15 @@ interface AIPVinculosGraphProps {
   initialVinculos: AIPVinculo[]
   onApenadoClick: (id: string) => void
   onFocarApenado: (sipeId: number) => void
+  onDeleteLink?: (linkId: string) => Promise<void>
 }
 
 export function AIPVinculosGraph({
   selectedApenado,
   initialVinculos,
   onApenadoClick,
-  onFocarApenado
+  onFocarApenado,
+  onDeleteLink
 }: AIPVinculosGraphProps) {
   // Estados de dados locais para o Grafo (permite carregar segundo grau)
   const [nodes, setNodes] = useState<{ [id: string]: GraphNode }>({})
@@ -121,6 +126,8 @@ export function AIPVinculosGraph({
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
   const [contextMenuNodeId, setContextMenuNodeId] = useState<string | null>(null)
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [confirmDeleteLinkId, setConfirmDeleteLinkId] = useState<string | null>(null)
+  const [deletingLinkId, setDeletingLinkId] = useState<string | null>(null)
 
   // Refs de controle de física e arrasto
   const svgRef = useRef<SVGSVGElement>(null)
@@ -1440,6 +1447,73 @@ export function AIPVinculosGraph({
                 <Network className="w-3.5 h-3.5 text-emerald-500" />
                 {nodes[contextMenuNodeId].expanded ? 'Já Expandido (2º Grau)' : 'Expandir Vínculos (2º Grau)'}
               </button>
+
+              {onDeleteLink && (() => {
+                const centralId = selectedApenado.sipeId.toString()
+                const nodeId = contextMenuNodeId
+                const linksComEsteNo = links.filter(l =>
+                  (l.source === centralId && l.target === nodeId) ||
+                  (l.source === nodeId && l.target === centralId)
+                )
+                if (linksComEsteNo.length === 0) return null
+                return (
+                  <div className="pt-1 pb-1">
+                    <div className="px-3 py-1.5 text-[9px] uppercase font-bold text-red-400 dark:text-red-500 flex items-center gap-1.5">
+                      <Trash2 className="w-3 h-3" />
+                      Remover Vínculo
+                    </div>
+                    {linksComEsteNo.map(l => (
+                      <div key={l.id} className="px-3 py-1.5 flex items-center gap-2">
+                        <Link2 className="w-3 h-3 text-gray-400 shrink-0" />
+                        <span className="text-[11px] text-gray-600 dark:text-gray-400 flex-1 truncate">{l.tipo}</span>
+                        {confirmDeleteLinkId === l.id ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              disabled={deletingLinkId === l.id}
+                              onClick={async () => {
+                                setDeletingLinkId(l.id)
+                                try {
+                                  await onDeleteLink(l.id)
+                                  setLinks(prev => prev.filter(x => x.id !== l.id))
+                                  linksRef.current = linksRef.current.filter(x => x.id !== l.id)
+                                  toast.success('Vínculo removido')
+                                } catch {
+                                  toast.error('Erro ao remover vínculo')
+                                } finally {
+                                  setDeletingLinkId(null)
+                                  setConfirmDeleteLinkId(null)
+                                  setContextMenuNodeId(null)
+                                }
+                              }}
+                              className="px-1.5 py-0.5 text-[10px] bg-red-500 hover:bg-red-600 text-white rounded font-bold flex items-center gap-1 disabled:opacity-60"
+                            >
+                              {deletingLinkId === l.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : null}
+                              Sim
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteLinkId(null)}
+                              className="px-1.5 py-0.5 text-[10px] bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded font-bold"
+                            >
+                              Não
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteLinkId(l.id)}
+                            className="shrink-0 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
+                            title="Remover este vínculo"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </>
           )}
         </div>
