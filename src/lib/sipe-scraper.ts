@@ -5909,6 +5909,22 @@ export async function scrapeHistorico(
   }
 }
 
+// Rejeita valores que não parecem nome de pessoa (ex: "COLETA DNA", "PERÍODO GESTAÇÃO")
+function sanitizeConjugeNome(val: string | null | undefined): string | null {
+  if (!val) return null
+  const v = val.trim()
+  if (v.length < 4) return null
+  // Somente letras (incluindo acentuadas), espaços, hifens e apóstrofos
+  if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-]+$/.test(v)) return null
+  // Ao menos 2 palavras com 2+ caracteres cada
+  if (v.split(/\s+/).filter(w => w.length >= 2).length < 2) return null
+  // Rejeita termos claramente não-nomes (procedimentos médicos, siglas, etc.)
+  const NON_NAME = ['DNA', 'COLETA', 'PERÍODO', 'GESTAÇÃO', 'GRAVIDEZ', 'EXAME', 'LAUDO', 'TESTE', 'RESULTADO', 'SEMANA', 'TRIMESTRE']
+  const upper = v.toUpperCase().split(/\s+/)
+  if (upper.some(w => NON_NAME.includes(w))) return null
+  return v
+}
+
 function parseDateSafely(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null
   const cleanStr = dateStr.trim()
@@ -6314,7 +6330,7 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       religiao: religiaoValue,
       estadoCivil: estadoCivilValue,
       qtdFilhos: parseInt(val('qtdfilhos') || val('qtd_filhos') || val('num_filhos') || '0') || null,
-      nomeConjuge: val('nomeesposa') || val('nome_esposa') || val('nomeconjuge') || val('nome_conjuge') || staticVal('nomeesposa') || extractLabel('(?:Nome do\\s+)?C[oô]njuge') || extractLabel('Esposa') || null,
+      nomeConjuge: sanitizeConjugeNome(val('nomeesposa') || val('nome_esposa') || val('nomeconjuge') || val('nome_conjuge') || staticVal('nomeesposa') || extractLabel('(?:Nome do\\s+)?C[oô]njuge') || extractLabel('Esposa')),
       nomeMae: nomeMaeFinal,
       nomePai: val('nomepai') || val('nome_pai') || staticVal('nomepai') || staticVal('nome_pai') || extractLabel('Nome\\s+[Dd]o\\s+[Pp]ai') || extractLabel('Pai') || null,
       telefone: val('telefone'),
@@ -7084,7 +7100,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     grauInstrucao:  pick('GRAU DE INSTRUÇÃO', 'GRAU DE INSTRUCAO', 'INSTRUÇÃO', 'INSTRUCAO', 'ESCOLARIDADE'),
     religiao:       pick('RELIGIÃO', 'RELIGIAO'),
     estadoCivil:    pick('ESTADO CIVIL'),
-    nomeConjuge:    pick('NOME DO CÔNJUGE', 'NOME DO CONJUGE', 'CÔNJUGE', 'CONJUGE', 'NOME DA ESPOSA', 'ESPOSA', 'NOME DO ESPOSO', 'ESPOSO'),
+    nomeConjuge:    sanitizeConjugeNome(pick('NOME DO CÔNJUGE', 'NOME DO CONJUGE', 'CÔNJUGE', 'CONJUGE', 'NOME DA ESPOSA', 'ESPOSA', 'NOME DO ESPOSO', 'ESPOSO')),
     nomeMae:        pick('NOME DA MÃE', 'NOME DA MAE', 'MÃE', 'MAE', 'NOME MÃE', 'NOME MAE'),
     nomePai:        pick('NOME DO PAI', 'PAI', 'NOME PAI'),
     regime:         pick('REGIME'),
