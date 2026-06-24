@@ -8054,6 +8054,7 @@ export async function scrapeApenadoFichaFast(
       grauInstrucao: apenado.grauInstrucao,
       religiao: apenado.religiao,
       estadoCivil: apenado.estadoCivil,
+      nomeConjuge: apenado.nomeConjuge,
       qtdFilhos: apenado.qtdFilhos,
       nomeMae: apenado.nomeMae,
       nomePai: apenado.nomePai,
