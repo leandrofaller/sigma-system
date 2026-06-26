@@ -132,6 +132,24 @@ export async function getAnexoPresignedUrl(chaveS3: string, nomeOriginal?: strin
   return getSignedUrl(s3Client, command, { expiresIn: 300 }) // expira em 5 minutos
 }
 
+export async function getAnexoStream(chaveS3: string): Promise<{ body: ReadableStream | null; contentType: string; contentLength: number }> {
+  const s3Client = createS3Client()
+  const command = new GetObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME!,
+    Key: chaveS3,
+  })
+  const response = await s3Client.send(command)
+  
+  // Convert the SDK stream to a web ReadableStream
+  const webStream = response.Body?.transformToWebStream() ?? null
+  
+  return {
+    body: webStream as ReadableStream | null,
+    contentType: response.ContentType || 'application/octet-stream',
+    contentLength: response.ContentLength || 0,
+  }
+}
+
 export async function deleteAnexoS3(chaveS3: string): Promise<void> {
   const s3Client = createS3Client()
 
