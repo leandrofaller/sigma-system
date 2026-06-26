@@ -391,29 +391,40 @@ export function startServidoresSync(jobId: string): void {
           // Função inteligente de extração baseada em regex
           const extractField = (labelRegex: RegExp): string => {
             let foundVal = '';
-            $details('div, td, th, span, p, label').each((_, el) => {
-              const text = $details(el).text().trim();
-              if (labelRegex.test(text)) {
-                const nextSib = $details(el).next();
-                if (nextSib.length > 0 && nextSib.text().trim().length > 0) {
-                  foundVal = nextSib.text().trim();
+            $details('td, th, label, span, p, div, li').each((_, el) => {
+              const $el = $details(el);
+              // Só processa elementos "folha" ou que tenham texto direto curto
+              // para evitar que divs pai (que acumulam texto de filhos) capturem antes
+              const hasBlockChildren = $el.children('div, table, ul, ol, section, article').length > 0;
+              if (hasBlockChildren) return; // skip containers
+
+              const text = $el.text().trim();
+              // Ignora texto muito longo (provavelmente acumulou filhos)
+              if (text.length > 120) return;
+              if (!labelRegex.test(text)) return;
+
+              // 1. Próximo sibling com texto
+              const nextSib = $el.next();
+              if (nextSib.length > 0 && nextSib.text().trim().length > 0 && nextSib.text().trim().length < 200) {
+                foundVal = nextSib.text().trim();
+                return false;
+              }
+              // 2. Texto inclui "Label: Valor"
+              if (text.includes(':')) {
+                const parts = text.split(':');
+                if (parts.length > 1 && parts[1].trim().length > 0) {
+                  foundVal = parts.slice(1).join(':').trim();
                   return false;
                 }
-                if (text.includes(':')) {
-                  const parts = text.split(':');
-                  if (parts.length > 1 && parts[1].trim().length > 0) {
-                    foundVal = parts[1].trim();
-                    return false;
-                  }
-                }
-                if (el.tagName === 'td' || el.tagName === 'th') {
-                  const row = $details(el).closest('tr');
-                  const cells = row.find('td, th');
-                  const idx = cells.index(el);
-                  if (idx !== -1 && idx < cells.length - 1) {
-                    foundVal = cells.eq(idx + 1).text().trim();
-                    return false;
-                  }
+              }
+              // 3. Célula de tabela → próxima célula da mesma linha
+              if (el.tagName === 'td' || el.tagName === 'th') {
+                const row = $el.closest('tr');
+                const cells = row.find('td, th');
+                const idx = cells.index(el);
+                if (idx !== -1 && idx < cells.length - 1) {
+                  foundVal = cells.eq(idx + 1).text().trim();
+                  return false;
                 }
               }
             });

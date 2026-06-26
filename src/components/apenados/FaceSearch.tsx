@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useIndexing } from '@/contexts/IndexingContext';
+import { useVisitanteIndexing } from '@/contexts/VisitanteIndexingContext';
 import {
   X, ScanFace, Upload, Loader2, AlertTriangle, RefreshCw,
   Database, Search, CheckCircle, Trash2, Users, ZoomIn, ZoomOut, Pencil,
@@ -316,6 +317,19 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [showAdvancedClearConfirm, setShowAdvancedClearConfirm] = useState(false);
   const { isIndexing, progress: indexProgress, indexError, startIndexing, stopIndexing } = useIndexing();
 
+  // Indexação de Visitantes
+  const {
+    isIndexing: isVisitanteIndexing,
+    progress: visitanteIndexProgress,
+    indexError: visitanteIndexError,
+    startIndexing: startVisitanteIndexing,
+    stopIndexing: stopVisitanteIndexing
+  } = useVisitanteIndexing();
+
+  const [visitanteIndexStatus, setVisitanteIndexStatus] = useState<IndexStatus | null>(null);
+  const [showVisitanteClearConfirm, setShowVisitanteClearConfirm] = useState(false);
+  const [indexSubTab, setIndexSubTab] = useState<'apenados' | 'visitantes'>('apenados');
+
   const fetchDashboard = useCallback(async () => {
     try { setDashboard(await (await fetch('/api/apenados/face/advanced-dashboard')).json()); } catch {}
   }, []);
@@ -381,10 +395,18 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     try { setIndexStatus(await (await fetch('/api/apenados/face/status')).json()); } catch {}
   };
 
-  useEffect(() => { fetchStatus(); }, []);
+  const fetchVisitanteStatus = async () => {
+    try { setVisitanteIndexStatus(await (await fetch('/api/visitantes/face/status')).json()); } catch {}
+  };
+
+  useEffect(() => {
+    fetchStatus();
+    fetchVisitanteStatus();
+  }, []);
 
   // Atualiza contadores quando a indexação terminar
   useEffect(() => { if (!isIndexing) fetchStatus(); }, [isIndexing]);
+  useEffect(() => { if (!isVisitanteIndexing) fetchVisitanteStatus(); }, [isVisitanteIndexing]);
 
   // ── Analisar foto no servidor ─────────────────────────────────────────────
   const analyzeImage = useCallback(async (file: File, minSim: number) => {
@@ -575,6 +597,16 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
       if (res.ok) fetchStatus();
       else setErrorMsg(data.error || 'Erro ao limpar índice');
     } catch { setErrorMsg('Erro ao limpar índice'); }
+  };
+
+  const clearVisitanteIndex = async () => {
+    setShowVisitanteClearConfirm(false);
+    try {
+      const res = await fetch('/api/visitantes/face/clear', { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) fetchVisitanteStatus();
+      else setErrorMsg(data.error || 'Erro ao limpar índice de visitantes');
+    } catch { setErrorMsg('Erro ao limpar índice de visitantes'); }
   };
 
   const clearAdvancedIndex = async () => {
@@ -1338,114 +1370,255 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
           ════════════════════════════════════════════════════════════════════ */}
           {tab === 'index' && (
             <div className="space-y-5">
-              {/* Contadores */}
-              {indexStatus && (
-                <div className="grid grid-cols-4 gap-3">
-                  {[
-                    { label: 'Com foto', value: indexStatus.withPhoto, color: 'text-sigma-600' },
-                    { label: 'Indexadas', value: indexStatus.indexed, color: 'text-green-600 dark:text-green-400' },
-                    { label: 'Sem rosto', value: indexStatus.noFace ?? 0, color: 'text-gray-500 dark:text-gray-400' },
-                    { label: 'Pendentes', value: indexStatus.remaining, color: indexStatus.remaining > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="card p-4 text-center">
-                      <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString('pt-BR')}</p>
-                      <p className="text-xs text-subtle mt-1">{label}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {indexError && (
-                <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-400">
-                  {indexError}
-                </div>
-              )}
-
-              {/* Progresso */}
-              {(isIndexing || indexProgress.total > 0) && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-title">
-                      {indexProgress.current.toLocaleString('pt-BR')} / {indexProgress.total.toLocaleString('pt-BR')}
-                    </div>
-                    {isIndexing && indexProgress.current > 0 && (
-                      <div className="text-xs text-subtle">
-                        {(() => {
-                          const elapsed = (Date.now() - indexProgress.startTime) / 1000;
-                          const rate = indexProgress.current / elapsed;
-                          return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(etaSeconds)}`;
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                  <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-sigma-500 to-sigma-700 transition-all duration-300 rounded-full"
-                      style={{ width: indexProgress.total > 0 ? `${(indexProgress.current / indexProgress.total) * 100}%` : '0%' }}
-                    />
-                  </div>
-                  <div className="flex gap-4 text-xs text-subtle">
-                    <span className="text-green-600 dark:text-green-400 font-medium">
-                      {indexProgress.faces.toLocaleString('pt-BR')} rostos detectados
-                    </span>
-                    <span>{indexProgress.skipped.toLocaleString('pt-BR')} sem rosto</span>
-                    {indexProgress.errors > 0 && (
-                      <span className="text-red-500">{indexProgress.errors.toLocaleString('pt-BR')} erros</span>
-                    )}
-                  </div>
-                  {!isIndexing && indexProgress.current >= indexProgress.total && indexProgress.total > 0 && (
-                    <p className="text-sm text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5">
-                      <CheckCircle className="w-4 h-4" /> Indexação concluída!
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Info */}
-              <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm space-y-1">
-                <p className="font-semibold text-blue-800 dark:text-blue-300">Como funciona:</p>
-                <ul className="list-disc pl-4 space-y-1 text-xs text-blue-700 dark:text-blue-400">
-                  <li>O servidor processa cada foto usando InsightFace buffalo_l (ArcFace 512 dims).</li>
-                  <li>Lotes de {BATCH_SIZE} fotos por requisição — o modelo Python carrega uma vez por lote.</li>
-                  <li>Fotos sem rosto detectável são ignoradas e não reprocessadas.</li>
-                  <li>Pode ser interrompido e retomado a qualquer momento.</li>
-                  <li>Requer: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">pip install insightface onnxruntime opencv-python</code></li>
-                </ul>
+              {/* Seletor de Base de Dados para Indexação */}
+              <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[280px] border border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setIndexSubTab('apenados')}
+                  className={`flex-1 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                    indexSubTab === 'apenados'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  Apenados
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIndexSubTab('visitantes')}
+                  className={`flex-1 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                    indexSubTab === 'visitantes'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  Visitantes
+                </button>
               </div>
 
-              <div className="flex gap-3 flex-wrap">
-                {!isIndexing ? (
-                  <>
-                    <button
-                      onClick={startIndexing}
-                      disabled={(indexStatus?.remaining ?? 1) === 0}
-                      className="flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
-                    >
-                      <Database className="w-4 h-4" />
-                      {(indexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação completa'}
-                    </button>
-                    <button onClick={fetchStatus}
-                      className="flex items-center gap-2 text-sm font-medium text-sigma-600 hover:text-sigma-700 border border-sigma-200 dark:border-sigma-800 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 px-4 py-2.5 rounded-xl transition-colors">
-                      <RefreshCw className="w-4 h-4" /> Atualizar
-                    </button>
-                    {isSuperAdmin && (
+              {indexSubTab === 'apenados' ? (
+                <>
+                  {/* Contadores Apenados */}
+                  {indexStatus && (
+                    <div className="grid grid-cols-4 gap-3">
+                      {[
+                        { label: 'Com foto', value: indexStatus.withPhoto, color: 'text-sigma-600' },
+                        { label: 'Indexadas', value: indexStatus.indexed, color: 'text-green-600 dark:text-green-400' },
+                        { label: 'Sem rosto', value: indexStatus.noFace ?? 0, color: 'text-gray-500 dark:text-gray-400' },
+                        { label: 'Pendentes', value: indexStatus.remaining, color: indexStatus.remaining > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="card p-4 text-center">
+                          <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString('pt-BR')}</p>
+                          <p className="text-xs text-subtle mt-1">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {indexError && (
+                    <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-400">
+                      {indexError}
+                    </div>
+                  )}
+
+                  {/* Progresso Apenados */}
+                  {(isIndexing || indexProgress.total > 0) && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold text-title">
+                          {indexProgress.current.toLocaleString('pt-BR')} / {indexProgress.total.toLocaleString('pt-BR')}
+                        </div>
+                        {isIndexing && indexProgress.current > 0 && (
+                          <div className="text-xs text-subtle">
+                            {(() => {
+                              const elapsed = (Date.now() - indexProgress.startTime) / 1000;
+                              const rate = indexProgress.current / elapsed;
+                              return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(etaSeconds)}`;
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-sigma-500 to-sigma-700 transition-all duration-300 rounded-full"
+                          style={{ width: indexProgress.total > 0 ? `${(indexProgress.current / indexProgress.total) * 100}%` : '0%' }}
+                        />
+                      </div>
+                      <div className="flex gap-4 text-xs text-subtle">
+                        <span className="text-green-600 dark:text-green-400 font-medium">
+                          {indexProgress.faces.toLocaleString('pt-BR')} rostos detectados
+                        </span>
+                        <span>{indexProgress.skipped.toLocaleString('pt-BR')} sem rosto</span>
+                        {indexProgress.errors > 0 && (
+                          <span className="text-red-500">{indexProgress.errors.toLocaleString('pt-BR')} erros</span>
+                        )}
+                      </div>
+                      {!isIndexing && indexProgress.current >= indexProgress.total && indexProgress.total > 0 && (
+                        <p className="text-sm text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5">
+                          <CheckCircle className="w-4 h-4" /> Indexação de apenados concluída!
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Info Apenados */}
+                  <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm space-y-1">
+                    <p className="font-semibold text-blue-800 dark:text-blue-300">Como funciona:</p>
+                    <ul className="list-disc pl-4 space-y-1 text-xs text-blue-700 dark:text-blue-400">
+                      <li>O servidor processa cada foto usando InsightFace buffalo_l (ArcFace 512 dims).</li>
+                      <li>Lotes de {BATCH_SIZE} fotos por requisição — o modelo Python carrega uma vez por lote.</li>
+                      <li>Fotos sem rosto detectável são ignoradas e não reprocessadas.</li>
+                      <li>Pode ser interrompido e retomado a qualquer momento.</li>
+                      <li>Requer: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">pip install insightface onnxruntime opencv-python</code></li>
+                    </ul>
+                  </div>
+
+                  <div className="flex gap-3 flex-wrap">
+                    {!isIndexing ? (
+                      <>
+                        <button
+                          onClick={startIndexing}
+                          disabled={(indexStatus?.remaining ?? 1) === 0}
+                          className="flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+                        >
+                          <Database className="w-4 h-4" />
+                          {(indexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação completa'}
+                        </button>
+                        <button onClick={fetchStatus}
+                          className="flex items-center gap-2 text-sm font-medium text-sigma-600 hover:text-sigma-700 border border-sigma-200 dark:border-sigma-800 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 px-4 py-2.5 rounded-xl transition-colors">
+                          <RefreshCw className="w-4 h-4" /> Atualizar
+                        </button>
+                        {isSuperAdmin && (
+                          <button
+                            onClick={() => setShowClearConfirm(true)}
+                            className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" /> Limpar índice
+                          </button>
+                        )}
+                      </>
+                    ) : (
                       <button
-                        onClick={() => setShowClearConfirm(true)}
-                        className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                        onClick={stopIndexing}
+                        className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
                       >
-                        <Trash2 className="w-4 h-4" /> Limpar índice
+                        <X className="w-4 h-4" /> Parar indexação
                       </button>
                     )}
-                  </>
-                ) : (
-                  <button
-                    onClick={stopIndexing}
-                    className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
-                  >
-                    <X className="w-4 h-4" /> Parar indexação
-                  </button>
-                )}
-              </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Contadores Visitantes */}
+                  {visitanteIndexStatus && (
+                    <div className="grid grid-cols-4 gap-3">
+                      {[
+                        { label: 'Com foto', value: visitanteIndexStatus.withPhoto, color: 'text-indigo-600' },
+                        { label: 'Indexadas', value: visitanteIndexStatus.indexed, color: 'text-green-600 dark:text-green-400' },
+                        { label: 'Sem rosto', value: visitanteIndexStatus.noFace ?? 0, color: 'text-gray-500 dark:text-gray-400' },
+                        { label: 'Pendentes', value: visitanteIndexStatus.remaining, color: visitanteIndexStatus.remaining > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="card p-4 text-center">
+                          <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString('pt-BR')}</p>
+                          <p className="text-xs text-subtle mt-1">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {visitanteIndexError && (
+                    <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-400">
+                      {visitanteIndexError}
+                    </div>
+                  )}
+
+                  {/* Progresso Visitantes */}
+                  {(isVisitanteIndexing || visitanteIndexProgress.total > 0) && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold text-title">
+                          {visitanteIndexProgress.current.toLocaleString('pt-BR')} / {visitanteIndexProgress.total.toLocaleString('pt-BR')}
+                        </div>
+                        {isVisitanteIndexing && visitanteIndexProgress.current > 0 && (
+                          <div className="text-xs text-subtle">
+                            {(() => {
+                              const elapsed = (Date.now() - visitanteIndexProgress.startTime) / 1000;
+                              const rate = visitanteIndexProgress.current / elapsed;
+                              const remSecs = (visitanteIndexProgress.total - visitanteIndexProgress.current) / rate;
+                              return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(remSecs)}`;
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-indigo-500 to-indigo-700 transition-all duration-300 rounded-full"
+                          style={{ width: visitanteIndexProgress.total > 0 ? `${(visitanteIndexProgress.current / visitanteIndexProgress.total) * 100}%` : '0%' }}
+                        />
+                      </div>
+                      <div className="flex gap-4 text-xs text-subtle">
+                        <span className="text-green-600 dark:text-green-400 font-medium">
+                          {visitanteIndexProgress.faces.toLocaleString('pt-BR')} rostos detectados
+                        </span>
+                        <span>{visitanteIndexProgress.skipped.toLocaleString('pt-BR')} sem rosto</span>
+                        {visitanteIndexProgress.errors > 0 && (
+                          <span className="text-red-500">{visitanteIndexProgress.errors.toLocaleString('pt-BR')} erros</span>
+                        )}
+                      </div>
+                      {!isVisitanteIndexing && visitanteIndexProgress.current >= visitanteIndexProgress.total && visitanteIndexProgress.total > 0 && (
+                        <p className="text-sm text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5">
+                          <CheckCircle className="w-4 h-4" /> Indexação de visitantes concluída!
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Info Visitantes */}
+                  <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm space-y-1">
+                    <p className="font-semibold text-blue-800 dark:text-blue-300">Como funciona:</p>
+                    <ul className="list-disc pl-4 space-y-1 text-xs text-blue-700 dark:text-blue-400">
+                      <li>Processa em lote a base de fotos de visitantes de forma otimizada.</li>
+                      <li>Extrai e gera a biometria facial clássica ArcFace de 512 dimensões.</li>
+                      <li>Atualiza a busca inteligente de visitantes no módulo de reconhecimento.</li>
+                      <li>Pode ser pausado a qualquer momento sem perda de progresso.</li>
+                    </ul>
+                  </div>
+
+                  <div className="flex gap-3 flex-wrap">
+                    {!isVisitanteIndexing ? (
+                      <>
+                        <button
+                          onClick={startVisitanteIndexing}
+                          disabled={(visitanteIndexStatus?.remaining ?? 1) === 0}
+                          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+                        >
+                          <Database className="w-4 h-4" />
+                          {(visitanteIndexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação completa'}
+                        </button>
+                        <button onClick={fetchVisitanteStatus}
+                          className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 px-4 py-2.5 rounded-xl transition-colors">
+                          <RefreshCw className="w-4 h-4" /> Atualizar
+                        </button>
+                        {isSuperAdmin && (
+                          <button
+                            onClick={() => setShowVisitanteClearConfirm(true)}
+                            className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" /> Limpar índice
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <button
+                        onClick={stopVisitanteIndexing}
+                        className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                      >
+                        <X className="w-4 h-4" /> Parar indexação
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -1670,6 +1843,32 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                 Cancelar
               </button>
               <button onClick={clearIndex}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors">
+                Limpar índice
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm clear visitantes modal */}
+      {showVisitanteClearConfirm && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-red-200 dark:border-red-800 p-6 max-w-sm w-full space-y-4">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0" />
+              <p className="font-bold text-title">Limpar índice de visitantes?</p>
+            </div>
+            <p className="text-sm text-subtle">
+              Todos os embeddings ArcFace de visitantes serão removidos do banco de dados.
+              A indexação de visitantes precisará ser refeita do zero.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowVisitanteClearConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-subtle hover:text-body border border-gray-200 dark:border-gray-700 rounded-xl transition-colors">
+                Cancelar
+              </button>
+              <button onClick={clearVisitanteIndex}
                 className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors">
                 Limpar índice
               </button>

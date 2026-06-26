@@ -1,0 +1,39 @@
+﻿src/lib/scraper-engines/playwright.ts(9,57): error TS2307: Cannot find module 'playwright' or its corresponding type declarations.
+src/lib/sipe-scraper.ts(354,24): error TS7006: Parameter 'perfil' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(372,33): error TS7006: Parameter 'unidade' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(384,24): error TS7006: Parameter 'unidade' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(1070,29): error TS7006: Parameter 'route' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(1676,26): error TS7006: Parameter 'perfil' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(1694,35): error TS7006: Parameter 'unidade' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(1706,26): error TS7006: Parameter 'unidade' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(2219,52): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(2236,5): error TS2322: Type 'unknown[]' is not assignable to type 'number[]'.
+  Type 'unknown' is not assignable to type 'number'.
+src/lib/sipe-scraper.ts(2367,54): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(2384,5): error TS2322: Type 'unknown[]' is not assignable to type 'number[]'.
+  Type 'unknown' is not assignable to type 'number'.
+src/lib/sipe-scraper.ts(2661,47): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(3044,56): error TS7006: Parameter 'src' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(3067,51): error TS7006: Parameter 'url' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(3091,53): error TS7006: Parameter 'url' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(3503,47): error TS7006: Parameter 'url' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(3527,49): error TS7006: Parameter 'url' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(3998,55): error TS7006: Parameter 'url' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(4016,53): error TS7006: Parameter 'url' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(4215,5): error TS2322: Type 'unknown[]' is not assignable to type 'number[]'.
+  Type 'unknown' is not assignable to type 'number'.
+src/lib/sipe-scraper.ts(4288,5): error TS2322: Type 'unknown[]' is not assignable to type 'number[]'.
+  Type 'unknown' is not assignable to type 'number'.
+src/lib/sipe-scraper.ts(4905,43): error TS7006: Parameter 'response' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(4944,31): error TS7031: Binding element 'inscricao' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(4944,42): error TS7031: Binding element 'uf' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(5126,45): error TS7006: Parameter 'oabNum' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(5425,50): error TS7006: Parameter 'opt' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(5725,130): error TS7006: Parameter 'elements' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(5726,27): error TS7006: Parameter 'el' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(5735,22): error TS7006: Parameter 'text' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(5735,28): error TS7006: Parameter 'idx' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(5864,53): error TS7031: Binding element 'url' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(5864,58): error TS7031: Binding element 'sipeId' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(5864,66): error TS7031: Binding element 'token' implicitly has an 'any' type.
+src/lib/sipe-scraper.ts(5966,47): error TS7006: Parameter 'el' implicitly has an 'any' type.

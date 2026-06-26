@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, ScanSearch, Loader2, Trash2, AlertTriangle, CheckCircle,
   RefreshCw, Users, Fingerprint, Waves, Zap, Clock, UserX,
@@ -82,7 +83,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
   const [renameValue, setRenameValue] = useState('');
   const [displayedGroupCount, setDisplayedGroupCount] = useState(20);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const [loadMoreElement, setLoadMoreElement] = useState<HTMLDivElement | null>(null);
 
   // Load dismissed groups from localStorage on mount
   useEffect(() => {
@@ -171,7 +172,9 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok && res.status !== 409) throw new Error(data.error || `Erro ${res.status}`);
       setJobState((prev) =>
-        prev ? { ...prev, phase: 'indexing', error: '' } : null,
+        prev
+          ? { ...prev, phase: 'indexing', error: '' }
+          : { phase: 'indexing', indexingCurrent: 0, indexingTotal: 0, groups: [], totalGroups: 0, totalAnalyzed: 0, faceGroupsCount: 0, error: '' },
       );
       startPolling();
     } catch (err: any) {
@@ -318,14 +321,13 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
 
   // IntersectionObserver: load more groups when sentinel is visible
   useEffect(() => {
-    const el = loadMoreRef.current;
-    if (!el) return;
+    if (!loadMoreElement) return;
     const obs = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) setDisplayedGroupCount((n) => n + 20);
     }, { rootMargin: '300px' });
-    obs.observe(el);
+    obs.observe(loadMoreElement);
     return () => obs.disconnect();
-  });
+  }, [loadMoreElement]);
 
   const pendingDeleteCount = activeGroups.reduce((sum, g) => sum + g.records.length - 1, 0);
   const isRunning = jobState?.phase === 'indexing' || jobState?.phase === 'detecting';
@@ -336,7 +338,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
       ? Math.round((jobState.indexingCurrent / jobState.indexingTotal) * 100)
       : 0;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
@@ -922,7 +924,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
 
               {/* Load-more sentinel + button */}
               {activeGroups.length > displayedGroupCount && (
-                <div ref={loadMoreRef} className="flex flex-col items-center gap-2 py-3">
+                <div ref={setLoadMoreElement} className="flex flex-col items-center gap-2 py-3">
                   <button
                     onClick={() => setDisplayedGroupCount((n) => n + 20)}
                     className="text-xs font-medium text-sigma-600 hover:text-sigma-700 border border-sigma-200 dark:border-sigma-800 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 px-4 py-2 rounded-xl transition-colors"
@@ -1057,6 +1059,7 @@ export function DuplicateChecker({ onClose, onPhotoDeleted }: Props) {
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

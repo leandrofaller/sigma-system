@@ -144,20 +144,17 @@ export async function requestSipeViaProxy(options: {
       ? `${SIPE_PYTHON_API_URL}/sipe/proxy?path=${encodeURIComponent(cleanPath)}`
       : `${SIPE_PYTHON_API_URL}/sipe/proxy`
 
-    const headers: Record<string, string> = {
+    // Cabeçalhos da requisição Next.js → proxy Python: sempre application/json
+    // (options.headers é para o SIPE via proxy, não para o proxy em si)
+    const proxyHeaders: Record<string, string> = {
       'Accept': 'application/json',
       'X-Sipe-Unidade': globalThis.__sipeFallbackUnidade || SIPE_UNIDADE,
       ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
     }
-    if (options.headers) {
-      for (const [k, v] of Object.entries(options.headers)) {
-        headers[k] = v
-      }
-    }
 
     const res = await fetch(url, {
       method,
-      headers,
+      headers: proxyHeaders,
       body: method === 'POST'
         ? JSON.stringify({
             path: cleanPath,
@@ -172,7 +169,8 @@ export async function requestSipeViaProxy(options: {
 
     if (!res.ok) {
       if (res.status !== 404) {
-        console.warn(`[PYTHON PROXY] ⚠️ Chamada ${method} falhou com status ${res.status} para o path: ${cleanPath}. Ativando fallback para Playwright.`)
+        const errBody = await res.text().catch(() => '(sem corpo)')
+        console.warn(`[PYTHON PROXY] ⚠️ ${method} ${cleanPath} → ${res.status}: ${errBody.substring(0, 400)}`)
       }
       return null
     }
@@ -2628,7 +2626,14 @@ async function scrapeApenadoFicha(
 
   if (useSearch) {
     // ── Busca cross-unit: contorna restrição de unidade da sessão ──
-    const searchPath = `/apenados/index?escolha=nomeapenado&parametro=${sipeId}`
+    let searchTerm = String(sipeId)
+    const localImport = await prisma.sipeApenadoImportado.findUnique({
+      where: { sipeId }
+    })
+    if (localImport && localImport.nome) {
+      searchTerm = localImport.nome
+    }
+    const searchPath = `/apenados/index?escolha=nomeapenado&parametro=${encodeURIComponent(searchTerm)}`
     const proxyData = await fetchSipeViaProxy(searchPath)
     
     if (proxyData && !proxyData.is_binary && proxyData.html) {
@@ -3182,12 +3187,22 @@ async function scrapeApenadoFicha(
     faccaoNome = faccaoObj?.nome ?? null;
   }
 
-  // 🔐 Estratégia de busca: matricula (CPF/RJI) é ÚNICO e seguro
-  // Primeiro tenta por matricula, depois por nome (compatibilidade com dados antigos)
-  const matriculaIdentifier = dados.rji || dados.cpf || null;
-  let localApenado = null;
+  // 🔐 Estratégia de busca: primeiro pelo link existente no SipeApenadoImportado,
+  // depois por matricula (CPF/RJI), e por fim por nome.
+  const existingImport = await prisma.sipeApenadoImportado.findUnique({
+    where: { sipeId },
+    select: { apenadoLocalId: true }
+  });
 
-  if (matriculaIdentifier) {
+  let localApenado = null;
+  if (existingImport?.apenadoLocalId) {
+    localApenado = await prisma.apenado.findUnique({
+      where: { id: existingImport.apenadoLocalId }
+    });
+  }
+
+  const matriculaIdentifier = dados.rji || dados.cpf || null;
+  if (!localApenado && matriculaIdentifier) {
     localApenado = await prisma.apenado.findFirst({
       where: { matricula: matriculaIdentifier }
     });
@@ -3228,13 +3243,12 @@ async function scrapeApenadoFicha(
       });
     } else {
       const updateData: any = {};
-      // Só atualiza a foto local se for detectada alteração (fotoAtualizada === true)
-      // ou se o apenado local atualmente estiver sem foto cadastrada.
-      if (photoPath && (fotoAtualizada || !localApenado.photoPath)) {
+      const pathDiffers = localApenado.photoPath !== photoPath;
+      if (photoPath && (fotoAtualizada || !localApenado.photoPath || pathDiffers)) {
         updateData.photoPath = photoPath;
         
-        // Reseta hashes para forçar re-indexação facial no job em background apenas se a foto mudou
-        if (fotoAtualizada) {
+        // Reseta hashes para forçar re-indexação facial no job em background se a foto mudou, foi atribuída ou difere
+        if (fotoAtualizada || pathDiffers || !localApenado.faceDescriptor) {
           updateData.photoHash = null;
           updateData.photoQuality = null;
           updateData.photoHashSha = null;
@@ -3304,6 +3318,7 @@ async function scrapeApenadoFicha(
     religiao: dados.religiao,
     estadoCivil: dados.estadoCivil,
     qtdFilhos: dados.qtdFilhos,
+    nomeConjuge: dados.nomeConjuge,
     nomeMae: dados.nomeMae,
     nomePai: dados.nomePai,
     telefone: dados.telefone,
@@ -3325,10 +3340,14 @@ async function scrapeApenadoFicha(
     ultimaSyncAt: new Date(),
   }
 
-  // Em re-sync, não sobrescrever campos com null — preserva dados existentes se o parser falhar
-  const updateData = Object.fromEntries(
-    Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
-  )
+  // Em re-sync, não sobrescrever campos com null — preserva dados existentes se o parser falhar.
+  // Exceção: nomeConjuge é extraído explicitamente e pode ser null para limpar valores antigos incorretos.
+  const updateData = {
+    ...Object.fromEntries(
+      Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
+    ),
+    nomeConjuge: dados.nomeConjuge,
+  }
 
   const apenado = await prisma.sipeApenadoImportado.upsert({
     where: { sipeId },
@@ -5890,6 +5909,22 @@ export async function scrapeHistorico(
   }
 }
 
+// Rejeita valores que não parecem nome de pessoa (ex: "COLETA DNA", "PERÍODO GESTAÇÃO")
+function sanitizeConjugeNome(val: string | null | undefined): string | null {
+  if (!val) return null
+  const v = val.trim()
+  if (v.length < 4) return null
+  // Somente letras (incluindo acentuadas), espaços, hifens e apóstrofos
+  if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-]+$/.test(v)) return null
+  // Ao menos 2 palavras com 2+ caracteres cada
+  if (v.split(/\s+/).filter(w => w.length >= 2).length < 2) return null
+  // Rejeita termos claramente não-nomes (procedimentos médicos, siglas, etc.)
+  const NON_NAME = ['DNA', 'COLETA', 'PERÍODO', 'GESTAÇÃO', 'GRAVIDEZ', 'EXAME', 'LAUDO', 'TESTE', 'RESULTADO', 'SEMANA', 'TRIMESTRE']
+  const upper = v.toUpperCase().split(/\s+/)
+  if (upper.some(w => NON_NAME.includes(w))) return null
+  return v
+}
+
 function parseDateSafely(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null
   const cleanStr = dateStr.trim()
@@ -6106,7 +6141,9 @@ function parseApenadoFichaHtmlCheerio(html: string) {
   const $ = cheerio.load(html)
   
   // Detecção de redirecionamento para o index / listagem
-  const isListagem = $('table').length > 0 && $('[name="nomemae"]').length === 0 && $('[name="nomepai"]').length === 0
+  // Só considera listagem se não houver nenhum campo de identificação individual do apenado
+  const hasApenadoField = $('[name="nomeapenado"], [name="nomemae"], [name="nomepai"], [name="cpf"], [name="rji"], [name="datanascimento"]').length > 0
+  const isListagem = $('table').length > 0 && !hasApenadoField
   if (isListagem) {
     return {
       dados: { nome: null } as any,
@@ -6240,9 +6277,43 @@ function parseApenadoFichaHtmlCheerio(html: string) {
     return null
   }
 
+  const nomeMaeVal = val('nomemae') || val('nome_mae') || staticVal('nomemae') || staticVal('nome_mae') || extractLabel('Nome\\s+[Dd]a\\s+M[ãa]e') || extractLabel('M[ãa]e') || null
+  const nomeApenadoVal = val('nomeapenado')
+
+  // Diagnóstico: mostra o estado real do campo nomemae no HTML do SIPE
+  const nomemaeEl = $('[name="nomemae"]')
+  const nomemaeAttrs: Record<string, string | undefined> = {}
+  if (nomemaeEl.length) {
+    ;['value', 'data-value', 'data-text', 'data-id', 'type', 'class', 'readonly', 'id'].forEach(a => {
+      const v = nomemaeEl.attr(a)
+      if (v !== undefined) nomemaeAttrs[a] = v
+    })
+  }
+  // Fallback: extrair nomeMae de dados JSON embutidos em <script> (SIPE preenche inputs via JS)
+  let nomeMaeFinal = nomeMaeVal
+  if (!nomeMaeFinal) {
+    const scriptContent = $('script').map((_, el) => $(el).html() || '').get().join('\n')
+    const scriptPatterns = [
+      /"nomemae"\s*:\s*"([^"]+)"/i,
+      /"nome_mae"\s*:\s*"([^"]+)"/i,
+      /nomemae\s*[:=]\s*['"]([^'"]+)['"]/i,
+      /nome_mae\s*[:=]\s*['"]([^'"]+)['"]/i,
+      /\bnomemae\b[^'"]*['"]([A-ZÀ-Ú][A-ZÀ-Ú\s]{3,60})['"]/i,
+    ]
+    for (const pat of scriptPatterns) {
+      const m = scriptContent.match(pat)
+      if (m?.[1]) { nomeMaeFinal = m[1].trim(); break }
+    }
+  }
+
+  const maeSnippets = bodyText.match(/.{0,40}(?:mãe|mae|nomemae|nome_mae).{0,80}/gi)?.slice(0, 5) ?? []
+  console.log(`[PARSE FICHA] nome="${nomeApenadoVal}" nomeMae="${nomeMaeFinal ?? 'NULL'}"`)
+  console.log(`[PARSE FICHA] [name=nomemae] count=${nomemaeEl.length} attrs=${JSON.stringify(nomemaeAttrs)}`)
+  console.log(`[PARSE FICHA] bodyText snippets mãe:`, maeSnippets)
+
   return {
     dados: {
-      nome: val('nomeapenado'),
+      nome: nomeApenadoVal,
       nomeOutro: val('nomefalso'),
       cpf: val('cpf'),
       rg: val('rg'),
@@ -6259,8 +6330,9 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       religiao: religiaoValue,
       estadoCivil: estadoCivilValue,
       qtdFilhos: parseInt(val('qtdfilhos') || val('qtd_filhos') || val('num_filhos') || '0') || null,
-      nomeMae: val('nomemae') || val('nome_mae') || null,
-      nomePai: val('nomepai') || val('nome_pai') || null,
+      nomeConjuge: sanitizeConjugeNome(val('nomeesposa') || val('nome_esposa') || val('nomeconjuge') || val('nome_conjuge') || staticVal('nomeesposa') || extractLabel('(?:Nome do\\s+)?C[oô]njuge') || extractLabel('Esposa')),
+      nomeMae: nomeMaeFinal,
+      nomePai: val('nomepai') || val('nome_pai') || staticVal('nomepai') || staticVal('nome_pai') || extractLabel('Nome\\s+[Dd]o\\s+[Pp]ai') || extractLabel('Pai') || null,
       telefone: val('telefone'),
       rji: val('rji'),
       regime: selVal('fk_regime') || selVal('regime'),
@@ -7028,6 +7100,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     grauInstrucao:  pick('GRAU DE INSTRUÇÃO', 'GRAU DE INSTRUCAO', 'INSTRUÇÃO', 'INSTRUCAO', 'ESCOLARIDADE'),
     religiao:       pick('RELIGIÃO', 'RELIGIAO'),
     estadoCivil:    pick('ESTADO CIVIL'),
+    nomeConjuge:    sanitizeConjugeNome(pick('NOME DO CÔNJUGE', 'NOME DO CONJUGE', 'CÔNJUGE', 'CONJUGE', 'NOME DA ESPOSA', 'ESPOSA', 'NOME DO ESPOSO', 'ESPOSO')),
     nomeMae:        pick('NOME DA MÃE', 'NOME DA MAE', 'MÃE', 'MAE', 'NOME MÃE', 'NOME MAE'),
     nomePai:        pick('NOME DO PAI', 'PAI', 'NOME PAI'),
     regime:         pick('REGIME'),
@@ -7042,6 +7115,25 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     if (!isNaN(n)) dpData.qtdFilhos = n
   }
 
+  // Fallback: se nomeMae ainda nulo, tenta extrair do texto do HTML por regex
+  if (!dpData.nomeMae) {
+    const rawText = $.root().text()
+    const patterns = [
+      /nome\s+da\s+m[ãa]e\s*[:\-]?\s*([A-ZÀ-Ú][A-ZÀ-Ú\s]{3,60})/i,
+      /m[ãa]e\s*[:\-]\s*([A-ZÀ-Ú][A-ZÀ-Ú\s]{3,60})/i,
+    ]
+    for (const pat of patterns) {
+      const m = rawText.match(pat)
+      if (m) {
+        const candidate = m[1].trim().replace(/\s+/g, ' ')
+        if (candidate.length > 3 && candidate.length < 80) {
+          dpData.nomeMae = candidate
+          break
+        }
+      }
+    }
+  }
+
   // Monta objeto de atualização apenas com valores extraídos (não-nulos)
   const dpUpdate: Record<string, any> = {}
   for (const [key, value] of Object.entries(dpData)) {
@@ -7049,6 +7141,8 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
       dpUpdate[key] = value
     }
   }
+
+  console.log(`[FICHA GERAL DP] apenadoId=${apenadoId} nomeMae="${dpData.nomeMae ?? 'NULL'}" campos encontrados:`, Object.keys(dpUpdate))
 
   if (Object.keys(dpUpdate).length > 0) {
     await prisma.sipeApenadoImportado.update({
@@ -7532,7 +7626,14 @@ export async function scrapeApenadoFichaFast(
   let editHtml = ''
   
   if (useSearch) {
-    const searchPath = `/apenados/index?escolha=nomeapenado&parametro=${sipeId}`
+    let searchTerm = String(sipeId)
+    const localImport = await prisma.sipeApenadoImportado.findUnique({
+      where: { sipeId }
+    })
+    if (localImport && localImport.nome) {
+      searchTerm = localImport.nome
+    }
+    const searchPath = `/apenados/index?escolha=nomeapenado&parametro=${encodeURIComponent(searchTerm)}`
     const proxyData = await fetchSipeViaProxy(searchPath)
     if (!proxyData || proxyData.is_binary || !proxyData.html) {
       throw new Error('APENADO_NAO_ENCONTRADO')
@@ -7804,13 +7905,25 @@ export async function scrapeApenadoFichaFast(
     faccaoNome = faccaoObj?.nome ?? null
   }
 
-  const matriculaIdentifier = dados.rji || dados.cpf || null
-  let localApenado = null
+  // 🔐 Estratégia de busca: primeiro pelo link existente no SipeApenadoImportado,
+  // depois por matricula (CPF/RJI), e por fim por nome.
+  const existingImport = await prisma.sipeApenadoImportado.findUnique({
+    where: { sipeId },
+    select: { apenadoLocalId: true }
+  });
 
-  if (matriculaIdentifier) {
+  let localApenado = null;
+  if (existingImport?.apenadoLocalId) {
+    localApenado = await prisma.apenado.findUnique({
+      where: { id: existingImport.apenadoLocalId }
+    });
+  }
+
+  const matriculaIdentifier = dados.rji || dados.cpf || null;
+  if (!localApenado && matriculaIdentifier) {
     localApenado = await prisma.apenado.findFirst({
       where: { matricula: matriculaIdentifier }
-    })
+    });
   }
 
   let nomeFinalApenado = nomeApenadoUpper
@@ -7843,9 +7956,10 @@ export async function scrapeApenadoFichaFast(
       })
     } else {
       const updateData: any = {}
-      if (photoPath && (fotoAtualizada || !localApenado.photoPath)) {
+      const pathDiffers = localApenado.photoPath !== photoPath;
+      if (photoPath && (fotoAtualizada || !localApenado.photoPath || pathDiffers)) {
         updateData.photoPath = photoPath
-        if (fotoAtualizada) {
+        if (fotoAtualizada || pathDiffers || !localApenado.faceDescriptor) {
           updateData.photoHash = null
           updateData.photoQuality = null
           updateData.photoHashSha = null
@@ -7899,6 +8013,7 @@ export async function scrapeApenadoFichaFast(
     religiao: dados.religiao,
     estadoCivil: dados.estadoCivil,
     qtdFilhos: dados.qtdFilhos,
+    nomeConjuge: dados.nomeConjuge,
     nomeMae: dados.nomeMae,
     nomePai: dados.nomePai,
     telefone: dados.telefone,
@@ -7920,10 +8035,14 @@ export async function scrapeApenadoFichaFast(
     ultimaSyncAt: new Date(),
   }
 
-  // Em re-sync, não sobrescrever campos com null — preserva dados existentes se o parser falhar
-  const updateData = Object.fromEntries(
-    Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
-  )
+  // Em re-sync, não sobrescrever campos com null — preserva dados existentes se o parser falhar.
+  // Exceção: nomeConjuge é extraído explicitamente e pode ser null para limpar valores antigos incorretos.
+  const updateData = {
+    ...Object.fromEntries(
+      Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
+    ),
+    nomeConjuge: dados.nomeConjuge,
+  }
 
   const apenado = await prisma.sipeApenadoImportado.upsert({
     where: { sipeId },
@@ -7951,6 +8070,7 @@ export async function scrapeApenadoFichaFast(
       grauInstrucao: apenado.grauInstrucao,
       religiao: apenado.religiao,
       estadoCivil: apenado.estadoCivil,
+      nomeConjuge: apenado.nomeConjuge,
       qtdFilhos: apenado.qtdFilhos,
       nomeMae: apenado.nomeMae,
       nomePai: apenado.nomePai,
@@ -8018,6 +8138,12 @@ export async function scrapeApenadoFichaFast(
     fetchSipeViaProxy(`/apenados/${sipeId}/atendimentos`),
     fetchSipeViaProxy(`/apenados/${sipeId}/credenciados`),
   ]
+
+  console.log(`[SCRAPER FAST] csrfToken para #${sipeId}: ${csrfToken ? csrfToken.substring(0, 12) + '…' : 'NÃO ENCONTRADO'}`)
+
+  // Reativa o apenado na sessão do proxy imediatamente antes do POST para fichaGeral,
+  // garantindo que o SIPE aceite o apenado_id sem retornar 422.
+  await fetchSipeViaProxy(`/apenados/${sipeId}/selecionarOpcao`).catch(() => {})
 
   let fichaGeralPromise: Promise<SipeProxyResponse | null> = Promise.resolve(null)
   if (csrfToken) {
@@ -8096,8 +8222,28 @@ export async function scrapeApenadoFichaFast(
   }
 
   // Por último, executa a Ficha Geral consolidada (evitando duplicar advogados e visitantes criados acima)
+  console.log(`[SCRAPER FAST] fichaGeralData para #${sipeId}: ${fichaGeralData?.html ? `HTML ${fichaGeralData.html.length} chars` : 'NÃO RETORNOU'}`)
   if (fichaGeralData?.html) {
     await parseAndSaveFichaGeralCheerio(fichaGeralData.html, apenado.id)
+  }
+
+  // Fallback: se fichaGeral não retornou, tenta endpoints alternativos para extrair dados pessoais
+  if (!fichaGeralData?.html) {
+    const [showData, dpData] = await Promise.all([
+      fetchSipeViaProxy(`/apenados/${sipeId}/show`).catch(() => null),
+      fetchSipeViaProxy(`/apenados/${sipeId}/dadosPessoais`).catch(() => null),
+    ])
+    if (showData?.html) {
+      console.log(`[SCRAPER FAST] /show para #${sipeId}: ${showData.html.length} chars — tentando extrair DP`)
+      await parseAndSaveFichaGeralCheerio(showData.html, apenado.id)
+    } else if (dpData?.html) {
+      console.log(`[SCRAPER FAST] /dadosPessoais para #${sipeId}: ${dpData.html.length} chars — tentando extrair DP`)
+      await parseAndSaveFichaGeralCheerio(dpData.html, apenado.id)
+    } else {
+      // Último recurso: re-parseia o próprio editHtml como fichaGeral
+      console.log(`[SCRAPER FAST] /show e /dadosPessoais indisponíveis — extraindo DP do editHtml #${sipeId}`)
+      await parseAndSaveFichaGeralCheerio(editHtml, apenado.id)
+    }
   }
 
   console.log(`[SCRAPER FAST] 🚀 Apenado #${sipeId} processado de forma sequencial-segura com sucesso!`)

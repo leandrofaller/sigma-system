@@ -253,6 +253,9 @@ def sipe_proxy_write(
             req_kwargs["headers"] = headers
 
         response = client._request(method, path, **req_kwargs)
+        if hasattr(response, 'status_code') and response.status_code >= 400:
+            body_preview = getattr(response, 'text', '')[:500] if hasattr(response, 'text') else ''
+            logger.warning(f"[PROXY] SIPE retornou {response.status_code} para {method} {path}: {body_preview}")
         return _serialize_proxy_response(response, path)
     except SIPEAuthError as e:
         logger.error(f"Erro de autenticação no proxy {method} para o path {path}: {str(e)}")
@@ -302,7 +305,7 @@ def sgp_proxy_write(
         "headers": headers,
         "impersonate": "chrome",
         "timeout": 20.0,
-        "allow_redirects": False
+        "allow_redirects": True
     }
 
     form = payload.get("form")

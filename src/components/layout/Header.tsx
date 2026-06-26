@@ -125,14 +125,34 @@ export function Header({ user }: HeaderProps) {
     return () => clearInterval(intervalId);
   }, []);
 
+  const getViewedIds = (): Set<string> => {
+    try {
+      const raw = localStorage.getItem('sigma:viewed-relints');
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set();
+    }
+  };
+
+  const markAsViewed = (id: string) => {
+    try {
+      const viewed = getViewedIds();
+      viewed.add(id);
+      localStorage.setItem('sigma:viewed-relints', JSON.stringify([...viewed]));
+    } catch {}
+  };
+
   useEffect(() => {
     fetch('/api/received-relints')
       .then((r) => r.json())
       .then((data) => {
         if (!Array.isArray(data)) return;
-        setNotifications(data.slice(0, 10));
         const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        setNotifCount(data.filter((n) => new Date(n.createdAt).getTime() > cutoff).length);
+        const recent = data.filter((n) => new Date(n.createdAt).getTime() > cutoff);
+        const viewed = getViewedIds();
+        const unread = recent.filter((n) => !viewed.has(n.id));
+        setNotifications(unread.slice(0, 10));
+        setNotifCount(unread.length);
       })
       .catch(() => {});
   }, []);
@@ -216,8 +236,13 @@ export function Header({ user }: HeaderProps) {
                   notifications.map((n) => (
                     <Link
                       key={n.id}
-                      href="/relints-recebidos"
-                      onClick={() => setNotifOpen(false)}
+                      href={`/relints-recebidos?highlight=${n.id}`}
+                      onClick={() => {
+                        markAsViewed(n.id);
+                        setNotifications((prev) => prev.filter((x) => x.id !== n.id));
+                        setNotifCount((prev) => Math.max(0, prev - 1));
+                        setNotifOpen(false);
+                      }}
                       className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
                     >
                       <div className="w-8 h-8 bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">

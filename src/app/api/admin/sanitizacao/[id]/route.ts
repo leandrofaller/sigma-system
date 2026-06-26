@@ -7,6 +7,7 @@ import { rename, mkdir, unlink, readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { createHash } from 'crypto';
 import { invalidateFaceCache } from '@/lib/face-cache';
+import { pgvectorAvailable, clearVector } from '@/lib/pgvector';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -40,18 +41,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     if (action === 'approve') {
-      // 1. Rollback da imagem: mover da quarentena para o diretório de apenados
+      // 1. Rollback da imagem: mover da quarentena para o diretório de apenados (apenas se for diferente)
       const srcPath = getApenadoPhotoPath(log.photoPath);
       const destPath = getApenadoPhotoPath(log.originalPath);
-
-      if (existsSync(srcPath)) {
+ 
+      if (srcPath !== destPath && existsSync(srcPath)) {
         await mkdir(dirname(destPath), { recursive: true });
         await rename(srcPath, destPath);
-      } else {
-        // Se a foto não existir na quarentena por algum motivo, mas o arquivo original existir ou se for um fallback
-        console.warn(`[Auditoria] Foto na quarentena não encontrada: ${srcPath}`);
       }
-
+ 
       // 2. Restaurar photoPath no Apenado correspondente para re-indexação facial
       if (log.apenadoId) {
         await prisma.apenado.update({
@@ -67,30 +65,51 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           },
         });
       }
-
+ 
       // 3. Atualizar status da sanitização
       await prisma.imageSanitization.update({
         where: { id },
         data: { status: 'APPROVED' },
       });
-
+ 
       invalidateFaceCache();
       return NextResponse.json({ ok: true, message: 'Imagem aprovada e restaurada para a fila de indexação.' });
     }
-
+ 
     if (action === 'reject') {
-      // 1. Deletar arquivo físico na quarentena
+      // 1. Deletar arquivo físico
       const srcPath = getApenadoPhotoPath(log.photoPath);
       if (existsSync(srcPath)) {
         await unlink(srcPath);
       }
-
-      // 2. Atualizar status para REJECTED (não vincula a foto ao apenado, ele permanece sem foto)
+ 
+      // 2. Desvincular foto e embedding do apenado local para retirar do ArcFace (já que não foi limpo antes)
+      if (log.apenadoId) {
+        await prisma.apenado.update({
+          where: { id: log.apenadoId },
+          data: {
+            photoPath: null,
+            faceDescriptor: null,
+            detScore: null,
+            photoHash: null,
+            photoHashSha: null,
+            photoQuality: null,
+          },
+        });
+ 
+        // Se pgvector estiver disponível, remove o vetor do índice
+        if (await pgvectorAvailable()) {
+          await clearVector(log.apenadoId);
+        }
+      }
+ 
+      // 3. Atualizar status para REJECTED
       await prisma.imageSanitization.update({
         where: { id },
         data: { status: 'REJECTED' },
       });
-
+ 
+      invalidateFaceCache();
       return NextResponse.json({ ok: true, message: 'Imagem rejeitada e removida permanentemente do disco.' });
     }
 

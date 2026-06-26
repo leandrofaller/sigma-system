@@ -37,9 +37,18 @@ export async function POST(
 
     console.log(`[SYNC INDIVIDUAL] 🔄 Iniciando raspagem individual para o apenado #${sipeId} (${dbApenado.nome})...`)
 
-    // Roda a raspagem de ficha acelerada (fast) síncronamente.
-    // Usamos useSearch = true para que o scraper localize o apenado no index e resolva sua unidade dinamicamente
-    await scrapeApenadoFichaFast(sipeId, apenadoUnidadeNome, true)
+    // Tenta primeiro via busca por nome (resolve unidade dinamicamente).
+    // Se não encontrado na listagem (paginação, transferência etc.), cai no acesso direto por sipeId.
+    try {
+      await scrapeApenadoFichaFast(sipeId, apenadoUnidadeNome, true)
+    } catch (searchErr: any) {
+      if (searchErr?.message === 'APENADO_NAO_ENCONTRADO') {
+        console.warn(`[SYNC INDIVIDUAL] ⚠️ Busca por nome falhou para #${sipeId}, tentando acesso direto...`)
+        await scrapeApenadoFichaFast(sipeId, apenadoUnidadeNome, false)
+      } else {
+        throw searchErr
+      }
+    }
 
     // Buscar o apenado novamente com todas as relações para retornar os dados completos atualizados
     const updated = await prisma.sipeApenadoImportado.findUnique({
@@ -63,7 +72,7 @@ export async function POST(
       }
     })
 
-    console.log(`[SYNC INDIVIDUAL] ✅ Sincronização concluída com sucesso para #${sipeId}.`)
+    console.log(`[SYNC INDIVIDUAL] ✅ Sincronização concluída para #${sipeId}. nomeMae="${updated?.nomeMae ?? 'NULL'}" nomePai="${updated?.nomePai ?? 'NULL'}"`)
 
     return NextResponse.json({ success: true, apenado: updated })
   } catch (err: any) {

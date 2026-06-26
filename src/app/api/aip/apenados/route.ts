@@ -253,6 +253,8 @@ export async function GET(request: NextRequest) {
       whereClause += ` AND (
         immutable_unaccent(nome) ILIKE immutable_unaccent($${idx})
         OR COALESCE(cpf,'') ILIKE $${idx}
+        OR immutable_unaccent(COALESCE("nomeMae",'')) ILIKE immutable_unaccent($${idx})
+        OR immutable_unaccent(COALESCE(vulgo,'')) ILIKE immutable_unaccent($${idx})
       )`
       params.push(pattern)
       idx++

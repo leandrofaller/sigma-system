@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { ReceivedRelintsList } from '@/components/relint/ReceivedRelintsList';
@@ -38,13 +39,15 @@ export default async function RelintsRecebidosPage() {
           Arquivos recebidos de outras agências — {files.length} arquivo{files.length !== 1 ? 's' : ''}
         </p>
       </div>
-      <ReceivedRelintsList
-        files={files}
-        groups={groups}
-        folders={folders}
-        userId={user.id}
-        role={user.role}
-      />
+      <Suspense>
+        <ReceivedRelintsList
+          files={files}
+          groups={groups}
+          folders={folders}
+          userId={user.id}
+          role={user.role}
+        />
+      </Suspense>
     </div>
   );
 }

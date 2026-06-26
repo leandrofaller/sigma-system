@@ -15,6 +15,7 @@ export interface Apenado {
   _photoTs?: number;
   isFaceIndexed?: boolean;
   noFaceDetected?: boolean;
+  isLinkedToSipe?: boolean;
 }
 
 function qualityPill(q: number | null | undefined) {
@@ -113,7 +114,16 @@ export function ApenadoCard({ apenado, userRole, onEdit, onDelete, onPhotoClick 
           </div>
         </div>
 
-        {!apenado.photoPath && (
+        {apenado.isLinkedToSipe && (
+          <div className="absolute top-2 right-2 z-10">
+            <div className="flex items-center gap-1 bg-purple-600/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm" title="Vinculado à ficha do SIPE (Apenados & Facções)">
+              <span className="w-1.2 h-1.2 bg-green-400 rounded-full animate-pulse" />
+              SIPE VINCULADO
+            </div>
+          </div>
+        )}
+
+        {!apenado.photoPath && !apenado.isLinkedToSipe && (
           <div className="absolute top-2 right-2">
             <div className="w-5 h-5 bg-gray-400/80 rounded-full flex items-center justify-center">
               <User className="w-3 h-3 text-white" />

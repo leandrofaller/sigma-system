@@ -185,7 +185,7 @@ export function UnidadesPanel({
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Buscar apenado na unidade..."
+                  placeholder="Buscar por nome, CPF, nome da mãe ou alcunha..."
                   value={searchApenado}
                   onChange={e => setSearchApenado(e.target.value)}
                   className="w-full pl-9 pr-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"

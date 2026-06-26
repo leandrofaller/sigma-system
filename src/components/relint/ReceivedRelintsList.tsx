@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -48,6 +49,8 @@ interface Props {
 }
 
 export function ReceivedRelintsList({ files: initialFiles, groups, folders: initialFolders, userId, role }: Props) {
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get('highlight') ?? null;
   const [files, setFiles] = useState(initialFiles);
   const [folders, setFolders] = useState(initialFolders);
   const [search, setSearch] = useState('');
@@ -383,6 +386,7 @@ export function ReceivedRelintsList({ files: initialFiles, groups, folders: init
                 files={grouped[source]}
                 folders={folders}
                 isAdmin={isAdmin}
+                highlightId={highlightId}
                 onMove={handleMoveFile}
                 onDelete={handleDeleteFile}
               />
@@ -413,8 +417,8 @@ function FolderNavItem({ icon: Icon, label, count, active, onClick }: {
   );
 }
 
-function AgencyGroup({ source, files, folders, isAdmin, onMove, onDelete }: {
-  source: string; files: any[]; folders: RRFolder[]; isAdmin: boolean;
+function AgencyGroup({ source, files, folders, isAdmin, highlightId, onMove, onDelete }: {
+  source: string; files: any[]; folders: RRFolder[]; isAdmin: boolean; highlightId: string | null;
   onMove: (fileId: string, folderId: string | null) => Promise<void>;
   onDelete: (fileId: string) => Promise<void>;
 }) {
@@ -449,6 +453,7 @@ function AgencyGroup({ source, files, folders, isAdmin, onMove, onDelete }: {
                   index={i}
                   folders={folders}
                   isAdmin={isAdmin}
+                  highlight={file.id === highlightId}
                   onMove={onMove}
                   onDelete={onDelete}
                 />
@@ -461,16 +466,28 @@ function AgencyGroup({ source, files, folders, isAdmin, onMove, onDelete }: {
   );
 }
 
-function FileCard({ file, index, folders, isAdmin, onMove, onDelete }: {
-  file: any; index: number; folders: RRFolder[]; isAdmin: boolean;
+function FileCard({ file, index, folders, isAdmin, highlight, onMove, onDelete }: {
+  file: any; index: number; folders: RRFolder[]; isAdmin: boolean; highlight?: boolean;
   onMove: (fileId: string, folderId: string | null) => Promise<void>;
   onDelete: (fileId: string) => Promise<void>;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [moving, setMoving] = useState(false);
   const [menuStyle, setMenuStyle] = useState({ top: 0, right: 0 });
+  const [highlighted, setHighlighted] = useState(highlight ?? false);
+  const cardRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (highlight && cardRef.current) {
+      setTimeout(() => {
+        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+      const timer = setTimeout(() => setHighlighted(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlight]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -500,10 +517,15 @@ function FileCard({ file, index, folders, isAdmin, onMove, onDelete }: {
 
   return (
     <motion.div
+      ref={cardRef}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.04 }}
-      className="card p-5 hover:shadow-md transition-shadow relative group/card"
+      className={`card p-5 hover:shadow-md transition-all relative group/card ${
+        highlighted
+          ? 'ring-2 ring-sigma-400 shadow-lg shadow-sigma-100 dark:shadow-sigma-900/30 bg-sigma-50/30 dark:bg-sigma-900/10'
+          : ''
+      }`}
     >
       {/* Admin controls — button stays in card, dropdown rendered via portal */}
       {isAdmin && (
