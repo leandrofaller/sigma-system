@@ -1,57 +1,63 @@
 import { prisma } from '../src/lib/db'
-import { getAnexoStream, getAnexoPresignedUrl } from '../src/lib/s3'
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 import dotenv from 'dotenv'
 import path from 'path'
 
 // Carrega variáveis do arquivo .env
 dotenv.config({ path: path.resolve(__dirname, '../.env') })
 
+function createS3Client() {
+  const region = (process.env.AWS_REGION || 'us-east-1').trim()
+  const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || '').trim()
+  const secretAccessKey = (process.env.AWS_SECRET_ACCESS_KEY || '').trim()
+
+  return new S3Client({
+    region,
+    credentials: {
+      accessKeyId,
+      secretAccessKey,
+    },
+  })
+}
+
 async function main() {
-  console.log('=== Iniciando Teste S3 ===')
-  console.log('Bucket:', process.env.AWS_BUCKET_NAME)
-  console.log('Region:', process.env.AWS_REGION)
+  console.log('=== Testando transformToByteArray ===')
+  const s3Client = createS3Client()
   
-  // Buscar um anexo
   const anexo = await prisma.aIPApenadoAnexo.findFirst({
     orderBy: { dataUpload: 'desc' }
   })
 
   if (!anexo) {
-    console.log('Nenhum anexo encontrado no banco!')
+    console.log('Nenhum anexo encontrado!')
     return
   }
 
-  console.log('Anexo encontrado no banco:')
-  console.log('ID:', anexo.id)
-  console.log('Nome Original:', anexo.nomeOriginal)
-  console.log('Chave S3:', anexo.chaveS3)
-  console.log('URL S3:', anexo.urlS3)
+  console.log('Testando para o anexo:', anexo.nomeOriginal)
+
+  const command = new GetObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME!,
+    Key: anexo.chaveS3,
+  })
 
   try {
-    console.log('\n--- Testando getAnexoPresignedUrl ---')
-    const presignedUrl = await getAnexoPresignedUrl(anexo.chaveS3, anexo.nomeOriginal)
-    console.log('Presigned URL gerada com sucesso!')
-    console.log('URL:', presignedUrl)
-  } catch (error: any) {
-    console.error('Erro ao gerar Presigned URL:', error)
-  }
-
-  try {
-    console.log('\n--- Testando getAnexoStream ---')
-    const streamRes = await getAnexoStream(anexo.chaveS3)
-    console.log('Status: Stream obtido do S3 com sucesso!')
-    console.log('Content-Type:', streamRes.contentType)
-    console.log('Content-Length:', streamRes.contentLength)
-    console.log('Possui Body:', !!streamRes.body)
-  } catch (error: any) {
-    console.error('Erro ao obter Stream do S3:', error)
+    const response = await s3Client.send(command)
+    console.log('Objeto S3 obtido com sucesso!')
+    
+    if (response.Body) {
+      console.log('Tentando transformToByteArray()...')
+      const byteArray = await response.Body.transformToByteArray()
+      console.log('Sucesso! Tamanho do Uint8Array obtido:', byteArray.length)
+      console.log('Tipo do Array:', byteArray.constructor.name)
+    } else {
+      console.log('response.Body está vazio!')
+    }
+  } catch (err: any) {
+    console.error('Erro ao ler do S3:', err)
   }
 }
 
 main()
-  .catch(e => {
-    console.error('Erro geral no script de teste:', e)
-  })
   .finally(async () => {
     await prisma.$disconnect()
   })

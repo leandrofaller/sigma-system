@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { deleteAnexoS3, getAnexoPresignedUrl } from '@/lib/s3'
+import { deleteAnexoS3, getAnexoPresignedUrl, getAnexoBytes } from '@/lib/s3'
 
 export async function GET(
   req: NextRequest,
@@ -38,9 +38,22 @@ export async function GET(
       return NextResponse.redirect(presignedUrl, { status: 307 })
     }
 
-    // Para visualização (img src, lightbox), redireciona para a URL assinada do S3 (permitindo exibição inline)
-    const presignedUrl = await getAnexoPresignedUrl(anexo.chaveS3)
-    return NextResponse.redirect(presignedUrl, { status: 307 })
+    // Para visualização (img src, lightbox), faz proxy direto dos bytes do S3 para evitar problemas de rede restrita/intranet
+    const { data, contentType, contentLength } = await getAnexoBytes(anexo.chaveS3)
+
+    if (!data) {
+      return NextResponse.json({ error: 'Arquivo vazio' }, { status: 404 })
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': contentType,
+      'Cache-Control': 'private, max-age=300',
+    }
+    if (contentLength) {
+      headers['Content-Length'] = String(contentLength)
+    }
+
+    return new Response(Buffer.from(data), { headers })
   } catch (erro) {
     console.error('Erro ao obter anexo do S3:', erro)
     return NextResponse.json({ error: 'Erro ao carregar anexo' }, { status: 500 })

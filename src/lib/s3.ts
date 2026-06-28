@@ -132,7 +132,7 @@ export async function getAnexoPresignedUrl(chaveS3: string, nomeOriginal?: strin
   return getSignedUrl(s3Client, command, { expiresIn: 300 }) // expira em 5 minutos
 }
 
-export async function getAnexoStream(chaveS3: string): Promise<{ body: ReadableStream | null; contentType: string; contentLength: number }> {
+export async function getAnexoBytes(chaveS3: string): Promise<{ data: Uint8Array | null; contentType: string; contentLength: number }> {
   const s3Client = createS3Client()
   const command = new GetObjectCommand({
     Bucket: process.env.AWS_BUCKET_NAME!,
@@ -140,13 +140,12 @@ export async function getAnexoStream(chaveS3: string): Promise<{ body: ReadableS
   })
   const response = await s3Client.send(command)
   
-  // Convert the SDK stream to a web ReadableStream
-  const webStream = response.Body?.transformToWebStream() ?? null
+  const data = response.Body ? await response.Body.transformToByteArray() : null
   
   return {
-    body: webStream as ReadableStream | null,
+    data,
     contentType: response.ContentType || 'application/octet-stream',
-    contentLength: response.ContentLength || 0,
+    contentLength: response.ContentLength || data?.length || 0,
   }
 }
 
