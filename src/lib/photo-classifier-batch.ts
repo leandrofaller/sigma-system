@@ -1,25 +1,47 @@
 import { spawn } from 'child_process';
 import { join } from 'path';
 
-export interface IndexResult {
+export type PhotoCategory =
+  | 'FACE_OK'
+  | 'FACE_MISSED'
+  | 'DOCUMENT'
+  | 'TATTOO'
+  | 'BODY'
+  | 'NO_FACE';
+
+export interface ClassifyResult {
   id?: string;
-  embedding?: number[];
-  det_score?: number;
-  no_face?: boolean;
-  no_photo?: boolean;
+  category?: PhotoCategory;
+  confidence?: number;
+  reason?: string;
+  has_face?: boolean;
+  det_score?: number | null;
+  ocr_text?: string | null;
   error?: string;
   install?: string;
   done?: boolean;
 }
 
-export function runIndexBatch(ids: string[], uploadsDir: string, photoPaths?: Record<string, string>): Promise<IndexResult[]> {
+export function runClassifyBatch(
+  ids: string[],
+  uploadsDir: string,
+  photoPaths?: Record<string, string>,
+  complementHints?: Record<string, string>,
+): Promise<ClassifyResult[]> {
   return new Promise((resolve, reject) => {
-    const scriptPath = join(process.cwd(), 'scripts', 'arcface_index.py');
-    const input = JSON.stringify({ ids, uploads_dir: uploadsDir, photo_paths: photoPaths });
+    const scriptPath = join(process.cwd(), 'scripts', 'photo_classifier.py');
+    const input = JSON.stringify({
+      ids,
+      uploads_dir: uploadsDir,
+      photo_paths: photoPaths,
+      complement_hints: complementHints,
+    });
+
     const envPython = process.env.ARCFACE_PYTHON;
-    const localVenv = process.platform === 'win32'
-      ? join(process.cwd(), 'backend', '.venv', 'Scripts', 'python.exe')
-      : join(process.cwd(), 'backend', '.venv', 'bin', 'python');
+    const localVenv =
+      process.platform === 'win32'
+        ? join(process.cwd(), 'backend', '.venv', 'Scripts', 'python.exe')
+        : join(process.cwd(), 'backend', '.venv', 'bin', 'python');
 
     const candidates = envPython
       ? [envPython, localVenv, 'python3', 'python', 'py']
@@ -28,7 +50,7 @@ export function runIndexBatch(ids: string[], uploadsDir: string, photoPaths?: Re
 
     function tryNext() {
       if (idx >= candidates.length) {
-        reject(new Error('Python não encontrado. Defina ARCFACE_PYTHON=/opt/arcface-venv/bin/python3 no .env'));
+        reject(new Error('Python não encontrado. Defina ARCFACE_PYTHON no .env'));
         return;
       }
       const cmd = candidates[idx++];
@@ -42,11 +64,11 @@ export function runIndexBatch(ids: string[], uploadsDir: string, photoPaths?: Re
         TQDM_DISABLE: '1',
         PYTHONPATH: join(process.cwd(), 'scripts'),
       };
+
       const proc = spawn(cmd, ['-u', scriptPath], { stdio: ['pipe', 'pipe', 'pipe'], env });
 
       let buffer = '';
-      let stderr = '';
-      const results: IndexResult[] = [];
+      const results: ClassifyResult[] = [];
 
       proc.stdin.write(input);
       proc.stdin.end();
@@ -58,19 +80,25 @@ export function runIndexBatch(ids: string[], uploadsDir: string, photoPaths?: Re
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;
-          try { results.push(JSON.parse(trimmed)); } catch {}
+          try {
+            results.push(JSON.parse(trimmed));
+          } catch {
+            /* ignore */
+          }
         }
       });
 
-      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
-
       proc.on('close', (code) => {
         if (buffer.trim()) {
-          try { results.push(JSON.parse(buffer.trim())); } catch {}
+          try {
+            results.push(JSON.parse(buffer.trim()));
+          } catch {
+            /* ignore */
+          }
         }
-        const firstResult = results[0];
-        if (firstResult?.error && firstResult?.install) {
-          reject(new Error(firstResult.error));
+        const first = results[0];
+        if (first?.error && first?.install) {
+          reject(new Error(first.error));
           return;
         }
         if (code !== 0 && results.length === 0) {

@@ -11,51 +11,23 @@ Saida (stdout): JSON linha por linha para cada ID processado
                 {"id": "...", "error": "mensagem"}
 Final:          {"done": true}
 """
-import sys
 import json
 import os
-import glob
+import sys
 import warnings
-warnings.filterwarnings('ignore')
 
-EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
+warnings.filterwarnings("ignore")
 
-# Confiança mínima de detecção. Abaixo disso o embedding é pouco confiável
-# e polui o índice com vetores ruins → falsos positivos na busca.
-# RetinaFace: > 0.5 = confiável, 0.35-0.5 = marginal, < 0.35 = descarte.
-MIN_DET_SCORE = 0.35
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-
-def find_photo(uploads_dir: str, id_: str) -> str | None:
-    for ext in EXTENSIONS:
-        path = os.path.join(uploads_dir, id_ + ext)
-        if os.path.isfile(path):
-            return path
-    return None
-
-
-def imread_safe(path: str):
-    """cv2.imread com correção de orientação EXIF.
-    Fotos tiradas em celular ficam rotacionadas sem isso — reduz det_score ou causa no_face."""
-    try:
-        import cv2
-        from PIL import Image, ImageOps
-        import numpy as np
-        pil = ImageOps.exif_transpose(Image.open(path).convert("RGB"))
-        return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
-    except Exception:
-        import cv2
-        return cv2.imread(path)
-
-
-def best_face(faces):
-    """Seleciona o rosto principal: combina det_score (60%) + área normalizada (40%).
-    Evita selecionar rosto pequeno de fundo quando há múltiplos detectados."""
-    def score(f):
-        x1, y1, x2, y2 = f.bbox
-        area = max(0.0, (x2 - x1) * (y2 - y1))
-        return float(f.det_score) * 0.6 + min(area / 100_000.0, 1.0) * 0.4
-    return max(faces, key=score)
+from face_detect_utils import (
+    MIN_DET_SCORE_INDEX,
+    best_face,
+    create_face_app,
+    detect_faces_robust,
+    find_photo,
+    imread_safe,
+)
 
 
 def main():
@@ -83,36 +55,13 @@ def main():
         sys.exit(1)
 
     try:
-        import cv2
-        from insightface.app import FaceAnalysis
+        app = create_face_app()
     except BaseException as e:
         print(json.dumps({
-            "error": f"Erro ao importar no {sys.executable} (path: {sys.path}): {type(e).__name__}: {e}",
+            "error": f"Erro ao importar no {sys.executable}: {type(e).__name__}: {e}",
             "install": "pip install insightface onnxruntime opencv-python-headless",
         }), flush=True)
         raise SystemExit(1)
-
-    import io as _io
-    _real_stdout = sys.stdout
-    sys.stdout = _io.StringIO()
-    try:
-        import onnxruntime as ort
-        providers_env = os.getenv("ARCFACE_PROVIDERS")
-        if providers_env:
-            providers = [p.strip() for p in providers_env.split(",") if p.strip()]
-        else:
-            if ort.get_device() == "GPU" and "CUDAExecutionProvider" in ort.get_available_providers():
-                providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-            else:
-                providers = ["CPUExecutionProvider"]
-
-        app = FaceAnalysis(
-            name="buffalo_l",
-            providers=providers,
-        )
-        app.prepare(ctx_id=0, det_size=(640, 640))
-    finally:
-        sys.stdout = _real_stdout
 
     for id_ in ids:
         photo_path = photo_paths.get(id_) or find_photo(uploads_dir, id_)
@@ -126,40 +75,15 @@ def main():
                 print(json.dumps({"id": id_, "error": "nao foi possivel ler imagem"}), flush=True)
                 continue
 
-            faces = app.get(img)
-            if not faces:
-                # FALLBACK 1: CLAHE (Equalização de Contraste Adaptativo Local) para fotos muito escuras
-                try:
-                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-                    cl_img = clahe.apply(gray)
-                    cl_img_3ch = cv2.cvtColor(cl_img, cv2.COLOR_GRAY2BGR)
-                    faces = app.get(cl_img_3ch)
-                except Exception:
-                    pass
-
-            if not faces:
-                # FALLBACK 2: Ajuste temporário de det_size para 1024x1024 (para fotos grandes ou rostos pequenos)
-                try:
-                    app.prepare(ctx_id=0, det_size=(1024, 1024))
-                    faces = app.get(img)
-                    app.prepare(ctx_id=0, det_size=(640, 640))
-                except Exception:
-                    try:
-                        app.prepare(ctx_id=0, det_size=(640, 640))
-                    except Exception:
-                        pass
+            faces, _method = detect_faces_robust(app, img)
 
             if not faces:
                 print(json.dumps({"id": id_, "no_face": True}), flush=True)
                 continue
 
-            # Melhor rosto = maior det_score (60%) + maior área (40%)
             best = best_face(faces)
 
-            # Descarta embeddings com confiança abaixo do mínimo — vetores ruins
-            # causam falsos positivos na busca e degradam a qualidade do índice.
-            if float(best.det_score) < MIN_DET_SCORE:
+            if float(best.det_score) < MIN_DET_SCORE_INDEX:
                 print(json.dumps({
                     "id": id_,
                     "no_face": True,

@@ -13,6 +13,8 @@ interface QualityStats {
   noFaceDoc: number;
   noFaceTattoo: number;
   noFaceOther: number;
+  faceMissed: number;
+  classified: number;
   lowScore: number;
   blurry: number;
   pending: number;
@@ -26,6 +28,22 @@ interface QualityRecord {
   photoPath: string | null;
   photoQuality: number | null;
   detScore: number | null;
+  photoCategory?: string | null;
+  photoCategoryConf?: number | null;
+  photoCategoryReason?: string | null;
+}
+
+interface ClassificationState {
+  isRunning: boolean;
+  progress: {
+    current: number;
+    total: number;
+    classified: number;
+    errors: number;
+    byCategory: Record<string, number>;
+  };
+  error: string;
+  mode: string;
 }
 
 interface PgVectorStats {
@@ -34,7 +52,7 @@ interface PgVectorStats {
   indexExists: boolean;
 }
 
-type Tab = 'lowscore' | 'blurry' | 'pending' | 'noface_doc' | 'noface_tattoo' | 'noface';
+type Tab = 'lowscore' | 'blurry' | 'pending' | 'face_missed' | 'noface_doc' | 'noface_tattoo' | 'noface';
 
 interface Props {
   onClose: () => void;
@@ -62,9 +80,19 @@ const TAB_LABELS: Record<Tab, string> = {
   lowscore: 'Score Baixo',
   blurry: 'Borradas',
   pending: 'Pendentes',
-  noface_doc: 'Documento / Sem Foto',
+  face_missed: 'Rosto não indexado',
+  noface_doc: 'Documentos',
   noface_tattoo: 'Tatuagens',
   noface: 'Outras Sem Rosto',
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  FACE_OK: 'Rosto OK',
+  FACE_MISSED: 'Rosto detectado',
+  DOCUMENT: 'Documento',
+  TATTOO: 'Tatuagem',
+  BODY: 'Corpo',
+  NO_FACE: 'Sem rosto',
 };
 
 export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhotosRemoved }: Props) {
@@ -90,6 +118,8 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
   const [removing, setRemoving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [removedCount, setRemovedCount] = useState<number | null>(null);
+  const [classification, setClassification] = useState<ClassificationState | null>(null);
+  const [classifying, setClassifying] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -104,10 +134,39 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
       setTabTotal(qData.total ?? 0);
       setSkip(qData.records?.length ?? 0);
       setPgvec(pvData);
+      if (qData.classification) setClassification(qData.classification);
     } finally {
       setLoading(false);
     }
   }, [activeTab]);
+
+  const startClassification = useCallback(async (mode: 'none_only' | 'all' | 'stale' = 'none_only') => {
+    setClassifying(true);
+    try {
+      const res = await fetch('/api/apenados/face/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'Erro ao iniciar classificação');
+        return;
+      }
+      const poll = setInterval(async () => {
+        const st = await fetch('/api/apenados/face/classify');
+        const data = await st.json();
+        setClassification(data);
+        if (!data.isRunning) {
+          clearInterval(poll);
+          setClassifying(false);
+          fetchStats();
+        }
+      }, 3000);
+    } finally {
+      setClassifying(false);
+    }
+  }, [fetchStats]);
 
   const fetchTab = useCallback(async (tab: Tab, reset = false) => {
     setLoading(true);
@@ -250,6 +309,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
         const updates: Partial<QualityStats> = { pending: s.pending + (data.reset ?? 0) };
         if (activeTab === 'lowscore') updates.lowScore = Math.max(0, s.lowScore - 1);
         if (activeTab === 'blurry') updates.blurry = Math.max(0, s.blurry - 1);
+        if (activeTab === 'face_missed') updates.faceMissed = Math.max(0, s.faceMissed - 1);
         return { ...s, ...updates };
       });
       setSuccessCount((n) => (n ?? 0) + 1);
@@ -293,6 +353,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
         const updates: Partial<QualityStats> = { pending: s.pending + (data.reset ?? countReindexed) };
         if (activeTab === 'lowscore') updates.lowScore = Math.max(0, s.lowScore - countReindexed);
         if (activeTab === 'blurry') updates.blurry = Math.max(0, s.blurry - countReindexed);
+        if (activeTab === 'face_missed') updates.faceMissed = Math.max(0, s.faceMissed - countReindexed);
         return { ...s, ...updates };
       });
       setSuccessCount((n) => (n ?? 0) + countReindexed);
@@ -328,11 +389,14 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
   const allSelected = records.length > 0 && selected.size === records.length;
   const someSelected = selected.size > 0 && !allSelected;
   const isNoFaceTab = activeTab === 'noface' || activeTab === 'noface_doc' || activeTab === 'noface_tattoo';
+  const isDeletionTab = isNoFaceTab;
+  const isReindexOnlyTab = activeTab === 'face_missed' || activeTab === 'lowscore' || activeTab === 'blurry' || activeTab === 'pending';
 
   const tabCounts: Record<Tab, number> = {
     lowscore: stats?.lowScore ?? 0,
     blurry: stats?.blurry ?? 0,
     pending: stats?.pending ?? 0,
+    face_missed: stats?.faceMissed ?? 0,
     noface_doc: stats?.noFaceDoc ?? 0,
     noface_tattoo: stats?.noFaceTattoo ?? 0,
     noface: stats?.noFaceOther ?? 0,
@@ -410,6 +474,49 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                 </div>
               </div>
 
+              {/* Classificação inteligente */}
+              <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/10 p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-sm font-semibold text-title">Classificação de fotos (OCR + tatuagem + rosto)</p>
+                    <p className="text-xs text-subtle mt-1">
+                      {stats.classified.toLocaleString('pt-BR')} classificadas ·{' '}
+                      {stats.faceMissed.toLocaleString('pt-BR')} com rosto não indexado (falsos negativos)
+                    </p>
+                    {classification?.isRunning && (
+                      <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-2 font-medium">
+                        Processando {classification.progress.current.toLocaleString('pt-BR')} / {classification.progress.total.toLocaleString('pt-BR')}
+                        {' '}· {classification.progress.classified.toLocaleString('pt-BR')} ok
+                      </p>
+                    )}
+                    {classification?.error && (
+                      <p className="text-xs text-red-500 mt-1">{classification.error}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => startClassification('none_only')}
+                      disabled={classifying || classification?.isRunning}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {(classifying || classification?.isRunning) ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Eye className="w-3.5 h-3.5" />
+                      )}
+                      Classificar sem rosto
+                    </button>
+                    <button
+                      onClick={() => startClassification('stale')}
+                      disabled={classifying || classification?.isRunning}
+                      className="text-xs font-medium text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      Reclassificar pendentes
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* pgvector status */}
               <div className={`rounded-xl border p-4 ${pgvec?.available ? 'border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-900/10' : 'border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30'}`}>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -474,7 +581,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
               )}
 
               {/* Tabs */}
-              <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+              <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 overflow-x-auto">
                 {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
                   <button
                     key={tab}
@@ -525,7 +632,7 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                   </span>
                   {selected.size > 0 && (
                     <div className="ml-auto flex items-center gap-2">
-                      {(activeTab === 'lowscore' || activeTab === 'blurry' || activeTab === 'pending') && (
+                      {isReindexOnlyTab && (
                         <button
                           onClick={handleReindexSelected}
                           disabled={resettingIds.size > 0}
@@ -539,13 +646,15 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                           Re-indexar {selectAllGlobally ? tabTotal.toLocaleString('pt-BR') : selected.size} registro{selected.size !== 1 || selectAllGlobally ? 's' : ''}
                         </button>
                       )}
-                      <button
-                        onClick={() => setShowConfirm(true)}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Remover {selectAllGlobally ? tabTotal.toLocaleString('pt-BR') : selected.size} foto{selected.size !== 1 || selectAllGlobally ? 's' : ''}
-                      </button>
+                      {isDeletionTab && (
+                        <button
+                          onClick={() => setShowConfirm(true)}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Remover {selectAllGlobally ? tabTotal.toLocaleString('pt-BR') : selected.size} foto{selected.size !== 1 || selectAllGlobally ? 's' : ''}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -612,9 +721,10 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                     {activeTab === 'lowscore' && 'Rostos detectados com confiança abaixo de 50% — possivelmente mal iluminados, ocluídos ou de lado. Re-indexar após melhorar a foto.'}
                     {activeTab === 'blurry' && 'Fotos indexadas com qualidade Laplacian abaixo de 50 — embora o rosto tenha sido detectado, o embedding pode ser impreciso.'}
                     {activeTab === 'pending' && 'Fotos sem embedding ArcFace — aguardando próxima execução do job de indexação.'}
-                    {activeTab === 'noface_doc' && 'Documentos ou imagens sem foto detectados automaticamente. Exclua para limpar o banco.'}
-                    {activeTab === 'noface_tattoo' && 'Fotos identificadas como tatuagens ou cicatrizes. Exclua se não forem necessárias na base de faces ou se cadastradas incorretamente como foto de perfil.'}
-                    {activeTab === 'noface' && 'Fotos onde o ArcFace não detectou rostos — outras imagens não classificadas. Exclua para limpar o banco.'}
+                    {activeTab === 'face_missed' && 'O classificador detectou rosto, mas o indexador ArcFace marcou como sem rosto. Use Re-indexar — não remova.'}
+                    {activeTab === 'noface_doc' && 'Documentos detectados por OCR e análise visual. Revise e remova manualmente se desejar.'}
+                    {activeTab === 'noface_tattoo' && 'Tatuagens e fotos de partes do corpo (sem rosto). Revise e remova manualmente se desejar.'}
+                    {activeTab === 'noface' && 'Imagens sem rosto que não se encaixam nas outras categorias. Revise antes de remover.'}
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                     {records.map((record) => {
@@ -665,6 +775,11 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                                   {qi.label}
                                 </div>
                               )}
+                              {record.photoCategory && (
+                                <div className="px-1.5 py-0.5 rounded text-[9px] font-bold leading-none text-white bg-indigo-600/90 max-w-[90px] truncate">
+                                  {CATEGORY_LABELS[record.photoCategory] ?? record.photoCategory}
+                                </div>
+                              )}
                             </div>
 
                             {/* Checkbox de seleção */}
@@ -686,8 +801,12 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                               )}
                             </div>
                           </div>
-                          {/* Re-index button (only for lowscore and blurry) */}
-                          {activeTab !== 'pending' && !isNoFaceTab && (
+                          {record.photoCategoryReason && (
+                            <p className="px-2 py-1 text-[9px] text-subtle border-t border-gray-100 dark:border-gray-800 line-clamp-2" title={record.photoCategoryReason}>
+                              {record.photoCategoryReason}
+                            </p>
+                          )}
+                          {isReindexOnlyTab && activeTab !== 'pending' && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();

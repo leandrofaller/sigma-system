@@ -37,6 +37,12 @@ Promise.all([
   p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS \"apenados_photoHashSha_idx\" ON apenados(\"photoHashSha\")'),
   p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"photoQuality\" DOUBLE PRECISION'),
   p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS \"apenados_photoQuality_idx\" ON apenados(\"photoQuality\")'),
+  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"photoCategory\" TEXT'),
+  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"photoCategoryConf\" DOUBLE PRECISION'),
+  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"photoCategoryReason\" TEXT'),
+  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"photoClassifiedAt\" TIMESTAMP(3)'),
+  p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS \"apenados_photoCategory_idx\" ON apenados(\"photoCategory\")'),
+  p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS \"apenados_photoClassifiedAt_idx\" ON apenados(\"photoClassifiedAt\")'),
 ]).then(() => { console.log('Colunas OK'); }).catch(e => { console.error('AVISO colunas:', e.message); }).finally(() => p.\$disconnect());
 " || echo "AVISO: script de colunas falhou (nao critico)"
 

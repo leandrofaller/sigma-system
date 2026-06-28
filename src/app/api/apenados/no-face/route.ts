@@ -4,7 +4,23 @@ import { prisma } from '@/lib/db';
 import { unlink } from 'fs/promises';
 import { getApenadoPhotoPath } from '@/lib/storage';
 
-import { getPrismaWhereForTab, getSqlFilterForTab } from '@/lib/face-quality-filters';
+import {
+  getPrismaWhereForTab,
+  getSqlFilterForTab,
+  isNoFaceDeletionTab,
+} from '@/lib/face-quality-filters';
+
+const CLEAR_PHOTO_DATA = {
+  photoPath: null,
+  faceDescriptor: null,
+  photoQuality: null,
+  detScore: null,
+  photoCategory: null,
+  photoCategoryConf: null,
+  photoCategoryReason: null,
+  photoClassifiedAt: null,
+  ocrText: null,
+} as const;
 
 // GET /api/apenados/no-face?skip=0&take=50&minQuality=0
 // Returns records where faceDescriptor = 'NONE' (photo exists but no face detected),
@@ -68,6 +84,12 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Aba não especificada para deleção global' }, { status: 400 });
     }
 
+    if (!isNoFaceDeletionTab(tab)) {
+      return NextResponse.json({
+        error: 'Esta aba não permite remoção em massa. Use re-indexação para fotos com rosto detectado.',
+      }, { status: 400 });
+    }
+
     const prismaWhere = getPrismaWhereForTab(tab);
     const sqlFilter = getSqlFilterForTab(tab);
 
@@ -81,7 +103,9 @@ export async function DELETE(req: NextRequest) {
       // 2. Executar update massivo no BD
       const result = await prisma.$executeRawUnsafe(
         `UPDATE apenados 
-         SET "photoPath" = NULL, "faceDescriptor" = NULL, "photoQuality" = NULL 
+         SET "photoPath" = NULL, "faceDescriptor" = NULL, "photoQuality" = NULL,
+             "detScore" = NULL, "photoCategory" = NULL, "photoCategoryConf" = NULL,
+             "photoCategoryReason" = NULL, "photoClassifiedAt" = NULL, "ocrText" = NULL
          WHERE ${sqlFilter}`
       );
       updatedCount = result;
@@ -96,7 +120,7 @@ export async function DELETE(req: NextRequest) {
       // 2. Executar update massivo via Prisma
       const result = await prisma.apenado.updateMany({
         where: prismaWhere,
-        data: { photoPath: null, faceDescriptor: null, photoQuality: null },
+        data: CLEAR_PHOTO_DATA,
       });
       updatedCount = result.count;
     } else {
@@ -106,15 +130,31 @@ export async function DELETE(req: NextRequest) {
     const ids: string[] = Array.isArray(body.ids) ? body.ids : [];
     if (ids.length === 0) return NextResponse.json({ error: 'Nenhum ID informado' }, { status: 400 });
 
+    if (tab === 'face_missed') {
+      return NextResponse.json({
+        error: 'Fotos com rosto detectado devem ser reindexadas, não removidas.',
+      }, { status: 400 });
+    }
+
     const records = await prisma.apenado.findMany({
       where: { id: { in: ids } },
-      select: { id: true, photoPath: true },
+      select: { id: true, photoPath: true, photoCategory: true },
     });
+
+    const blocked = records.filter((r) =>
+      r.photoCategory === 'FACE_OK' || r.photoCategory === 'FACE_MISSED',
+    );
+    if (blocked.length > 0) {
+      return NextResponse.json({
+        error: `${blocked.length} registro(s) têm rosto detectado na classificação. Use re-indexação.`,
+      }, { status: 400 });
+    }
+
     photoPathsToUnlink = records.map((r) => r.photoPath).filter((p): p is string => !!p);
 
     const result = await prisma.apenado.updateMany({
       where: { id: { in: ids } },
-      data: { photoPath: null, faceDescriptor: null, photoQuality: null },
+      data: CLEAR_PHOTO_DATA,
     });
     updatedCount = result.count;
   }

@@ -31,14 +31,23 @@ export async function POST(req: NextRequest) {
     if (sqlFilter) {
       const result = await prisma.$executeRawUnsafe(
         `UPDATE apenados 
-         SET "faceDescriptor" = NULL, "detScore" = NULL 
+         SET "faceDescriptor" = NULL, "detScore" = NULL,
+             "photoCategory" = NULL, "photoCategoryConf" = NULL,
+             "photoCategoryReason" = NULL, "photoClassifiedAt" = NULL
          WHERE ${sqlFilter}`
       );
       resetCount = result;
     } else if (Object.keys(prismaWhere).length > 0) {
       const result = await prisma.apenado.updateMany({
         where: prismaWhere,
-        data: { faceDescriptor: null, detScore: null },
+        data: {
+          faceDescriptor: null,
+          detScore: null,
+          photoCategory: null,
+          photoCategoryConf: null,
+          photoCategoryReason: null,
+          photoClassifiedAt: null,
+        },
       });
       resetCount = result.count;
     } else {
@@ -52,7 +61,14 @@ export async function POST(req: NextRequest) {
 
     const { count } = await prisma.apenado.updateMany({
       where: { id: { in: ids } },
-      data: { faceDescriptor: null, detScore: null },
+      data: {
+        faceDescriptor: null,
+        detScore: null,
+        photoCategory: null,
+        photoCategoryConf: null,
+        photoCategoryReason: null,
+        photoClassifiedAt: null,
+      },
     });
     resetCount = count;
   }
