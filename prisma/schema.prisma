@@ -1041,6 +1041,7 @@ model AIPApenado {
   vinculos AIPVinculo[]
   fotoVisitantes AIPFotoVisitante[]
   anexos AIPApenadoAnexo[]
+  mapaVinculos MapaFaccaoVinculo[]
 
   @@index([sipeId])
   @@index([unidade])
@@ -1437,6 +1438,25 @@ model OrdemMissaoParticipante {
   @@index([ordemId])
   @@index([userId])
   @@map("ordens_missao_participantes")
+}
+
+model MapaFaccaoVinculo {
+  id               String     @id @default(cuid())
+  municipio        String
+  municipioIbge    Int?
+  unidadePrisional String
+  aipApenadoId     String
+  aipApenado       AIPApenado @relation(fields: [aipApenadoId], references: [id], onDelete: Cascade)
+  observacoes      String?    @db.Text
+  cadastradoPor    String
+  cadastradoEm     DateTime   @default(now())
+  atualizadoEm     DateTime   @updatedAt
+
+  @@unique([aipApenadoId, municipio, unidadePrisional])
+  @@index([municipio])
+  @@index([municipioIbge])
+  @@index([unidadePrisional])
+  @@map("mapa_faccoes_vinculos")
 }
 
 model SidebarConfig {

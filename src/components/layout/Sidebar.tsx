@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Map, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -27,7 +27,7 @@ interface NavItem {
 const iconMap: Record<string, React.ComponentType<any>> = {
   LayoutDashboard, FileText, Inbox, BookOpen, ClipboardList, Calendar, CalendarDays,
   Trello, MessageSquare, Sparkles, UserCheck, Shield, Database, Smartphone, Brain, Building2,
-  Users, FolderOpen, Monitor, MapPin, AlertCircle, Settings, ShieldAlert
+  Users, FolderOpen, Monitor, MapPin, Map, AlertCircle, Settings, ShieldAlert
 };
 
 const defaultNavItems: NavItem[] = [
@@ -43,6 +43,7 @@ const defaultNavItems: NavItem[] = [
   { label: 'Consulta IA', href: '/ia', iconName: 'Sparkles', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Identificação de Apenados', href: '/apenados', iconName: 'UserCheck', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Apenados & Facções', href: '/faccoes', iconName: 'Shield', roles: ['SUPER_ADMIN'] },
+  { label: 'Mapa Facções', href: '/mapa-faccoes', iconName: 'Map', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'SIAIP', href: '/siaip', iconName: 'Database', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Celulares Recebidos', href: '/aparelhos', iconName: 'Smartphone', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'AIP', href: '/aip', iconName: 'Brain', roles: ['SUPER_ADMIN', 'OPERATOR'] },
