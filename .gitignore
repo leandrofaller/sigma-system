@@ -43,3 +43,12 @@ prisma/migrations/
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Cursor / Grok / agent workspace (local only — not part of the app)
+mcps/
+agent-tools/
+terminals/
+
+# Diagnostic scripts criados localmente (usam DB de produção)
+scratch/check_quality_stats.ts
+scratch/check_vps_photos.ts
