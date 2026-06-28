@@ -116,7 +116,7 @@ export async function printAIPDossier(
   let stampBgColor = '#f1f5f9'
 
   if (isFaccaoConfirmada) {
-    classificationLabel = 'CONFIDENCIAL // ALTO RISCO'
+    classificationLabel = 'RESERVADO'
     stampBorderColor = '#991b1b'
     stampTextColor = '#ffffff'
     stampBgColor = '#991b1b'
@@ -163,8 +163,13 @@ export async function printAIPDossier(
       border-bottom: 2px solid #0f172a;
       padding-bottom: 8px;
     }
-    .header-logo {
+    .header-logo-aip {
       width: 80px;
+      height: auto;
+      object-fit: contain;
+    }
+    .header-logo-pp {
+      width: 100px;
       height: auto;
       object-fit: contain;
     }
@@ -485,7 +490,7 @@ export async function printAIPDossier(
   <!-- CABEÇALHO -->
   <div class="header-container">
     <div>
-      ${aipLogo ? `<img src="${aipLogo}" class="header-logo" alt="AIP" />` : '<div style="width:80px"></div>'}
+      ${aipLogo ? `<img src="${aipLogo}" class="header-logo-aip" alt="AIP" />` : '<div style="width:80px"></div>'}
     </div>
     <div class="header-text">
       <h1>Secretaria de Estado da Justiça de Rondônia</h1>
@@ -493,7 +498,7 @@ export async function printAIPDossier(
       <h3>Qualificação de Apenado</h3>
     </div>
     <div>
-      ${ppLogo ? `<img src="${ppLogo}" class="header-logo" alt="Polícia Penal" />` : '<div style="width:80px"></div>'}
+      ${ppLogo ? `<img src="${ppLogo}" class="header-logo-pp" alt="Polícia Penal" />` : '<div style="width:100px"></div>'}
     </div>
   </div>
 
