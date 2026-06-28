@@ -306,10 +306,25 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
       setTabTotal((t) => Math.max(0, t - 1));
       setStats((s) => {
         if (!s) return s;
-        const updates: Partial<QualityStats> = { pending: s.pending + (data.reset ?? 0) };
-        if (activeTab === 'lowscore') updates.lowScore = Math.max(0, s.lowScore - 1);
-        if (activeTab === 'blurry') updates.blurry = Math.max(0, s.blurry - 1);
-        if (activeTab === 'face_missed') updates.faceMissed = Math.max(0, s.faceMissed - 1);
+        const count = data.reset ?? 1;
+        const updates: Partial<QualityStats> = {
+          pending: activeTab === 'pending' ? s.pending : s.pending + count
+        };
+        if (activeTab === 'lowscore') updates.lowScore = Math.max(0, s.lowScore - count);
+        if (activeTab === 'blurry') updates.blurry = Math.max(0, s.blurry - count);
+        if (activeTab === 'face_missed') updates.faceMissed = Math.max(0, s.faceMissed - count);
+        if (activeTab === 'noface_doc') {
+          updates.noFaceDoc = Math.max(0, s.noFaceDoc - count);
+          updates.noFace = Math.max(0, s.noFace - count);
+        }
+        if (activeTab === 'noface_tattoo') {
+          updates.noFaceTattoo = Math.max(0, s.noFaceTattoo - count);
+          updates.noFace = Math.max(0, s.noFace - count);
+        }
+        if (activeTab === 'noface') {
+          updates.noFaceOther = Math.max(0, s.noFaceOther - count);
+          updates.noFace = Math.max(0, s.noFace - count);
+        }
         return { ...s, ...updates };
       });
       setSuccessCount((n) => (n ?? 0) + 1);
@@ -350,10 +365,25 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
       
       setStats((s) => {
         if (!s) return s;
-        const updates: Partial<QualityStats> = { pending: s.pending + (data.reset ?? countReindexed) };
-        if (activeTab === 'lowscore') updates.lowScore = Math.max(0, s.lowScore - countReindexed);
-        if (activeTab === 'blurry') updates.blurry = Math.max(0, s.blurry - countReindexed);
-        if (activeTab === 'face_missed') updates.faceMissed = Math.max(0, s.faceMissed - countReindexed);
+        const count = selectAllGlobally ? tabTotal : countReindexed;
+        const updates: Partial<QualityStats> = {
+          pending: activeTab === 'pending' ? s.pending : s.pending + (data.reset ?? count)
+        };
+        if (activeTab === 'lowscore') updates.lowScore = Math.max(0, s.lowScore - count);
+        if (activeTab === 'blurry') updates.blurry = Math.max(0, s.blurry - count);
+        if (activeTab === 'face_missed') updates.faceMissed = Math.max(0, s.faceMissed - count);
+        if (activeTab === 'noface_doc') {
+          updates.noFaceDoc = Math.max(0, s.noFaceDoc - count);
+          updates.noFace = Math.max(0, s.noFace - count);
+        }
+        if (activeTab === 'noface_tattoo') {
+          updates.noFaceTattoo = Math.max(0, s.noFaceTattoo - count);
+          updates.noFace = Math.max(0, s.noFace - count);
+        }
+        if (activeTab === 'noface') {
+          updates.noFaceOther = Math.max(0, s.noFaceOther - count);
+          updates.noFace = Math.max(0, s.noFace - count);
+        }
         return { ...s, ...updates };
       });
       setSuccessCount((n) => (n ?? 0) + countReindexed);
@@ -390,7 +420,6 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
   const someSelected = selected.size > 0 && !allSelected;
   const isNoFaceTab = activeTab === 'noface' || activeTab === 'noface_doc' || activeTab === 'noface_tattoo';
   const isDeletionTab = isNoFaceTab;
-  const isReindexOnlyTab = activeTab === 'face_missed' || activeTab === 'lowscore' || activeTab === 'blurry' || activeTab === 'pending';
 
   const tabCounts: Record<Tab, number> = {
     lowscore: stats?.lowScore ?? 0,
@@ -632,20 +661,18 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                   </span>
                   {selected.size > 0 && (
                     <div className="ml-auto flex items-center gap-2">
-                      {isReindexOnlyTab && (
-                        <button
-                          onClick={handleReindexSelected}
-                          disabled={resettingIds.size > 0}
-                          className="flex items-center gap-1.5 text-xs font-semibold text-white bg-sigma-600 hover:bg-sigma-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          {resettingIds.size > 0 ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <RotateCcw className="w-3.5 h-3.5" />
-                          )}
-                          Re-indexar {selectAllGlobally ? tabTotal.toLocaleString('pt-BR') : selected.size} registro{selected.size !== 1 || selectAllGlobally ? 's' : ''}
-                        </button>
-                      )}
+                      <button
+                        onClick={handleReindexSelected}
+                        disabled={resettingIds.size > 0}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-white bg-sigma-600 hover:bg-sigma-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {resettingIds.size > 0 ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        )}
+                        Re-indexar {selectAllGlobally ? tabTotal.toLocaleString('pt-BR') : selected.size} registro{selected.size !== 1 || selectAllGlobally ? 's' : ''}
+                      </button>
                       {isDeletionTab && (
                         <button
                           onClick={() => setShowConfirm(true)}
@@ -806,19 +833,17 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                               {record.photoCategoryReason}
                             </p>
                           )}
-                          {isReindexOnlyTab && activeTab !== 'pending' && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleReindex(record);
-                              }}
-                              disabled={isResetting}
-                              title="Resetar para re-indexação"
-                              className="flex items-center justify-center gap-1 py-1.5 text-[10px] font-medium text-sigma-600 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 transition-colors border-t border-gray-100 dark:border-gray-800 disabled:opacity-40"
-                            >
-                              <RotateCcw className="w-3 h-3" /> Re-indexar
-                            </button>
-                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReindex(record);
+                            }}
+                            disabled={isResetting}
+                            title="Resetar para re-indexação"
+                            className="flex items-center justify-center gap-1 py-1.5 text-[10px] font-medium text-sigma-600 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 transition-colors border-t border-gray-100 dark:border-gray-800 disabled:opacity-40"
+                          >
+                            <RotateCcw className="w-3 h-3" /> Re-indexar
+                          </button>
                         </div>
                       );
                     })}
