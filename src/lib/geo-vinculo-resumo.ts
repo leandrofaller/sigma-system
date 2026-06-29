@@ -7,7 +7,7 @@ import {
   resolveUnidadeEndereco,
   unidadeCorrespondeCatalogo,
 } from '@/lib/unidades-enderecos-resolver'
-import { getStaticUnidadeById } from '@/lib/unidades-enderecos-catalog'
+import { loadUnidadeById } from '@/lib/unidades-enderecos-catalog'
 
 export interface GeoResumoUnidade {
   unidadeId: string
@@ -100,7 +100,7 @@ export async function fetchVinculosMapaPorGeo(opts: {
   let list = vinculosRaw
 
   if (opts.unidadeId) {
-    const entry = getStaticUnidadeById(opts.unidadeId)
+    const entry = await loadUnidadeById(opts.unidadeId)
     if (entry) {
       list = list.filter((v) => unidadeCorrespondeCatalogo(v.unidadePrisional, entry))
     }

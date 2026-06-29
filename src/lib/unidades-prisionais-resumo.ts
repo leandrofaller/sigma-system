@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
 import { nomeParaIbge } from '@/lib/municipios-rondonia'
+import { loadCustomUnidadesAtivas } from '@/lib/unidades-enderecos-catalog'
 import { geoMapaFromUnidadeEndereco, resolveUnidadeEndereco } from '@/lib/unidades-enderecos-resolver'
 
 export interface ApenadosMunicipioUnidadesPrisionais {
@@ -10,11 +11,14 @@ export interface ApenadosMunicipioUnidadesPrisionais {
 
 /** Total de apenados por município a partir da tabela isolada de Unidades Prisionais (SIAIP). */
 export async function buildApenadosUnidadesPrisionaisPorMunicipio(): Promise<ApenadosMunicipioUnidadesPrisionais[]> {
-  const statsUnidade = await prisma.sipeApenadoUnidadePrisional.groupBy({
-    by: ['unidade'],
-    where: { sexo: { not: null } },
-    _count: { id: true },
-  })
+  const [statsUnidade, customCatalog] = await Promise.all([
+    prisma.sipeApenadoUnidadePrisional.groupBy({
+      by: ['unidade'],
+      where: { sexo: { not: null } },
+      _count: { id: true },
+    }),
+    loadCustomUnidadesAtivas(),
+  ])
 
   const munMap = new Map<string, ApenadosMunicipioUnidadesPrisionais>()
 
@@ -22,7 +26,7 @@ export async function buildApenadosUnidadesPrisionaisPorMunicipio(): Promise<Ape
     const unidade = item.unidade
     if (!unidade?.trim()) continue
 
-    const entry = resolveUnidadeEndereco(unidade)
+    const entry = resolveUnidadeEndereco(unidade, customCatalog)
     if (!entry) continue
 
     const geo = geoMapaFromUnidadeEndereco(entry)

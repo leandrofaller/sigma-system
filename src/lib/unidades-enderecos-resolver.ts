@@ -113,8 +113,12 @@ export function listaEnderecosHrefFromUnidadeAip(unidadeAip: string | null | und
 }
 
 /** Unidade AIP/SIPE corresponde à entrada da lista oficial? */
-export function unidadeCorrespondeCatalogo(unidadeAip: string | null | undefined, entry: UnidadeEndereco): boolean {
-  const r = resolveUnidadeEndereco(unidadeAip)
+export function unidadeCorrespondeCatalogo(
+  unidadeAip: string | null | undefined,
+  entry: UnidadeEndereco,
+  extraCatalog: UnidadeEndereco[] = []
+): boolean {
+  const r = resolveUnidadeEndereco(unidadeAip, extraCatalog)
   if (r) return r.id === entry.id
   if (!unidadeAip?.trim()) return false
   return normKey(unidadeAip) === normKey(entry.unidade)
@@ -140,9 +144,53 @@ function municipioFromCatalogEntry(entry: UnidadeEndereco): string | null {
 /**
  * Resolve texto de unidade do AIP/SIPE para entrada da lista oficial de endereços.
  */
-export function resolveUnidadeEndereco(unidadeAip: string | null | undefined): UnidadeEndereco | null {
+function resolveInCatalog(unidadeAip: string, catalog: UnidadeEndereco[]): UnidadeEndereco | null {
+  const norm = normKey(unidadeAip)
+
+  for (const entry of catalog) {
+    if (normKey(entry.unidade) === norm) return entry
+  }
+
+  for (const entry of catalog) {
+    for (const alias of extrairAliasesParenteses(entry.unidade)) {
+      const aliasNorm = normKey(alias)
+      if (aliasNorm.length >= 3 && norm.includes(aliasNorm)) return entry
+    }
+  }
+
+  let best: { entry: UnidadeEndereco; score: number } | null = null
+  for (const entry of catalog) {
+    const cat = normKey(entry.unidade)
+    if (!cat || cat.length < 8) continue
+
+    if (norm.includes(cat) || cat.includes(norm)) {
+      const score = Math.min(norm.length, cat.length) / Math.max(norm.length, cat.length)
+      if (!best || score > best.score) best = { entry, score }
+    }
+
+    const comarcaNorm = normKey(entry.comarca)
+    if (comarcaNorm.length >= 4 && norm.includes(comarcaNorm)) {
+      const tokens = cat.split(' ').filter((t) => t.length >= 5)
+      const matched = tokens.filter((t) => norm.includes(t)).length
+      if (matched >= 2) {
+        const score = 0.55 + matched * 0.08
+        if (!best || score > best.score) best = { entry, score }
+      }
+    }
+  }
+
+  return best && best.score >= 0.45 ? best.entry : null
+}
+
+export function resolveUnidadeEndereco(
+  unidadeAip: string | null | undefined,
+  extraCatalog: UnidadeEndereco[] = []
+): UnidadeEndereco | null {
   if (!unidadeAip?.trim()) return null
   const norm = normKey(unidadeAip)
+
+  const extraHit = resolveInCatalog(unidadeAip, extraCatalog)
+  if (extraHit) return extraHit
 
   for (const entry of UNIDADES_ENDERECOS_RO) {
     if (normKey(entry.unidade) === norm) return entry

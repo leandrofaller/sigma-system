@@ -1,9 +1,46 @@
+import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/db'
 import {
   UNIDADES_ENDERECOS_RO,
   COMARCAS_RO,
   type UnidadeEndereco,
 } from '@/lib/unidades-enderecos-ro'
+
+export const CUSTOM_UNIDADE_PREFIX = 'custom-'
+
+export function isCustomUnidadeId(unidadeId: string): boolean {
+  return unidadeId.startsWith(CUSTOM_UNIDADE_PREFIX)
+}
+
+function generateCustomId(): string {
+  return `${CUSTOM_UNIDADE_PREFIX}${randomUUID()}`
+}
+
+type CustomRow = {
+  id: string
+  comarca: string
+  unidade: string
+  endereco: string
+  cep: string
+  latitude: number | null
+  longitude: number | null
+  status: 'PENDENTE' | 'ATIVA' | 'REJEITADA'
+}
+
+function mapCustomRow(row: CustomRow): UnidadeEndereco {
+  return {
+    id: row.id,
+    comarca: row.comarca,
+    unidade: row.unidade,
+    endereco: row.endereco,
+    cep: row.cep,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    criadaNoSistema: true,
+    customizado: true,
+    alteracaoPendente: row.status === 'PENDENTE',
+  }
+}
 
 export interface UnidadeEnderecoInput {
   comarca: string
@@ -82,24 +119,45 @@ export function getStaticUnidadeById(unidadeId: string): UnidadeEndereco | undef
   return UNIDADES_ENDERECOS_RO.find((u) => u.id === unidadeId)
 }
 
+export async function loadCustomUnidadesAtivas(): Promise<UnidadeEndereco[]> {
+  const rows = await prisma.unidadeEnderecoCustom.findMany({
+    where: { status: 'ATIVA' },
+    orderBy: [{ comarca: 'asc' }, { unidade: 'asc' }],
+  })
+  return rows.map(mapCustomRow)
+}
+
 export async function loadUnidadesCatalog(): Promise<UnidadeEndereco[]> {
-  const [overrides, pendentes] = await Promise.all([
+  const [overrides, pendentes, customAtivas] = await Promise.all([
     prisma.unidadeEnderecoOverride.findMany(),
     prisma.unidadeEnderecoSolicitacao.findMany({
       where: { status: 'PENDENTE' },
       select: { unidadeId: true },
+    }),
+    prisma.unidadeEnderecoCustom.findMany({
+      where: { status: 'ATIVA' },
+      orderBy: [{ comarca: 'asc' }, { unidade: 'asc' }],
     }),
   ])
 
   const overrideMap = new Map(overrides.map((o) => [o.unidadeId, o]))
   const pendenteIds = new Set(pendentes.map((p) => p.unidadeId))
 
-  return UNIDADES_ENDERECOS_RO.map((base) =>
+  const estaticas = UNIDADES_ENDERECOS_RO.map((base) =>
     mergeEntry(base, overrideMap.get(base.id) ?? null, pendenteIds.has(base.id))
   )
+  const customizadas = customAtivas.map(mapCustomRow)
+
+  return [...estaticas, ...customizadas]
 }
 
 export async function loadUnidadeById(unidadeId: string): Promise<UnidadeEndereco | null> {
+  if (isCustomUnidadeId(unidadeId)) {
+    const row = await prisma.unidadeEnderecoCustom.findUnique({ where: { id: unidadeId } })
+    if (!row || row.status === 'REJEITADA') return null
+    return mapCustomRow(row)
+  }
+
   const base = getStaticUnidadeById(unidadeId)
   if (!base) return null
 
@@ -112,6 +170,63 @@ export async function loadUnidadeById(unidadeId: string): Promise<UnidadeEnderec
   ])
 
   return mergeEntry(base, override, !!pendente)
+}
+
+export async function criarUnidade(
+  data: UnidadeEnderecoInput,
+  userId: string,
+  asAdmin: boolean
+): Promise<UnidadeEndereco> {
+  const normalized = normalizeUnidadeInput(data)
+  const err = validateUnidadeInput(normalized)
+  if (err) throw new Error(err)
+
+  const id = generateCustomId()
+  const row = await prisma.unidadeEnderecoCustom.create({
+    data: {
+      id,
+      comarca: normalized.comarca,
+      unidade: normalized.unidade,
+      endereco: normalized.endereco,
+      cep: normalized.cep ?? '',
+      latitude: normalized.latitude ?? null,
+      longitude: normalized.longitude ?? null,
+      status: asAdmin ? 'ATIVA' : 'PENDENTE',
+      criadoPorId: userId,
+      revisadoPorId: asAdmin ? userId : null,
+      revisadoEm: asAdmin ? new Date() : null,
+    },
+  })
+
+  return mapCustomRow(row)
+}
+
+export async function atualizarUnidadeCustom(
+  unidadeId: string,
+  data: UnidadeEnderecoInput,
+  userId: string
+) {
+  const normalized = normalizeUnidadeInput(data)
+  const err = validateUnidadeInput(normalized)
+  if (err) throw new Error(err)
+  if (!isCustomUnidadeId(unidadeId)) throw new Error('UNIDADE_NAO_CUSTOM')
+
+  const existing = await prisma.unidadeEnderecoCustom.findUnique({ where: { id: unidadeId } })
+  if (!existing || existing.status !== 'ATIVA') throw new Error('UNIDADE_NAO_ENCONTRADA')
+
+  const row = await prisma.unidadeEnderecoCustom.update({
+    where: { id: unidadeId },
+    data: {
+      comarca: normalized.comarca,
+      unidade: normalized.unidade,
+      endereco: normalized.endereco,
+      cep: normalized.cep ?? '',
+      latitude: normalized.latitude ?? null,
+      longitude: normalized.longitude ?? null,
+    },
+  })
+
+  return mapCustomRow(row)
 }
 
 export async function upsertUnidadeOverride(
@@ -244,6 +359,49 @@ export async function listarSolicitacoesPendentes() {
     orderBy: { solicitadoEm: 'asc' },
     include: {
       solicitadoPor: { select: { id: true, name: true, email: true } },
+    },
+  })
+}
+
+export async function listarNovasUnidadesPendentes() {
+  return prisma.unidadeEnderecoCustom.findMany({
+    where: { status: 'PENDENTE' },
+    orderBy: { criadoEm: 'asc' },
+    include: {
+      criadoPor: { select: { id: true, name: true, email: true } },
+    },
+  })
+}
+
+export async function aprovarNovaUnidade(customId: string, adminId: string) {
+  const row = await prisma.unidadeEnderecoCustom.findUnique({ where: { id: customId } })
+  if (!row) throw new Error('NOVA_UNIDADE_NAO_ENCONTRADA')
+  if (row.status !== 'PENDENTE') throw new Error('NOVA_UNIDADE_JA_REVISADA')
+
+  const updated = await prisma.unidadeEnderecoCustom.update({
+    where: { id: customId },
+    data: {
+      status: 'ATIVA',
+      revisadoPorId: adminId,
+      revisadoEm: new Date(),
+    },
+  })
+
+  return mapCustomRow(updated)
+}
+
+export async function rejeitarNovaUnidade(customId: string, adminId: string, motivo?: string) {
+  const row = await prisma.unidadeEnderecoCustom.findUnique({ where: { id: customId } })
+  if (!row) throw new Error('NOVA_UNIDADE_NAO_ENCONTRADA')
+  if (row.status !== 'PENDENTE') throw new Error('NOVA_UNIDADE_JA_REVISADA')
+
+  return prisma.unidadeEnderecoCustom.update({
+    where: { id: customId },
+    data: {
+      status: 'REJEITADA',
+      revisadoPorId: adminId,
+      revisadoEm: new Date(),
+      motivoRejeicao: motivo?.trim() || null,
     },
   })
 }

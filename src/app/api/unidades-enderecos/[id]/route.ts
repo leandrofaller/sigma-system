@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import {
+  atualizarUnidadeCustom,
   isAdminRole,
+  isCustomUnidadeId,
   loadUnidadeById,
   upsertUnidadeOverride,
   type UnidadeEnderecoInput,
@@ -48,13 +50,17 @@ export async function PUT(
   const body = (await req.json()) as UnidadeEnderecoInput
 
   try {
-    await upsertUnidadeOverride(id, body, user.id)
+    if (isCustomUnidadeId(id)) {
+      await atualizarUnidadeCustom(id, body, user.id)
+    } else {
+      await upsertUnidadeOverride(id, body, user.id)
+    }
 
     await prisma.auditLog.create({
       data: {
         userId: user.id,
         action: 'UNIDADE_ENDERECO_ATUALIZADA',
-        entity: 'UnidadeEnderecoOverride',
+        entity: isCustomUnidadeId(id) ? 'UnidadeEnderecoCustom' : 'UnidadeEnderecoOverride',
         entityId: id,
         details: { ...body },
       },
@@ -64,7 +70,7 @@ export async function PUT(
     return NextResponse.json({ unidade, aplicado: true })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro ao salvar'
-    if (msg === 'UNIDADE_NAO_ENCONTRADA') {
+    if (msg === 'UNIDADE_NAO_ENCONTRADA' || msg === 'UNIDADE_NAO_CUSTOM') {
       return NextResponse.json({ error: 'Unidade não encontrada' }, { status: 404 })
     }
     if (msg.includes('obrigat') || msg.includes('inválid')) {

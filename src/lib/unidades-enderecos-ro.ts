@@ -12,6 +12,8 @@ export interface UnidadeEndereco {
   customizado?: boolean
   /** Operador enviou alteração aguardando aprovação. */
   alteracaoPendente?: boolean
+  /** Unidade criada no sistema (fora do catálogo estático original). */
+  criadaNoSistema?: boolean
 }
 
 export const UNIDADES_ENDERECOS_RO: UnidadeEndereco[] = [

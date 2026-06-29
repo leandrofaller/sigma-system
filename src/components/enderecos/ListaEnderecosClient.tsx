@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import {
   Building2, MapPin, Search, ExternalLink, Navigation, Copy, Check,
-  ChevronRight, X, List, Map as MapIcon, Users, Shield, Loader2, Pencil, Clock,
+  ChevronRight, X, List, Map as MapIcon, Users, Shield, Loader2, Pencil, Clock, Plus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { containsNormalized } from '@/lib/search'
@@ -67,7 +67,12 @@ function UnidadeCard({
                 pendente
               </span>
             )}
-            {unidade.customizado && !unidade.alteracaoPendente && (
+            {unidade.criadaNoSistema && (
+              <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-cyan-500/15 text-cyan-700 dark:text-cyan-400">
+                nova
+              </span>
+            )}
+            {unidade.customizado && !unidade.alteracaoPendente && !unidade.criadaNoSistema && (
               <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
                 atualizado
               </span>
@@ -106,12 +111,14 @@ function DetalheUnidade({
   onClose,
   onEditar,
   ocultarMapa = false,
+  podeEditar = true,
 }: {
   unidade: UnidadeEndereco
   resumo?: GeoResumoUnidade
   onClose?: () => void
   onEditar: () => void
   ocultarMapa?: boolean
+  podeEditar?: boolean
 }) {
   const [copied, setCopied] = useState(false)
   const [vinculos, setVinculos] = useState<VinculoPreview[]>([])
@@ -177,9 +184,11 @@ function DetalheUnidade({
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <button type="button" onClick={onEditar} className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 text-blue-600" title="Editar unidade">
-              <Pencil className="w-4 h-4" />
-            </button>
+            {podeEditar && (
+              <button type="button" onClick={onEditar} className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 text-blue-600" title="Editar unidade">
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
             {onClose && (
               <button type="button" onClick={onClose} className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-subtle">
                 <X className="w-5 h-5" />
@@ -302,6 +311,7 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
   const [comarcas, setComarcas] = useState<string[]>([])
   const [loadingUnidades, setLoadingUnidades] = useState(true)
   const [editando, setEditando] = useState<UnidadeEndereco | null>(null)
+  const [criandoUnidade, setCriandoUnidade] = useState(false)
 
   const carregarUnidades = useCallback(async () => {
     setLoadingUnidades(true)
@@ -358,8 +368,19 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
   const comarcaMatches = (c: string) =>
     !search.trim() || containsNormalized(c, search) || filtradas.some((u) => u.comarca === c)
 
-  const handleUnidadeSalva = (atualizada: UnidadeEndereco) => {
-    setUnidades((prev) => prev.map((u) => (u.id === atualizada.id ? atualizada : u)))
+  const handleUnidadeSalva = (atualizada: UnidadeEndereco, pendente?: boolean) => {
+    if (pendente) {
+      carregarUnidades()
+      return
+    }
+    setUnidades((prev) => {
+      const exists = prev.some((u) => u.id === atualizada.id)
+      if (exists) return prev.map((u) => (u.id === atualizada.id ? atualizada : u))
+      return [...prev, atualizada].sort(
+        (a, b) => a.comarca.localeCompare(b.comarca) || a.unidade.localeCompare(b.unidade)
+      )
+    })
+    setSelectedId(atualizada.id)
     carregarResumo()
   }
 
@@ -390,13 +411,22 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Integrada ao AIP e Mapa Facções — {unidades.length} unidades
-                {!isAdmin && ' · edições sujeitas a aprovação'}
+                {!isAdmin && ' · criações e edições sujeitas a aprovação'}
               </p>
             </div>
           </div>
-          <Link href="/mapa-faccoes" className="btn-secondary text-xs gap-1.5">
-            <MapIcon className="w-3.5 h-3.5" /> Mapa Facções
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setCriandoUnidade(true)}
+              className="btn-primary text-xs gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Nova unidade
+            </button>
+            <Link href="/mapa-faccoes" className="btn-secondary text-xs gap-1.5">
+              <MapIcon className="w-3.5 h-3.5" /> Mapa Facções
+            </Link>
+          </div>
         </div>
 
         <div className="relative mt-4">
@@ -472,7 +502,8 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
               resumo={resumoPorId[selected.id]}
               onClose={() => setSelectedId(null)}
               onEditar={() => setEditando(selected)}
-              ocultarMapa={!!editando}
+              podeEditar={isAdmin || !selected.criadaNoSistema}
+              ocultarMapa={!!editando || criandoUnidade}
             />
           ) : (
             <div className="flex flex-col items-center justify-center flex-1 p-8 text-center text-subtle">
@@ -489,6 +520,15 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
           isAdmin={isAdmin}
           comarcas={comarcas}
           onClose={() => setEditando(null)}
+          onSaved={handleUnidadeSalva}
+        />
+      )}
+
+      {criandoUnidade && (
+        <UnidadeEditarModal
+          isAdmin={isAdmin}
+          comarcas={comarcas}
+          onClose={() => setCriandoUnidade(false)}
           onSaved={handleUnidadeSalva}
         />
       )}

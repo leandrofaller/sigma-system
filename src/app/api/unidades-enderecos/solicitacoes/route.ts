@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { getStaticUnidadeById, isAdminRole, listarSolicitacoesPendentes } from '@/lib/unidades-enderecos-catalog'
+import {
+  getStaticUnidadeById,
+  isAdminRole,
+  listarNovasUnidadesPendentes,
+  listarSolicitacoesPendentes,
+} from '@/lib/unidades-enderecos-catalog'
 
 export async function GET() {
   const session = await auth()
@@ -12,11 +17,25 @@ export async function GET() {
   }
 
   try {
-    const solicitacoes = await listarSolicitacoesPendentes()
+    const [solicitacoes, novasUnidades] = await Promise.all([
+      listarSolicitacoesPendentes(),
+      listarNovasUnidadesPendentes(),
+    ])
     return NextResponse.json({
       solicitacoes: solicitacoes.map((s) => ({
         ...s,
         unidadeAtual: getStaticUnidadeById(s.unidadeId),
+      })),
+      novasUnidades: novasUnidades.map((u) => ({
+        id: u.id,
+        comarca: u.comarca,
+        unidade: u.unidade,
+        endereco: u.endereco,
+        cep: u.cep,
+        latitude: u.latitude,
+        longitude: u.longitude,
+        criadoEm: u.criadoEm,
+        criadoPor: u.criadoPor,
       })),
     })
   } catch (e) {

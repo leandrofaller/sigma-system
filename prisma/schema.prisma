@@ -133,6 +133,8 @@ model User {
   unidadeEnderecoOverridesAtualizados UnidadeEnderecoOverride[] @relation("UnidadeOverrideAtualizado")
   unidadeEnderecoSolicitacoesEnviadas UnidadeEnderecoSolicitacao[] @relation("UnidadeSolicitacaoEnviada")
   unidadeEnderecoSolicitacoesRevisadas UnidadeEnderecoSolicitacao[] @relation("UnidadeSolicitacaoRevisada")
+  unidadeEnderecoCustomCriadas         UnidadeEnderecoCustom[] @relation("UnidadeCustomCriada")
+  unidadeEnderecoCustomRevisadas       UnidadeEnderecoCustom[] @relation("UnidadeCustomRevisada")
 
   @@map("users")
 }
@@ -1529,6 +1531,36 @@ model UnidadeEnderecoSolicitacao {
   @@index([unidadeId])
   @@index([solicitadoEm])
   @@map("unidade_endereco_solicitacoes")
+}
+
+enum UnidadeEnderecoCustomStatus {
+  PENDENTE
+  ATIVA
+  REJEITADA
+}
+
+// Unidades prisionais criadas pelos usuários (fora do catálogo estático).
+model UnidadeEnderecoCustom {
+  id              String                        @id
+  comarca         String
+  unidade         String
+  endereco        String
+  cep             String                        @default("")
+  latitude        Float?
+  longitude       Float?
+  status          UnidadeEnderecoCustomStatus   @default(PENDENTE)
+  criadoPorId     String
+  criadoPor       User                          @relation("UnidadeCustomCriada", fields: [criadoPorId], references: [id], onDelete: Cascade)
+  revisadoPorId   String?
+  revisadoPor     User?                         @relation("UnidadeCustomRevisada", fields: [revisadoPorId], references: [id], onDelete: SetNull)
+  revisadoEm      DateTime?
+  motivoRejeicao  String?                       @db.Text
+  criadoEm        DateTime                      @default(now())
+  atualizadoEm    DateTime                      @updatedAt
+
+  @@index([status])
+  @@index([comarca])
+  @@map("unidade_endereco_custom")
 }
 
 
