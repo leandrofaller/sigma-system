@@ -118,11 +118,13 @@ interface AIPApenadoAnexo {
 function AIApenadoCard({
   apenado,
   onSelect,
-  onViewVinculos
+  onViewVinculos,
+  onViewMapa,
 }: {
   apenado: AIPApenado
   onSelect: (a: AIPApenado) => void
   onViewVinculos?: (sipeId: number) => void
+  onViewMapa?: (aipApenadoId: string) => void
 }) {
   const temInteligencia = !!(apenado.facaoRealNome || apenado.notasInteligencia)
   const isFaccaoConfirmada = apenado.facaoRealNome && apenado.facaoNivel === 'confirmado'
@@ -201,6 +203,20 @@ function AIApenadoCard({
               >
                 <Link2 className="w-2.5 h-2.5" />
                 Ver Vínculos
+              </button>
+            )}
+            {onViewMapa && (apenado.facaoRealNome || apenado.faccao) && apenado.unidade && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onViewMapa(apenado.id)
+                }}
+                className="px-2 py-0.5 rounded bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 text-[10px] font-bold border border-red-150 dark:border-red-900/40 flex items-center gap-1 transition-all"
+                title="Ver no mapa de facções"
+              >
+                <MapPin className="w-2.5 h-2.5" />
+                Mapa
               </button>
             )}
           </div>
@@ -1193,7 +1209,15 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
   )
 }
 
-export function AIPanel({ userRole, onViewVinculos }: { userRole?: string; onViewVinculos?: (sipeId: number) => void }) {
+export function AIPanel({
+  userRole,
+  onViewVinculos,
+  onViewMapa,
+}: {
+  userRole?: string
+  onViewVinculos?: (sipeId: number) => void
+  onViewMapa?: (aipApenadoId: string) => void
+}) {
   const [apenados, setApenados] = useState<AIPApenado[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedApenado, setSelectedApenado] = useState<AIPApenado | null>(null)
@@ -1327,6 +1351,7 @@ export function AIPanel({ userRole, onViewVinculos }: { userRole?: string; onVie
                 apenado={a}
                 onSelect={setSelectedApenado}
                 onViewVinculos={onViewVinculos}
+                onViewMapa={onViewMapa}
               />
             ))}
           </div>

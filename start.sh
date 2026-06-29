@@ -56,6 +56,7 @@ Promise.all([
   p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"faceVectorAdvanced\" vector(512)'),
   p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS apenados_face_hnsw_idx ON apenados USING hnsw (\"faceVector\" vector_cosine_ops) WITH (m = 32, ef_construction = 128)'),
   p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS apenados_face_advanced_hnsw_idx ON apenados USING hnsw (\"faceVectorAdvanced\" vector_cosine_ops) WITH (m = 32, ef_construction = 128)'),
+  p.\$executeRawUnsafe('ALTER TABLE mapa_faccoes_vinculos ADD COLUMN IF NOT EXISTS origem TEXT NOT NULL DEFAULT \'MANUAL\''),
 ]).then(() => { console.log('pgvector avancado OK'); }).catch(e => { console.error('AVISO pgvector:', e.message); }).finally(() => p.\$disconnect());
 " || echo "AVISO: pgvector insert falhou (nao critico)"
 

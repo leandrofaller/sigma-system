@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
         unidadePrisional: unidadePrisional.trim(),
         aipApenadoId: resolvedId,
         observacoes: observacoes?.trim() || null,
+        origem: 'MANUAL',
         cadastradoPor,
       },
       include: {

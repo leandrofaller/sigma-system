@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { auth } from '@/lib/auth'
 import { unaccentParam } from '@/lib/search'
+import { syncMapaFromAipAsync } from '@/lib/mapa-faccoes-aip-sync'
 
 /**
  * POST /api/aip/apenados
@@ -159,6 +160,8 @@ export async function POST(request: NextRequest) {
         })
       );
     }
+
+    syncMapaFromAipAsync(novoApenado.id, cadastradoPor)
 
     return NextResponse.json(
       {

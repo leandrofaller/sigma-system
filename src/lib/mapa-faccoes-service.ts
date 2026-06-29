@@ -140,6 +140,12 @@ export async function buildMapaStats() {
     faccoesGlobais[f] = (faccoesGlobais[f] || 0) + 1
   }
 
+  const porOrigem = { manual: 0, aipAuto: 0 }
+  for (const v of vinculos) {
+    if (v.origem === 'AIP_AUTO') porOrigem.aipAuto++
+    else porOrigem.manual++
+  }
+
   return {
     municipios,
     maxApenados,
@@ -149,6 +155,8 @@ export async function buildMapaStats() {
       municipiosComDados: municipios.length,
       unidadesComDados: unidades.length,
       faccoes: faccoesGlobais,
+      manual: porOrigem.manual,
+      aipAuto: porOrigem.aipAuto,
     },
     geradoEm: new Date().toISOString(),
   }
@@ -161,6 +169,7 @@ export function formatVinculo(v: Awaited<ReturnType<typeof fetchMapaVinculosComA
     municipioIbge: v.municipioIbge,
     unidadePrisional: v.unidadePrisional,
     observacoes: v.observacoes,
+    origem: v.origem,
     cadastradoEm: v.cadastradoEm,
     apenado: {
       ...v.aipApenado,

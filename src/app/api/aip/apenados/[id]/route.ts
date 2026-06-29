@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { syncMapaFromAipAsync } from '@/lib/mapa-faccoes-aip-sync';
 
 /**
  * GET /api/aip/apenados/{id}
@@ -165,6 +166,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       cadastradoPorNome,
       atualizadoPorNome
     }
+
+    syncMapaFromAipAsync(apenado.id, user.id)
 
     return NextResponse.json({
       success: true,

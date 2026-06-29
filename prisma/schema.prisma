@@ -1447,6 +1447,7 @@ model MapaFaccaoVinculo {
   unidadePrisional String
   aipApenadoId     String
   aipApenado       AIPApenado @relation(fields: [aipApenadoId], references: [id], onDelete: Cascade)
+  origem           String     @default("MANUAL") // MANUAL | AIP_AUTO
   observacoes      String?    @db.Text
   cadastradoPor    String
   cadastradoEm     DateTime   @default(now())

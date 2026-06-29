@@ -7,11 +7,11 @@ import html2canvas from 'html2canvas'
 import JSZip from 'jszip'
 import {
   Map, Shield, Building2, Users, Search, Plus, Trash2, FileBarChart,
-  Play, Pause, Download, Loader2, X, ChevronRight, Sparkles, MapPin
+  Play, Pause, Download, Loader2, X, ChevronRight, Sparkles, MapPin, RefreshCw, Brain
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { containsNormalized } from '@/lib/search'
-import { IBGE_PARA_NOME } from '@/lib/municipios-rondonia'
+import { IBGE_PARA_NOME, nomeParaIbge } from '@/lib/municipios-rondonia'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
 
 const MapaFaccoesMap = dynamic(() => import('./MapaFaccoesMap'), {
@@ -39,6 +39,7 @@ interface Vinculo {
   municipio: string
   unidadePrisional: string
   observacoes: string | null
+  origem?: string
   apenado: {
     id: string
     sipeId: number
@@ -53,10 +54,28 @@ interface Vinculo {
 interface StatsPayload {
   municipios: MunicipioMapStats[]
   maxApenados: number
-  totais: { vinculos: number; municipiosComDados: number; unidadesComDados: number }
+  totais: {
+    vinculos: number
+    municipiosComDados: number
+    unidadesComDados: number
+    manual?: number
+    aipAuto?: number
+  }
 }
 
-export function MapaFaccoesClient() {
+interface MapaFaccoesClientProps {
+  /** Renderizado dentro da aba AIP (sem header duplicado de página). */
+  embedded?: boolean
+  /** Destaca município do apenado AIP ao navegar da lista de apenados. */
+  highlightAipApenadoId?: string | null
+  onClearHighlight?: () => void
+}
+
+export function MapaFaccoesClient({
+  embedded = false,
+  highlightAipApenadoId = null,
+  onClearHighlight,
+}: MapaFaccoesClientProps = {}) {
   const [geojson, setGeojson] = useState<GeoJSON.FeatureCollection | null>(null)
   const [stats, setStats] = useState<StatsPayload | null>(null)
   const [vinculos, setVinculos] = useState<Vinculo[]>([])
@@ -79,6 +98,7 @@ export function MapaFaccoesClient() {
   const [unidadeInput, setUnidadeInput] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [syncingAip, setSyncingAip] = useState(false)
 
   const mapAreaRef = useRef<HTMLDivElement>(null)
   const presentationTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -141,6 +161,68 @@ export function MapaFaccoesClient() {
     if (selectedNome) loadVinculos(selectedNome)
     else setVinculos([])
   }, [selectedNome, loadVinculos])
+
+  const focusAipApenadoOnMap = useCallback(async (aipId: string) => {
+    const res = await fetch(`/api/mapa-faccoes/vinculos?municipio=`)
+    if (!res.ok) return
+    const data = await res.json()
+    const match = (data.vinculos as Vinculo[]).find((v) => v.apenado.id === aipId)
+    if (!match) {
+      await fetch('/api/mapa-faccoes/sync-aip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aipApenadoId: aipId }),
+      })
+      await loadData()
+      const retry = await fetch('/api/mapa-faccoes/vinculos')
+      if (retry.ok) {
+        const d2 = await retry.json()
+        const m2 = (d2.vinculos as Vinculo[]).find((v) => v.apenado.id === aipId)
+        if (m2) {
+          setSelectedNome(m2.municipio)
+          setSelectedIbge(nomeParaIbge(m2.municipio))
+          return
+        }
+      }
+      toast.info('Apenado sem município/unidade/facção suficientes para o mapa. Vincule manualmente.')
+      return
+    }
+    setSelectedNome(match.municipio)
+    setSelectedIbge(nomeParaIbge(match.municipio))
+  }, [loadData])
+
+  useEffect(() => {
+    if (!highlightAipApenadoId || loading) return
+    focusAipApenadoOnMap(highlightAipApenadoId).finally(() => onClearHighlight?.())
+  }, [highlightAipApenadoId, loading, focusAipApenadoOnMap, onClearHighlight])
+
+  const syncAllFromAip = async () => {
+    setSyncingAip(true)
+    let cursor: string | null = null
+    let totalSynced = 0
+    let totalProcessed = 0
+    try {
+      do {
+        const res = await fetch('/api/mapa-faccoes/sync-aip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cursor, limit: 200 }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Falha na sincronização')
+        totalSynced += data.synced ?? 0
+        totalProcessed += data.processed ?? 0
+        cursor = data.nextCursor ?? null
+      } while (cursor)
+      toast.success(`AIP sincronizado: ${totalSynced} vínculos de ${totalProcessed} apenados processados`)
+      await loadData()
+      if (selectedNome) await loadVinculos(selectedNome)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erro ao sincronizar com AIP')
+    } finally {
+      setSyncingAip(false)
+    }
+  }
 
   useEffect(() => {
     if (!presentationPlaying || !presentationMode || municipiosComDados.length === 0) {
@@ -316,22 +398,38 @@ export function MapaFaccoesClient() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="px-4 md:px-6 py-3.5 border-b border-gray-200 dark:border-gray-700 shrink-0">
+      <div className={`${embedded ? 'px-0 py-2' : 'px-4 md:px-6 py-3.5'} border-b border-gray-200 dark:border-gray-700 shrink-0`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-red-500/20 to-orange-500/20 rounded-xl">
-              <Map className="w-5 h-5 text-red-500" />
+          {!embedded ? (
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-br from-red-500/20 to-orange-500/20 rounded-xl">
+                <Map className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
+                  Mapa Facções — Rondônia
+                </h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Visualização geográfica da atuação faccionada no sistema prisional
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
-                Mapa Facções — Rondônia
-              </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Visualização geográfica da atuação faccionada no sistema prisional
-              </p>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-subtle">
+              <Brain className="w-4 h-4 text-purple-500" />
+              <span>Integrado ao AIP — vínculos sincronizados automaticamente</span>
             </div>
-          </div>
+          )}
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={syncAllFromAip}
+              disabled={syncingAip}
+              className="btn-secondary text-xs gap-1.5"
+            >
+              {syncingAip ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              Sync AIP
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -366,9 +464,10 @@ export function MapaFaccoesClient() {
         </div>
 
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3">
             {[
               { icon: Users, label: 'Faccionados mapeados', value: stats.totais.vinculos, color: 'text-red-500' },
+              { icon: Brain, label: 'Via AIP (auto)', value: stats.totais.aipAuto ?? 0, color: 'text-purple-500' },
               { icon: MapPin, label: 'Municípios', value: stats.totais.municipiosComDados, color: 'text-blue-500' },
               { icon: Building2, label: 'Unidades', value: stats.totais.unidadesComDados, color: 'text-amber-500' },
               { icon: Shield, label: 'Cobertura RO', value: `${Math.round((stats.totais.municipiosComDados / 52) * 100)}%`, color: 'text-emerald-500' },
@@ -476,12 +575,19 @@ export function MapaFaccoesClient() {
                           <p className="text-xs mt-1 flex items-center gap-1">
                             <Building2 className="w-3 h-3" /> {v.unidadePrisional}
                           </p>
-                          <span
-                            className="inline-block text-[10px] font-bold mt-1 px-1.5 py-0.5 rounded"
-                            style={{ backgroundColor: `${v.apenado.faccaoCor}22`, color: v.apenado.faccaoCor }}
-                          >
-                            {v.apenado.faccaoDisplay}
-                          </span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <span
+                              className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded"
+                              style={{ backgroundColor: `${v.apenado.faccaoCor}22`, color: v.apenado.faccaoCor }}
+                            >
+                              {v.apenado.faccaoDisplay}
+                            </span>
+                            {v.origem === 'AIP_AUTO' && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                                AIP
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <button type="button" onClick={() => handleDeleteVinculo(v.id)} className="text-red-500 hover:bg-red-500/10 p-1.5 rounded-lg shrink-0">
                           <Trash2 className="w-4 h-4" />

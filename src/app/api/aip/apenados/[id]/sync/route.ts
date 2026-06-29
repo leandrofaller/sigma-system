@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { scrapeApenadoFichaFast, resolveUnidadeIdByNome } from '@/lib/sipe-scraper'
+import { syncMapaFromAipAsync } from '@/lib/mapa-faccoes-aip-sync'
 
 export async function POST(
   req: NextRequest,
@@ -73,6 +74,8 @@ export async function POST(
     const temVinculos = vinculos.length > 0
 
     console.log(`[SYNC AIP INDIVIDUAL] ✅ Sincronização em AIP concluída com sucesso para #${sipeId}.`)
+
+    syncMapaFromAipAsync(id, (session.user as { id: string }).id)
 
     return NextResponse.json({
       success: true,

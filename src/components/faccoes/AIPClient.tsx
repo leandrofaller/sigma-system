@@ -8,7 +8,8 @@ import { AIPFaccoesPanel } from './AIPFaccoesPanel'
 import { AIPAdvogadosPanel } from './AIPAdvogadosPanel'
 import { AIPVisitantesPanel } from './AIPVisitantesPanel'
 import { AIPVinculosPanel } from './AIPVinculosPanel'
-import { Brain, BarChart2, Users, Shield, Briefcase, Camera, Link2 } from 'lucide-react'
+import { Brain, BarChart2, Users, Shield, Briefcase, Camera, Link2, Map } from 'lucide-react'
+import { MapaFaccoesClient } from '@/components/mapa-faccoes/MapaFaccoesClient'
 
 interface AIPClientProps {
   userRole: string
@@ -19,10 +20,16 @@ interface AIPClientProps {
 export function AIPClient({ userRole }: AIPClientProps) {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [preselectedSipeId, setPreselectedSipeId] = useState<number | null>(null)
+  const [highlightAipApenadoId, setHighlightAipApenadoId] = useState<string | null>(null)
 
   const handleViewVinculos = (sipeId: number) => {
     setPreselectedSipeId(sipeId)
     setActiveTab('vinculos')
+  }
+
+  const handleViewMapa = (aipApenadoId: string) => {
+    setHighlightAipApenadoId(aipApenadoId)
+    setActiveTab('mapa')
   }
 
   const triggerClass = "gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start"
@@ -78,6 +85,10 @@ export function AIPClient({ userRole }: AIPClientProps) {
                 <Camera className="w-4 h-4" />
                 Visitantes
               </TabsTrigger>
+              <TabsTrigger value="mapa" className={triggerClass}>
+                <Map className="w-4 h-4" />
+                Mapa Facções
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -86,7 +97,7 @@ export function AIPClient({ userRole }: AIPClientProps) {
           </TabsContent>
 
           <TabsContent value="apenados" className="flex-1 min-h-0 mt-0">
-            <AIPanel userRole={userRole} onViewVinculos={handleViewVinculos} />
+            <AIPanel userRole={userRole} onViewVinculos={handleViewVinculos} onViewMapa={handleViewMapa} />
           </TabsContent>
 
           <TabsContent value="vinculos" className="flex-1 min-h-0 mt-0">
@@ -107,6 +118,14 @@ export function AIPClient({ userRole }: AIPClientProps) {
 
           <TabsContent value="visitantes" className="flex-1 min-h-0 mt-0 overflow-y-auto">
             <AIPVisitantesPanel />
+          </TabsContent>
+
+          <TabsContent value="mapa" className="flex-1 min-h-0 mt-0 overflow-hidden">
+            <MapaFaccoesClient
+              embedded
+              highlightAipApenadoId={highlightAipApenadoId}
+              onClearHighlight={() => setHighlightAipApenadoId(null)}
+            />
           </TabsContent>
         </Tabs>
       </div>
