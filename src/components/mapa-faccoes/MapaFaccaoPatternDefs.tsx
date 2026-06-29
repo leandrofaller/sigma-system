@@ -1,12 +1,13 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { COR_CV, type FaccaoEstiloMapa } from '@/lib/mapa-faccoes'
 import { MAPA_PCC_STRIPES_ID } from '@/lib/mapa-faccoes-patterns'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
 
 function PccStripesInRect({ x, width }: { x: number; width: number }) {
   const step = 6
-  const stripes: React.ReactNode[] = []
+  const stripes: ReactNode[] = []
   for (let i = 0; i < width; i += step) {
     stripes.push(
       <rect key={`k${x}-${i}`} x={x + i} y={0} width={step / 2} height={100} fill="#0a0a0a" />,
