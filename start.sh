@@ -46,6 +46,19 @@ Promise.all([
 ]).then(() => { console.log('Colunas OK'); }).catch(e => { console.error('AVISO colunas:', e.message); }).finally(() => p.\$disconnect());
 " || echo "AVISO: script de colunas falhou (nao critico)"
 
+echo "Garantindo suporte pgvector avancado (idempotente)..."
+gosu nextjs node -e "
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+Promise.all([
+  p.\$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS vector'),
+  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"faceVector\" vector(512)'),
+  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"faceVectorAdvanced\" vector(512)'),
+  p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS apenados_face_hnsw_idx ON apenados USING hnsw (\"faceVector\" vector_cosine_ops) WITH (m = 32, ef_construction = 128)'),
+  p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS apenados_face_advanced_hnsw_idx ON apenados USING hnsw (\"faceVectorAdvanced\" vector_cosine_ops) WITH (m = 32, ef_construction = 128)'),
+]).then(() => { console.log('pgvector avancado OK'); }).catch(e => { console.error('AVISO pgvector:', e.message); }).finally(() => p.\$disconnect());
+" || echo "AVISO: pgvector insert falhou (nao critico)"
+
 echo "Garantindo item de sidebar Ordens de Missão (idempotente)..."
 gosu nextjs node -e "
 const { PrismaClient } = require('@prisma/client');

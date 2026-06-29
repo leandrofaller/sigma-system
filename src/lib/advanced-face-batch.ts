@@ -14,17 +14,28 @@ export interface AdvancedIndexResult {
   done?: boolean;
 }
 
-export function runAdvancedIndexBatch(ids: string[], uploadsDir: string): Promise<AdvancedIndexResult[]> {
+export function runAdvancedIndexBatch(
+  ids: string[],
+  uploadsDir: string,
+  photoPaths?: Record<string, string>,
+): Promise<AdvancedIndexResult[]> {
   return new Promise((resolve, reject) => {
     const scriptPath = join(process.cwd(), 'scripts', 'advanced_face_index.py');
-    const input = JSON.stringify({ ids, uploads_dir: uploadsDir });
+    const input = JSON.stringify({ ids, uploads_dir: uploadsDir, photo_paths: photoPaths });
     const envPython = process.env.ARCFACE_PYTHON;
-    const candidates = envPython ? [envPython, 'python3', 'python', 'py'] : ['python3', 'python', 'py'];
+    const localVenv = process.platform === 'win32'
+      ? join(process.cwd(), 'backend', '.venv', 'Scripts', 'python.exe')
+      : join(process.cwd(), 'backend', '.venv', 'bin', 'python');
+
+    const candidates = envPython
+      ? [envPython, localVenv, 'python3', 'python', 'py']
+      : [localVenv, 'python3', 'python', 'py'];
     let idx = 0;
+    const errors: string[] = [];
 
     function tryNext() {
       if (idx >= candidates.length) {
-        reject(new Error('Python não encontrado. Defina ARCFACE_PYTHON no .env'));
+        reject(new Error('Python não encontrado. Defina ARCFACE_PYTHON=/opt/arcface-venv/bin/python3 no .env'));
         return;
       }
       const cmd = candidates[idx++];
@@ -36,6 +47,7 @@ export function runAdvancedIndexBatch(ids: string[], uploadsDir: string): Promis
         ORT_LOGGING_LEVEL: '3',
         PYTHONWARNINGS: 'ignore',
         TQDM_DISABLE: '1',
+        PYTHONPATH: join(process.cwd(), 'scripts'),
         OMP_NUM_THREADS: '1',
         MKL_NUM_THREADS: '1',
         OPENBLAS_NUM_THREADS: '1',
@@ -75,10 +87,12 @@ export function runAdvancedIndexBatch(ids: string[], uploadsDir: string): Promis
           return;
         }
         if (code !== 0 && results.length === 0) {
+          const detail = stderr.trim() ? ` — ${stderr.trim().slice(-300)}` : '';
+          errors.push(`[${cmd}] exit ${code}${detail}`);
           tryNext();
-        } else {
-          resolve(results);
+          return;
         }
+        resolve(results);
       });
 
       proc.on('error', () => tryNext());

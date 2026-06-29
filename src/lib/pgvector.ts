@@ -178,6 +178,43 @@ export async function populateVectorsFromDescriptors(batchSize = 500): Promise<n
   return total;
 }
 
+/** Popula faceVectorAdvanced a partir de faceDescriptorAdvanced (migração). */
+export async function populateVectorsFromAdvancedDescriptors(batchSize = 500): Promise<number> {
+  let total = 0;
+  let lastId = '';
+
+  while (true) {
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: string; faceDescriptorAdvanced: string }>>(
+      `SELECT id, "faceDescriptorAdvanced" FROM apenados
+       WHERE "faceDescriptorAdvanced" LIKE '[%'
+         AND "faceVectorAdvanced" IS NULL
+         AND id > $1
+       ORDER BY id ASC
+       LIMIT $2`,
+      lastId,
+      batchSize,
+    );
+
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      try {
+        const vec = row.faceDescriptorAdvanced.trim();
+        await prisma.$executeRawUnsafe(
+          `UPDATE apenados SET "faceVectorAdvanced" = $1::vector WHERE id = $2`,
+          vec,
+          row.id,
+        );
+        total++;
+      } catch {}
+    }
+
+    lastId = rows[rows.length - 1].id;
+  }
+
+  return total;
+}
+
 /** Remove o faceVector de um apenado. Silencioso — não lança exceção. */
 export async function clearVector(id: string): Promise<void> {
   try {

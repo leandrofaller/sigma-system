@@ -2,7 +2,7 @@ import { prisma } from './db';
 import { runAdvancedIndexBatch } from './advanced-face-batch';
 import { invalidateAdvancedFaceCache } from './advanced-face-cache';
 import { pgvectorAdvancedAvailable, upsertVectorAdvanced } from './pgvector';
-import { getApenadosDir } from './storage';
+import { getApenadosDir, getApenadoPhotoPath } from './storage';
 
 const BATCH_SIZE = 100;
 const DELAY_BETWEEN_BATCHES_MS = 2000; // 2 segundos de pausa entre lotes para aliviar CPU na VPS
@@ -59,6 +59,15 @@ export function startAdvancedJob(): void {
 async function runLoop(): Promise<void> {
   const uploadsDir = getApenadosDir();
 
+  // Reseta descriptors avançados corrompidos (null bytes).
+  await prisma.$executeRaw`
+    UPDATE apenados
+    SET "faceDescriptorAdvanced" = NULL
+    WHERE "faceDescriptorAdvanced" IS NOT NULL
+      AND "faceDescriptorAdvanced" != 'NONE'
+      AND strpos(encode("faceDescriptorAdvanced"::bytea, 'hex'), '00') > 0
+  `;
+
   // Limpa embeddings órfãos
   await prisma.apenado.updateMany({
     where: { photoPath: null, faceDescriptorAdvanced: { not: null } },
@@ -96,7 +105,7 @@ async function runLoop(): Promise<void> {
 
     const records = await prisma.apenado.findMany({
       where: { photoPath: { not: null }, faceDescriptorAdvanced: null },
-      select: { id: true },
+      select: { id: true, photoPath: true },
       take: BATCH_SIZE,
       orderBy: { createdAt: 'asc' },
     });
@@ -104,7 +113,20 @@ async function runLoop(): Promise<void> {
     if (records.length === 0) break;
 
     const ids = records.map((r) => r.id);
-    const results = await runAdvancedIndexBatch(ids, uploadsDir);
+    const photoPaths: Record<string, string> = {};
+    for (const r of records) {
+      if (r.photoPath) photoPaths[r.id] = getApenadoPhotoPath(r.photoPath);
+    }
+
+    let results;
+    try {
+      results = await runAdvancedIndexBatch(ids, uploadsDir, photoPaths);
+    } catch (batchErr: unknown) {
+      const msg = batchErr instanceof Error ? batchErr.message : String(batchErr);
+      console.error('[advanced-indexing] Falha no lote Python:', msg);
+      state.error = msg;
+      break;
+    }
 
     const updates: Promise<any>[] = [];
     for (const r of results) {
@@ -138,19 +160,7 @@ async function runLoop(): Promise<void> {
         );
         skipped++;
       } else {
-        // Grava no banco que o processamento falhou/é inválido (marcando como FACE_NONE)
-        // para evitar loop infinito em registros com erro que continuariam null.
-        updates.push(
-          prisma.apenado.update({
-            where: { id: r.id },
-            data: { 
-              faceDescriptorAdvanced: FACE_NONE,
-              advancedDetScore: null,
-              advancedQualityScore: null,
-              advancedLivenessScore: null
-            },
-          }),
-        );
+        // Erro transitório: mantém null para retry (mesmo comportamento do ArcFace clássico).
         errors++;
       }
     }

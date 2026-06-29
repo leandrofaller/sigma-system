@@ -130,6 +130,7 @@ export async function GET(req: NextRequest) {
         const inputData = JSON.stringify({
           ids: [testApenado.id],
           uploads_dir: getApenadosDir(),
+          photo_paths: { [testApenado.id]: fullPhotoPath },
         });
 
         // Usa o primeiro executável Python funcional detectado
@@ -145,6 +146,7 @@ export async function GET(req: NextRequest) {
             ORT_LOGGING_LEVEL: '3',
             PYTHONWARNINGS: 'ignore',
             TQDM_DISABLE: '1',
+            PYTHONPATH: join(process.cwd(), 'scripts'),
           };
           const proc = spawn(workingPython, ['-u', scriptPath], { env });
           let stdout = '';

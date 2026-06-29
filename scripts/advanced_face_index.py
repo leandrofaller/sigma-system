@@ -1,42 +1,30 @@
 #!/usr/bin/env python3
 """
 Indexa em lote rostos de apenados usando o Pipeline de IA Facial.
-Recebe JSON com lista de IDs via stdin. Carrega o modelo uma vez.
-Para cada ID busca a foto em <uploads_dir>/<id>.jpg (ou .jpeg/.png/.webp).
+Alinhado ao arcface_index.py: mesma detecção robusta e suporte a photo_paths.
 
-Entrada (stdin): {"ids": ["id1", "id2", ...], "uploads_dir": "/abs/path"}
-Saida (stdout): JSON linha por linha para cada ID processado
-                {"id": "...", "embedding": [...512 floats...], "det_score": 0.99, "liveness_score": 0.85, "quality_score": 78.5}
-                {"id": "...", "no_face": true}
-                {"id": "...", "error": "mensagem"}
-Final:          {"done": true}
+Entrada (stdin): {"ids": [...], "uploads_dir": "/abs/path", "photo_paths": {"id": "/abs/foto.webp"}}
 """
-import sys
 import json
 import os
+import sys
 import warnings
-warnings.filterwarnings('ignore')
 
-# Reutiliza as funções de pose, qualidade e liveness do analyze
-from advanced_face_analyze import imread_safe, analyze_quality, analyze_liveness
+warnings.filterwarnings("ignore")
 
-MIN_DET_SCORE = 0.35
-EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-def find_photo(uploads_dir: str, id_: str) -> str | None:
-    for ext in EXTENSIONS:
-        path = os.path.join(uploads_dir, id_ + ext)
-        if os.path.isfile(path):
-            return path
-    return None
+from advanced_face_analyze import analyze_liveness, analyze_quality
+from face_detect_utils import (
+    MIN_DET_SCORE_INDEX,
+    best_face,
+    create_face_app,
+    detect_faces_robust,
+    find_photo,
+    imread_safe,
+    pick_best_detection,
+)
 
-def best_face(faces):
-    """Seleciona o rosto principal: combina det_score (60%) + área normalizada (40%)."""
-    def score(f):
-        x1, y1, x2, y2 = f.bbox
-        area = max(0.0, (x2 - x1) * (y2 - y1))
-        return float(f.det_score) * 0.6 + min(area / 100_000.0, 1.0) * 0.4
-    return max(faces, key=score)
 
 def main():
     raw = sys.stdin.read().strip()
@@ -52,51 +40,28 @@ def main():
 
     ids = data.get("ids", [])
     uploads_dir = data.get("uploads_dir", "")
+    photo_paths = data.get("photo_paths", {})
 
     if not ids:
         print(json.dumps({"done": True, "processed": 0}))
         return
 
-    if not uploads_dir or not os.path.isdir(uploads_dir):
-        print(json.dumps({"error": f"uploads_dir invalido: {uploads_dir!r}"}))
+    if not photo_paths and (not uploads_dir or not os.path.isdir(uploads_dir)):
+        print(json.dumps({"error": f"uploads_dir invalido: {uploads_dir!r} e photo_paths nao fornecido"}))
         sys.exit(1)
 
     try:
-        import cv2
-        import numpy as np
-        from insightface.app import FaceAnalysis
+        app = create_face_app()
     except BaseException as e:
         print(json.dumps({
-            "error": f"Erro ao importar bibliotecas: {type(e).__name__}: {e}",
-            "install": "pip install insightface onnxruntime opencv-python-headless numpy"
+            "error": f"Erro ao importar no {sys.executable}: {type(e).__name__}: {e}",
+            "install": "pip install insightface onnxruntime opencv-python-headless numpy",
         }), flush=True)
         raise SystemExit(1)
 
-    import io as _io
-    _real_stdout = sys.stdout
-    sys.stdout = _io.StringIO()
-    try:
-        import onnxruntime as ort
-        providers_env = os.getenv("ARCFACE_PROVIDERS")
-        if providers_env:
-            providers = [p.strip() for p in providers_env.split(",") if p.strip()]
-        else:
-            if ort.get_device() == "GPU" and "CUDAExecutionProvider" in ort.get_available_providers():
-                providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-            else:
-                providers = ["CPUExecutionProvider"]
-
-        app = FaceAnalysis(
-            name="buffalo_l",
-            providers=providers,
-        )
-        app.prepare(ctx_id=0, det_size=(640, 640))
-    finally:
-        sys.stdout = _real_stdout
-
     for id_ in ids:
-        photo_path = find_photo(uploads_dir, id_)
-        if photo_path is None:
+        photo_path = photo_paths.get(id_) or find_photo(uploads_dir, id_)
+        if photo_path is None or not os.path.isfile(photo_path):
             print(json.dumps({"id": id_, "no_photo": True}), flush=True)
             continue
 
@@ -106,43 +71,14 @@ def main():
                 print(json.dumps({"id": id_, "error": "nao foi possivel ler imagem"}), flush=True)
                 continue
 
-            faces = app.get(img)
-            if not faces:
-                # FALLBACK 1: CLAHE (Equalização de Contraste Adaptativo Local) para fotos muito escuras
-                try:
-                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-                    cl_img = clahe.apply(gray)
-                    cl_img_3ch = cv2.cvtColor(cl_img, cv2.COLOR_GRAY2BGR)
-                    faces = app.get(cl_img_3ch)
-                except Exception:
-                    pass
+            faces, _method = detect_faces_robust(app, img)
+            best, det_score = pick_best_detection(faces, MIN_DET_SCORE_INDEX)
 
-            if not faces:
-                # FALLBACK 2: Ajuste temporário de det_size para 1024x1024 (para fotos grandes ou rostos pequenos)
-                try:
-                    app.prepare(ctx_id=0, det_size=(1024, 1024))
-                    faces = app.get(img)
-                    app.prepare(ctx_id=0, det_size=(640, 640))
-                except Exception:
-                    try:
-                        app.prepare(ctx_id=0, det_size=(640, 640))
-                    except Exception:
-                        pass
-
-            if not faces:
-                print(json.dumps({"id": id_, "no_face": True}), flush=True)
-                continue
-
-            # Seleciona o melhor rosto detectado
-            best = best_face(faces)
-
-            # Descarte se score de detecção for muito baixo
-            if float(best.det_score) < MIN_DET_SCORE:
+            if best is None:
                 print(json.dumps({
                     "id": id_,
                     "no_face": True,
-                    "low_det_score": round(float(best.det_score), 4),
+                    "low_det_score": round(det_score, 4) if det_score else None,
                 }), flush=True)
                 continue
 
@@ -150,7 +86,6 @@ def main():
             bbox = best.bbox.tolist()
             kps = best.kps.tolist() if hasattr(best, "kps") and best.kps is not None else []
 
-            # Analisa Qualidade e Liveness
             quality_info = analyze_quality(img, bbox, kps)
             liveness_score = analyze_liveness(img, best)
 
@@ -160,13 +95,14 @@ def main():
                 "det_score": round(float(best.det_score), 4),
                 "liveness_score": liveness_score,
                 "quality_score": quality_info["score"],
-                "quality_details": quality_info
+                "quality_details": quality_info,
             }), flush=True)
 
         except Exception as e:
             print(json.dumps({"id": id_, "error": str(e)}), flush=True)
 
     print(json.dumps({"done": True}), flush=True)
+
 
 if __name__ == "__main__":
     main()
