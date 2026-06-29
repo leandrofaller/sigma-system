@@ -18,6 +18,21 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+# Limita o uso de CPU restringindo as threads do ONNX Runtime
+try:
+    import onnxruntime as ort
+    _original_InferenceSession = ort.InferenceSession
+    class PatchedInferenceSession(_original_InferenceSession):
+        def __init__(self, model_path, sess_options=None, *args, **kwargs):
+            if sess_options is None:
+                sess_options = ort.SessionOptions()
+            sess_options.intra_op_num_threads = 1
+            sess_options.inter_op_num_threads = 1
+            super().__init__(model_path, sess_options, *args, **kwargs)
+    ort.InferenceSession = PatchedInferenceSession
+except ImportError:
+    pass
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from face_detect_utils import (
