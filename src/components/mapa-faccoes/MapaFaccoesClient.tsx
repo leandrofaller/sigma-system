@@ -566,6 +566,7 @@ export function MapaFaccoesClient({
         >
           <MapaFaccoesMap
             geojson={geojson}
+            municipios={stats?.municipios ?? []}
             statsByIbge={statsByIbge}
             statsByNome={statsByNome}
             maxApenados={stats?.maxApenados ?? 1}
@@ -613,11 +614,18 @@ export function MapaFaccoesClient({
             </motion.div>
           )}
 
-          <div className="absolute top-3 left-3 z-[1000] bg-gray-950/80 backdrop-blur rounded-lg px-3 py-2 text-[10px] text-gray-300 border border-white/10">
-            <p className="font-bold text-white mb-1">Legenda</p>
-            <p>Cor = facção predominante</p>
-            <p>Intensidade = quantidade de faccionados</p>
-            <p className={`mt-1 ${pendingMapaLink ? 'text-amber-300 font-bold' : 'text-amber-400'}`}>
+          <div className="absolute top-3 left-3 z-[1000] bg-gray-950/80 backdrop-blur rounded-lg px-3 py-2 text-[10px] text-gray-300 border border-white/10 max-w-[200px]">
+            <p className="font-bold text-white mb-1.5">Legenda</p>
+            <p className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-[#dc2626]" /> Comando Vermelho</p>
+            <p className="flex items-center gap-1.5 mt-0.5">
+              <span
+                className="inline-block w-3 h-3 rounded-sm border border-white/20"
+                style={{ background: 'repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 2px,#f8fafc 2px,#f8fafc 4px)' }}
+              />
+              PCC (listrado)
+            </p>
+            <p className="mt-0.5 text-gray-400">Divisão = CV e PCC no mesmo município</p>
+            <p className={`mt-1.5 ${pendingMapaLink ? 'text-amber-300 font-bold' : 'text-amber-400'}`}>
               {pendingMapaLink ? 'Modo vínculo: clique no município' : 'Clique no município para cadastrar'}
             </p>
           </div>
@@ -674,6 +682,19 @@ export function MapaFaccoesClient({
                         >
                           {selectedStat.faccaoPredominante}
                         </span>
+                        {selectedStat.estiloMapa?.tipo === 'split' && selectedStat.faccaoSecundaria && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-gray-800 text-gray-200">
+                            + {selectedStat.faccaoSecundaria} ({selectedStat.estiloMapa.pccCount} PCC / {selectedStat.estiloMapa.cvCount} CV)
+                          </span>
+                        )}
+                        {selectedStat.estiloMapa?.tipo === 'striped' && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full font-bold text-white"
+                            style={{ background: 'repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 3px,#f8fafc 3px,#f8fafc 6px)' }}
+                          >
+                            Listrado PCC
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
