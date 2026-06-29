@@ -69,6 +69,7 @@ export async function PATCH(
       dataFato, horaFato, localFato, vitima,
       naturezaInvestigacao, observacoes, prazo,
       status, participanteIds,
+      demandanteNome, demandanteFuncao,
     } = body
 
     const updated = await prisma.ordemMissao.update({
@@ -86,6 +87,8 @@ export async function PATCH(
         ...(observacoes !== undefined && { observacoes: observacoes || null }),
         ...(prazo !== undefined && { prazo: new Date(prazo) }),
         ...(status !== undefined && { status }),
+        ...(demandanteNome !== undefined && { demandanteNome: demandanteNome || null }),
+        ...(demandanteFuncao !== undefined && { demandanteFuncao: demandanteFuncao || null }),
         ...(participanteIds !== undefined && {
           participantes: {
             deleteMany: {},

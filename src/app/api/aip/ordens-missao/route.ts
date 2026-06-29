@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
       numero, titulo, historico, ipNumero, naturezaFato,
       dataFato, horaFato, localFato, vitima,
       naturezaInvestigacao, observacoes, prazo,
+      demandanteNome, demandanteFuncao,
       participanteIds = [],
     } = body
 
@@ -73,6 +74,8 @@ export async function POST(req: NextRequest) {
         observacoes: observacoes || null,
         prazo: new Date(prazo),
         emitidoPorId: (session.user as any).id,
+        demandanteNome: demandanteNome || null,
+        demandanteFuncao: demandanteFuncao || null,
         participantes: {
           create: participanteIds.map((userId: string) => ({ userId })),
         },

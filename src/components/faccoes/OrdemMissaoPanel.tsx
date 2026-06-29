@@ -46,6 +46,8 @@ interface OrdemMissao {
   status: 'ATIVA' | 'CONCLUIDA' | 'VENCIDA' | 'CANCELADA'
   emitidoPorId: string
   emitidoPor: { id: string; name: string; role: string; avatar?: string | null }
+  demandanteNome?: string | null
+  demandanteFuncao?: string | null
   participantes: Participante[]
   createdAt: string
   updatedAt: string
@@ -278,9 +280,9 @@ function DocumentPreview({
       <div style={{ textAlign: 'center', marginBottom: '40px' }}>
         <p style={{ fontSize: '11pt', marginBottom: '30px' }}>Cumpra-se</p>
         <p style={{ fontSize: '11pt', marginBottom: '2px' }}>
-          <strong style={{ textTransform: 'uppercase' }}>{ordem.emitidoPor.name}</strong>
+          <strong style={{ textTransform: 'uppercase' }}>{ordem.demandanteNome || ordem.emitidoPor.name}</strong>
         </p>
-        <p style={{ fontSize: '10pt' }}>Diretor da Agência de Inteligência Penal</p>
+        <p style={{ fontSize: '10pt' }}>{ordem.demandanteFuncao || 'Diretor da Agência de Inteligência Penal'}</p>
         <p style={{ fontSize: '10pt' }}>AIP/SEJUS/RO</p>
       </div>
 
@@ -411,6 +413,7 @@ const EMPTY_FORM = {
   naturezaFato: '', dataFato: '', horaFato: '', localFato: '',
   vitima: '', naturezaInvestigacao: '', observacoes: '',
   prazo: '', participanteIds: [] as string[],
+  demandanteNome: '', demandanteFuncao: 'Diretor da Agência de Inteligência Penal',
 }
 
 function EditorModal({
@@ -446,6 +449,8 @@ function EditorModal({
       observacoes: ordem.observacoes || '',
       prazo: ordem.prazo ? ordem.prazo.slice(0, 16) : '',
       participanteIds: (ordem.participantes ?? []).map(p => p.userId),
+      demandanteNome: ordem.demandanteNome || '',
+      demandanteFuncao: ordem.demandanteFuncao || 'Diretor da Agência de Inteligência Penal',
     }
   })
   const [saving, setSaving] = useState(false)
@@ -629,6 +634,27 @@ function EditorModal({
                 <textarea className={textarea} rows={3} value={form.observacoes}
                   onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
                   placeholder="Informações adicionais..." />
+              </div>
+            </div>
+          </section>
+
+          {/* Assinatura / Demandante */}
+          <section>
+            <h3 className="text-xs font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5" /> Assinatura / Autoridade Demandante
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className={label}>Nome do Demandante</label>
+                <input className={input} value={form.demandanteNome}
+                  onChange={e => setForm(f => ({ ...f, demandanteNome: e.target.value }))}
+                  placeholder="Nome do assinante da ordem (deixe em branco para usar seu nome)" />
+              </div>
+              <div>
+                <label className={label}>Função do Demandante</label>
+                <input className={input} value={form.demandanteFuncao}
+                  onChange={e => setForm(f => ({ ...f, demandanteFuncao: e.target.value }))}
+                  placeholder="Ex: Diretor da Agência de Inteligência Penal" />
               </div>
             </div>
           </section>

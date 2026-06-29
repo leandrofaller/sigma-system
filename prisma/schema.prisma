@@ -1422,6 +1422,8 @@ model OrdemMissao {
   status               OrdemMissaoStatus @default(ATIVA)
   emitidoPorId         String
   emitidoPor           User              @relation("OrdensMissaoEmitidas", fields: [emitidoPorId], references: [id])
+  demandanteNome       String?
+  demandanteFuncao     String?
   participantes        OrdemMissaoParticipante[]
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
