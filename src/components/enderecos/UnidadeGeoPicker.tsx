@@ -34,7 +34,7 @@ export function UnidadeGeoPicker({ latitude, longitude, onChange }: Props) {
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[10px] font-bold uppercase text-subtle tracking-wide">
-          Geolocalização (Google Maps)
+          Geolocalização (Satélite)
         </p>
         <div className="flex gap-1.5">
           <button type="button" onClick={usarMinhaLocalizacao} disabled={loadingGeo} className="btn-secondary text-[10px] px-2 py-1">

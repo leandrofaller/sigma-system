@@ -312,3 +312,9 @@ select option {
   background-color: #1f2937 !important;
   color: #f3f4f6 !important;
 }
+
+/* Marcador SVG da Lista de Endereços (Leaflet DivIcon) */
+.unidade-map-marker-icon {
+  background: transparent !important;
+  border: none !important;
+}

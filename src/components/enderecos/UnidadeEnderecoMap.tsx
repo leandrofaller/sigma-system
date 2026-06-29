@@ -2,16 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { enderecoCompleto, type UnidadeEndereco } from '@/lib/unidades-enderecos-ro'
+import { UNIDADE_SATELLITE_TILE, createUnidadeMarkerIcon } from '@/lib/leaflet-unidade-map'
 
-delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-})
+const unidadeMarkerIcon = createUnidadeMarkerIcon()
 
 const DEFAULT_CENTER: [number, number] = [-10.83, -63.17]
 
@@ -56,18 +51,18 @@ export default function UnidadeEnderecoMap({ unidade }: { unidade: UnidadeEndere
   const lat = hasCoords ? unidade.latitude! : geocoded?.lat ?? null
   const lng = hasCoords ? unidade.longitude! : geocoded?.lng ?? null
   const center: [number, number] = lat != null && lng != null ? [lat, lng] : DEFAULT_CENTER
-  const zoom = lat != null && lng != null ? (hasCoords ? 16 : 15) : 7
+  const zoom = lat != null && lng != null ? (hasCoords ? 17 : 16) : 7
 
   return (
     <MapContainer center={center} zoom={zoom} className="h-full w-full" scrollWheelZoom>
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution={UNIDADE_SATELLITE_TILE.attribution}
+        url={UNIDADE_SATELLITE_TILE.url}
       />
       {lat != null && lng != null && (
         <>
           <FlyTo lat={lat} lng={lng} zoom={zoom} />
-          <Marker position={[lat, lng]}>
+          <Marker position={[lat, lng]} icon={unidadeMarkerIcon}>
             <Popup>
               <span className="font-bold text-sm">{unidade.unidade}</span>
               <br />
