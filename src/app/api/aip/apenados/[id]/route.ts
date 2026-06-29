@@ -106,6 +106,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       observacoes,
       facaoRelevancia,
       vulgo,
+      custodiaReal,
     } = body
 
     // Montar update apenas com campos de inteligência
@@ -120,6 +121,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (observacoes !== undefined) updateData.observacoes = observacoes
     if (facaoRelevancia !== undefined) updateData.facaoRelevancia = facaoRelevancia
     if (vulgo !== undefined) updateData.vulgo = vulgo
+    if (custodiaReal !== undefined) updateData.custodiaReal = custodiaReal
 
     // Se está atualizando facão real pela primeira vez, registrar data
     if (facaoRealNome && !facaoNivel) {

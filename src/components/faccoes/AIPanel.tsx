@@ -79,6 +79,7 @@ export interface AIPApenado {
   observacoes?: string
   vulgo?: string | null
   facaoRelevancia?: string | null
+  custodiaReal?: string | null
 
   cadastradoEm: string
   cadastradoPor: string
@@ -169,7 +170,7 @@ function AIApenadoCard({
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-gray-900 dark:text-white truncate text-sm">{apenado.nome}</h3>
           <p className="text-xs text-gray-550 mt-1 truncate">
-            {apenado.unidade && `${apenado.unidade} • `}
+            {(apenado.unidade || apenado.custodiaReal) && `${apenado.unidade || apenado.custodiaReal} • `}
             {apenado.faccao || '—'}
           </p>
 
@@ -451,6 +452,7 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
           observacoes: formData.observacoes,
           facaoRelevancia: formData.facaoRelevancia,
           vulgo: formData.vulgo,
+          custodiaReal: formData.custodiaReal,
           atualizadoPor: 'current-user' // TODO: integrar com auth real
         })
       })
@@ -701,7 +703,7 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
                     </h3>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       {[
-                        ['Unidade', apenado.unidade, listaEnderecosHrefFromUnidadeAip(apenado.unidade)],
+                        ['Unidade', apenado.unidade || apenado.custodiaReal, apenado.unidade ? listaEnderecosHrefFromUnidadeAip(apenado.unidade) : undefined],
                         ['Cela', apenado.cela],
                         ['Regime', apenado.regime],
                         ['Situação', apenado.situacao],
@@ -872,6 +874,24 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
                             </select>
                           ) : (
                             <p className="text-sm text-gray-900 dark:text-white font-medium">{formData.facaoRelevancia || '(não informado)'}</p>
+                          )}
+                        </div>
+
+                        {/* Local de Custódia Real */}
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Local de Custódia Real (Fora de RO)
+                          </label>
+                          {editing ? (
+                            <input
+                              type="text"
+                              value={formData.custodiaReal || ''}
+                              onChange={e => setFormData({ ...formData, custodiaReal: e.target.value })}
+                              placeholder="Ex: Presídio Federal de Catanduvas, Penitenciária de SP, etc."
+                              className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                            />
+                          ) : (
+                            <p className="text-sm text-gray-900 dark:text-white font-medium">{formData.custodiaReal || '(não informado)'}</p>
                           )}
                         </div>
                       </div>
