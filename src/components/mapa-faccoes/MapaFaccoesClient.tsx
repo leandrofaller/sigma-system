@@ -19,8 +19,10 @@ import {
   listaEnderecosHrefFromUnidadeAip,
 } from '@/lib/unidades-enderecos-resolver'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
+import type { GeoResumoMunicipio } from '@/lib/geo-vinculo-resumo'
 
 import { FaccaoMapaBadge, PccStripeSwatch } from './FaccaoMapaBadge'
+import { PresentationMunicipioPanel } from './PresentationMunicipioPanel'
 
 const MapaFaccoesMap = dynamic(() => import('./MapaFaccoesMap'), {
   ssr: false,
@@ -113,6 +115,7 @@ export function MapaFaccoesClient({
   const [presentationIndex, setPresentationIndex] = useState(0)
   const [presentationPlaying, setPresentationPlaying] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [geoPorMunicipio, setGeoPorMunicipio] = useState<GeoResumoMunicipio[]>([])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
@@ -187,18 +190,33 @@ export function MapaFaccoesClient({
     ? municipiosComDados[presentationIndex % municipiosComDados.length]?.ibge ?? null
     : null
 
+  const apenadosAipLookup = useMemo(() => {
+    const byIbge: Record<number, number> = {}
+    const byNome: Record<string, number> = {}
+    for (const m of geoPorMunicipio) {
+      if (m.municipioIbge != null) byIbge[m.municipioIbge] = m.apenadosAip
+      byNome[m.municipio] = m.apenadosAip
+    }
+    return { byIbge, byNome }
+  }, [geoPorMunicipio])
+
   const loadData = useCallback(async () => {
     try {
-      const [geoRes, statsRes, unidRes] = await Promise.all([
+      const [geoRes, statsRes, unidRes, geoVinculoRes] = await Promise.all([
         fetch('/geo/rondonia-municipios.geojson'),
         fetch('/api/mapa-faccoes/stats'),
         fetch('/api/mapa-faccoes/unidades'),
+        fetch('/api/geo-vinculo/resumo'),
       ])
       if (geoRes.ok) setGeojson(await geoRes.json())
       if (statsRes.ok) setStats(await statsRes.json())
       if (unidRes.ok) {
         const d = await unidRes.json()
         setUnidades(d.unidades || [])
+      }
+      if (geoVinculoRes.ok) {
+        const d = await geoVinculoRes.json()
+        setGeoPorMunicipio(d.porMunicipio ?? [])
       }
     } catch (e) {
       console.error(e)
@@ -486,7 +504,7 @@ export function MapaFaccoesClient({
     try {
       for (let i = 0; i < Math.min(municipiosComDados.length, 12); i++) {
         setPresentationIndex(i)
-        await new Promise((r) => setTimeout(r, 1400))
+        await new Promise((r) => setTimeout(r, 1800))
         const canvas = await html2canvas(mapAreaRef.current!, {
           backgroundColor: '#0f172a',
           scale: 1.5,
@@ -656,26 +674,20 @@ export function MapaFaccoesClient({
             </div>
           )}
 
-          {presentationMode && highlightIbge && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="absolute bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-gray-950/90 backdrop-blur-md border border-white/10 rounded-2xl p-4 text-white shadow-2xl z-[1000]"
-            >
-              <p className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mb-1">Modo apresentação</p>
-              <h3 className="text-xl font-black">{IBGE_PARA_NOME[highlightIbge]}</h3>
-              {statsByIbge[highlightIbge] && (
-                <p className="text-sm text-gray-300 mt-1">
-                  {statsByIbge[highlightIbge].totalApenados} faccionados ·{' '}
-                  <FaccaoMapaBadge
-                    label={statsByIbge[highlightIbge].faccaoPredominante}
-                    cor={statsByIbge[highlightIbge].faccaoCor}
-                    estiloMapa={statsByIbge[highlightIbge].estiloMapa}
-                  />
-                </p>
-              )}
-            </motion.div>
-          )}
+          <AnimatePresence mode="wait">
+            {presentationMode && highlightIbge && statsByIbge[highlightIbge] && (
+              <PresentationMunicipioPanel
+                key={highlightIbge}
+                nome={statsByIbge[highlightIbge].nome || IBGE_PARA_NOME[highlightIbge] || 'Município'}
+                stat={statsByIbge[highlightIbge]}
+                apenadosGeral={
+                  apenadosAipLookup.byIbge[highlightIbge]
+                  ?? apenadosAipLookup.byNome[statsByIbge[highlightIbge].nome]
+                  ?? 0
+                }
+              />
+            )}
+          </AnimatePresence>
 
           <div className="absolute top-3 left-3 z-[1000] bg-gray-950/80 backdrop-blur rounded-lg px-3 py-2 text-[10px] text-gray-300 border border-white/10 max-w-[200px]">
             <p className="font-bold text-white mb-1.5">Legenda</p>
