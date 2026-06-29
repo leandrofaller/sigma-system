@@ -96,6 +96,7 @@ export function UnidadesPrisionaisClient() {
               apiEndpoint="/api/sipe/unidades-prisionais/unidades"
               apiApenadosEndpoint="/api/sipe/unidades-prisionais"
               apiPhotoPrefix="/api/sipe/unidades-prisionais"
+              apiDashboardEndpoint="/api/sipe/unidades-prisionais/stats"
             />
           </TabsContent>
 

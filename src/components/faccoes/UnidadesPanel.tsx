@@ -16,12 +16,14 @@ interface UnidadesPanelProps {
   apiEndpoint?: string
   apiApenadosEndpoint?: string
   apiPhotoPrefix?: string
+  apiDashboardEndpoint?: string
 }
 
 export function UnidadesPanel({
   apiEndpoint = '/api/sipe/unidades',
   apiApenadosEndpoint = '/api/sipe/apenados',
-  apiPhotoPrefix = '/api/sipe/apenados'
+  apiPhotoPrefix = '/api/sipe/apenados',
+  apiDashboardEndpoint = '/api/sipe/unidades/stats'
 }: UnidadesPanelProps) {
   const [unidades, setUnidades] = useState<Unidade[]>([])
   const [searchUnidade, setSearchUnidade] = useState('')
@@ -240,7 +242,7 @@ export function UnidadesPanel({
             )}
           </>
         ) : searchUnidade.trim() === '' ? (
-          <UnidadesDashboard />
+          <UnidadesDashboard endpoint={apiDashboardEndpoint} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-3 p-8">
             <Building2 className="w-12 h-12 text-gray-300 dark:text-gray-700 animate-pulse" />
