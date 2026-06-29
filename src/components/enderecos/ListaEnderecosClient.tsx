@@ -105,11 +105,13 @@ function DetalheUnidade({
   resumo,
   onClose,
   onEditar,
+  ocultarMapa = false,
 }: {
   unidade: UnidadeEndereco
   resumo?: GeoResumoUnidade
   onClose?: () => void
   onEditar: () => void
+  ocultarMapa?: boolean
 }) {
   const [copied, setCopied] = useState(false)
   const [vinculos, setVinculos] = useState<VinculoPreview[]>([])
@@ -268,12 +270,20 @@ function DetalheUnidade({
       </div>
 
       <div className="flex-1 min-h-[200px] relative bg-gray-100 dark:bg-gray-900">
-        {!temGeo && (
-          <p className="absolute top-2 left-2 right-2 z-[1000] text-[10px] text-amber-800 dark:text-amber-200 bg-amber-100/90 dark:bg-amber-950/80 px-2 py-1 rounded-lg pointer-events-none">
-            Sem geolocalização — aproximando pelo endereço. Edite a unidade para definir coordenadas exatas.
-          </p>
+        {ocultarMapa ? (
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-subtle px-4 text-center">
+            Mapa oculto durante a edição da unidade
+          </div>
+        ) : (
+          <>
+            {!temGeo && (
+              <p className="absolute top-2 left-2 right-2 z-[10] text-[10px] text-amber-800 dark:text-amber-200 bg-amber-100/90 dark:bg-amber-950/80 px-2 py-1 rounded-lg pointer-events-none">
+                Sem geolocalização — aproximando pelo endereço. Edite a unidade para definir coordenadas exatas.
+              </p>
+            )}
+            <UnidadeEnderecoMap key={`${unidade.id}-${unidade.latitude}-${unidade.longitude}`} unidade={unidade} />
+          </>
         )}
-        <UnidadeEnderecoMap key={`${unidade.id}-${unidade.latitude}-${unidade.longitude}`} unidade={unidade} />
       </div>
     </div>
   )
@@ -462,6 +472,7 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
               resumo={resumoPorId[selected.id]}
               onClose={() => setSelectedId(null)}
               onEditar={() => setEditando(selected)}
+              ocultarMapa={!!editando}
             />
           ) : (
             <div className="flex flex-col items-center justify-center flex-1 p-8 text-center text-subtle">

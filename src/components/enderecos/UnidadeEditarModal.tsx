@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Save, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { COMARCAS_RO, type UnidadeEndereco } from '@/lib/unidades-enderecos-ro'
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function UnidadeEditarModal({ unidade, isAdmin, comarcas, onClose, onSaved }: Props) {
+  const [mounted, setMounted] = useState(false)
   const [comarca, setComarca] = useState(unidade.comarca)
   const [nome, setNome] = useState(unidade.unidade)
   const [endereco, setEndereco] = useState(unidade.endereco)
@@ -22,6 +24,18 @@ export function UnidadeEditarModal({ unidade, isAdmin, comarcas, onClose, onSave
   const [latitude, setLatitude] = useState<number | null>(unidade.latitude ?? null)
   const [longitude, setLongitude] = useState<number | null>(unidade.longitude ?? null)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
 
   useEffect(() => {
     setComarca(unidade.comarca)
@@ -65,9 +79,14 @@ export function UnidadeEditarModal({ unidade, isAdmin, comarcas, onClose, onSave
 
   const opcoesComarca = [...new Set([...COMARCAS_RO, ...comarcas, comarca])].sort()
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+  if (!mounted) return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div
+        className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col isolate"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <div>
             <h3 className="font-bold text-gray-900 dark:text-white">Editar unidade</h3>
@@ -146,6 +165,7 @@ export function UnidadeEditarModal({ unidade, isAdmin, comarcas, onClose, onSave
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

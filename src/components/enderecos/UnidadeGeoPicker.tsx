@@ -81,7 +81,7 @@ export function UnidadeGeoPicker({ latitude, longitude, onChange }: Props) {
       </div>
 
       <p className="text-[10px] text-subtle">Clique no mapa para definir o ponto exato da unidade.</p>
-      <div className="h-44 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+      <div className="unidade-geo-picker-map relative z-0 h-44 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 isolate">
         <GeoMapInner latitude={latitude} longitude={longitude} onPick={onChange} />
       </div>
     </div>
