@@ -23,6 +23,7 @@ import type { ApenadosMunicipioUnidadesPrisionais } from '@/lib/unidades-prision
 
 import { FaccaoMapaBadge, PccStripeSwatch } from './FaccaoMapaBadge'
 import { PresentationMunicipioPanel } from './PresentationMunicipioPanel'
+import { MapaFaccoesRelatorioModal } from './MapaFaccoesRelatorioModal'
 
 const MapaFaccoesMap = dynamic(() => import('./MapaFaccoesMap'), {
   ssr: false,
@@ -111,7 +112,6 @@ export function MapaFaccoesClient({
   const [selectedNome, setSelectedNome] = useState<string | null>(null)
   const [showCadastro, setShowCadastro] = useState(false)
   const [showRelatorio, setShowRelatorio] = useState(false)
-  const [relatorio, setRelatorio] = useState<Record<string, unknown> | null>(null)
   const [presentationMode, setPresentationMode] = useState(false)
   const [presentationIndex, setPresentationIndex] = useState(0)
   const [presentationPlaying, setPresentationPlaying] = useState(false)
@@ -460,12 +460,6 @@ export function MapaFaccoesClient({
     }
   }
 
-  const openRelatorio = async () => {
-    setShowRelatorio(true)
-    const res = await fetch('/api/mapa-faccoes/relatorio')
-    if (res.ok) setRelatorio(await res.json())
-  }
-
   const exportPng = async () => {
     if (!mapAreaRef.current) return
     setExporting(true)
@@ -605,7 +599,7 @@ export function MapaFaccoesClient({
             <button type="button" onClick={exportApresentacao} disabled={exporting} className="btn-secondary text-xs gap-1.5">
               <Download className="w-3.5 h-3.5" /> ZIP Frames
             </button>
-            <button type="button" onClick={openRelatorio} className="btn-primary text-xs gap-1.5">
+            <button type="button" onClick={() => setShowRelatorio(true)} className="btn-primary text-xs gap-1.5">
               <FileBarChart className="w-3.5 h-3.5" /> Relatório
             </button>
           </div>
@@ -996,75 +990,7 @@ export function MapaFaccoesClient({
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showRelatorio && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowRelatorio(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-700"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-5 border-b flex justify-between items-center">
-                <div>
-                  <h3 className="text-lg font-black">Relatório executivo</h3>
-                  <p className="text-xs text-subtle">Unidades com faccionados · quantitativos · facção predominante</p>
-                </div>
-                <button type="button" onClick={() => setShowRelatorio(false)}><X className="w-5 h-5" /></button>
-              </div>
-              {!relatorio ? (
-                <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin" /></div>
-              ) : (
-                <div className="p-5 space-y-6 text-sm">
-                  <div className="grid grid-cols-2 gap-3">
-                    {Object.entries((relatorio.resumo as Record<string, number>) || {}).map(([k, v]) => (
-                      <div key={k} className="rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
-                        <p className="text-[10px] uppercase text-subtle font-bold">{k.replace(/([A-Z])/g, ' $1')}</p>
-                        <p className="text-xl font-black">{v}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <h4 className="font-bold mb-2">Top municípios</h4>
-                    <div className="space-y-1">
-                      {((relatorio.topMunicipios as MunicipioMapStats[]) || []).slice(0, 8).map((m) => (
-                        <div key={m.nome} className="flex justify-between items-center py-1 border-b border-gray-100 dark:border-gray-800">
-                          <span>{m.nome}</span>
-                          <span className="font-bold" style={{ color: m.faccaoCor }}>{m.totalApenados} · {m.faccaoPredominante}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="font-bold mb-2">Unidades com maior incidência</h4>
-                    <div className="space-y-1">
-                      {((relatorio.topUnidades as { unidade: string; municipio: string; total: number; faccaoPredominante: string }[]) || []).slice(0, 8).map((u) => (
-                        <div key={`${u.unidade}-${u.municipio}`} className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800 text-xs">
-                          <span className="truncate max-w-[60%]">{u.unidade} <span className="text-subtle">({u.municipio})</span></span>
-                          <span className="font-bold">{u.total} · {u.faccaoPredominante}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="btn-primary w-full"
-                  >
-                    Imprimir / PDF
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <MapaFaccoesRelatorioModal open={showRelatorio} onClose={() => setShowRelatorio(false)} />
 
       <style jsx global>{`
         .mapa-faccao-tooltip {
