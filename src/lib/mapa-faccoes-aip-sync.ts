@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/db'
 import { faccaoDisplay } from '@/lib/mapa-faccoes'
-import { normalizeMunicipioNome, nomeParaIbge } from '@/lib/municipios-rondonia'
+import { nomeParaIbge } from '@/lib/municipios-rondonia'
 import { normalizeSearch } from '@/lib/search'
+import { inferMunicipioForMapa } from '@/lib/unidades-enderecos-resolver'
 
 export const MAPA_ORIGEM_MANUAL = 'MANUAL'
 export const MAPA_ORIGEM_AIP_AUTO = 'AIP_AUTO'
@@ -22,25 +23,9 @@ export function isAipFaccionado(ap: AipGeoSource): boolean {
   return n.length > 0 && n !== 'NAO IDENTIFICADO' && n !== 'NONE'
 }
 
-/** Infere município de RO a partir de cidade ou naturalidade do AIP. */
+/** @deprecated Use inferMunicipioForMapa — mantido para compatibilidade. */
 export function inferMunicipioFromAip(ap: AipGeoSource): string | null {
-  const uf = (ap.uf || '').trim().toUpperCase()
-  if (ap.cidade?.trim() && (!uf || uf === 'RO')) {
-    const m = normalizeMunicipioNome(ap.cidade)
-    if (nomeParaIbge(m)) return m
-  }
-
-  if (ap.naturalidade?.trim()) {
-    const parts = ap.naturalidade.split(/[-–—/,;|]/).map((s) => s.trim()).filter(Boolean)
-    for (const part of parts) {
-      const clean = part.replace(/\bRO\b/gi, '').trim()
-      if (!clean) continue
-      const m = normalizeMunicipioNome(clean)
-      if (nomeParaIbge(m)) return m
-    }
-  }
-
-  return null
+  return inferMunicipioForMapa(ap)?.municipio ?? null
 }
 
 export interface SyncMapaFromAipResult {
@@ -66,7 +51,8 @@ export async function syncMapaVinculoFromAip(
     return { synced: false, reason: 'inativo' }
   }
 
-  const municipio = inferMunicipioFromAip(ap)
+  const inferido = inferMunicipioForMapa(ap)
+  const municipio = inferido?.municipio ?? null
   const unidade = ap.unidade?.trim() || null
 
   if (!municipio || !unidade || !isAipFaccionado(ap)) {
@@ -116,7 +102,9 @@ export async function syncMapaVinculoFromAip(
         unidadePrisional: unidade,
         aipApenadoId,
         origem: MAPA_ORIGEM_AIP_AUTO,
-        observacoes: 'Sincronizado automaticamente do AIP',
+        observacoes: inferido?.via === 'unidade'
+          ? 'Sincronizado do AIP (município inferido pela unidade prisional)'
+          : 'Sincronizado automaticamente do AIP',
         cadastradoPor,
       },
     })

@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 import { containsNormalized } from '@/lib/search'
 import { IBGE_PARA_NOME, nomeParaIbge } from '@/lib/municipios-rondonia'
+import { inferMunicipioFromUnidadeAip } from '@/lib/unidades-enderecos-resolver'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
 
 const MapaFaccoesMap = dynamic(() => import('./MapaFaccoesMap'), {
@@ -210,6 +211,22 @@ export function MapaFaccoesClient({
     if (!highlightAipApenadoId || loading) return
     focusAipApenadoOnMap(highlightAipApenadoId).finally(() => onClearHighlight?.())
   }, [highlightAipApenadoId, loading, focusAipApenadoOnMap, onClearHighlight])
+
+  const municipioSugerido = useMemo(
+    () => (pendingMapaLink ? inferMunicipioFromUnidadeAip(pendingMapaLink.unidade) : null),
+    [pendingMapaLink]
+  )
+
+  useEffect(() => {
+    if (!pendingMapaLink) return
+    if (municipioSugerido) {
+      setSelectedNome(municipioSugerido)
+      setSelectedIbge(nomeParaIbge(municipioSugerido))
+    } else {
+      setSelectedNome(null)
+      setSelectedIbge(null)
+    }
+  }, [pendingMapaLink, municipioSugerido])
 
   const syncAllFromAip = async () => {
     setSyncingAip(true)
@@ -607,7 +624,7 @@ export function MapaFaccoesClient({
         </div>
 
         <div className="w-full lg:w-[360px] shrink-0 flex flex-col min-h-[280px] lg:min-h-0 bg-white dark:bg-gray-900/50 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          {pendingMapaLink && !selectedNome ? (
+          {pendingMapaLink ? (
             <div className="flex flex-col flex-1 p-4">
               <div className="rounded-2xl border-2 border-dashed border-amber-400 bg-amber-50 dark:bg-amber-950/20 p-4">
                 <p className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
@@ -620,7 +637,9 @@ export function MapaFaccoesClient({
                   {pendingMapaLink.unidade}
                 </p>
                 <p className="text-sm mt-4 text-amber-900 dark:text-amber-100 leading-relaxed">
-                  Selecione o município de atuação no mapa ao lado. O vínculo será criado automaticamente.
+                  {municipioSugerido
+                    ? <>Município sugerido pela unidade: <strong>{municipioSugerido}</strong>. Clique nele no mapa para confirmar ou escolha outro.</>
+                    : 'Selecione o município no mapa ao lado. O vínculo será criado automaticamente.'}
                 </p>
                 {linkingMapa && (
                   <p className="text-xs mt-3 flex items-center gap-2 text-amber-700 dark:text-amber-300">
