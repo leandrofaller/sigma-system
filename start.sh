@@ -82,6 +82,17 @@ p.\$executeRawUnsafe(\`
 \`).then(() => { console.log('Sidebar Mapa Faccoes OK'); }).catch(e => { console.error('AVISO sidebar mapa:', e.message); }).finally(() => p.\$disconnect());
 " || echo "AVISO: sidebar mapa insert falhou (nao critico)"
 
+echo "Garantindo item de sidebar Lista de Enderecos (idempotente)..."
+gosu nextjs node -e "
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+p.\$executeRawUnsafe(\`
+  INSERT INTO sidebar_configs (id, key, label, href, \"iconName\", position, roles, enabled, \"isAdmin\", \"createdAt\", \"updatedAt\")
+  SELECT 'cm_lista_enderecos_sidebar', 'lista-enderecos', 'Lista de Endereços', '/lista-enderecos', 'List', 47, ARRAY['SUPER_ADMIN','ADMIN','OPERATOR'], true, false, NOW(), NOW()
+  WHERE NOT EXISTS (SELECT 1 FROM sidebar_configs WHERE key = 'lista-enderecos')
+\`).then(() => { console.log('Sidebar Lista de Enderecos OK'); }).catch(e => { console.error('AVISO sidebar enderecos:', e.message); }).finally(() => p.\$disconnect());
+" || echo "AVISO: sidebar enderecos insert falhou (nao critico)"
+
 echo "Iniciando API Python FastAPI em background..."
 PYTHONPATH=/app/backend/app gosu nextjs /opt/arcface-venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 
