@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import {
@@ -13,7 +14,6 @@ import {
   formatCep,
   enderecoCompleto,
   googleMapsSearchUrl,
-  googleMapsEmbedUrl,
   googleMapsDirectionsUrl,
   filtrarUnidades,
   type UnidadeEndereco,
@@ -22,6 +22,8 @@ import { mapaFaccoesHref } from '@/lib/unidades-enderecos-resolver'
 import type { GeoResumoUnidade } from '@/lib/geo-vinculo-resumo'
 import { UnidadeEditarModal } from './UnidadeEditarModal'
 import { UnidadesEnderecosAprovacao } from './UnidadesEnderecosAprovacao'
+
+const UnidadeEnderecoMap = dynamic(() => import('./UnidadeEnderecoMap'), { ssr: false })
 
 interface GeoResumoPayload {
   porUnidade: GeoResumoUnidade[]
@@ -267,19 +269,11 @@ function DetalheUnidade({
 
       <div className="flex-1 min-h-[200px] relative bg-gray-100 dark:bg-gray-900">
         {!temGeo && (
-          <p className="absolute top-2 left-2 right-2 z-10 text-[10px] text-amber-800 dark:text-amber-200 bg-amber-100/90 dark:bg-amber-950/80 px-2 py-1 rounded-lg">
-            Sem geolocalização — exibindo busca por endereço. Edite a unidade para definir coordenadas.
+          <p className="absolute top-2 left-2 right-2 z-[1000] text-[10px] text-amber-800 dark:text-amber-200 bg-amber-100/90 dark:bg-amber-950/80 px-2 py-1 rounded-lg pointer-events-none">
+            Sem geolocalização — aproximando pelo endereço. Edite a unidade para definir coordenadas exatas.
           </p>
         )}
-        <iframe
-          key={`${unidade.id}-${unidade.latitude}-${unidade.longitude}-${unidade.endereco}`}
-          title={`Mapa — ${unidade.unidade}`}
-          src={googleMapsEmbedUrl(unidade)}
-          className="absolute inset-0 w-full h-full border-0"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-          allowFullScreen
-        />
+        <UnidadeEnderecoMap key={`${unidade.id}-${unidade.latitude}-${unidade.longitude}`} unidade={unidade} />
       </div>
     </div>
   )
