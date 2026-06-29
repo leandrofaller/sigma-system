@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db'
 import { agregarPorMunicipio, faccaoCor, faccaoDisplay } from '@/lib/mapa-faccoes'
 import { nomeParaIbge, normalizeMunicipioNome } from '@/lib/municipios-rondonia'
 import { matchesMunicipio } from '@/lib/municipio-match'
+import { buildApenadosUnidadesPrisionaisPorMunicipio } from '@/lib/unidades-prisionais-resumo'
 
 /** @deprecated Use matchesMunicipio */
 export function matchesMunicipioVinculo(
@@ -109,7 +110,10 @@ export async function fetchMapaVinculosComAip() {
 }
 
 export async function buildMapaStats() {
-  const vinculos = await fetchMapaVinculosComAip()
+  const [vinculos, apenadosPorMunicipio] = await Promise.all([
+    fetchMapaVinculosComAip(),
+    buildApenadosUnidadesPrisionaisPorMunicipio(),
+  ])
   const municipios = agregarPorMunicipio(vinculos, (nome, ibge) => ibge ?? nomeParaIbge(nome))
   const maxApenados = municipios.reduce((m, x) => Math.max(m, x.totalApenados), 0)
 
@@ -158,6 +162,7 @@ export async function buildMapaStats() {
 
   return {
     municipios,
+    apenadosPorMunicipio,
     maxApenados,
     unidades,
     totais: {

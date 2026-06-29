@@ -53,7 +53,10 @@ export function PresentationMunicipioPanel({ nome, stat, apenadosGeral }: Props)
         <motion.div variants={fadeUp} className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <Users className="w-4 h-4 text-blue-400 shrink-0" />
-            <span className="text-sm text-gray-300">Total de apenados</span>
+            <span className="text-sm text-gray-300">
+              Total de apenados
+              <span className="block text-[10px] text-gray-500 font-normal">Unidades Prisionais (SIAIP)</span>
+            </span>
           </div>
           <span className="text-xl font-black tabular-nums text-blue-300 shrink-0">
             {apenadosGeral.toLocaleString('pt-BR')}

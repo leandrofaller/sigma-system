@@ -19,7 +19,7 @@ import {
   listaEnderecosHrefFromUnidadeAip,
 } from '@/lib/unidades-enderecos-resolver'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
-import type { GeoResumoMunicipio } from '@/lib/geo-vinculo-resumo'
+import type { ApenadosMunicipioUnidadesPrisionais } from '@/lib/unidades-prisionais-resumo'
 
 import { FaccaoMapaBadge, PccStripeSwatch } from './FaccaoMapaBadge'
 import { PresentationMunicipioPanel } from './PresentationMunicipioPanel'
@@ -64,6 +64,7 @@ interface Vinculo {
 
 interface StatsPayload {
   municipios: MunicipioMapStats[]
+  apenadosPorMunicipio?: ApenadosMunicipioUnidadesPrisionais[]
   maxApenados: number
   totais: {
     vinculos: number
@@ -115,8 +116,6 @@ export function MapaFaccoesClient({
   const [presentationIndex, setPresentationIndex] = useState(0)
   const [presentationPlaying, setPresentationPlaying] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [geoPorMunicipio, setGeoPorMunicipio] = useState<GeoResumoMunicipio[]>([])
-
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -190,33 +189,28 @@ export function MapaFaccoesClient({
     ? municipiosComDados[presentationIndex % municipiosComDados.length]?.ibge ?? null
     : null
 
-  const apenadosAipLookup = useMemo(() => {
+  const apenadosUnidadesPrisionaisLookup = useMemo(() => {
     const byIbge: Record<number, number> = {}
     const byNome: Record<string, number> = {}
-    for (const m of geoPorMunicipio) {
-      if (m.municipioIbge != null) byIbge[m.municipioIbge] = m.apenadosAip
-      byNome[m.municipio] = m.apenadosAip
+    for (const m of stats?.apenadosPorMunicipio ?? []) {
+      if (m.municipioIbge != null) byIbge[m.municipioIbge] = m.totalApenados
+      byNome[m.municipio] = m.totalApenados
     }
     return { byIbge, byNome }
-  }, [geoPorMunicipio])
+  }, [stats?.apenadosPorMunicipio])
 
   const loadData = useCallback(async () => {
     try {
-      const [geoRes, statsRes, unidRes, geoVinculoRes] = await Promise.all([
+      const [geoRes, statsRes, unidRes] = await Promise.all([
         fetch('/geo/rondonia-municipios.geojson'),
         fetch('/api/mapa-faccoes/stats'),
         fetch('/api/mapa-faccoes/unidades'),
-        fetch('/api/geo-vinculo/resumo'),
       ])
       if (geoRes.ok) setGeojson(await geoRes.json())
       if (statsRes.ok) setStats(await statsRes.json())
       if (unidRes.ok) {
         const d = await unidRes.json()
         setUnidades(d.unidades || [])
-      }
-      if (geoVinculoRes.ok) {
-        const d = await geoVinculoRes.json()
-        setGeoPorMunicipio(d.porMunicipio ?? [])
       }
     } catch (e) {
       console.error(e)
@@ -681,8 +675,8 @@ export function MapaFaccoesClient({
                 nome={statsByIbge[highlightIbge].nome || IBGE_PARA_NOME[highlightIbge] || 'Município'}
                 stat={statsByIbge[highlightIbge]}
                 apenadosGeral={
-                  apenadosAipLookup.byIbge[highlightIbge]
-                  ?? apenadosAipLookup.byNome[statsByIbge[highlightIbge].nome]
+                  apenadosUnidadesPrisionaisLookup.byIbge[highlightIbge]
+                  ?? apenadosUnidadesPrisionaisLookup.byNome[statsByIbge[highlightIbge].nome]
                   ?? 0
                 }
               />
