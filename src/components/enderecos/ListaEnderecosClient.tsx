@@ -1,16 +1,15 @@
 'use client'
 
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import {
   Building2, MapPin, Search, ExternalLink, Navigation, Copy, Check,
-  ChevronRight, X, List, Map as MapIcon, Users, Shield, Loader2,
+  ChevronRight, X, List, Map as MapIcon, Users, Shield, Loader2, Pencil, Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { containsNormalized } from '@/lib/search'
 import {
-  UNIDADES_ENDERECOS_RO,
-  COMARCAS_RO,
   formatCep,
   enderecoCompleto,
   googleMapsSearchUrl,
@@ -21,6 +20,8 @@ import {
 } from '@/lib/unidades-enderecos-ro'
 import { mapaFaccoesHref } from '@/lib/unidades-enderecos-resolver'
 import type { GeoResumoUnidade } from '@/lib/geo-vinculo-resumo'
+import { UnidadeEditarModal } from './UnidadeEditarModal'
+import { UnidadesEnderecosAprovacao } from './UnidadesEnderecosAprovacao'
 
 interface GeoResumoPayload {
   porUnidade: GeoResumoUnidade[]
@@ -55,9 +56,21 @@ function UnidadeCard({
       <div className="flex items-start gap-2">
         <Building2 className={`w-4 h-4 mt-0.5 shrink-0 ${selected ? 'text-blue-500' : 'text-gray-400'}`} />
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            {unidade.comarca}
-          </p>
+          <div className="flex flex-wrap items-center gap-1">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              {unidade.comarca}
+            </p>
+            {unidade.alteracaoPendente && (
+              <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                pendente
+              </span>
+            )}
+            {unidade.customizado && !unidade.alteracaoPendente && (
+              <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+                atualizado
+              </span>
+            )}
+          </div>
           <p className="font-bold text-sm text-gray-900 dark:text-white mt-0.5 leading-snug">
             {unidade.unidade}
           </p>
@@ -89,10 +102,12 @@ function DetalheUnidade({
   unidade,
   resumo,
   onClose,
+  onEditar,
 }: {
   unidade: UnidadeEndereco
   resumo?: GeoResumoUnidade
   onClose?: () => void
+  onEditar: () => void
 }) {
   const [copied, setCopied] = useState(false)
   const [vinculos, setVinculos] = useState<VinculoPreview[]>([])
@@ -101,6 +116,8 @@ function DetalheUnidade({
   const mapaHref = resumo?.municipio
     ? mapaFaccoesHref(resumo.municipio, resumo.municipioIbge)
     : '/mapa-faccoes'
+
+  const temGeo = unidade.latitude != null && unidade.longitude != null
 
   useEffect(() => {
     let cancelled = false
@@ -144,17 +161,27 @@ function DetalheUnidade({
             <h2 className="font-black text-base md:text-lg text-gray-900 dark:text-white mt-2 leading-snug">
               {unidade.unidade}
             </h2>
+            {unidade.alteracaoPendente && (
+              <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1 flex items-center gap-1">
+                <Clock className="w-3 h-3" /> Alteração aguardando aprovação do administrador
+              </p>
+            )}
             {resumo?.municipio && (
               <p className="text-[10px] text-subtle mt-1">
                 Município no mapa: <strong className="text-gray-700 dark:text-gray-300">{resumo.municipio}</strong>
               </p>
             )}
           </div>
-          {onClose && (
-            <button type="button" onClick={onClose} className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-subtle">
-              <X className="w-5 h-5" />
+          <div className="flex items-center gap-1 shrink-0">
+            <button type="button" onClick={onEditar} className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 text-blue-600" title="Editar unidade">
+              <Pencil className="w-4 h-4" />
             </button>
-          )}
+            {onClose && (
+              <button type="button" onClick={onClose} className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-subtle">
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mt-4 space-y-2 text-sm">
@@ -167,6 +194,11 @@ function DetalheUnidade({
               <span className="font-mono font-bold">CEP {formatCep(unidade.cep)}</span>
             ) : (
               <span className="italic">CEP não informado</span>
+            )}
+            {temGeo && (
+              <span className="font-mono text-emerald-700 dark:text-emerald-400">
+                {unidade.latitude!.toFixed(6)}, {unidade.longitude!.toFixed(6)}
+              </span>
             )}
           </div>
         </div>
@@ -234,7 +266,13 @@ function DetalheUnidade({
       </div>
 
       <div className="flex-1 min-h-[200px] relative bg-gray-100 dark:bg-gray-900">
+        {!temGeo && (
+          <p className="absolute top-2 left-2 right-2 z-10 text-[10px] text-amber-800 dark:text-amber-200 bg-amber-100/90 dark:bg-amber-950/80 px-2 py-1 rounded-lg">
+            Sem geolocalização — exibindo busca por endereço. Edite a unidade para definir coordenadas.
+          </p>
+        )}
         <iframe
+          key={`${unidade.id}-${unidade.latitude}-${unidade.longitude}-${unidade.endereco}`}
           title={`Mapa — ${unidade.unidade}`}
           src={googleMapsEmbedUrl(unidade)}
           className="absolute inset-0 w-full h-full border-0"
@@ -248,17 +286,44 @@ function DetalheUnidade({
 }
 
 export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnidadeId?: string | null }) {
+  const { data: session } = useSession()
+  const role = (session?.user as { role?: string } | undefined)?.role
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN'
+
   const [search, setSearch] = useState('')
   const [comarcaFilter, setComarcaFilter] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(initialUnidadeId)
   const [geoResumo, setGeoResumo] = useState<GeoResumoPayload | null>(null)
+  const [unidades, setUnidades] = useState<UnidadeEndereco[]>([])
+  const [comarcas, setComarcas] = useState<string[]>([])
+  const [loadingUnidades, setLoadingUnidades] = useState(true)
+  const [editando, setEditando] = useState<UnidadeEndereco | null>(null)
 
-  useEffect(() => {
+  const carregarUnidades = useCallback(async () => {
+    setLoadingUnidades(true)
+    try {
+      const res = await fetch('/api/unidades-enderecos')
+      if (res.ok) {
+        const data = await res.json()
+        setUnidades(data.unidades ?? [])
+        setComarcas(data.comarcas ?? [])
+      }
+    } finally {
+      setLoadingUnidades(false)
+    }
+  }, [])
+
+  const carregarResumo = useCallback(() => {
     fetch('/api/geo-vinculo/resumo')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setGeoResumo(d))
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    carregarUnidades()
+    carregarResumo()
+  }, [carregarUnidades, carregarResumo])
 
   const resumoPorId = useMemo(() => {
     const m: Record<string, GeoResumoUnidade> = {}
@@ -267,8 +332,8 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
   }, [geoResumo])
 
   const filtradas = useMemo(
-    () => filtrarUnidades(UNIDADES_ENDERECOS_RO, search, comarcaFilter),
-    [search, comarcaFilter]
+    () => filtrarUnidades(unidades, search, comarcaFilter),
+    [unidades, search, comarcaFilter]
   )
 
   const porComarca = useMemo(() => {
@@ -282,12 +347,30 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
   }, [filtradas])
 
   const selected = useMemo(
-    () => UNIDADES_ENDERECOS_RO.find((u) => u.id === selectedId) ?? null,
-    [selectedId]
+    () => unidades.find((u) => u.id === selectedId) ?? null,
+    [unidades, selectedId]
   )
 
   const comarcaMatches = (c: string) =>
     !search.trim() || containsNormalized(c, search) || filtradas.some((u) => u.comarca === c)
+
+  const handleUnidadeSalva = (atualizada: UnidadeEndereco) => {
+    setUnidades((prev) => prev.map((u) => (u.id === atualizada.id ? atualizada : u)))
+    carregarResumo()
+  }
+
+  const handleAprovacaoResolvida = () => {
+    carregarUnidades()
+    carregarResumo()
+  }
+
+  if (loadingUnidades) {
+    return (
+      <div className="flex items-center justify-center h-full gap-2 text-subtle">
+        <Loader2 className="w-5 h-5 animate-spin" /> Carregando unidades...
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -302,7 +385,8 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
                 Lista de Endereços
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Integrada ao AIP e Mapa Facções — {UNIDADES_ENDERECOS_RO.length} unidades
+                Integrada ao AIP e Mapa Facções — {unidades.length} unidades
+                {!isAdmin && ' · edições sujeitas a aprovação'}
               </p>
             </div>
           </div>
@@ -330,10 +414,10 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
               !comarcaFilter ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-subtle hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
           >
-            Todas ({UNIDADES_ENDERECOS_RO.length})
+            Todas ({unidades.length})
           </button>
-          {COMARCAS_RO.filter(comarcaMatches).map((c) => {
-            const count = UNIDADES_ENDERECOS_RO.filter((u) => u.comarca === c).length
+          {comarcas.filter(comarcaMatches).map((c) => {
+            const count = unidades.filter((u) => u.comarca === c).length
             const visible = filtradas.filter((u) => u.comarca === c).length
             return (
               <button
@@ -351,16 +435,18 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
         </div>
       </div>
 
+      {isAdmin && <UnidadesEnderecosAprovacao onResolved={handleAprovacaoResolvida} />}
+
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
         <div className={`w-full lg:w-[420px] shrink-0 flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700 ${selected ? 'hidden lg:flex' : 'flex'}`}>
           <div className="flex-1 overflow-y-auto p-3 space-y-4">
-            {porComarca.map(([comarca, unidades]) => (
+            {porComarca.map(([comarca, lista]) => (
               <div key={comarca}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-600/80 dark:text-blue-400/80 mb-2 px-1 sticky top-0 bg-gray-50/95 dark:bg-gray-950/95 py-1 backdrop-blur-sm z-10">
                   {comarca}
                 </p>
                 <div className="space-y-2">
-                  {unidades.map((u) => (
+                  {lista.map((u) => (
                     <UnidadeCard
                       key={u.id}
                       unidade={u}
@@ -381,6 +467,7 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
               unidade={selected}
               resumo={resumoPorId[selected.id]}
               onClose={() => setSelectedId(null)}
+              onEditar={() => setEditando(selected)}
             />
           ) : (
             <div className="flex flex-col items-center justify-center flex-1 p-8 text-center text-subtle">
@@ -390,6 +477,16 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
           )}
         </div>
       </div>
+
+      {editando && (
+        <UnidadeEditarModal
+          unidade={editando}
+          isAdmin={isAdmin}
+          comarcas={comarcas}
+          onClose={() => setEditando(null)}
+          onSaved={handleUnidadeSalva}
+        />
+      )}
     </div>
   )
 }

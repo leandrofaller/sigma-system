@@ -1,12 +1,13 @@
 import { prisma } from '@/lib/db'
 import { matchesMunicipio } from '@/lib/municipio-match'
 import { fetchMapaVinculosComAip, formatVinculo } from '@/lib/mapa-faccoes-service'
-import { UNIDADES_ENDERECOS_RO } from '@/lib/unidades-enderecos-ro'
+import { loadUnidadesCatalog } from '@/lib/unidades-enderecos-catalog'
 import {
   geoMapaFromUnidadeEndereco,
   resolveUnidadeEndereco,
   unidadeCorrespondeCatalogo,
 } from '@/lib/unidades-enderecos-resolver'
+import { getStaticUnidadeById } from '@/lib/unidades-enderecos-catalog'
 
 export interface GeoResumoUnidade {
   unidadeId: string
@@ -44,7 +45,8 @@ export async function buildGeoVinculoResumo() {
     }),
   ])
 
-  const porUnidade: GeoResumoUnidade[] = UNIDADES_ENDERECOS_RO.map((entry) => {
+  const catalogo = await loadUnidadesCatalog()
+  const porUnidade: GeoResumoUnidade[] = catalogo.map((entry) => {
     const geo = geoMapaFromUnidadeEndereco(entry)
     const vinculosUnit = vinculosRaw.filter((v) => unidadeCorrespondeCatalogo(v.unidadePrisional, entry))
     const apenados = apenadosAip.filter((a) => unidadeCorrespondeCatalogo(a.unidade, entry))
@@ -98,7 +100,7 @@ export async function fetchVinculosMapaPorGeo(opts: {
   let list = vinculosRaw
 
   if (opts.unidadeId) {
-    const entry = UNIDADES_ENDERECOS_RO.find((u) => u.id === opts.unidadeId)
+    const entry = getStaticUnidadeById(opts.unidadeId)
     if (entry) {
       list = list.filter((v) => unidadeCorrespondeCatalogo(v.unidadePrisional, entry))
     }

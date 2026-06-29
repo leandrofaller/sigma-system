@@ -6,6 +6,12 @@ export interface UnidadeEndereco {
   unidade: string
   endereco: string
   cep: string
+  latitude?: number | null
+  longitude?: number | null
+  /** Dados vieram de override aprovado no banco (não do catálogo estático). */
+  customizado?: boolean
+  /** Operador enviou alteração aguardando aprovação. */
+  alteracaoPendente?: boolean
 }
 
 export const UNIDADES_ENDERECOS_RO: UnidadeEndereco[] = [
@@ -88,17 +94,26 @@ export function enderecoCompleto(u: UnidadeEndereco): string {
   return u.cep ? `${base}, CEP ${formatCep(u.cep)}` : base
 }
 
+function temCoordenadas(u: UnidadeEndereco): boolean {
+  return u.latitude != null && u.longitude != null && !isNaN(u.latitude) && !isNaN(u.longitude)
+}
+
+export function googleMapsQuery(u: UnidadeEndereco): string {
+  if (temCoordenadas(u)) return `${u.latitude},${u.longitude}`
+  return enderecoCompleto(u)
+}
+
 export function googleMapsSearchUrl(u: UnidadeEndereco): string {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enderecoCompleto(u))}`
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(googleMapsQuery(u))}`
 }
 
 export function googleMapsEmbedUrl(u: UnidadeEndereco): string {
-  const q = encodeURIComponent(enderecoCompleto(u))
-  return `https://maps.google.com/maps?q=${q}&hl=pt&z=15&output=embed`
+  const q = encodeURIComponent(googleMapsQuery(u))
+  return `https://maps.google.com/maps?q=${q}&hl=pt&z=${temCoordenadas(u) ? 16 : 15}&output=embed`
 }
 
 export function googleMapsDirectionsUrl(u: UnidadeEndereco): string {
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(enderecoCompleto(u))}`
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(googleMapsQuery(u))}`
 }
 
 export function filtrarUnidades(

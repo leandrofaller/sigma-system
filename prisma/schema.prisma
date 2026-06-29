@@ -130,6 +130,10 @@ model User {
   ordensEmitidas      OrdemMissao[]             @relation("OrdensMissaoEmitidas")
   ordensParticipacoes OrdemMissaoParticipante[] @relation("OrdensMissaoParticipacoes")
 
+  unidadeEnderecoOverridesAtualizados UnidadeEnderecoOverride[] @relation("UnidadeOverrideAtualizado")
+  unidadeEnderecoSolicitacoesEnviadas UnidadeEnderecoSolicitacao[] @relation("UnidadeSolicitacaoEnviada")
+  unidadeEnderecoSolicitacoesRevisadas UnidadeEnderecoSolicitacao[] @relation("UnidadeSolicitacaoRevisada")
+
   @@map("users")
 }
 
@@ -1474,6 +1478,56 @@ model SidebarConfig {
   updatedAt DateTime @updatedAt
 
   @@map("sidebar_configs")
+}
+
+enum UnidadeEnderecoSolicitacaoStatus {
+  PENDENTE
+  APROVADA
+  REJEITADA
+}
+
+// Dados aprovados que sobrescrevem o catálogo estático (por unidadeId).
+model UnidadeEnderecoOverride {
+  id              String   @id @default(cuid())
+  unidadeId       String   @unique
+  comarca         String
+  unidade         String
+  endereco        String
+  cep             String   @default("")
+  latitude        Float?
+  longitude       Float?
+  atualizadoPorId String?
+  atualizadoPor   User?    @relation("UnidadeOverrideAtualizado", fields: [atualizadoPorId], references: [id], onDelete: SetNull)
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+
+  @@index([comarca])
+  @@map("unidade_endereco_overrides")
+}
+
+// Alterações enviadas por operadores — exigem aprovação de admin.
+model UnidadeEnderecoSolicitacao {
+  id                String                           @id @default(cuid())
+  unidadeId         String
+  status            UnidadeEnderecoSolicitacaoStatus @default(PENDENTE)
+  comarca           String
+  unidade           String
+  endereco          String
+  cep               String                           @default("")
+  latitude          Float?
+  longitude         Float?
+  solicitadoPorId   String
+  solicitadoPor     User                             @relation("UnidadeSolicitacaoEnviada", fields: [solicitadoPorId], references: [id], onDelete: Cascade)
+  solicitadoEm      DateTime                         @default(now())
+  revisadoPorId     String?
+  revisadoPor       User?                            @relation("UnidadeSolicitacaoRevisada", fields: [revisadoPorId], references: [id], onDelete: SetNull)
+  revisadoEm        DateTime?
+  motivoRejeicao    String?                          @db.Text
+
+  @@index([status])
+  @@index([unidadeId])
+  @@index([solicitadoEm])
+  @@map("unidade_endereco_solicitacoes")
 }
 
 
