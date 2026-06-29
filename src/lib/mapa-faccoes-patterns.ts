@@ -2,6 +2,10 @@ import { intensidadeCor, type FaccaoEstiloMapa } from '@/lib/mapa-faccoes'
 
 export const MAPA_PCC_STRIPES_ID = 'mapa-pcc-stripes'
 
+/** Padrão listrado PCC (mapa e ícones de legenda — nunca como fundo de texto). */
+export const PCC_STRIPE_GRADIENT =
+  'repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 2px,#f8fafc 2px,#f8fafc 4px)'
+
 export function splitPatternId(ibge: number): string {
   return `mapa-split-${ibge}`
 }

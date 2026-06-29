@@ -87,13 +87,19 @@ function buildTooltip(stat: MunicipioMapStats | undefined, nome: string): string
     const pct = Math.round((estilo.ratioPredominante ?? 0.5) * 100)
     return `<strong>${nome}</strong><br/>${stat.totalApenados} faccionado(s)<br/>
       <span style="color:#dc2626">● CV: ${estilo.cvCount}</span> ·
-      <span style="color:#f8fafc;background:#111;padding:0 3px;border-radius:2px">▥ PCC: ${estilo.pccCount}</span><br/>
+      <span style="display:inline-flex;align-items:center;gap:4px;color:#fff;background:#0a0a0a;padding:2px 6px;border-radius:4px;font-weight:700">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 2px,#f8fafc 2px,#f8fafc 4px);border:1px solid rgba(255,255,255,.3)"></span>
+        PCC: ${estilo.pccCount}
+      </span><br/>
       <em>Predominante: ${stat.faccaoPredominante} (${pct}%)</em>`
   }
 
   if (estilo?.tipo === 'striped') {
     return `<strong>${nome}</strong><br/>${stat.totalApenados} faccionado(s)<br/>
-      <span style="color:#f8fafc;background:repeating-linear-gradient(45deg,#111,#111 2px,#fff 2px,#fff 4px);padding:0 4px;border-radius:2px">▥ PCC</span>`
+      <span style="display:inline-flex;align-items:center;gap:4px;color:#fff;background:#0a0a0a;padding:2px 8px;border-radius:4px;font-weight:700">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 2px,#f8fafc 2px,#f8fafc 4px);border:1px solid rgba(255,255,255,.3)"></span>
+        PCC
+      </span>`
   }
 
   if (estilo?.predominanteGrupo === 'CV') {

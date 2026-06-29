@@ -20,6 +20,8 @@ import {
 } from '@/lib/unidades-enderecos-resolver'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
 
+import { FaccaoMapaBadge, PccStripeSwatch } from './FaccaoMapaBadge'
+
 const MapaFaccoesMap = dynamic(() => import('./MapaFaccoesMap'), {
   ssr: false,
   loading: () => (
@@ -665,9 +667,11 @@ export function MapaFaccoesClient({
               {statsByIbge[highlightIbge] && (
                 <p className="text-sm text-gray-300 mt-1">
                   {statsByIbge[highlightIbge].totalApenados} faccionados ·{' '}
-                  <span style={{ color: statsByIbge[highlightIbge].faccaoCor }}>
-                    {statsByIbge[highlightIbge].faccaoPredominante}
-                  </span>
+                  <FaccaoMapaBadge
+                    label={statsByIbge[highlightIbge].faccaoPredominante}
+                    cor={statsByIbge[highlightIbge].faccaoCor}
+                    estiloMapa={statsByIbge[highlightIbge].estiloMapa}
+                  />
                 </p>
               )}
             </motion.div>
@@ -677,11 +681,9 @@ export function MapaFaccoesClient({
             <p className="font-bold text-white mb-1.5">Legenda</p>
             <p className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-[#dc2626]" /> Comando Vermelho</p>
             <p className="flex items-center gap-1.5 mt-0.5">
-              <span
-                className="inline-block w-3 h-3 rounded-sm border border-white/20"
-                style={{ background: 'repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 2px,#f8fafc 2px,#f8fafc 4px)' }}
-              />
-              PCC (listrado)
+              <PccStripeSwatch />
+              <span className="text-white font-semibold">PCC</span>
+              <span className="text-gray-400">(listrado no mapa)</span>
             </p>
             <p className="mt-0.5 text-gray-400">Divisão = CV e PCC no mesmo município</p>
             <p className={`mt-1.5 ${pendingMapaLink ? 'text-amber-300 font-bold' : 'text-amber-400'}`}>
@@ -744,23 +746,14 @@ export function MapaFaccoesClient({
                         <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold">
                           {selectedStat.totalApenados} faccionados
                         </span>
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-full font-bold"
-                          style={{ backgroundColor: `${selectedStat.faccaoCor}22`, color: selectedStat.faccaoCor }}
-                        >
-                          {selectedStat.faccaoPredominante}
-                        </span>
+                        <FaccaoMapaBadge
+                          label={selectedStat.faccaoPredominante}
+                          cor={selectedStat.faccaoCor}
+                          estiloMapa={selectedStat.estiloMapa}
+                        />
                         {selectedStat.estiloMapa?.tipo === 'split' && selectedStat.faccaoSecundaria && (
                           <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-gray-800 text-gray-200">
                             + {selectedStat.faccaoSecundaria} ({selectedStat.estiloMapa.pccCount} PCC / {selectedStat.estiloMapa.cvCount} CV)
-                          </span>
-                        )}
-                        {selectedStat.estiloMapa?.tipo === 'striped' && (
-                          <span
-                            className="text-xs px-2 py-0.5 rounded-full font-bold text-white"
-                            style={{ background: 'repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 3px,#f8fafc 3px,#f8fafc 6px)' }}
-                          >
-                            Listrado PCC
                           </span>
                         )}
                       </div>
@@ -863,12 +856,11 @@ export function MapaFaccoesClient({
                             })()}
                           </p>
                           <div className="flex flex-wrap gap-1 mt-1.5">
-                            <span
-                              className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded"
-                              style={{ backgroundColor: `${v.apenado.faccaoCor}22`, color: v.apenado.faccaoCor }}
-                            >
-                              {v.apenado.faccaoDisplay}
-                            </span>
+                            <FaccaoMapaBadge
+                              label={v.apenado.faccaoDisplay}
+                              cor={v.apenado.faccaoCor}
+                              showStripeHint={false}
+                            />
                             {v.origem === 'AIP_AUTO' && (
                               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400">
                                 AIP
