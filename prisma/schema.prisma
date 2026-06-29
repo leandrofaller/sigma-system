@@ -708,6 +708,7 @@ model SipeApenadoImportado {
   @@index([nome])
   @@index([cpf])
   @@index([faccaoId])
+  @@index([apenadoLocalId])
   @@map("sipe_apenados_importados")
 }
 

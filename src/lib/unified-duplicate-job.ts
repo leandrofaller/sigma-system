@@ -136,6 +136,16 @@ function hammingDistance(a: string, b: string): number {
   }
 }
 
+function hammingDistanceBigInt(a: bigint, b: bigint): number {
+  let diff = a ^ b;
+  let n = 0;
+  while (diff > 0n) {
+    diff &= diff - 1n;
+    n++;
+  }
+  return n;
+}
+
 // Fast 32-bit popcount using Hamming weight algorithm
 function popcount32(x: number): number {
   x = x | 0;
@@ -376,7 +386,16 @@ function getRecordCategory(
 }
 
 async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
-  const idToRecord = new Map(records.map((r) => [r.id, r]));
+  const recordsWithBigInt = records.map((r) => {
+    let photoHashBigInt: bigint | null = null;
+    if (r.photoHash && r.photoHash.length === 16) {
+      try {
+        photoHashBigInt = BigInt('0x' + r.photoHash);
+      } catch {}
+    }
+    return { ...r, photoHashBigInt };
+  });
+  const idToRecord = new Map(recordsWithBigInt.map((r) => [r.id, r]));
   const parent = new Map<string, string>(records.map((r) => [r.id, r.id]));
   const find = makeFind(parent);
   const pixelMergedIds = new Set<string>(); // IDs merged via pixel hashing (phases A & B)
@@ -403,26 +422,22 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
   await new Promise<void>((r) => setImmediate(r));
 
   // ── Phase B: dHash LSH near-duplicate grouping ────────────────────────────
-  const validRecords = records.filter((r) => r.photoHash?.length === 16);
+  const validRecords = recordsWithBigInt.filter((r) => r.photoHashBigInt !== null);
   const bandMaps: Map<string, string[]>[] = [new Map(), new Map(), new Map(), new Map()];
 
   for (const r of validRecords) {
-    try {
-      const n = BigInt('0x' + r.photoHash!);
-      const bands = [
-        ((n >> 48n) & 0xffffn).toString(16).padStart(4, '0'),
-        ((n >> 32n) & 0xffffn).toString(16).padStart(4, '0'),
-        ((n >> 16n) & 0xffffn).toString(16).padStart(4, '0'),
-        (n & 0xffffn).toString(16).padStart(4, '0'),
-      ];
-      for (let b = 0; b < 4; b++) {
-        const key = `${b}:${bands[b]}`;
-        const bucket = bandMaps[b].get(key);
-        if (!bucket) bandMaps[b].set(key, [r.id]);
-        else if (bucket.length < MAX_BUCKET_SIZE) bucket.push(r.id);
-      }
-    } catch {
-      // invalid hash — skip
+    const n = r.photoHashBigInt!;
+    const bands = [
+      ((n >> 48n) & 0xffffn).toString(16).padStart(4, '0'),
+      ((n >> 32n) & 0xffffn).toString(16).padStart(4, '0'),
+      ((n >> 16n) & 0xffffn).toString(16).padStart(4, '0'),
+      (n & 0xffffn).toString(16).padStart(4, '0'),
+    ];
+    for (let b = 0; b < 4; b++) {
+      const key = `${b}:${bands[b]}`;
+      const bucket = bandMaps[b].get(key);
+      if (!bucket) bandMaps[b].set(key, [r.id]);
+      else if (bucket.length < MAX_BUCKET_SIZE) bucket.push(r.id);
     }
   }
 
@@ -441,8 +456,10 @@ async function buildGroupsAsync(records: RawRecord[]): Promise<DupGroup[]> {
           
           const a = idToRecord.get(idA);
           const b = idToRecord.get(idB);
-          if (a?.photoHash && b?.photoHash && hammingDistance(a.photoHash, b.photoHash) <= DHASH_THRESHOLD) {
-            candidatePairs.add(`${idA}|${idB}`);
+          if (a?.photoHashBigInt !== null && b?.photoHashBigInt !== null && a?.photoHashBigInt !== undefined && b?.photoHashBigInt !== undefined) {
+            if (hammingDistanceBigInt(a.photoHashBigInt, b.photoHashBigInt) <= DHASH_THRESHOLD) {
+              candidatePairs.add(`${idA}|${idB}`);
+            }
           }
           if (++iteration % 50_000 === 0) await new Promise<void>((r) => setImmediate(r));
         }
@@ -615,36 +632,63 @@ async function runJob(): Promise<void> {
   // ── Phase 2: Detection ─────────────────────────────────────────────────────
   state = { ...state, phase: 'detecting' };
 
-  const records = await prisma.$queryRaw<RawRecord[]>`
+  // 1. Carregar apenados com fotos
+  const rawRecords = await prisma.$queryRaw<any[]>`
     SELECT a.id, a.name, a.matricula, a.unidade, a.faccao, a."photoPath",
            a."photoHashSha", a."photoHash", a."photoQuality",
            (a."faceDescriptor" IS NOT NULL AND a."faceDescriptor" != '') AS "hasFace",
-           a."ocrText",
-           EXISTS (
-             SELECT 1 FROM sipe_apenados_importados s
-             JOIN aip_apenados ai ON s."sipeId" = ai."sipeApenadoId"
-             WHERE s."apenadoLocalId" = a.id
-           ) AS "hasAip",
-           EXISTS (
-             SELECT 1 FROM sipe_apenados_importados s
-             WHERE s."apenadoLocalId" = a.id
-           ) AS "hasSipe",
-           (
-             SELECT s."sipeId" FROM sipe_apenados_importados s
-             WHERE s."apenadoLocalId" = a.id
-             LIMIT 1
-           ) AS "sipeId",
-           (
-             SELECT s.situacao FROM sipe_apenados_importados s
-             WHERE s."apenadoLocalId" = a.id
-             LIMIT 1
-           ) AS "situacao"
+           a."ocrText"
     FROM apenados a
     WHERE a."photoPath" IS NOT NULL
       AND a."photoHash" IS NOT NULL
       AND a."photoHashSha" IS NOT NULL
     ORDER BY a.name ASC
   `;
+
+  // 2. Carregar importações do SIPE de forma paralela rápida
+  const imports = await prisma.sipeApenadoImportado.findMany({
+    where: { apenadoLocalId: { not: null } },
+    select: {
+      apenadoLocalId: true,
+      sipeId: true,
+      situacao: true,
+      aipApenado: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
+
+  // Mapear importações para junção em memória O(N)
+  const importsMap = new Map<string, typeof imports[0]>();
+  for (const imp of imports) {
+    if (imp.apenadoLocalId) {
+      importsMap.set(imp.apenadoLocalId, imp);
+    }
+  }
+
+  // 3. Juntar dados em memória de forma instantânea
+  const records: RawRecord[] = rawRecords.map((r) => {
+    const imp = importsMap.get(r.id);
+    return {
+      id: r.id,
+      name: r.name,
+      matricula: r.matricula,
+      unidade: r.unidade,
+      faccao: r.faccao,
+      photoPath: r.photoPath,
+      photoHashSha: r.photoHashSha,
+      photoHash: r.photoHash,
+      photoQuality: r.photoQuality,
+      hasFace: r.hasFace,
+      ocrText: r.ocrText,
+      hasAip: imp ? imp.aipApenado !== null : false,
+      hasSipe: imp !== undefined,
+      sipeId: imp ? imp.sipeId : null,
+      situacao: imp ? imp.situacao : null,
+    };
+  });
 
   const groups = await buildGroupsAsync(records);
   const faceGroupsCount = groups.filter((g) => g.type === 'face').length;
