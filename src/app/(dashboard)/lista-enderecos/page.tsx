@@ -4,7 +4,11 @@ import { ListaEnderecosClient } from '@/components/enderecos/ListaEnderecosClien
 
 export const metadata = { title: 'Lista de Endereços — Unidades Prisionais RO' }
 
-export default async function ListaEnderecosPage() {
+export default async function ListaEnderecosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ unidade?: string }>
+}) {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
@@ -13,5 +17,7 @@ export default async function ListaEnderecosPage() {
     redirect('/dashboard')
   }
 
-  return <ListaEnderecosClient />
+  const params = await searchParams
+
+  return <ListaEnderecosClient initialUnidadeId={params.unidade ?? null} />
 }

@@ -76,6 +76,50 @@ function extrairAliasesParenteses(unidade: string): string[] {
     .flatMap((inner) => inner.split(/\be\b|\/|,/i).map((s) => s.trim()).filter(Boolean))
 }
 
+export function municipioMapaFromUnidadeEndereco(entry: UnidadeEndereco): string | null {
+  return municipioFromCatalogEntry(entry)
+}
+
+export function municipioIbgeFromUnidadeEndereco(entry: UnidadeEndereco): number | null {
+  const m = municipioFromCatalogEntry(entry)
+  return m ? nomeParaIbge(m) : null
+}
+
+export function geoMapaFromUnidadeEndereco(entry: UnidadeEndereco) {
+  const municipio = municipioFromCatalogEntry(entry)
+  return {
+    comarca: entry.comarca,
+    municipio,
+    municipioIbge: municipio ? nomeParaIbge(municipio) : null,
+  }
+}
+
+/** URL do Mapa Facções com município pré-selecionado. */
+export function mapaFaccoesHref(municipio: string | null, ibge: number | null): string {
+  if (!municipio) return '/mapa-faccoes'
+  const p = new URLSearchParams({ municipio })
+  if (ibge) p.set('ibge', String(ibge))
+  return `/mapa-faccoes?${p}`
+}
+
+export function listaEnderecosHref(unidadeId: string): string {
+  return `/lista-enderecos?unidade=${encodeURIComponent(unidadeId)}`
+}
+
+/** Link para lista de endereços a partir do nome/sigla de unidade do AIP/SIPE. */
+export function listaEnderecosHrefFromUnidadeAip(unidadeAip: string | null | undefined): string | null {
+  const entry = resolveUnidadeEndereco(unidadeAip)
+  return entry ? listaEnderecosHref(entry.id) : null
+}
+
+/** Unidade AIP/SIPE corresponde à entrada da lista oficial? */
+export function unidadeCorrespondeCatalogo(unidadeAip: string | null | undefined, entry: UnidadeEndereco): boolean {
+  const r = resolveUnidadeEndereco(unidadeAip)
+  if (r) return r.id === entry.id
+  if (!unidadeAip?.trim()) return false
+  return normKey(unidadeAip) === normKey(entry.unidade)
+}
+
 function municipioFromCatalogEntry(entry: UnidadeEndereco): string | null {
   const override = MUNICIPIO_OVERRIDE_BY_ID[entry.id]
   if (override) {

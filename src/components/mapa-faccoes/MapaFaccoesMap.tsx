@@ -134,7 +134,7 @@ export default function MapaFaccoesMap({
       const total = stat?.totalApenados ?? 0
       const isSelected = selectedIbge === ibge
       const isHighlight = highlightIbge === ibge
-      const linkBase = linkMode && !isSelected
+      const linkBase = !!(linkMode && !isSelected)
 
       const fillColor = resolveMapFillColor(
         stat,

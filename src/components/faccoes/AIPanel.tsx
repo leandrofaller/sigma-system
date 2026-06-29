@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
+import { listaEnderecosHrefFromUnidadeAip } from '@/lib/unidades-enderecos-resolver'
 import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, MapPinOff, CheckCircle2, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download, Link2, RefreshCw, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
@@ -699,7 +701,7 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
                     </h3>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       {[
-                        ['Unidade', apenado.unidade],
+                        ['Unidade', apenado.unidade, listaEnderecosHrefFromUnidadeAip(apenado.unidade)],
                         ['Cela', apenado.cela],
                         ['Regime', apenado.regime],
                         ['Situação', apenado.situacao],
@@ -709,10 +711,16 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
                         ['RJI', apenado.rji],
                         ['Preso Oriundo', apenado.presoOriundo],
                         ['Intramuro', apenado.intramuro === true ? 'Sim' : apenado.intramuro === false ? 'Não' : null],
-                      ].map(([label, value]) => value != null ? (
+                      ].map(([label, value, href]) => value != null ? (
                         <div key={String(label)}>
                           <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-                          <p className="text-gray-900 dark:text-white font-medium">{value}</p>
+                          {href ? (
+                            <Link href={href} className="text-blue-600 dark:text-blue-400 font-medium hover:underline">
+                              {value}
+                            </Link>
+                          ) : (
+                            <p className="text-gray-900 dark:text-white font-medium">{value}</p>
+                          )}
                         </div>
                       ) : null)}
                     </div>

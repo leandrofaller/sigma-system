@@ -1,25 +1,15 @@
 import { prisma } from '@/lib/db'
 import { agregarPorMunicipio, faccaoCor, faccaoDisplay } from '@/lib/mapa-faccoes'
-import { normalizeMunicipioNome, nomeParaIbge } from '@/lib/municipios-rondonia'
-import { normalizeSearch } from '@/lib/search'
+import { nomeParaIbge, normalizeMunicipioNome } from '@/lib/municipios-rondonia'
+import { matchesMunicipio } from '@/lib/municipio-match'
 
-/** Compara município do vínculo com filtro do mapa (IBGE ou nome canônico). */
+/** @deprecated Use matchesMunicipio */
 export function matchesMunicipioVinculo(
   v: { municipio: string; municipioIbge: number | null },
   queryNome: string,
   queryIbge: number | null | undefined
 ): boolean {
-  if (queryIbge != null && v.municipioIbge === queryIbge) return true
-
-  const qNome = normalizeSearch(queryNome)
-  if (!qNome) return true
-
-  const vNome = normalizeSearch(v.municipio)
-  if (vNome === qNome) return true
-
-  const canonQuery = normalizeSearch(normalizeMunicipioNome(queryNome))
-  const canonV = normalizeSearch(normalizeMunicipioNome(v.municipio))
-  return canonV === canonQuery || vNome.includes(qNome) || qNome.includes(vNome)
+  return matchesMunicipio(v, queryNome, queryIbge)
 }
 
 export async function resolveAipApenadoId(

@@ -1,18 +1,23 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import html2canvas from 'html2canvas'
 import JSZip from 'jszip'
 import {
   Map, Shield, Building2, Users, Search, Plus, Trash2, FileBarChart,
-  Play, Pause, Download, Loader2, X, ChevronRight, Sparkles, MapPin, RefreshCw, Brain
+  Play, Pause, Download, Loader2, X, ChevronRight, Sparkles, MapPin, RefreshCw, Brain, List,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { containsNormalized } from '@/lib/search'
-import { IBGE_PARA_NOME, nomeParaIbge } from '@/lib/municipios-rondonia'
-import { inferMunicipioFromUnidadeAip } from '@/lib/unidades-enderecos-resolver'
+import { IBGE_PARA_NOME, nomeParaIbge, normalizeMunicipioNome } from '@/lib/municipios-rondonia'
+import {
+  inferMunicipioFromUnidadeAip,
+  listaEnderecosHrefFromUnidadeAip,
+} from '@/lib/unidades-enderecos-resolver'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
 
 const MapaFaccoesMap = dynamic(() => import('./MapaFaccoesMap'), {
@@ -121,6 +126,33 @@ export function MapaFaccoesClient({
 
   const mapAreaRef = useRef<HTMLDivElement>(null)
   const presentationTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const deepLinkApplied = useRef(false)
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    if (deepLinkApplied.current || loading) return
+    const munParam = searchParams.get('municipio')
+    const ibgeParam = searchParams.get('ibge')
+    if (!munParam && !ibgeParam) return
+
+    deepLinkApplied.current = true
+    const ibgeParsed = ibgeParam ? parseInt(ibgeParam, 10) : null
+    const ibge = ibgeParsed != null && !isNaN(ibgeParsed)
+      ? ibgeParsed
+      : munParam
+        ? nomeParaIbge(normalizeMunicipioNome(munParam))
+        : null
+    const nome = munParam
+      ? normalizeMunicipioNome(munParam)
+      : ibge
+        ? IBGE_PARA_NOME[ibge] ?? null
+        : null
+
+    if (nome) {
+      setSelectedNome(nome)
+      setSelectedIbge(ibge)
+    }
+  }, [searchParams, loading])
 
   const statsByIbge = useMemo(() => {
     const m: Record<number, MunicipioMapStats> = {}
@@ -520,6 +552,9 @@ export function MapaFaccoesClient({
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
+            <Link href="/lista-enderecos" className="btn-secondary text-xs gap-1.5">
+              <List className="w-3.5 h-3.5" /> Endereços
+            </Link>
             <button
               type="button"
               onClick={syncAllFromAip}
@@ -666,7 +701,16 @@ export function MapaFaccoesClient({
                 <p className="text-[10px] text-subtle mt-0.5">SIPE #{pendingMapaLink.sipeId}</p>
                 <p className="text-xs mt-2 flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
                   <Building2 className="w-3.5 h-3.5 shrink-0" />
-                  {pendingMapaLink.unidade}
+                  {(() => {
+                    const href = listaEnderecosHrefFromUnidadeAip(pendingMapaLink.unidade)
+                    return href ? (
+                      <Link href={href} className="font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                        {pendingMapaLink.unidade}
+                      </Link>
+                    ) : (
+                      pendingMapaLink.unidade
+                    )
+                  })()}
                 </p>
                 <p className="text-sm mt-4 text-amber-900 dark:text-amber-100 leading-relaxed">
                   {municipioSugerido
@@ -807,7 +851,16 @@ export function MapaFaccoesClient({
                           </div>
                           <p className="text-xs mt-1.5 flex items-start gap-1 text-gray-600 dark:text-gray-300">
                             <Building2 className="w-3 h-3 shrink-0 mt-0.5" />
-                            <span className="line-clamp-2">{v.unidadePrisional}</span>
+                            {(() => {
+                              const href = listaEnderecosHrefFromUnidadeAip(v.unidadePrisional)
+                              return href ? (
+                                <Link href={href} className="line-clamp-2 font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                                  {v.unidadePrisional}
+                                </Link>
+                              ) : (
+                                <span className="line-clamp-2">{v.unidadePrisional}</span>
+                              )
+                            })()}
                           </p>
                           <div className="flex flex-wrap gap-1 mt-1.5">
                             <span

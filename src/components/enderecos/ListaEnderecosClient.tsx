@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import Link from 'next/link'
 import {
   Building2, MapPin, Search, ExternalLink, Navigation, Copy, Check,
-  ChevronRight, X, List,
+  ChevronRight, X, List, Map as MapIcon, Users, Shield, Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { containsNormalized } from '@/lib/search'
@@ -18,14 +19,27 @@ import {
   filtrarUnidades,
   type UnidadeEndereco,
 } from '@/lib/unidades-enderecos-ro'
+import { mapaFaccoesHref } from '@/lib/unidades-enderecos-resolver'
+import type { GeoResumoUnidade } from '@/lib/geo-vinculo-resumo'
+
+interface GeoResumoPayload {
+  porUnidade: GeoResumoUnidade[]
+}
+
+interface VinculoPreview {
+  id: string
+  apenado: { nome: string; sipeId: number; faccaoDisplay: string; faccaoCor: string }
+}
 
 function UnidadeCard({
   unidade,
   selected,
+  resumo,
   onSelect,
 }: {
   unidade: UnidadeEndereco
   selected: boolean
+  resumo?: GeoResumoUnidade
   onSelect: () => void
 }) {
   return (
@@ -50,8 +64,19 @@ function UnidadeCard({
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 line-clamp-2">
             {unidade.endereco}
           </p>
-          {unidade.cep && (
-            <p className="text-[10px] font-mono text-subtle mt-1">CEP {formatCep(unidade.cep)}</p>
+          {resumo && (resumo.vinculosMapa > 0 || resumo.apenadosAip > 0) && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {resumo.vinculosMapa > 0 && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400">
+                  {resumo.vinculosMapa} no mapa
+                </span>
+              )}
+              {resumo.apenadosAip > 0 && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                  {resumo.apenadosAip} no AIP
+                </span>
+              )}
+            </div>
           )}
         </div>
         <ChevronRight className={`w-4 h-4 shrink-0 mt-1 ${selected ? 'text-blue-500' : 'text-gray-300'}`} />
@@ -62,12 +87,39 @@ function UnidadeCard({
 
 function DetalheUnidade({
   unidade,
+  resumo,
   onClose,
 }: {
   unidade: UnidadeEndereco
+  resumo?: GeoResumoUnidade
   onClose?: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  const [vinculos, setVinculos] = useState<VinculoPreview[]>([])
+  const [loadingVinculos, setLoadingVinculos] = useState(false)
+
+  const mapaHref = resumo?.municipio
+    ? mapaFaccoesHref(resumo.municipio, resumo.municipioIbge)
+    : '/mapa-faccoes'
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadingVinculos(true)
+    const params = new URLSearchParams({ unidadeId: unidade.id, limit: '8' })
+    if (resumo?.municipio) params.set('municipio', resumo.municipio)
+    if (resumo?.municipioIbge) params.set('ibge', String(resumo.municipioIbge))
+
+    fetch(`/api/geo-vinculo/vinculos?${params}`)
+      .then((r) => (r.ok ? r.json() : { vinculos: [] }))
+      .then((d) => {
+        if (!cancelled) setVinculos(d.vinculos ?? [])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingVinculos(false)
+      })
+
+    return () => { cancelled = true }
+  }, [unidade.id, resumo?.municipio, resumo?.municipioIbge])
 
   const copiar = async () => {
     try {
@@ -82,7 +134,7 @@ function DetalheUnidade({
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="p-4 md:p-5 border-b border-gray-200 dark:border-gray-700 shrink-0">
+      <div className="p-4 md:p-5 border-b border-gray-200 dark:border-gray-700 shrink-0 max-h-[55%] overflow-y-auto">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
@@ -92,13 +144,14 @@ function DetalheUnidade({
             <h2 className="font-black text-base md:text-lg text-gray-900 dark:text-white mt-2 leading-snug">
               {unidade.unidade}
             </h2>
+            {resumo?.municipio && (
+              <p className="text-[10px] text-subtle mt-1">
+                Município no mapa: <strong className="text-gray-700 dark:text-gray-300">{resumo.municipio}</strong>
+              </p>
+            )}
           </div>
           {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-subtle"
-            >
+            <button type="button" onClick={onClose} className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-subtle">
               <X className="w-5 h-5" />
             </button>
           )}
@@ -118,33 +171,69 @@ function DetalheUnidade({
           </div>
         </div>
 
+        {resumo && (
+          <div className="mt-4 rounded-xl border border-purple-200/60 dark:border-purple-800/50 bg-purple-50/50 dark:bg-purple-950/20 p-3">
+            <p className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-2">
+              Integração AIP · Mapa Facções
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/80 dark:bg-gray-900/50 font-bold">
+                <Users className="w-3 h-3 text-purple-500" />
+                {resumo.apenadosAip} apenado{resumo.apenadosAip !== 1 ? 's' : ''} no AIP
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/80 dark:bg-gray-900/50 font-bold">
+                <MapIcon className="w-3 h-3 text-red-500" />
+                {resumo.vinculosMapa} no mapa
+              </span>
+            </div>
+            <Link href={mapaHref} className="btn-primary w-full mt-3 text-xs gap-1.5 justify-center">
+              <MapIcon className="w-3.5 h-3.5" />
+              Ver faccionados no Mapa Facções
+            </Link>
+            <Link href="/aip" className="btn-secondary w-full mt-2 text-xs gap-1.5 justify-center">
+              <Shield className="w-3.5 h-3.5" />
+              Abrir AIP
+            </Link>
+          </div>
+        )}
+
+        {loadingVinculos ? (
+          <p className="text-xs text-subtle flex items-center gap-2 mt-3">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando faccionados do mapa...
+          </p>
+        ) : vinculos.length > 0 ? (
+          <div className="mt-3 space-y-1.5">
+            <p className="text-[10px] font-bold uppercase text-subtle">Faccionados vinculados (mapa)</p>
+            {vinculos.map((v) => (
+              <div key={v.id} className="text-xs rounded-lg bg-gray-50 dark:bg-gray-800/60 px-2.5 py-1.5 flex justify-between gap-2">
+                <span className="font-bold truncate">{v.apenado.nome}</span>
+                <span className="text-[10px] shrink-0" style={{ color: v.apenado.faccaoCor }}>
+                  {v.apenado.faccaoDisplay}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : resumo && resumo.vinculosMapa === 0 && resumo.apenadosAip > 0 ? (
+          <p className="text-xs text-amber-700 dark:text-amber-300 mt-3">
+            Há apenados no AIP nesta unidade, mas ainda não vinculados ao mapa. Use Sync AIP ou Vincular Mapa no AIP.
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap gap-2 mt-4">
-          <a
-            href={googleMapsSearchUrl(unidade)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-primary text-xs gap-1.5"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Abrir no Google Maps
+          <a href={googleMapsSearchUrl(unidade)} target="_blank" rel="noopener noreferrer" className="btn-primary text-xs gap-1.5">
+            <ExternalLink className="w-3.5 h-3.5" /> Google Maps
           </a>
-          <a
-            href={googleMapsDirectionsUrl(unidade)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-secondary text-xs gap-1.5"
-          >
-            <Navigation className="w-3.5 h-3.5" />
-            Como chegar
+          <a href={googleMapsDirectionsUrl(unidade)} target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs gap-1.5">
+            <Navigation className="w-3.5 h-3.5" /> Como chegar
           </a>
           <button type="button" onClick={copiar} className="btn-secondary text-xs gap-1.5">
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-            Copiar endereço
+            Copiar
           </button>
         </div>
       </div>
 
-      <div className="flex-1 min-h-[240px] relative bg-gray-100 dark:bg-gray-900">
+      <div className="flex-1 min-h-[200px] relative bg-gray-100 dark:bg-gray-900">
         <iframe
           title={`Mapa — ${unidade.unidade}`}
           src={googleMapsEmbedUrl(unidade)}
@@ -158,10 +247,24 @@ function DetalheUnidade({
   )
 }
 
-export function ListaEnderecosClient() {
+export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnidadeId?: string | null }) {
   const [search, setSearch] = useState('')
   const [comarcaFilter, setComarcaFilter] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(initialUnidadeId)
+  const [geoResumo, setGeoResumo] = useState<GeoResumoPayload | null>(null)
+
+  useEffect(() => {
+    fetch('/api/geo-vinculo/resumo')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setGeoResumo(d))
+      .catch(() => {})
+  }, [])
+
+  const resumoPorId = useMemo(() => {
+    const m: Record<string, GeoResumoUnidade> = {}
+    for (const u of geoResumo?.porUnidade ?? []) m[u.unidadeId] = u
+    return m
+  }, [geoResumo])
 
   const filtradas = useMemo(
     () => filtrarUnidades(UNIDADES_ENDERECOS_RO, search, comarcaFilter),
@@ -169,7 +272,7 @@ export function ListaEnderecosClient() {
   )
 
   const porComarca = useMemo(() => {
-    const map = new Map<string, UnidadeEndereco[]>()
+    const map = new globalThis.Map<string, UnidadeEndereco[]>()
     for (const u of filtradas) {
       const list = map.get(u.comarca) ?? []
       list.push(u)
@@ -182,8 +285,6 @@ export function ListaEnderecosClient() {
     () => UNIDADES_ENDERECOS_RO.find((u) => u.id === selectedId) ?? null,
     [selectedId]
   )
-
-  const handleSelect = (id: string) => setSelectedId(id)
 
   const comarcaMatches = (c: string) =>
     !search.trim() || containsNormalized(c, search) || filtradas.some((u) => u.comarca === c)
@@ -201,10 +302,13 @@ export function ListaEnderecosClient() {
                 Lista de Endereços
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Unidades prisionais de Rondônia — {UNIDADES_ENDERECOS_RO.length} endereços · {COMARCAS_RO.length} comarcas
+                Integrada ao AIP e Mapa Facções — {UNIDADES_ENDERECOS_RO.length} unidades
               </p>
             </div>
           </div>
+          <Link href="/mapa-faccoes" className="btn-secondary text-xs gap-1.5">
+            <MapIcon className="w-3.5 h-3.5" /> Mapa Facções
+          </Link>
         </div>
 
         <div className="relative mt-4">
@@ -223,9 +327,7 @@ export function ListaEnderecosClient() {
             type="button"
             onClick={() => setComarcaFilter(null)}
             className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
-              !comarcaFilter
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-800 text-subtle hover:bg-gray-200 dark:hover:bg-gray-700'
+              !comarcaFilter ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-subtle hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
           >
             Todas ({UNIDADES_ENDERECOS_RO.length})
@@ -239,9 +341,7 @@ export function ListaEnderecosClient() {
                 type="button"
                 onClick={() => setComarcaFilter(comarcaFilter === c ? null : c)}
                 className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap ${
-                  comarcaFilter === c
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-800 text-subtle hover:bg-gray-200 dark:hover:bg-gray-700'
+                  comarcaFilter === c ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-subtle hover:bg-gray-200 dark:hover:bg-gray-700'
                 }`}
               >
                 {c} ({search || comarcaFilter ? visible : count})
@@ -253,37 +353,25 @@ export function ListaEnderecosClient() {
 
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
         <div className={`w-full lg:w-[420px] shrink-0 flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700 ${selected ? 'hidden lg:flex' : 'flex'}`}>
-          <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 shrink-0">
-            <p className="text-[10px] font-bold uppercase text-subtle tracking-wide">
-              {filtradas.length} unidade{filtradas.length !== 1 ? 's' : ''} encontrada{filtradas.length !== 1 ? 's' : ''}
-            </p>
-          </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-4">
-            {filtradas.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-subtle gap-2">
-                <MapPin className="w-10 h-10 opacity-30" />
-                <p className="text-sm font-bold">Nenhuma unidade encontrada</p>
-                <p className="text-xs">Tente outro termo ou limpe os filtros</p>
-              </div>
-            ) : (
-              porComarca.map(([comarca, unidades]) => (
-                <div key={comarca}>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-600/80 dark:text-blue-400/80 mb-2 px-1 sticky top-0 bg-gray-50/95 dark:bg-gray-950/95 py-1 backdrop-blur-sm z-10">
-                    {comarca}
-                  </p>
-                  <div className="space-y-2">
-                    {unidades.map((u) => (
-                      <UnidadeCard
-                        key={u.id}
-                        unidade={u}
-                        selected={selectedId === u.id}
-                        onSelect={() => handleSelect(u.id)}
-                      />
-                    ))}
-                  </div>
+            {porComarca.map(([comarca, unidades]) => (
+              <div key={comarca}>
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600/80 dark:text-blue-400/80 mb-2 px-1 sticky top-0 bg-gray-50/95 dark:bg-gray-950/95 py-1 backdrop-blur-sm z-10">
+                  {comarca}
+                </p>
+                <div className="space-y-2">
+                  {unidades.map((u) => (
+                    <UnidadeCard
+                      key={u.id}
+                      unidade={u}
+                      resumo={resumoPorId[u.id]}
+                      selected={selectedId === u.id}
+                      onSelect={() => setSelectedId(u.id)}
+                    />
+                  ))}
                 </div>
-              ))
-            )}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -291,15 +379,13 @@ export function ListaEnderecosClient() {
           {selected ? (
             <DetalheUnidade
               unidade={selected}
+              resumo={resumoPorId[selected.id]}
               onClose={() => setSelectedId(null)}
             />
           ) : (
             <div className="flex flex-col items-center justify-center flex-1 p-8 text-center text-subtle">
               <MapPin className="w-12 h-12 opacity-25 mb-3" />
               <p className="font-bold text-gray-700 dark:text-gray-300">Selecione uma unidade</p>
-              <p className="text-xs mt-2 max-w-xs">
-                Escolha uma unidade na lista para ver o endereço completo e a localização no Google Maps.
-              </p>
             </div>
           )}
         </div>
