@@ -50,5 +50,8 @@ agent-tools/
 terminals/
 
 # Diagnostic scripts criados localmente (usam DB de produção)
-scratch/check_quality_stats.ts
-scratch/check_vps_photos.ts
+scratch/
+
+# Bytecode Python gerado ao rodar scripts localmente
+scripts/__pycache__/
+**/__pycache__/
