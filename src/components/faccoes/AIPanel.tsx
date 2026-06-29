@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download, Link2, RefreshCw, FileText } from 'lucide-react'
+import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, MapPinOff, CheckCircle2, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download, Link2, RefreshCw, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { printAIPDossier } from './AIPDossierPrint'
@@ -85,6 +85,9 @@ export interface AIPApenado {
   atualizadoPor?: string
   atualizadoPorNome?: string | null
 
+  temMapaVinculo?: boolean
+  mapaMunicipio?: string | null
+
   // Relacionamento com visitantes
   fotoVisitantes?: AIPFotoVisitante[]
   sipeApenado?: {
@@ -124,11 +127,13 @@ function AIApenadoCard({
   apenado: AIPApenado
   onSelect: (a: AIPApenado) => void
   onViewVinculos?: (sipeId: number) => void
-  onViewMapa?: (aipApenadoId: string) => void
+  onViewMapa?: (apenado: AIPApenado) => void
 }) {
   const temInteligencia = !!(apenado.facaoRealNome || apenado.notasInteligencia)
   const isFaccaoConfirmada = apenado.facaoRealNome && apenado.facaoNivel === 'confirmado'
   const temVinculos = (apenado as any).temVinculos
+  const temMapaVinculo = !!apenado.temMapaVinculo
+  const podeMapa = !!(apenado.facaoRealNome || apenado.faccao) && !!apenado.unidade
 
   return (
     <button
@@ -205,19 +210,34 @@ function AIApenadoCard({
                 Ver Vínculos
               </button>
             )}
-            {onViewMapa && (apenado.facaoRealNome || apenado.faccao) && apenado.unidade && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onViewMapa(apenado.id)
-                }}
-                className="px-2 py-0.5 rounded bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 text-[10px] font-bold border border-red-150 dark:border-red-900/40 flex items-center gap-1 transition-all"
-                title="Ver no mapa de facções"
-              >
-                <MapPin className="w-2.5 h-2.5" />
-                Mapa
-              </button>
+            {onViewMapa && podeMapa && (
+              temMapaVinculo ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onViewMapa(apenado)
+                  }}
+                  className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold border border-emerald-500 shadow-sm shadow-emerald-600/25 flex items-center gap-1 transition-all"
+                  title={apenado.mapaMunicipio ? `Mapeado em ${apenado.mapaMunicipio}` : 'Ver no mapa de facções'}
+                >
+                  <CheckCircle2 className="w-2.5 h-2.5" />
+                  No Mapa
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onViewMapa(apenado)
+                  }}
+                  className="px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 text-amber-800 dark:text-amber-200 text-[10px] font-bold border-2 border-dashed border-amber-400 dark:border-amber-500 flex items-center gap-1 transition-all ring-2 ring-amber-400/30 hover:ring-amber-400/60"
+                  title="Clique e selecione o município no mapa para vincular"
+                >
+                  <MapPinOff className="w-2.5 h-2.5" />
+                  Vincular Mapa
+                </button>
+              )
             )}
           </div>
         </div>
@@ -1213,10 +1233,12 @@ export function AIPanel({
   userRole,
   onViewVinculos,
   onViewMapa,
+  mapaRefreshKey = 0,
 }: {
   userRole?: string
   onViewVinculos?: (sipeId: number) => void
-  onViewMapa?: (aipApenadoId: string) => void
+  onViewMapa?: (apenado: AIPApenado) => void
+  mapaRefreshKey?: number
 }) {
   const [apenados, setApenados] = useState<AIPApenado[]>([])
   const [loading, setLoading] = useState(true)
@@ -1274,6 +1296,10 @@ export function AIPanel({
   useEffect(() => {
     fetchApenados(1, searchQuery)
   }, [searchQuery, fetchApenados])
+
+  useEffect(() => {
+    if (mapaRefreshKey > 0) fetchApenados(page, searchQuery)
+  }, [mapaRefreshKey, fetchApenados, page, searchQuery])
 
   const handleSearch = (value: string) => {
     setSearchQuery(value)

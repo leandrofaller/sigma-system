@@ -9,7 +9,8 @@ import { AIPAdvogadosPanel } from './AIPAdvogadosPanel'
 import { AIPVisitantesPanel } from './AIPVisitantesPanel'
 import { AIPVinculosPanel } from './AIPVinculosPanel'
 import { Brain, BarChart2, Users, Shield, Briefcase, Camera, Link2, Map } from 'lucide-react'
-import { MapaFaccoesClient } from '@/components/mapa-faccoes/MapaFaccoesClient'
+import { MapaFaccoesClient, type PendingMapaLink } from '@/components/mapa-faccoes/MapaFaccoesClient'
+import type { AIPApenado } from './AIPanel'
 
 interface AIPClientProps {
   userRole: string
@@ -21,15 +22,35 @@ export function AIPClient({ userRole }: AIPClientProps) {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [preselectedSipeId, setPreselectedSipeId] = useState<number | null>(null)
   const [highlightAipApenadoId, setHighlightAipApenadoId] = useState<string | null>(null)
+  const [pendingMapaLink, setPendingMapaLink] = useState<PendingMapaLink | null>(null)
+  const [mapaRefreshKey, setMapaRefreshKey] = useState(0)
 
   const handleViewVinculos = (sipeId: number) => {
     setPreselectedSipeId(sipeId)
     setActiveTab('vinculos')
   }
 
-  const handleViewMapa = (aipApenadoId: string) => {
-    setHighlightAipApenadoId(aipApenadoId)
+  const handleViewMapa = (apenado: AIPApenado) => {
+    setHighlightAipApenadoId(null)
+    setPendingMapaLink(null)
+
+    if (apenado.temMapaVinculo) {
+      setHighlightAipApenadoId(apenado.id)
+    } else if (apenado.unidade) {
+      setPendingMapaLink({
+        aipApenadoId: apenado.id,
+        nome: apenado.nome,
+        unidade: apenado.unidade,
+        sipeId: apenado.sipeId,
+      })
+    }
+
     setActiveTab('mapa')
+  }
+
+  const handleMapaLinked = () => {
+    setPendingMapaLink(null)
+    setMapaRefreshKey((k) => k + 1)
   }
 
   const triggerClass = "gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start"
@@ -97,7 +118,12 @@ export function AIPClient({ userRole }: AIPClientProps) {
           </TabsContent>
 
           <TabsContent value="apenados" className="flex-1 min-h-0 mt-0">
-            <AIPanel userRole={userRole} onViewVinculos={handleViewVinculos} onViewMapa={handleViewMapa} />
+            <AIPanel
+              userRole={userRole}
+              onViewVinculos={handleViewVinculos}
+              onViewMapa={handleViewMapa}
+              mapaRefreshKey={mapaRefreshKey}
+            />
           </TabsContent>
 
           <TabsContent value="vinculos" className="flex-1 min-h-0 mt-0">
@@ -125,6 +151,9 @@ export function AIPClient({ userRole }: AIPClientProps) {
               embedded
               highlightAipApenadoId={highlightAipApenadoId}
               onClearHighlight={() => setHighlightAipApenadoId(null)}
+              pendingMapaLink={pendingMapaLink}
+              onClearPendingMapaLink={() => setPendingMapaLink(null)}
+              onMapaLinked={handleMapaLinked}
             />
           </TabsContent>
         </Tabs>

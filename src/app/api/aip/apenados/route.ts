@@ -236,8 +236,16 @@ export async function GET(request: NextRequest) {
           if (userUpdater) atualizadoPorNome = userUpdater.name
         }
 
+        const mapaVinc = await prisma.mapaFaccaoVinculo.findFirst({
+          where: { aipApenadoId: apenado.id },
+          select: { municipio: true },
+          orderBy: { cadastradoEm: 'desc' },
+        })
+
         const apenadoFormatado = {
           ...apenado,
+          temMapaVinculo: !!mapaVinc,
+          mapaMunicipio: mapaVinc?.municipio ?? null,
           cadastradoPorNome,
           atualizadoPorNome
         }
@@ -339,9 +347,26 @@ export async function GET(request: NextRequest) {
       : []
     const usuarioMap = new Map(usuarios.map(u => [u.id, u.name]))
 
+    const mapaVinculos = ids.length > 0
+      ? await prisma.mapaFaccaoVinculo.findMany({
+          where: { aipApenadoId: { in: ids } },
+          select: { aipApenadoId: true, municipio: true },
+          orderBy: { cadastradoEm: 'desc' },
+        })
+      : []
+
+    const mapaPorApenado = new Map<string, string>()
+    for (const v of mapaVinculos) {
+      if (!mapaPorApenado.has(v.aipApenadoId)) {
+        mapaPorApenado.set(v.aipApenadoId, v.municipio)
+      }
+    }
+
     const apenadosFormatados = apenados.map(a => ({
       ...a,
       temVinculos: idsComVinculos.has(a.id),
+      temMapaVinculo: mapaPorApenado.has(a.id),
+      mapaMunicipio: mapaPorApenado.get(a.id) ?? null,
       cadastradoPorNome: usuarioMap.get(a.cadastradoPor) || a.cadastradoPor,
       atualizadoPorNome: a.atualizadoPor ? (usuarioMap.get(a.atualizadoPor) || a.atualizadoPor) : null
     }))

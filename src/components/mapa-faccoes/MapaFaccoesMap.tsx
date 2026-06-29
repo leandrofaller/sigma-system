@@ -31,6 +31,7 @@ interface Props {
   highlightIbge: number | null
   onSelect: (ibge: number, nome: string) => void
   presentationMode?: boolean
+  linkMode?: boolean
 }
 
 function FlyToMunicipio({
@@ -79,6 +80,7 @@ export default function MapaFaccoesMap({
   highlightIbge,
   onSelect,
   presentationMode,
+  linkMode,
 }: Props) {
   const geojson = useMemo(() => (rawGeo ? enrichGeoJson(rawGeo) : null), [rawGeo])
   const geoKey = useMemo(
@@ -100,15 +102,27 @@ export default function MapaFaccoesMap({
         fill = stat.faccaoCor
       }
 
+      const linkBase = linkMode && !isSelected
+
       return {
-        fillColor: fill,
-        fillOpacity: total > 0 ? (isSelected || isHighlight ? 0.82 : 0.58) : 0.12,
-        color: isSelected || isHighlight ? '#0f172a' : total > 0 ? '#1e293b' : '#94a3b8',
-        weight: isSelected || isHighlight ? 3 : total > 0 ? 1.5 : 0.8,
+        fillColor: linkBase ? '#fbbf24' : fill,
+        fillOpacity: linkMode
+          ? (isSelected ? 0.9 : total > 0 ? 0.45 : 0.28)
+          : total > 0 ? (isSelected || isHighlight ? 0.82 : 0.58) : 0.12,
+        color: isSelected
+          ? '#0f172a'
+          : linkMode
+            ? '#f59e0b'
+            : isHighlight
+              ? '#0f172a'
+              : total > 0
+                ? '#1e293b'
+                : '#94a3b8',
+        weight: isSelected || isHighlight ? 3 : linkMode ? 1.2 : total > 0 ? 1.5 : 0.8,
         opacity: 1,
       } as L.PathOptions
     },
-    [statsByIbge, statsByNome, maxApenados, selectedIbge, highlightIbge]
+    [statsByIbge, statsByNome, maxApenados, selectedIbge, highlightIbge, linkMode]
   )
 
   const onEachFeature = useCallback(
@@ -117,9 +131,11 @@ export default function MapaFaccoesMap({
       const nome = (feature.properties as { nome?: string })?.nome || IBGE_PARA_NOME[ibge] || ''
       const stat = statsByIbge[ibge]
 
-      const tooltip = stat && stat.totalApenados > 0
-        ? `<strong>${nome}</strong><br/>${stat.totalApenados} faccionado(s)<br/><span style="color:${stat.faccaoCor}">● ${stat.faccaoPredominante}</span>`
-        : `<strong>${nome}</strong><br/><em>Sem registros</em>`
+      const tooltip = linkMode
+        ? `<strong>${nome}</strong><br/><span style="color:#f59e0b">● Clique para vincular aqui</span>`
+        : stat && stat.totalApenados > 0
+          ? `<strong>${nome}</strong><br/>${stat.totalApenados} faccionado(s)<br/><span style="color:${stat.faccaoCor}">● ${stat.faccaoPredominante}</span>`
+          : `<strong>${nome}</strong><br/><em>Sem registros</em>`
 
       layer.bindTooltip(tooltip, { sticky: true, className: 'mapa-faccao-tooltip' })
 
@@ -135,7 +151,7 @@ export default function MapaFaccoesMap({
         click: () => onSelect(ibge, nome),
       })
     },
-    [statsByIbge, onSelect, styleFeature]
+    [statsByIbge, onSelect, styleFeature, linkMode]
   )
 
   const flyIbge = highlightIbge ?? selectedIbge

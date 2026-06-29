@@ -63,18 +63,32 @@ interface StatsPayload {
   }
 }
 
+export interface PendingMapaLink {
+  aipApenadoId: string
+  nome: string
+  unidade: string
+  sipeId: number
+}
+
 interface MapaFaccoesClientProps {
   /** Renderizado dentro da aba AIP (sem header duplicado de página). */
   embedded?: boolean
   /** Destaca município do apenado AIP ao navegar da lista de apenados. */
   highlightAipApenadoId?: string | null
   onClearHighlight?: () => void
+  /** Apenado aguardando vinculação — clique no município confirma. */
+  pendingMapaLink?: PendingMapaLink | null
+  onClearPendingMapaLink?: () => void
+  onMapaLinked?: (aipApenadoId: string) => void
 }
 
 export function MapaFaccoesClient({
   embedded = false,
   highlightAipApenadoId = null,
   onClearHighlight,
+  pendingMapaLink = null,
+  onClearPendingMapaLink,
+  onMapaLinked,
 }: MapaFaccoesClientProps = {}) {
   const [geojson, setGeojson] = useState<GeoJSON.FeatureCollection | null>(null)
   const [stats, setStats] = useState<StatsPayload | null>(null)
@@ -99,6 +113,7 @@ export function MapaFaccoesClient({
   const [observacoes, setObservacoes] = useState('')
   const [saving, setSaving] = useState(false)
   const [syncingAip, setSyncingAip] = useState(false)
+  const [linkingMapa, setLinkingMapa] = useState(false)
 
   const mapAreaRef = useRef<HTMLDivElement>(null)
   const presentationTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -203,12 +218,17 @@ export function MapaFaccoesClient({
     let totalProcessed = 0
     try {
       do {
-        const res = await fetch('/api/mapa-faccoes/sync-aip', {
+        const res: Response = await fetch('/api/mapa-faccoes/sync-aip', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cursor, limit: 200 }),
         })
-        const data = await res.json()
+        const data: {
+          error?: string
+          synced?: number
+          processed?: number
+          nextCursor?: string | null
+        } = await res.json()
         if (!res.ok) throw new Error(data.error || 'Falha na sincronização')
         totalSynced += data.synced ?? 0
         totalProcessed += data.processed ?? 0
@@ -237,7 +257,45 @@ export function MapaFaccoesClient({
     }
   }, [presentationPlaying, presentationMode, municipiosComDados.length])
 
+  const linkPendingToMunicipio = useCallback(async (municipio: string, ibge: number | null) => {
+    if (!pendingMapaLink || linkingMapa) return
+    setLinkingMapa(true)
+    try {
+      const res = await fetch('/api/mapa-faccoes/vinculos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          municipio,
+          municipioIbge: ibge,
+          unidadePrisional: pendingMapaLink.unidade,
+          aipApenadoId: pendingMapaLink.aipApenadoId,
+          sipeId: pendingMapaLink.sipeId,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (data.duplicate) toast.warning('Este apenado já está vinculado a este município')
+        else toast.error(data.error || 'Erro ao vincular')
+        return
+      }
+      toast.success(`${pendingMapaLink.nome} vinculado a ${municipio}`)
+      onMapaLinked?.(pendingMapaLink.aipApenadoId)
+      onClearPendingMapaLink?.()
+      await loadData()
+      await loadVinculos(municipio)
+    } finally {
+      setLinkingMapa(false)
+    }
+  }, [pendingMapaLink, linkingMapa, loadData, loadVinculos, onMapaLinked, onClearPendingMapaLink])
+
   const handleSelectMunicipio = (ibge: number, nome: string) => {
+    if (pendingMapaLink) {
+      setSelectedIbge(ibge)
+      setSelectedNome(nome)
+      void linkPendingToMunicipio(nome, ibge)
+      return
+    }
+
     setSelectedIbge(ibge)
     setSelectedNome(nome)
     if (presentationMode) {
@@ -498,7 +556,26 @@ export function MapaFaccoesClient({
             highlightIbge={highlightIbge}
             onSelect={handleSelectMunicipio}
             presentationMode={presentationMode}
+            linkMode={!!pendingMapaLink}
           />
+
+          {pendingMapaLink && (
+            <div className="absolute top-3 right-3 z-[1000] max-w-sm bg-amber-500/95 text-amber-950 rounded-xl px-4 py-3 shadow-2xl border border-amber-300 animate-in fade-in slide-in-from-top-2">
+              <p className="text-[10px] font-black uppercase tracking-wider">Vinculação rápida</p>
+              <p className="font-bold text-sm mt-0.5 truncate">{pendingMapaLink.nome}</p>
+              <p className="text-xs mt-1 opacity-90">
+                {linkingMapa ? 'Salvando vínculo...' : 'Clique no município no mapa para confirmar'}
+              </p>
+              <button
+                type="button"
+                onClick={onClearPendingMapaLink}
+                disabled={linkingMapa}
+                className="mt-2 text-[10px] font-bold underline hover:no-underline disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
 
           {presentationMode && highlightIbge && (
             <motion.div
@@ -523,12 +600,44 @@ export function MapaFaccoesClient({
             <p className="font-bold text-white mb-1">Legenda</p>
             <p>Cor = facção predominante</p>
             <p>Intensidade = quantidade de faccionados</p>
-            <p className="mt-1 text-amber-400">Clique no município para cadastrar</p>
+            <p className={`mt-1 ${pendingMapaLink ? 'text-amber-300 font-bold' : 'text-amber-400'}`}>
+              {pendingMapaLink ? 'Modo vínculo: clique no município' : 'Clique no município para cadastrar'}
+            </p>
           </div>
         </div>
 
         <div className="w-full lg:w-[360px] shrink-0 flex flex-col min-h-[280px] lg:min-h-0 bg-white dark:bg-gray-900/50 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          {selectedNome ? (
+          {pendingMapaLink && !selectedNome ? (
+            <div className="flex flex-col flex-1 p-4">
+              <div className="rounded-2xl border-2 border-dashed border-amber-400 bg-amber-50 dark:bg-amber-950/20 p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Vincular ao mapa
+                </p>
+                <p className="font-black text-base text-gray-900 dark:text-white mt-1">{pendingMapaLink.nome}</p>
+                <p className="text-[10px] text-subtle mt-0.5">SIPE #{pendingMapaLink.sipeId}</p>
+                <p className="text-xs mt-2 flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+                  <Building2 className="w-3.5 h-3.5 shrink-0" />
+                  {pendingMapaLink.unidade}
+                </p>
+                <p className="text-sm mt-4 text-amber-900 dark:text-amber-100 leading-relaxed">
+                  Selecione o município de atuação no mapa ao lado. O vínculo será criado automaticamente.
+                </p>
+                {linkingMapa && (
+                  <p className="text-xs mt-3 flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={onClearPendingMapaLink}
+                  disabled={linkingMapa}
+                  className="btn-secondary w-full mt-4 text-xs disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : selectedNome ? (
             <>
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-start justify-between gap-2">
