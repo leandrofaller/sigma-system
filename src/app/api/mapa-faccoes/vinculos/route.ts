@@ -6,6 +6,7 @@ import { nomeParaIbge } from '@/lib/municipios-rondonia'
 import {
   fetchMapaVinculosComAip,
   formatVinculo,
+  matchesMunicipioVinculo,
   normalizeMunicipioInput,
   resolveAipApenadoId,
 } from '@/lib/mapa-faccoes-service'
@@ -19,15 +20,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
   }
 
-  const municipio = unaccentParam(new URL(request.url).searchParams.get('municipio'))
-  const unidade = unaccentParam(new URL(request.url).searchParams.get('unidade'))
+  const { searchParams } = new URL(request.url)
+  const municipio = unaccentParam(searchParams.get('municipio'))
+  const unidade = unaccentParam(searchParams.get('unidade'))
+  const ibgeParam = searchParams.get('ibge')
+  const ibgeFiltro = ibgeParam ? parseInt(ibgeParam, 10) : null
 
   try {
     let vinculos = await fetchMapaVinculosComAip()
 
-    if (municipio) {
-      const pattern = municipio.toLowerCase()
-      vinculos = vinculos.filter((v) => v.municipio.toLowerCase().includes(pattern))
+    if (municipio || (ibgeFiltro != null && !isNaN(ibgeFiltro))) {
+      vinculos = vinculos.filter((v) =>
+        matchesMunicipioVinculo(v, municipio, ibgeFiltro != null && !isNaN(ibgeFiltro) ? ibgeFiltro : null)
+      )
     }
     if (unidade) {
       const pattern = unidade.toLowerCase()
