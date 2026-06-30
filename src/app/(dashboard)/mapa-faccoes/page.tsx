@@ -2,7 +2,7 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { MapaFaccoesClient } from '@/components/mapa-faccoes/MapaFaccoesClient'
 
-export const metadata = { title: 'Mapa Facções — Rondônia' }
+export const metadata = { title: 'Mapa de Facções — Rondônia' }
 
 export default async function MapaFaccoesPage() {
   const session = await auth()

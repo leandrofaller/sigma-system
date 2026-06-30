@@ -108,7 +108,7 @@ export function AIPClient({ userRole }: AIPClientProps) {
               </TabsTrigger>
               <TabsTrigger value="mapa" className={triggerClass}>
                 <Map className="w-4 h-4" />
-                Mapa Facções
+                Mapa de Facções
               </TabsTrigger>
             </TabsList>
           </div>

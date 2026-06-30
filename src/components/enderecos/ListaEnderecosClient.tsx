@@ -219,7 +219,7 @@ function DetalheUnidade({
         {resumo && (
           <div className="mt-4 rounded-xl border border-purple-200/60 dark:border-purple-800/50 bg-purple-50/50 dark:bg-purple-950/20 p-3">
             <p className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-2">
-              Integração AIP · Mapa Facções
+              Integração AIP · Mapa de Facções
             </p>
             <div className="flex flex-wrap gap-2 text-xs">
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/80 dark:bg-gray-900/50 font-bold">
@@ -233,7 +233,7 @@ function DetalheUnidade({
             </div>
             <Link href={mapaHref} className="btn-primary w-full mt-3 text-xs gap-1.5 justify-center">
               <MapIcon className="w-3.5 h-3.5" />
-              Ver faccionados no Mapa Facções
+              Ver faccionados no Mapa de Facções
             </Link>
             <Link href="/aip" className="btn-secondary w-full mt-2 text-xs gap-1.5 justify-center">
               <Shield className="w-3.5 h-3.5" />
@@ -410,7 +410,7 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
                 Lista de Endereços
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Integrada ao AIP e Mapa Facções — {unidades.length} unidades
+                Integrada ao AIP e Mapa de Facções — {unidades.length} unidades
                 {!isAdmin && ' · criações e edições sujeitas a aprovação'}
               </p>
             </div>
@@ -424,7 +424,7 @@ export function ListaEnderecosClient({ initialUnidadeId = null }: { initialUnida
               <Plus className="w-3.5 h-3.5" /> Nova unidade
             </button>
             <Link href="/mapa-faccoes" className="btn-secondary text-xs gap-1.5">
-              <MapIcon className="w-3.5 h-3.5" /> Mapa Facções
+              <MapIcon className="w-3.5 h-3.5" /> Mapa de Facções
             </Link>
           </div>
         </div>

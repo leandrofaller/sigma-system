@@ -593,7 +593,7 @@ export function MapaFaccoesClient({
               </div>
               <div>
                 <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
-                  Mapa Facções — Rondônia
+                  Mapa de Facções — Rondônia
                 </h1>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   Visualização geográfica da atuação faccionada no sistema prisional

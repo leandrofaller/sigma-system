@@ -43,7 +43,7 @@ const defaultNavItems: NavItem[] = [
   { label: 'Consulta IA', href: '/ia', iconName: 'Sparkles', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Identificação de Apenados', href: '/apenados', iconName: 'UserCheck', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Apenados & Facções', href: '/faccoes', iconName: 'Shield', roles: ['SUPER_ADMIN'] },
-  { label: 'Mapa Facções', href: '/mapa-faccoes', iconName: 'Map', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Mapa de Facções', href: '/mapa-faccoes', iconName: 'Map', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Lista de Endereços', href: '/lista-enderecos', iconName: 'List', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'SIAIP', href: '/siaip', iconName: 'Database', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Celulares Recebidos', href: '/aparelhos', iconName: 'Smartphone', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
