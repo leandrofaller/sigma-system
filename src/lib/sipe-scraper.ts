@@ -7697,8 +7697,9 @@ export async function scrapeApenadoFichaFast(
       const text = $(row).text()
       const firstColText = $(tds.get(0)).text().trim()
 
-      // Valida se esta linha representa o apenado procurado
-      if (firstColText === String(sipeId) || (firstColText.includes(String(sipeId)) && text.includes(String(sipeId)))) {
+      // Valida se esta linha representa o apenado procurado (correspondência numérica exata)
+      const cleanFirstCol = firstColText.replace(/[^0-9]/g, '')
+      if (cleanFirstCol === String(sipeId)) {
         const a = $(row).find('a[href]')
         if (a.length) {
           link = a.attr('href') || null
