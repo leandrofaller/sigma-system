@@ -43,12 +43,24 @@ export async function PATCH(
       return NextResponse.json({ error: 'Missão não encontrada' }, { status: 404 });
     }
 
+    const userNormalizedName = user.name ? user.name.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+    const userParts = userNormalizedName.split(' ').filter(Boolean);
+    const isParticipant = mission.participants.some(p => {
+      const pNormalized = p.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const pParts = pNormalized.split(' ').filter(Boolean);
+      if (userNormalizedName.includes(pNormalized) || pNormalized.includes(userNormalizedName)) return true;
+      const ignoreWords = ['DE', 'DA', 'DO', 'DOS', 'DAS', 'E', 'O', 'A'];
+      const userMeaningfulParts = userParts.filter(w => !ignoreWords.includes(w));
+      const pMeaningfulParts = pParts.filter(w => !ignoreWords.includes(w));
+      return pMeaningfulParts.some(pw => userMeaningfulParts.includes(pw));
+    });
+
     const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
     const isCreator = mission.userId === user.id;
     const isGroupMember = mission.group && mission.group.users.length > 0;
 
-    if (!isAdmin && !isCreator && !isGroupMember) {
-      return NextResponse.json({ error: 'Acesso negado. Você não é membro do grupo ou criador da missão' }, { status: 403 });
+    if (!isAdmin && !isCreator && !isGroupMember && !isParticipant) {
+      return NextResponse.json({ error: 'Acesso negado. Você não é participante, membro do grupo ou criador da missão' }, { status: 403 });
     }
 
     // ===== Regras de transição de status =====

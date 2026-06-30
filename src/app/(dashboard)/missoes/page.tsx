@@ -19,8 +19,18 @@ export default async function MissoesPage() {
   // Buscar missões condicionalmente
   let missions;
   if (isMobile) {
+    const nameParts = user.name ? user.name.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(' ').filter(Boolean) : [];
     missions = await prisma.mission.findMany({
-      where: { userId: user.id },
+      where: {
+        OR: [
+          { userId: user.id },
+          {
+            participants: {
+              hasSome: nameParts
+            }
+          }
+        ]
+      },
       include: {
         group: { select: { id: true, name: true, color: true } },
       },
