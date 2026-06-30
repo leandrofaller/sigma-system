@@ -16,7 +16,7 @@ export interface CacheStatus {
 }
 
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutos
-const BATCH_SIZE = 30_000;
+const BATCH_SIZE = 5_000;
 
 let cache: FaceCache | null = null;
 let loadingPromise: Promise<FaceCache> | null = null;
