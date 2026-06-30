@@ -17,21 +17,30 @@ export default async function MissoesPage() {
   const groups = await prisma.group.findMany({ where: { isActive: true } });
 
   // Buscar missões condicionalmente
+  const nameParts = user.name ? user.name.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(' ').filter(Boolean) : [];
+  const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+
+  const baseWhere: any = {
+    status: { not: 'CANCELLED' }
+  };
+
+  if (!isAdmin) {
+    baseWhere.OR = [
+      { userId: user.id },
+      {
+        participants: {
+          hasSome: nameParts
+        }
+      }
+    ];
+  }
+
   let missions;
   if (isMobile) {
-    const nameParts = user.name ? user.name.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(' ').filter(Boolean) : [];
     missions = await prisma.mission.findMany({
-      where: {
-        OR: [
-          { userId: user.id },
-          {
-            participants: {
-              hasSome: nameParts
-            }
-          }
-        ]
-      },
+      where: baseWhere,
       include: {
+        user: { select: { name: true, avatar: true } },
         group: { select: { id: true, name: true, color: true } },
       },
       orderBy: { startDate: 'desc' },
@@ -39,7 +48,7 @@ export default async function MissoesPage() {
     });
   } else {
     missions = await prisma.mission.findMany({
-      where: { status: { not: 'CANCELLED' } },
+      where: baseWhere,
       include: {
         user: { select: { name: true, avatar: true } },
         group: { select: { name: true, color: true } },
