@@ -18,6 +18,7 @@ import {
   inferMunicipioFromUnidadeAip,
   listaEnderecosHrefFromUnidadeAip,
 } from '@/lib/unidades-enderecos-resolver'
+import { UNIDADES_ENDERECOS_RO } from '@/lib/unidades-enderecos-ro'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
 import type { ApenadosMunicipioUnidadesPrisionais } from '@/lib/unidades-prisionais-resumo'
 
@@ -522,9 +523,55 @@ export function MapaFaccoesClient({
   }
 
   const selectedStat = selectedIbge ? statsByIbge[selectedIbge] : null
-  const filteredUnidades = unidadeInput
-    ? unidades.filter((u) => containsNormalized(u, unidadeInput))
-    : unidades.slice(0, 15)
+  const filteredUnidades = useMemo(() => {
+    // 1. Filtrar as unidades com base no termo de busca (unidadeInput) se houver
+    const list = unidadeInput
+      ? unidades.filter((u) => containsNormalized(u, unidadeInput))
+      : unidades
+
+    // 2. Se houver um município selecionado (ex: "Porto Velho")
+    if (selectedNome) {
+      const selectedNomeNorm = selectedNome.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+
+      // Separar as unidades da comarca do município selecionado das demais
+      const localUnidades: string[] = []
+      const otherUnidades: string[] = []
+
+      for (const u of list) {
+        // Encontrar no catálogo UNIDADES_ENDERECOS_RO se essa unidade pertence à comarca selecionada
+        const match = UNIDADES_ENDERECOS_RO.find(
+          (item) => item.unidade.toUpperCase() === u.toUpperCase()
+        )
+        
+        if (match) {
+          const comarcaNorm = match.comarca.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          if (comarcaNorm === selectedNomeNorm) {
+            localUnidades.push(u)
+            continue
+          }
+        }
+        
+        // Também aceita se o nome da unidade contém o próprio nome do município
+        if (containsNormalized(u, selectedNome)) {
+          localUnidades.push(u)
+        } else {
+          otherUnidades.push(u)
+        }
+      }
+
+      // Se o usuário já digitou algo, mostramos as locais primeiro e depois as outras
+      if (unidadeInput) {
+        return [...localUnidades, ...otherUnidades]
+      }
+      
+      // Se ele não digitou nada, sugerimos as locais primeiro,
+      // e completamos com as outras para que ele veja todas as opções
+      const combined = [...localUnidades, ...otherUnidades]
+      return combined.slice(0, 30) // Exibe até 30 opções para melhor usabilidade
+    }
+
+    return list.slice(0, 15)
+  }, [unidades, unidadeInput, selectedNome])
 
   if (loading) {
     return (

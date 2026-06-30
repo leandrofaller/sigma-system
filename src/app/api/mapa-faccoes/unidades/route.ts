@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { UNIDADES_ENDERECOS_RO } from '@/lib/unidades-enderecos-ro'
 
 export async function GET() {
   const session = await auth()
@@ -27,6 +28,7 @@ export async function GET() {
   for (const u of sipeUnidades) if (u.unidade) set.add(u.unidade)
   for (const u of mapaUnidades) set.add(u.unidadePrisional)
   for (const u of aipUnidades) if (u.unidade) set.add(u.unidade)
+  for (const u of UNIDADES_ENDERECOS_RO) set.add(u.unidade)
 
   const unidades = Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
 
