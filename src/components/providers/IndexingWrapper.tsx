@@ -1,5 +1,6 @@
 'use client';
 
+import { useSession } from 'next-auth/react';
 import { IndexingProvider } from '@/contexts/IndexingContext';
 import { VisitanteIndexingProvider } from '@/contexts/VisitanteIndexingContext';
 import { IndexingStatusFloat } from '@/components/apenados/IndexingStatusFloat';
@@ -7,12 +8,19 @@ import { VisitanteIndexingStatusFloat } from '@/components/visitantes/VisitanteI
 import type { ReactNode } from 'react';
 
 export function IndexingWrapper({ children }: { children: ReactNode }) {
+  const { data: session } = useSession();
+  const isSuperAdmin = (session?.user as any)?.role === 'SUPER_ADMIN';
+
   return (
     <IndexingProvider>
       <VisitanteIndexingProvider>
         {children}
-        <IndexingStatusFloat />
-        <VisitanteIndexingStatusFloat />
+        {isSuperAdmin && (
+          <>
+            <IndexingStatusFloat />
+            <VisitanteIndexingStatusFloat />
+          </>
+        )}
       </VisitanteIndexingProvider>
     </IndexingProvider>
   );

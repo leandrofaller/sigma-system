@@ -12,8 +12,9 @@ export async function POST(
   if (!session?.user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
-  if ((session.user as any).role !== 'SUPER_ADMIN') {
-    return NextResponse.json({ error: 'Acesso restrito ao Superadmin' }, { status: 403 })
+  const role = (session.user as any).role
+  if (role !== 'SUPER_ADMIN' && role !== 'ADMIN' && role !== 'OPERATOR') {
+    return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
   }
 
   const { id } = await params

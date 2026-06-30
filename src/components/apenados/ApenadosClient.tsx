@@ -395,7 +395,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                 <Download className="w-4 h-4" />
                 {exporting ? 'Exportando...' : 'Exportar ZIP'}
               </button>
-              {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
+              {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || userRole === 'OPERATOR') && (
                 <button
                   onClick={() => setFaceSearchOpen(true)}
                   className="flex items-center gap-2 text-sm font-medium text-white border border-white/30 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
