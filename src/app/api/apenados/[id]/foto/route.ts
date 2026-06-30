@@ -90,8 +90,16 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const user = session.user as any;
-  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Apenas administradores podem remover fotos' }, { status: 403 });
+  const userDb = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { role: true, canDeletePhotos: true }
+  });
+
+  if (!userDb) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
+
+  const hasPermission = userDb.role === 'SUPER_ADMIN' || userDb.role === 'ADMIN' || (userDb.role === 'OPERATOR' && !!userDb.canDeletePhotos);
+  if (!hasPermission) {
+    return NextResponse.json({ error: 'Apenas administradores ou operadores autorizados podem remover fotos' }, { status: 403 });
   }
 
   const { id } = await params;

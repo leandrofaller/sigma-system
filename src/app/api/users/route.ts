@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     select: {
       id: true, name: true, email: true, phone: true, role: true,
       isActive: true, createdAt: true, lastLogin: true,
+      canDeletePhotos: true, canEditApenados: true,
       group: { select: { id: true, name: true } },
     },
   });
@@ -57,6 +58,8 @@ export async function POST(req: NextRequest) {
       passwordHash: hash,
       role: body.role || 'OPERATOR',
       groupId: body.groupId || null,
+      canDeletePhotos: body.role === 'OPERATOR' ? !!body.canDeletePhotos : false,
+      canEditApenados: body.role === 'OPERATOR' ? !!body.canEditApenados : false,
     },
     include: { group: true },
   });
@@ -66,7 +69,7 @@ export async function POST(req: NextRequest) {
     action: AUDIT_ACTIONS.CREATE_USER,
     entity: 'User',
     entityId: user.id,
-    details: { name: user.name, email: user.email, role: user.role },
+    details: { name: user.name, email: user.email, role: user.role, canDeletePhotos: user.canDeletePhotos, canEditApenados: user.canEditApenados },
     request: req,
   });
 

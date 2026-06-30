@@ -9,11 +9,13 @@ interface Props {
   onClose: () => void;
   onSaved: (a: Apenado) => void;
   userRole: string;
+  canEditApenados: boolean;
+  canDeletePhotos: boolean;
 }
 
-export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
+export function ApenadoModal({ apenado, onClose, onSaved, userRole, canEditApenados, canDeletePhotos }: Props) {
   const isEdit = !!apenado?.id;
-  const canDeletePhoto = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
+  const canDeletePhoto = canDeletePhotos;
 
   const [form, setForm] = useState({
     name: apenado?.name || '',
@@ -231,16 +233,20 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
               </div>
             )}
             <div
-              className={`relative rounded-xl border-2 border-dashed transition-all cursor-pointer overflow-hidden
-                ${dragging
-                  ? 'border-sigma-400 bg-sigma-50 dark:bg-sigma-900/20'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-sigma-300 dark:hover:border-sigma-700'
-                }`}
+              className={`relative rounded-xl transition-all overflow-hidden ${
+                canEditApenados 
+                  ? `border-2 border-dashed cursor-pointer ${
+                      dragging
+                        ? 'border-sigma-400 bg-sigma-50 dark:bg-sigma-900/20'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-sigma-300 dark:hover:border-sigma-700'
+                    }` 
+                  : 'border border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-800/10 cursor-default'
+              }`}
               style={{ height: 200 }}
-              onClick={() => fileRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onClick={() => canEditApenados && fileRef.current?.click()}
+              onDragOver={(e) => { if (canEditApenados) { e.preventDefault(); setDragging(true); } }}
               onDragLeave={() => setDragging(false)}
-              onDrop={handleDrop}
+              onDrop={(e) => { if (canEditApenados) handleDrop(e); }}
             >
               {photoPreview ? (
                 <>
@@ -253,12 +259,14 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
                       setPhotoPreview(null);
                     }}
                   />
-                  <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="flex items-center gap-2 text-white text-sm font-semibold">
-                      <Camera className="w-5 h-5" /> Trocar foto
+                  {canEditApenados && (
+                    <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="flex items-center gap-2 text-white text-sm font-semibold">
+                        <Camera className="w-5 h-5" /> Trocar foto
+                      </div>
                     </div>
-                  </div>
-                  {isEdit && apenado?.photoPath && !pendingFile && (
+                  )}
+                  {isEdit && apenado?.photoPath && !pendingFile && canEditApenados && (
                     <div className="absolute bottom-2 right-2 flex gap-1" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => handleRotate(270)}
@@ -295,8 +303,10 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
                     <Upload className="w-7 h-7" />
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-medium text-body">Arraste ou clique para adicionar foto</p>
-                    <p className="text-xs text-subtle mt-0.5">JPG, PNG, WebP — máx. 50MB</p>
+                    <p className="text-sm font-medium text-body">
+                      {canEditApenados ? 'Arraste ou clique para adicionar foto' : 'Sem foto cadastrada'}
+                    </p>
+                    {canEditApenados && <p className="text-xs text-subtle mt-0.5">JPG, PNG, WebP — máx. 50MB</p>}
                   </div>
                 </div>
               )}
@@ -319,7 +329,8 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value.toUpperCase() }))}
                 placeholder="NOME COMPLETO DO APENADO"
                 className={inputCls}
-                autoFocus={!isEdit}
+                autoFocus={!isEdit && canEditApenados}
+                disabled={!canEditApenados}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -330,6 +341,7 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
                   onChange={(e) => setForm((p) => ({ ...p, matricula: e.target.value }))}
                   placeholder="Ex: 2024-0001"
                   className={`${inputCls} font-mono`}
+                  disabled={!canEditApenados}
                 />
               </div>
               <div>
@@ -339,6 +351,7 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
                   onChange={(e) => setForm((p) => ({ ...p, unidade: e.target.value }))}
                   placeholder="Ex: CPP-I"
                   className={inputCls}
+                  disabled={!canEditApenados}
                 />
               </div>
             </div>
@@ -349,6 +362,7 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
                 onChange={(e) => setForm((p) => ({ ...p, faccao: e.target.value.toUpperCase() }))}
                 placeholder="Ex: CV, PCC..."
                 className={inputCls}
+                disabled={!canEditApenados}
               />
             </div>
             <div>
@@ -359,6 +373,7 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
                 rows={3}
                 placeholder="Informações adicionais relevantes..."
                 className={`${inputCls} resize-none`}
+                disabled={!canEditApenados}
               />
             </div>
           </div>
@@ -388,7 +403,7 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
                             return next;
                           })
                         }
-                        disabled={!canDeletePhoto}
+                        disabled={!canEditApenados}
                         className="w-3.5 h-3.5 rounded accent-teal-500 disabled:opacity-50"
                       />
                       <span className="text-sm text-body group-hover/grp:text-title transition-colors">{g.name}</span>
@@ -404,13 +419,15 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole }: Props) {
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3">
           <button onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-body border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-            Cancelar
+            {canEditApenados ? 'Cancelar' : 'Fechar'}
           </button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-sigma-600 hover:bg-sigma-700 rounded-xl transition-colors disabled:opacity-50 shadow-lg shadow-sigma-600/20">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-            {saving ? 'Salvando...' : (isEdit ? 'Salvar Alterações' : 'Cadastrar')}
-          </button>
+          {canEditApenados && (
+            <button onClick={handleSave} disabled={saving}
+              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-sigma-600 hover:bg-sigma-700 rounded-xl transition-colors disabled:opacity-50 shadow-lg shadow-sigma-600/20">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              {saving ? 'Salvando...' : (isEdit ? 'Salvar Alterações' : 'Cadastrar')}
+            </button>
+          )}
         </div>
       </div>
     </div>

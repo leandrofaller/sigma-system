@@ -15,10 +15,12 @@ interface Props {
   stats: { total: number; comFoto: number; semFoto: number };
   letterCounts: Record<string, number>;
   userRole: string;
+  canEditApenados: boolean;
+  canDeletePhotos: boolean;
 }
 
-export function MobileApenadosView({ stats: initialStats, letterCounts, userRole }: Props) {
-  const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
+export function MobileApenadosView({ stats: initialStats, letterCounts, userRole, canEditApenados, canDeletePhotos }: Props) {
+  const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || !!canEditApenados;
 
   const [statsLocal, setStatsLocal] = useState(initialStats);
 
@@ -394,9 +396,9 @@ export function MobileApenadosView({ stats: initialStats, letterCounts, userRole
             <div className="grid grid-cols-2 gap-3">
               {displayedItems.map((a) => (
                 <ApenadoCard
-                  key={a.id}
                   apenado={a}
                   userRole={userRole}
+                  canEditApenados={canEditApenados}
                   onEdit={(ap) => { setEditing(ap); setModalOpen(true); }}
                   onDelete={handleDelete}
                   onPhotoClick={setLightbox}
@@ -437,6 +439,7 @@ export function MobileApenadosView({ stats: initialStats, letterCounts, userRole
           onClose={() => setLightbox(null)}
           onNavigate={setLightbox}
           userRole={userRole}
+          canEditApenados={canEditApenados}
         />
       )}
 
@@ -446,6 +449,8 @@ export function MobileApenadosView({ stats: initialStats, letterCounts, userRole
           onClose={() => { setModalOpen(false); setEditing(null); }}
           onSaved={handleSaved}
           userRole={userRole}
+          canEditApenados={canEditApenados}
+          canDeletePhotos={canDeletePhotos}
         />
       )}
 

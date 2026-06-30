@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   UserCheck, Search, Download, Plus, LayoutGrid, List,
-  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch, Trash2, AlertTriangle, ScanFace, HardDrive, FileImage, Activity, FolderOpen,
+  Users, Camera, UserX, ChevronUp, FolderInput, Loader2, ScanSearch, Trash2, AlertTriangle, ScanFace, HardDrive, FileImage, Activity, FolderOpen, Eye,
 } from 'lucide-react';
 import { ApenadoCard, type Apenado } from './ApenadoCard';
 import { ApenadoModal } from './ApenadoModal';
@@ -30,6 +30,8 @@ interface Props {
   stats: Stats;
   letterCounts: Record<string, number>;
   userRole: string;
+  canEditApenados: boolean;
+  canDeletePhotos: boolean;
 }
 
 function formatBytes(b: number): string {
@@ -40,7 +42,7 @@ function formatBytes(b: number): string {
   return `${(b / k ** i).toFixed(1)} ${sizes[i]}`;
 }
 
-export function ApenadosClient({ stats: initialStats, letterCounts: initialLetterCounts, userRole }: Props) {
+export function ApenadosClient({ stats: initialStats, letterCounts: initialLetterCounts, userRole, canEditApenados, canDeletePhotos }: Props) {
   const [statsLocal, setStatsLocal] = useState(initialStats);
   const [letterCountsLocal, setLetterCountsLocal] = useState(initialLetterCounts);
 
@@ -451,18 +453,22 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                   <Trash2 className="w-4 h-4" /> Deletar Todas as Fotos
                 </button>
               )}
-              <button
-                onClick={() => setImportOpen(true)}
-                className="flex items-center gap-2 text-sm font-medium text-white border border-white/30 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
-              >
-                <FolderInput className="w-4 h-4" /> Importar Pasta
-              </button>
-              <button
-                onClick={openNew}
-                className="flex items-center gap-2 text-sm font-bold bg-white text-sigma-700 hover:bg-sigma-50 px-4 py-2 rounded-xl transition-all shadow-lg"
-              >
-                <Plus className="w-4 h-4" /> Novo Apenado
-              </button>
+              {canEditApenados && (
+                <>
+                  <button
+                    onClick={() => setImportOpen(true)}
+                    className="flex items-center gap-2 text-sm font-medium text-white border border-white/30 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
+                  >
+                    <FolderInput className="w-4 h-4" /> Importar Pasta
+                  </button>
+                  <button
+                    onClick={openNew}
+                    className="flex items-center gap-2 text-sm font-bold bg-white text-sigma-700 hover:bg-sigma-50 px-4 py-2 rounded-xl transition-all shadow-lg"
+                  >
+                    <Plus className="w-4 h-4" /> Novo Apenado
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -620,6 +626,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                   key={a.id}
                   apenado={a}
                   userRole={userRole}
+                  canEditApenados={canEditApenados}
                   onEdit={openEdit}
                   onDelete={handleDelete}
                   onPhotoClick={setLightbox}
@@ -672,11 +679,16 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
                       </button>
                     )}
                     <button onClick={() => openEdit(a)}
+                      title={canEditApenados ? "Editar apenado" : "Ver dados do apenado"}
                       className="p-1.5 text-gray-400 hover:text-sigma-600 hover:bg-sigma-50 dark:hover:bg-sigma-900/30 rounded-lg transition-colors">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
+                      {canEditApenados ? (
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      ) : (
+                        <Eye className="w-3.5 h-3.5" />
+                      )}
                     </button>
                     {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
                       <button onClick={() => handleDelete(a.id)}
@@ -827,6 +839,7 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
           onNavigate={setLightbox}
           onEditApenado={handleEditFromLightbox}
           userRole={userRole}
+          canEditApenados={canEditApenados}
         />
       )}
 
@@ -841,6 +854,8 @@ export function ApenadosClient({ stats: initialStats, letterCounts: initialLette
           onClose={() => { setModalOpen(false); setEditing(null); }}
           onSaved={handleSaved}
           userRole={userRole}
+          canEditApenados={canEditApenados}
+          canDeletePhotos={canDeletePhotos}
         />
       )}
     </div>

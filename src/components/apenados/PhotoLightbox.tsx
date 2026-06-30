@@ -33,13 +33,14 @@ interface Props {
   onNavigate: (a: Apenado) => void;
   onEditApenado?: (id: string) => void;
   userRole?: string;
+  canEditApenados?: boolean;
 }
 
-export function PhotoLightbox({ apenado, all, onClose, onNavigate, onEditApenado, userRole }: Props) {
+export function PhotoLightbox({ apenado, all, onClose, onNavigate, onEditApenado, userRole, canEditApenados }: Props) {
   const idx = all.findIndex((a) => a.id === apenado.id);
   const hasPrev = idx > 0;
   const hasNext = idx < all.length - 1;
-  const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
+  const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || !!canEditApenados;
 
   const goPrev = useCallback(() => {
     if (hasPrev) onNavigate(all[idx - 1]);

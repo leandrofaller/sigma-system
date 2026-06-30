@@ -77,6 +77,8 @@ model User {
   groupId      String?
   group        Group?    @relation(fields: [groupId], references: [id])
   isActive     Boolean   @default(true)
+  canDeletePhotos Boolean   @default(false)
+  canEditApenados Boolean   @default(false)
   avatar       String?
   lastLogin    DateTime?
   lastSeenAt   DateTime?

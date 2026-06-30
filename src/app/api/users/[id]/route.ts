@@ -26,6 +26,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       isActive: body.isActive ?? undefined,
     };
 
+    if (body.canDeletePhotos !== undefined) {
+      updateData.canDeletePhotos = body.role === 'OPERATOR' ? !!body.canDeletePhotos : (body.role ? false : undefined);
+    }
+    if (body.canEditApenados !== undefined) {
+      updateData.canEditApenados = body.role === 'OPERATOR' ? !!body.canEditApenados : (body.role ? false : undefined);
+    }
+
+    if (body.role && body.role !== 'OPERATOR') {
+      updateData.canDeletePhotos = false;
+      updateData.canEditApenados = false;
+    }
+
     if (body.password) {
       updateData.passwordHash = await bcrypt.hash(body.password, 12);
     }

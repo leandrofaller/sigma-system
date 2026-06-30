@@ -30,11 +30,20 @@ export function UsersTable({ users: initialUsers, groups, currentUserRole, curre
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', role: 'OPERATOR', groupId: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', role: 'OPERATOR', groupId: '', canEditApenados: false, canDeletePhotos: false });
 
   const openEdit = (user: any) => {
     setEditingUser(user);
-    setForm({ name: user.name, email: user.email, phone: user.phone || '', password: '', role: user.role, groupId: user.groupId || '' });
+    setForm({
+      name: user.name,
+      email: user.email,
+      phone: user.phone || '',
+      password: '',
+      role: user.role,
+      groupId: user.groupId || '',
+      canEditApenados: !!user.canEditApenados,
+      canDeletePhotos: !!user.canDeletePhotos
+    });
     setShowForm(true);
   };
 
@@ -62,7 +71,7 @@ export function UsersTable({ users: initialUsers, groups, currentUserRole, curre
       }
       setShowForm(false);
       setEditingUser(null);
-      setForm({ name: '', email: '', phone: '', password: '', role: 'OPERATOR', groupId: '' });
+      setForm({ name: '', email: '', phone: '', password: '', role: 'OPERATOR', groupId: '', canEditApenados: false, canDeletePhotos: false });
     } catch (err: any) {
       alert(err.message || 'Erro ao salvar usuário.');
     } finally {
@@ -111,7 +120,7 @@ export function UsersTable({ users: initialUsers, groups, currentUserRole, curre
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button onClick={() => { setEditingUser(null); setForm({ name: '', email: '', phone: '', password: '', role: 'OPERATOR', groupId: '' }); setShowForm(true); }}
+        <button onClick={() => { setEditingUser(null); setForm({ name: '', email: '', phone: '', password: '', role: 'OPERATOR', groupId: '', canEditApenados: false, canDeletePhotos: false }); setShowForm(true); }}
           className="flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
           <Plus className="w-4 h-4" /> Novo Usuário
         </button>
@@ -151,6 +160,32 @@ export function UsersTable({ users: initialUsers, groups, currentUserRole, curre
                 {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
             </div>
+
+            {form.role === 'OPERATOR' && currentUserRole === 'SUPER_ADMIN' && (
+              <div className="col-span-2 mt-2 p-4 bg-gray-50 dark:bg-gray-800/40 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-3">
+                <p className="text-xs font-bold text-sigma-600 uppercase tracking-wider">Permissões Especiais (Identificação de Apenados)</p>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <label className="flex items-center gap-2.5 cursor-pointer text-sm text-body font-medium select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!(form as any).canEditApenados}
+                      onChange={(e) => setForm({ ...form, canEditApenados: e.target.checked } as any)}
+                      className="w-4 h-4 rounded border-gray-300 dark:border-gray-700 text-sigma-600 focus:ring-sigma-500 accent-sigma-600"
+                    />
+                    Permitir Editar Dados
+                  </label>
+                  <label className="flex items-center gap-2.5 cursor-pointer text-sm text-body font-medium select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!(form as any).canDeletePhotos}
+                      onChange={(e) => setForm({ ...form, canDeletePhotos: e.target.checked } as any)}
+                      className="w-4 h-4 rounded border-gray-300 dark:border-gray-700 text-sigma-600 focus:ring-sigma-500 accent-sigma-600"
+                    />
+                    Permitir Deletar Fotos
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button onClick={() => setShowForm(false)}
@@ -197,10 +232,26 @@ export function UsersTable({ users: initialUsers, groups, currentUserRole, curre
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-4">
-                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${roleColors[user.role]}`}>
-                    {getRoleName(user.role)}
-                  </span>
+                 <td className="px-4 py-4">
+                  <div className="flex flex-col gap-1 items-start">
+                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${roleColors[user.role]}`}>
+                      {getRoleName(user.role)}
+                    </span>
+                    {user.role === 'OPERATOR' && (user.canEditApenados || user.canDeletePhotos) && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {user.canEditApenados && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200/20" title="Pode editar dados de apenados">
+                            Editar
+                          </span>
+                        )}
+                        {user.canDeletePhotos && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-200/20" title="Pode deletar fotos de apenados">
+                            Foto
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-4 text-sm text-body">{user.group?.name || '-'}</td>
                 <td className="px-4 py-4">

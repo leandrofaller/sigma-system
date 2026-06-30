@@ -36,6 +36,13 @@ export default async function ApenadosPage() {
   }
 
   const user = session.user as any;
+  const userDb = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { role: true, canEditApenados: true, canDeletePhotos: true }
+  });
+
+  const canEditApenados = userDb?.role === 'SUPER_ADMIN' || userDb?.role === 'ADMIN' || !!userDb?.canEditApenados;
+  const canDeletePhotos = userDb?.role === 'SUPER_ADMIN' || userDb?.role === 'ADMIN' || !!userDb?.canDeletePhotos;
 
   if (isMobile) {
     return (
@@ -43,6 +50,8 @@ export default async function ApenadosPage() {
         stats={{ total, comFoto, semFoto: total - comFoto }}
         letterCounts={letterCounts}
         userRole={user.role}
+        canEditApenados={canEditApenados}
+        canDeletePhotos={canDeletePhotos}
       />
     );
   }
@@ -52,6 +61,8 @@ export default async function ApenadosPage() {
       stats={{ total, comFoto, semFoto: total - comFoto, diskUsage }}
       letterCounts={letterCounts}
       userRole={user.role}
+      canEditApenados={canEditApenados}
+      canDeletePhotos={canDeletePhotos}
     />
   );
 }

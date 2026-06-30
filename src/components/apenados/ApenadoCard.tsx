@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Pencil, Trash2, User } from 'lucide-react';
+import { Download, Pencil, Trash2, User, Eye } from 'lucide-react';
 
 export interface Apenado {
   id: string;
@@ -40,12 +40,13 @@ function faceStatusPill(a: Apenado) {
 interface Props {
   apenado: Apenado;
   userRole: string;
+  canEditApenados?: boolean;
   onEdit: (a: Apenado) => void;
   onDelete: (id: string) => void;
   onPhotoClick?: (a: Apenado) => void;
 }
 
-export function ApenadoCard({ apenado, userRole, onEdit, onDelete, onPhotoClick }: Props) {
+export function ApenadoCard({ apenado, userRole, canEditApenados, onEdit, onDelete, onPhotoClick }: Props) {
   const canDelete = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
   const photoUrl = apenado.photoPath
     ? `/api/apenados/${apenado.id}/foto${apenado._photoTs ? `?t=${apenado._photoTs}` : ''}`
@@ -101,7 +102,8 @@ export function ApenadoCard({ apenado, userRole, onEdit, onDelete, onPhotoClick 
               onClick={(e) => { e.stopPropagation(); onEdit(apenado); }}
               className="flex-1 flex items-center gap-1 justify-center text-xs font-semibold text-white bg-sigma-600/80 hover:bg-sigma-600 backdrop-blur-sm px-2 py-1.5 rounded-lg transition-colors"
             >
-              <Pencil className="w-3.5 h-3.5" /> Editar
+              {canEditApenados ? <Pencil className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {canEditApenados ? 'Editar' : 'Ver Dados'}
             </button>
             {canDelete && (
               <button

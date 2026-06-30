@@ -10,6 +10,14 @@ export default async function MobileApenadosPage() {
   if (!session?.user) redirect('/login');
   const user = session.user as any;
 
+  const userDb = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { role: true, canEditApenados: true, canDeletePhotos: true }
+  });
+
+  const canEditApenados = userDb?.role === 'SUPER_ADMIN' || userDb?.role === 'ADMIN' || !!userDb?.canEditApenados;
+  const canDeletePhotos = userDb?.role === 'SUPER_ADMIN' || userDb?.role === 'ADMIN' || !!userDb?.canDeletePhotos;
+
   const [total, comFoto, letterRows] = await Promise.all([
     prisma.apenado.count(),
     prisma.apenado.count({ where: { photoPath: { not: null } } }),
@@ -32,6 +40,8 @@ export default async function MobileApenadosPage() {
       stats={{ total, comFoto, semFoto: total - comFoto }}
       letterCounts={letterCounts}
       userRole={user.role}
+      canEditApenados={canEditApenados}
+      canDeletePhotos={canDeletePhotos}
     />
   );
 }

@@ -44,7 +44,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   const user = session.user as any;
-  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+  const userDb = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { role: true, canEditApenados: true }
+  });
+
+  if (!userDb) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
+
+  const hasPermission = userDb.role === 'SUPER_ADMIN' || userDb.role === 'ADMIN' || (userDb.role === 'OPERATOR' && !!userDb.canEditApenados);
+  if (!hasPermission) {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
   }
 
