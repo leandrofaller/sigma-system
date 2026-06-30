@@ -14,6 +14,7 @@ function fmtTime(seconds: number): string {
 export function VisitanteIndexingStatusFloat() {
   const { isIndexing, timedOut, progress, indexError, stopIndexing } = useVisitanteIndexing();
   const [showDone, setShowDone] = useState(false);
+  const [showTimeout, setShowTimeout] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   const done = !isIndexing && progress.total > 0 && progress.current >= progress.total;
@@ -22,17 +23,24 @@ export function VisitanteIndexingStatusFloat() {
     if (isIndexing) {
       setDismissed(false);
       setShowDone(false);
+      setShowTimeout(false);
     } else if (done) {
       setShowDone(true);
       const timer = setTimeout(() => {
         setShowDone(false);
       }, 5000); // 5 segundos
       return () => clearTimeout(timer);
+    } else if (timedOut) {
+      setShowTimeout(true);
+      const timer = setTimeout(() => {
+        setShowTimeout(false);
+      }, 10000); // 10 segundos
+      return () => clearTimeout(timer);
     }
-  }, [isIndexing, done]);
+  }, [isIndexing, done, timedOut]);
 
   if (dismissed) return null;
-  if (!isIndexing && !showDone && !timedOut) return null;
+  if (!isIndexing && !showDone && (!timedOut || !showTimeout)) return null;
 
   const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
   const elapsed = progress.startTime ? (Date.now() - progress.startTime) / 1000 : 0;
