@@ -71,8 +71,9 @@ export function SipeVisitantesPanel({
   const [visitantes, setVisitantes] = useState<Visitante[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const [filtered, setFiltered] = useState<Visitante[]>([])
   const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
   const [selected, setSelected] = useState<Visitante | null>(null)
   const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null)
   const [zoomedPhotoTitle, setZoomedPhotoTitle] = useState<string>('')
@@ -98,41 +99,41 @@ export function SipeVisitantesPanel({
 
   const LIMIT = 20
 
-  const fetchVisitantes = useCallback(async () => {
+  const fetchVisitantes = useCallback(async (currPage: number, query: string) => {
     setLoading(true)
     try {
-      const res = await fetch(apiEndpoint)
+      const queryParam = encodeURIComponent(query.trim())
+      const url = `${apiEndpoint}?page=${currPage}&limit=${LIMIT}&search=${queryParam}&q=${queryParam}`
+      const res = await fetch(url)
       if (!res.ok) throw new Error()
       const data = await res.json()
       setVisitantes(data.visitantes ?? [])
+      setTotal(data.total ?? 0)
+      setTotalPages(data.pages ?? Math.ceil((data.total ?? 0) / LIMIT) ?? 1)
     } catch {
       toast.error('Erro ao carregar visitantes')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [apiEndpoint])
 
+  // Efeito ao mudar de página
   useEffect(() => {
-    fetchVisitantes()
-  }, [fetchVisitantes])
+    fetchVisitantes(page, searchQuery)
+  }, [page, fetchVisitantes])
 
+  // Efeito ao mudar a busca (debounce de 400ms)
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFiltered(visitantes)
-    } else {
-      setFiltered(
-        visitantes.filter(
-          (v) =>
-            containsNormalized(v.nomeVisitante, searchQuery) ||
-            containsNormalized(v.cpfVisitante, searchQuery)
-        )
-      )
-    }
-    setPage(1)
-  }, [searchQuery, visitantes])
+    const timer = setTimeout(() => {
+      setPage(1)
+      fetchVisitantes(1, searchQuery)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchQuery, fetchVisitantes])
 
-  const totalPages = Math.ceil(filtered.length / LIMIT)
-  const paginated = filtered.slice((page - 1) * LIMIT, page * LIMIT)
+  const handleRefresh = () => {
+    fetchVisitantes(page, searchQuery)
+  }
 
   if (loading) {
     return (
@@ -158,7 +159,7 @@ export function SipeVisitantesPanel({
           />
         </div>
         <button
-          onClick={fetchVisitantes}
+          onClick={handleRefresh}
           disabled={loading}
           className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
         >
@@ -168,17 +169,17 @@ export function SipeVisitantesPanel({
 
       {/* Count */}
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        {filtered.length} registro{filtered.length !== 1 ? 's' : ''} de visitantes vinculados a apenados do SIPE
+        {total} registro{total !== 1 ? 's' : ''} de visitantes vinculados a apenados do SIPE
       </p>
 
       {/* Cards */}
-      {paginated.length === 0 ? (
+      {visitantes.length === 0 ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-          {visitantes.length === 0 ? 'Nenhum visitante cadastrado' : 'Nenhum resultado encontrado'}
+          {searchQuery ? 'Nenhum resultado encontrado' : 'Nenhum visitante cadastrado'}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {paginated.map((v) => (
+          {visitantes.map((v) => (
             <button
               key={v.id}
               onClick={() => setSelected(v)}

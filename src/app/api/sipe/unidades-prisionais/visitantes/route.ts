@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url)
-  const q = searchParams.get('q')?.trim() ?? ''
+  const page = parseInt(searchParams.get('page') || '1')
+  const limit = parseInt(searchParams.get('limit') || '20')
+  const q = (searchParams.get('search') || searchParams.get('q') || '').trim()
 
   // Buscar todos os registros da tabela sipe_apenados_unidades_prisionais
   const apenados = await prisma.sipeApenadoUnidadePrisional.findMany()
@@ -57,8 +59,14 @@ export async function GET(req: NextRequest) {
   // Ordenar alfabeticamente
   filtered.sort((a, b) => (a.nomeVisitante || '').localeCompare(b.nomeVisitante || ''))
 
+  const total = filtered.length
+  const startIndex = (page - 1) * limit
+  const paginated = filtered.slice(startIndex, startIndex + limit)
+
   return NextResponse.json({
-    visitantes: filtered,
-    total: filtered.length,
+    visitantes: paginated,
+    total,
+    pages: Math.ceil(total / limit),
+    currentPage: page
   })
 }
