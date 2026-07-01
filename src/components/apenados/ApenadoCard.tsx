@@ -16,6 +16,8 @@ export interface Apenado {
   isFaceIndexed?: boolean;
   noFaceDetected?: boolean;
   isLinkedToSipe?: boolean;
+  photoCategory?: string | null;
+  photoCategoryReason?: string | null;
 }
 
 function qualityPill(q: number | null | undefined) {

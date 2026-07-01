@@ -22,6 +22,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const apenado = await prisma.apenado.findUnique({ where: { id } });
   if (!apenado) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
 
+  const user = session.user as any;
+  const userDb = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { role: true, canEditApenados: true }
+  });
+
+  if (!userDb) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
+
+  const canEdit = userDb.role === 'SUPER_ADMIN' || userDb.role === 'ADMIN' || (userDb.role === 'OPERATOR' && !!userDb.canEditApenados);
+  
+  if (!canEdit) {
+    // Operadores sem canEditApenados só podem enviar foto se o apenado estiver sem imagem
+    const isSemImagem = !apenado.photoPath || 
+                        apenado.photoCategory === 'NO_FACE' ||
+                        apenado.photoCategoryReason?.toLowerCase().includes('sem imagem') ||
+                        apenado.notes?.toLowerCase().includes('sem imagem');
+    if (!isSemImagem) {
+      return NextResponse.json({ error: 'Apenas administradores podem trocar fotos de apenados com imagens válidas' }, { status: 403 });
+    }
+  }
+
   const formData = await req.formData();
   const file = formData.get('foto') as File;
   if (!file) return NextResponse.json({ error: 'Arquivo obrigatório' }, { status: 400 });
@@ -79,8 +100,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const photoPath = `uploads/apenados/${filename}`;
   await prisma.apenado.update({
     where: { id },
-    data: { photoPath, photoHash, photoQuality, photoHashSha },
+    data: { 
+      photoPath, 
+      photoHash, 
+      photoQuality, 
+      photoHashSha,
+      faceDescriptor: null, // Reseta biometria anterior para forçar reindexação ArcFace automática
+      detScore: null,
+      photoCategory: null,
+      photoCategoryConf: null,
+      photoCategoryReason: null,
+      photoClassifiedAt: null,
+    },
   });
+
+  // Limpa o vector antigo no pgvector se ativo, e invalida o cache facial em memória
+  const pvecAvail = await pgvectorAvailable();
+  if (pvecAvail) clearVector(id);
+  invalidateFaceCache();
 
   return NextResponse.json({ photoPath });
 }

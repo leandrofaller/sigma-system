@@ -17,6 +17,14 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole, canEditApena
   const isEdit = !!apenado?.id;
   const canDeletePhoto = canDeletePhotos;
 
+  const isSemImagem = !apenado?.photoPath || 
+                      apenado?.photoCategory === 'NO_FACE' ||
+                      apenado?.photoCategoryReason?.toLowerCase().includes('sem imagem') ||
+                      apenado?.notes?.toLowerCase().includes('sem imagem') ||
+                      (apenado as any).fotosComplementares?.some((f: any) => f.descricao?.toLowerCase().includes('sem imagem'));
+
+  const allowPhotoUpload = canEditApenados || (isEdit && isSemImagem);
+
   const [form, setForm] = useState({
     name: apenado?.name || '',
     matricula: apenado?.matricula || '',
@@ -42,6 +50,7 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole, canEditApena
   const [initialGroupIds, setInitialGroupIds] = useState<Set<string>>(new Set());
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [groupsLoading, setGroupsLoading] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
 
   const inputCls = 'w-full input-base px-3 py-2 text-sm';
 
@@ -72,30 +81,40 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole, canEditApena
     if (!form.name.trim()) { alert('Nome é obrigatório'); return; }
     setSaving(true);
     try {
-      const method = isEdit ? 'PUT' : 'POST';
-      const url = isEdit ? `/api/apenados/${apenado!.id}` : '/api/apenados';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error();
-      const saved: Apenado = await res.json();
+      let saved: Apenado;
+      
+      if (canEditApenados) {
+        const method = isEdit ? 'PUT' : 'POST';
+        const url = isEdit ? `/api/apenados/${apenado!.id}` : '/api/apenados';
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form),
+        });
+        if (!res.ok) throw new Error('Falha ao salvar dados cadastrais');
+        saved = await res.json();
+      } else {
+        if (!isEdit || !apenado) throw new Error('Ação não permitida para este registro.');
+        saved = { ...apenado };
+      }
 
       if (pendingFile) {
         try {
           await uploadPhoto(saved.id, pendingFile);
-          saved.photoPath = `uploads/apenados/${saved.id}.jpg`;
+          saved.photoPath = `uploads/apenados/${saved.id}.webp`;
           saved._photoTs = Date.now();
+          saved.noFaceDetected = false;
         } catch (uploadErr: any) {
-          alert(`Apenado salvo, mas houve um erro ao salvar a foto: ${uploadErr.message}`);
+          alert(`Houve um erro ao enviar a foto: ${uploadErr.message}`);
+          setSaving(false);
+          return;
         }
       } else if (photoVersion > 0) {
         // Photo was rotated — stamp timestamp so card/lightbox bypass stale browser cache
         saved._photoTs = Date.now();
       }
 
-      if (isEdit) {
+      if (canEditApenados && isEdit) {
         const toAdd = [...selectedGroupIds].filter((id) => !initialGroupIds.has(id));
         const toRemove = [...initialGroupIds].filter((id) => !selectedGroupIds.has(id));
         await Promise.all([
@@ -117,8 +136,8 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole, canEditApena
       }
 
       onSaved(saved);
-    } catch {
-      alert('Erro ao salvar.');
+    } catch (err: any) {
+      alert(err.message || 'Erro ao salvar.');
     } finally {
       setSaving(false);
     }
@@ -155,6 +174,31 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole, canEditApena
       onSaved({ ...apenado, ...form, name: form.name.trim().toUpperCase(), photoPath: null });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleForceReindex = async () => {
+    if (!isEdit || !apenado?.id) return;
+    setReindexing(true);
+    try {
+      const res = await fetch('/api/apenados/face/reindex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: apenado.id, type: 'classic' }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Erro ao solicitar reindexação');
+      }
+      alert('Foto liberada! Ela foi colocada na fila de indexação biométrica.');
+      if (apenado) {
+        apenado.noFaceDetected = false;
+        setPhotoVersion((v) => v + 1);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Erro ao reindexar');
+    } finally {
+      setReindexing(false);
     }
   };
 
@@ -234,20 +278,20 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole, canEditApena
             )}
             <div
               className={`relative rounded-xl transition-all overflow-hidden ${
-                canEditApenados 
-                  ? `border-2 border-dashed cursor-pointer ${
-                      dragging
-                        ? 'border-sigma-400 bg-sigma-50 dark:bg-sigma-900/20'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-sigma-300 dark:hover:border-sigma-700'
-                    }` 
-                  : 'border border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-800/10 cursor-default'
-              }`}
-              style={{ height: 200 }}
-              onClick={() => canEditApenados && fileRef.current?.click()}
-              onDragOver={(e) => { if (canEditApenados) { e.preventDefault(); setDragging(true); } }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(e) => { if (canEditApenados) handleDrop(e); }}
-            >
+              allowPhotoUpload 
+                ? `border-2 border-dashed cursor-pointer ${
+                    dragging
+                      ? 'border-sigma-400 bg-sigma-50 dark:bg-sigma-900/20'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-sigma-300 dark:hover:border-sigma-700'
+                  }` 
+                : 'border border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-800/10 cursor-default'
+            }`}
+            style={{ height: 200 }}
+            onClick={() => allowPhotoUpload && fileRef.current?.click()}
+            onDragOver={(e) => { if (allowPhotoUpload) { e.preventDefault(); setDragging(true); } }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => { if (allowPhotoUpload) handleDrop(e); }}
+          >
               {photoPreview ? (
                 <>
                   <img
@@ -259,14 +303,14 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole, canEditApena
                       setPhotoPreview(null);
                     }}
                   />
-                  {canEditApenados && (
-                    <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <div className="flex items-center gap-2 text-white text-sm font-semibold">
-                        <Camera className="w-5 h-5" /> Trocar foto
-                      </div>
+                  {allowPhotoUpload && (
+                  <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="flex items-center gap-2 text-white text-sm font-semibold">
+                      <Camera className="w-5 h-5" /> Trocar foto
                     </div>
-                  )}
-                  {isEdit && apenado?.photoPath && !pendingFile && canEditApenados && (
+                  </div>
+                )}
+                {isEdit && apenado?.photoPath && !pendingFile && allowPhotoUpload && (
                     <div className="absolute bottom-2 right-2 flex gap-1" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => handleRotate(270)}
@@ -304,13 +348,44 @@ export function ApenadoModal({ apenado, onClose, onSaved, userRole, canEditApena
                   </div>
                   <div className="text-center">
                     <p className="text-sm font-medium text-body">
-                      {canEditApenados ? 'Arraste ou clique para adicionar foto' : 'Sem foto cadastrada'}
+                      {allowPhotoUpload ? 'Arraste ou clique para adicionar foto' : 'Sem foto cadastrada'}
                     </p>
-                    {canEditApenados && <p className="text-xs text-subtle mt-0.5">JPG, PNG, WebP — máx. 50MB</p>}
+                    {allowPhotoUpload && <p className="text-xs text-subtle mt-0.5">JPG, PNG, WebP — máx. 50MB</p>}
                   </div>
                 </div>
               )}
             </div>
+
+            {/* Badge "Sem Rosto" e controle de reindexação rápida para o Superadmin */}
+            {isEdit && apenado && (apenado.noFaceDetected || apenado.photoCategory === 'NO_FACE') && (
+              <div className="mt-3 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center justify-between gap-3 animate-fade-in">
+                <div className="flex items-start gap-2 min-w-0">
+                  <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[11px] font-bold text-red-800 dark:text-red-300">Sem Rosto Detectado</p>
+                    <p className="text-[10px] text-red-700 dark:text-red-400 leading-normal">
+                      O sistema biométrico não identificou uma face válida nesta foto.
+                    </p>
+                  </div>
+                </div>
+                {userRole === 'SUPER_ADMIN' && (
+                  <button
+                    type="button"
+                    onClick={handleForceReindex}
+                    disabled={reindexing}
+                    className="shrink-0 flex items-center gap-1 text-[10px] font-bold text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 px-2.5 py-1.5 rounded-lg transition-colors shadow-sm"
+                  >
+                    {reindexing ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RotateCw className="w-3 h-3" />
+                    )}
+                    Reindexar
+                  </button>
+                )}
+              </div>
+            )}
+
             <input
               ref={fileRef}
               type="file"
