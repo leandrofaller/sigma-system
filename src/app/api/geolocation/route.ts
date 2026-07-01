@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
+import { checkLocationAgainstGeofences } from '@/lib/geofencing';
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -42,6 +43,19 @@ export async function POST(req: NextRequest) {
     // Validar que address não ultrapasse 255 caracteres
     const address = body.address ? String(body.address).substring(0, 255) : null;
 
+    // Verificar cercas geográficas (isenta ADMIN/SUPER_ADMIN)
+    const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+    let isAllowed = true;
+    let blockedByFenceName: string | undefined = undefined;
+
+    if (!isAdmin) {
+      const fenceCheck = await checkLocationAgainstGeofences(body.lat, body.lng);
+      isAllowed = fenceCheck.isAllowed;
+      blockedByFenceName = fenceCheck.blockedByFenceName;
+    }
+
+    const geoStatus = isAllowed ? 'authorized' : 'blocked_area';
+
     // Criar registro de localização
     const location = await prisma.userLocation.create({
       data: {
@@ -53,20 +67,32 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Atualizar última localização do usuário
+    // Atualizar última localização do usuário e geoStatus
     await prisma.user.update({
       where: { id: user.id },
       data: {
+        geoStatus,
         lastLocation: {
           lat: parseFloat(body.lat.toFixed(6)),
           lng: parseFloat(body.lng.toFixed(6)),
           address,
           timestamp: new Date(),
+          blockedByFence: blockedByFenceName || null,
         },
       },
     }).catch(err => {
       console.warn(`[API/Geo] Erro ao atualizar lastLocation: ${err.message}`);
     });
+
+    if (!isAllowed) {
+      console.warn(`[API/Geo] ❌ ${user.email} bloqueado por cerca geográfica periódica: ${blockedByFenceName}`);
+      return NextResponse.json({
+        success: false,
+        error: `Acesso restrito nesta localização. Uso proibido na área: ${blockedByFenceName}.`,
+        geoStatus: 'blocked_area',
+        blocked: true
+      }, { status: 403 });
+    }
 
     const logMsg = address
       ? `${address} (±${accuracy}m)`
@@ -74,7 +100,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`[API/Geo] ✓ ${user.email}: ${logMsg}`);
 
-    return NextResponse.json({ success: true, id: location.id, address });
+    return NextResponse.json({ success: true, id: location.id, address, geoStatus });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error(`[API/Geo] POST error: ${errorMsg}`);

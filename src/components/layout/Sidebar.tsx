@@ -57,6 +57,7 @@ const defaultAdminItems: NavItem[] = [
   { label: 'Grupos / Setores', href: '/admin/grupos', iconName: 'FolderOpen', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Dispositivos', href: '/admin/dispositivos', iconName: 'Monitor', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Monitoramento', href: '/admin/monitoramento', iconName: 'MapPin', roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Cercas Geográficas', href: '/admin/cercas-geograficas', iconName: 'Locate', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Avisos de Manutenção', href: '/admin/manutencao', iconName: 'AlertCircle', roles: ['SUPER_ADMIN'] },
   { label: 'Auditoria', href: '/auditoria', iconName: 'ClipboardList', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Higienização de Fotos', href: '/admin/sanitizacao', iconName: 'ShieldAlert', roles: ['SUPER_ADMIN', 'ADMIN'] },

@@ -1,0 +1,215 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { MapContainer, TileLayer, Circle, Polygon, Marker, useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Corrigir os ícones padrão do Leaflet no Next.js
+// @ts-ignore
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+
+interface GeofenceData {
+  id?: string;
+  name: string;
+  type: string;
+  action: string;
+  coordinates: any;
+  isActive: boolean;
+}
+
+interface GeofencesMapProps {
+  fences: GeofenceData[];
+  selectedFenceId: string | null;
+  newFence: {
+    lat: number | null;
+    lng: number | null;
+    radius: number;
+    type: string;
+    action: string;
+  };
+  onMapClick: (lat: number, lng: number) => void;
+}
+
+const TILE_LAYERS = {
+  standard: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
+};
+
+// Componente para capturar os cliques no mapa
+function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onMapClick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
+// Componente para centralizar o mapa em um ponto específico
+function MapController({ center }: { center: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (center) {
+      map.setView(center, 14, { animate: true });
+    }
+  }, [center, map]);
+  return null;
+}
+
+export default function GeofencesMap({
+  fences,
+  selectedFenceId,
+  newFence,
+  onMapClick
+}: GeofencesMapProps) {
+  const [mapStyle, setMapStyle] = useState<'standard' | 'dark' | 'satellite'>('standard');
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Centraliza o mapa inicialmente na capital ou no centro das cercas
+  const initialCenter = useMemo<[number, number]>(() => {
+    if (fences.length > 0) {
+      const first = fences[0];
+      const coords = first.coordinates;
+      if (first.type === 'circle' && coords && coords.lat) {
+        return [coords.lat, coords.lng];
+      } else if (first.type === 'polygon' && Array.isArray(coords) && coords.length > 0) {
+        return [coords[0].lat, coords[0].lng];
+      }
+    }
+    // Coordenada padrão (centro aproximado do Brasil/DF)
+    return [-15.7801, -47.9292];
+  }, [fences]);
+
+  // Encontra o centro da cerca selecionada para focar o mapa nela
+  const selectedCenter = useMemo<[number, number] | null>(() => {
+    if (!selectedFenceId) return null;
+    const selected = fences.find(f => f.id === selectedFenceId);
+    if (!selected) return null;
+    const coords = selected.coordinates;
+    if (selected.type === 'circle' && coords && coords.lat) {
+      return [coords.lat, coords.lng];
+    } else if (selected.type === 'polygon' && Array.isArray(coords) && coords.length > 0) {
+      return [coords[0].lat, coords[0].lng];
+    }
+    return null;
+  }, [selectedFenceId, fences]);
+
+  if (!isMounted) {
+    return (
+      <div className="w-full h-[500px] bg-gray-100 dark:bg-gray-800 rounded-xl flex items-center justify-center border border-gray-200 dark:border-gray-700 animate-pulse">
+        <span className="text-gray-500">Carregando mapa...</span>
+      </div>
+    );
+  }
+
+  // Cores das cercas baseadas na ação (allow = azul/verde, deny = vermelho)
+  const getFenceOptions = (action: string, isActive: boolean) => {
+    const color = action === 'allow' ? '#2563eb' : '#dc2626';
+    return {
+      color,
+      fillColor: color,
+      fillOpacity: isActive ? 0.2 : 0.05,
+      dashArray: isActive ? undefined : '5, 10',
+      weight: isActive ? 2 : 1
+    };
+  };
+
+  return (
+    <div className="relative w-full h-[550px] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-inner">
+      {/* Seletor de camada do mapa */}
+      <div className="absolute top-3 right-3 z-[1000] bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-1.5 flex gap-1">
+        {(['standard', 'dark', 'satellite'] as const).map((style) => (
+          <button
+            key={style}
+            onClick={() => setMapStyle(style)}
+            className={`px-2.5 py-1 text-xs font-semibold rounded ${
+              mapStyle === style
+                ? 'bg-sigma-600 text-white dark:bg-sigma-500'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+          >
+            {style === 'standard' ? 'Padrão' : style === 'dark' ? 'Escuro' : 'Satélite'}
+          </button>
+        ))}
+      </div>
+
+      <MapContainer
+        center={initialCenter}
+        zoom={12}
+        style={{ width: '100%', height: '100%', background: '#f5f5f5' }}
+      >
+        <TileLayer url={TILE_LAYERS[mapStyle]} attribution='&copy; OpenStreetMap contributors' />
+        
+        {/* Manipulador de cliques para criar marcador de nova cerca */}
+        <MapClickHandler onMapClick={onMapClick} />
+        
+        {/* Controlador para focar cerca selecionada */}
+        <MapController center={selectedCenter} />
+
+        {/* Desenhar as cercas existentes */}
+        {fences.map((fence) => {
+          const coords = fence.coordinates;
+          if (!coords) return null;
+
+          const options = getFenceOptions(fence.action, fence.isActive);
+
+          if (fence.type === 'circle' && typeof coords.lat === 'number') {
+            return (
+              <Circle
+                key={fence.id}
+                center={[coords.lat, coords.lng]}
+                radius={coords.radius}
+                pathOptions={options}
+              />
+            );
+          } else if (fence.type === 'polygon' && Array.isArray(coords)) {
+            return (
+              <Polygon
+                key={fence.id}
+                positions={coords.map(c => [c.lat, c.lng])}
+                pathOptions={options}
+              />
+            );
+          }
+          return null;
+        })}
+
+        {/* Marcador e círculo para a nova cerca em edição */}
+        {newFence.lat !== null && newFence.lng !== null && (
+          <>
+            <Marker position={[newFence.lat, newFence.lng]} />
+            {newFence.type === 'circle' && (
+              <Circle
+                center={[newFence.lat, newFence.lng]}
+                radius={newFence.radius}
+                pathOptions={{
+                  color: newFence.action === 'allow' ? '#3b82f6' : '#ef4444',
+                  fillColor: newFence.action === 'allow' ? '#3b82f6' : '#ef4444',
+                  fillOpacity: 0.35,
+                  dashArray: '5, 5',
+                  weight: 2
+                }}
+              />
+            )}
+          </>
+        )}
+      </MapContainer>
+
+      {/* Dica no rodapé do mapa */}
+      <div className="absolute bottom-2 left-2 z-[1000] bg-white/90 dark:bg-gray-800/90 backdrop-blur rounded px-3 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 shadow border border-gray-150 dark:border-gray-750">
+        💡 Clique no mapa para definir o ponto central da cerca.
+      </div>
+    </div>
+  );
+}

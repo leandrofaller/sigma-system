@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { checkLocationAgainstGeofences } from '@/lib/geofencing';
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -34,6 +35,19 @@ export async function POST(req: NextRequest) {
     const cleanAccuracy = Math.max(0, accuracy || 0);
     const cleanAddress = address ? String(address).substring(0, 255) : null;
 
+    // Verificar cercas geográficas (isenta ADMIN/SUPER_ADMIN)
+    const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+    let isAllowed = true;
+    let blockedByFenceName: string | undefined = undefined;
+
+    if (!isAdmin) {
+      const fenceCheck = await checkLocationAgainstGeofences(lat, lng);
+      isAllowed = fenceCheck.isAllowed;
+      blockedByFenceName = fenceCheck.blockedByFenceName;
+    }
+
+    const geoStatus = isAllowed ? 'authorized' : 'blocked_area';
+
     // Atualizar user.geoLocationData e geoStatus
     const geoData = {
       lat: parseFloat(lat.toFixed(6)),
@@ -41,12 +55,13 @@ export async function POST(req: NextRequest) {
       accuracy: cleanAccuracy > 0 ? Math.round(cleanAccuracy) : null,
       address: cleanAddress,
       timestamp: new Date().toISOString(),
+      blockedByFence: blockedByFenceName || null,
     };
 
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
-        geoStatus: 'authorized',
+        geoStatus,
         geoLocationData: geoData,
         lastLocation: geoData, // Mantém compatibilidade com campo antigo
       },
@@ -64,6 +79,15 @@ export async function POST(req: NextRequest) {
     }).catch(err => {
       console.warn(`[Geo/Capture] Erro ao criar histórico: ${err.message}`);
     });
+
+    if (!isAllowed) {
+      console.warn(`[Geo/Capture] ❌ ${user.email} bloqueado por cerca geográfica: ${blockedByFenceName}`);
+      return NextResponse.json({
+        success: false,
+        error: `Acesso restrito nesta localização. Uso proibido na área: ${blockedByFenceName}.`,
+        geoStatus: 'blocked_area',
+      }, { status: 403 });
+    }
 
     console.log(`[Geo/Capture] ✓ ${user.email}: ${cleanAddress || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}`);
 

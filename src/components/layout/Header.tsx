@@ -66,6 +66,12 @@ export function Header({ user }: HeaderProps) {
           }),
         });
 
+        if (res.status === 403) {
+          console.warn('[Geo] Acesso restrito nesta localização. Recarregando página...');
+          window.location.reload();
+          return false;
+        }
+
         if (!res.ok) {
           console.warn(`[Geo] API error: ${res.status}`);
           return false;

@@ -29,6 +29,7 @@ const DEFAULT_ADMIN_ITEMS = [
   { key: 'admin-grupos', label: 'Grupos / Setores', href: '/admin/grupos', iconName: 'FolderOpen', position: 220, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: true },
   { key: 'admin-dispositivos', label: 'Dispositivos', href: '/admin/dispositivos', iconName: 'Monitor', position: 230, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: true },
   { key: 'admin-monitoramento', label: 'Monitoramento', href: '/admin/monitoramento', iconName: 'MapPin', position: 240, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: true },
+  { key: 'admin-geofences', label: 'Cercas Geográficas', href: '/admin/cercas-geograficas', iconName: 'Locate', position: 245, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: true },
   { key: 'admin-manutencao', label: 'Avisos de Manutenção', href: '/admin/manutencao', iconName: 'AlertCircle', position: 250, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: true },
   { key: 'admin-sidebar', label: 'Menu de Navegação', href: '/admin/sidebar', iconName: 'Settings', position: 265, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: true },
   { key: 'admin-auditoria', label: 'Auditoria', href: '/auditoria', iconName: 'ClipboardList', position: 260, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: true },
@@ -64,6 +65,16 @@ export async function GET(req: NextRequest) {
     if (configs.length > 0 && !hasSidebarConfig) {
       await prisma.sidebarConfig.create({
         data: { key: 'admin-sidebar', label: 'Menu de Navegação', href: '/admin/sidebar', iconName: 'Settings', position: 265, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: true }
+      });
+      configs = await prisma.sidebarConfig.findMany({
+        orderBy: { position: 'asc' }
+      });
+    }
+
+    const hasGeofencesConfig = configs.some(c => c.key === 'admin-geofences');
+    if (configs.length > 0 && !hasGeofencesConfig) {
+      await prisma.sidebarConfig.create({
+        data: { key: 'admin-geofences', label: 'Cercas Geográficas', href: '/admin/cercas-geograficas', iconName: 'Locate', position: 245, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: true }
       });
       configs = await prisma.sidebarConfig.findMany({
         orderBy: { position: 'asc' }

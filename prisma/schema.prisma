@@ -1568,4 +1568,19 @@ model UnidadeEnderecoCustom {
   @@map("unidade_endereco_custom")
 }
 
+model Geofence {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // "circle" | "polygon"
+  action      String   // "allow" | "deny"
+  coordinates Json     // Circular: { lat: float, lng: float, radius: float }
+                       // Polígono: [{ lat: float, lng: float }, ...]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("geofences")
+}
+
+
 

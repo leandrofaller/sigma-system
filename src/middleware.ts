@@ -87,8 +87,8 @@ export default auth((req) => {
     const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
     if (!isAdmin) {
       const geoStatus = user?.geoStatus || 'pending';
-      if (geoStatus === 'pending' || geoStatus === 'denied') {
-        return Response.json({ error: 'Necessário autorizar geolocalização' }, { status: 403 });
+      if (geoStatus !== 'authorized' && geoStatus !== 'admin-approved') {
+        return Response.json({ error: 'Necessário autorizar geolocalização ou acesso em área restrita' }, { status: 403 });
       }
     }
 
@@ -103,7 +103,7 @@ export default auth((req) => {
     // Bypass para ADMIN/SUPER_ADMIN (opcional - remover se quiser forçar mesmo para admin)
     if (!isAdmin) {
       const geoStatus = user?.geoStatus || 'pending';
-      if (geoStatus === 'pending' || geoStatus === 'denied') {
+      if (geoStatus !== 'authorized' && geoStatus !== 'admin-approved') {
         const res = NextResponse.redirect(buildRedirect(req, '/geolocation-permission'));
         return needsCookie ? attachDeviceCookie(res, newToken) : res;
       }

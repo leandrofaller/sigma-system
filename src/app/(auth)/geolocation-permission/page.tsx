@@ -166,11 +166,12 @@ export default function GeolocationPermissionPage() {
         }),
       });
 
+      const result = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        throw new Error('Erro ao submeter localização');
+        throw new Error(result.error || 'Erro ao submeter localização');
       }
 
-      const result = await res.json();
       if (result.success) {
         setStatus('success');
         // Atualizar a sessão dinâmica do NextAuth
@@ -178,7 +179,7 @@ export default function GeolocationPermissionPage() {
         // Redirecionar para dashboard após 1.5s
         setTimeout(() => router.push('/dashboard'), 1500);
       } else {
-        throw new Error(result.error);
+        throw new Error(result.error || 'Erro desconhecido');
       }
     } catch (err) {
       setStatus('error');
