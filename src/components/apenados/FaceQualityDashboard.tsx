@@ -168,6 +168,22 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
     }
   }, [fetchStats]);
 
+  const stopClassification = useCallback(async () => {
+    try {
+      const res = await fetch('/api/apenados/face/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stop' }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'Erro ao parar classificação');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
   const fetchTab = useCallback(async (tab: Tab, reset = false) => {
     setLoading(true);
     try {
@@ -513,10 +529,19 @@ export function FaceQualityDashboard({ onClose, defaultTab = 'lowscore', onPhoto
                       {stats.faceMissed.toLocaleString('pt-BR')} com rosto não indexado (falsos negativos)
                     </p>
                     {classification?.isRunning && (
-                      <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-2 font-medium">
-                        Processando {classification.progress.current.toLocaleString('pt-BR')} / {classification.progress.total.toLocaleString('pt-BR')}
-                        {' '}· {classification.progress.classified.toLocaleString('pt-BR')} ok
-                      </p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+                          Processando {classification.progress.current.toLocaleString('pt-BR')} / {classification.progress.total.toLocaleString('pt-BR')}
+                          {' '}· {classification.progress.classified.toLocaleString('pt-BR')} ok
+                        </p>
+                        <button
+                          onClick={stopClassification}
+                          className="text-xs font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors flex items-center gap-1"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-red-400 animate-pulse"></span>
+                          Pausar
+                        </button>
+                      </div>
                     )}
                     {classification?.error && (
                       <p className="text-xs text-red-500 mt-1">{classification.error}</p>
