@@ -27,10 +27,11 @@ export async function GET(req: NextRequest) {
 
   if (search) {
     const pattern = `%${search}%`;
-    whereClause = `WHERE immutable_unaccent(name) ILIKE immutable_unaccent($1)
-      OR immutable_unaccent(COALESCE(matricula,'')) ILIKE immutable_unaccent($1)
-      OR immutable_unaccent(COALESCE(unidade,'')) ILIKE immutable_unaccent($1)`;
-    sqlParams.push(pattern);
+    whereClause = `WHERE immutable_unaccent(name) % immutable_unaccent($1)
+      OR immutable_unaccent(name) ILIKE immutable_unaccent($2)
+      OR immutable_unaccent(COALESCE(matricula,'')) ILIKE immutable_unaccent($2)
+      OR immutable_unaccent(COALESCE(unidade,'')) ILIKE immutable_unaccent($2)`;
+    sqlParams.push(search, pattern);
   } else if (letter) {
     whereClause = `WHERE immutable_unaccent(name) ILIKE immutable_unaccent($1)`;
     sqlParams.push(`${letter}%`);
@@ -43,13 +44,16 @@ export async function GET(req: NextRequest) {
   const dataQuery = `
     SELECT id, name, matricula, unidade, faccao, "photoPath", notes, "createdAt",
            "photoQuality", "faceDescriptor",
+           ${search ? `similarity(immutable_unaccent(name), immutable_unaccent($1)) AS "searchScore",` : ''}
            EXISTS (
              SELECT 1 FROM sipe_apenados_importados s 
              WHERE s."apenadoLocalId" = apenados.id
            ) AS "isLinkedToSipe"
     FROM apenados
     ${whereClause}
-    ORDER BY name ASC
+    ORDER BY 
+      ${search ? `CASE WHEN immutable_unaccent(name) % immutable_unaccent($1) THEN similarity(immutable_unaccent(name), immutable_unaccent($1)) ELSE 0 END DESC,` : ''}
+      name ASC
     LIMIT $${takeIdx} OFFSET $${skipIdx}
   `;
 
