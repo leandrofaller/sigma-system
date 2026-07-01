@@ -416,6 +416,13 @@ export function MapaFaccoesClient({
       toast.error('Selecione apenado e unidade prisional')
       return
     }
+    const unidadeValida = unidades.find(
+      (u) => u.toLowerCase() === unidadeInput.trim().toLowerCase()
+    )
+    if (!unidadeValida) {
+      toast.error('Unidade prisional inválida. Escolha uma opção do catálogo de endereços.')
+      return
+    }
     setSaving(true)
     try {
       const res = await fetch('/api/mapa-faccoes/vinculos', {
@@ -424,7 +431,7 @@ export function MapaFaccoesClient({
         body: JSON.stringify({
           municipio: selectedNome,
           municipioIbge: selectedIbge,
-          unidadePrisional: unidadeInput.trim(),
+          unidadePrisional: unidadeValida,
           aipApenadoId: selectedApenado.aipApenadoId,
           sipeId: selectedApenado.sipeId,
           observacoes,

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/db'
-import { UNIDADES_ENDERECOS_RO } from '@/lib/unidades-enderecos-ro'
+import { loadUnidadesCatalog } from '@/lib/unidades-enderecos-catalog'
 
 export async function GET() {
   const session = await auth()
@@ -12,23 +11,12 @@ export async function GET() {
     return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
   }
 
-  const [sipeUnidades, mapaUnidades, aipUnidades] = await Promise.all([
-    prisma.sipeApenadoUnidadePrisional.groupBy({
-      by: ['unidade'],
-      where: { unidade: { not: null } },
-    }),
-    prisma.mapaFaccaoVinculo.groupBy({ by: ['unidadePrisional'] }),
-    prisma.aIPApenado.groupBy({
-      by: ['unidade'],
-      where: { unidade: { not: null } },
-    }),
-  ])
-
+  // Carrega as unidades oficiais da Lista de Endereços (estáticas + customizadas ativas)
+  const catalog = await loadUnidadesCatalog()
   const set = new Set<string>()
-  for (const u of sipeUnidades) if (u.unidade) set.add(u.unidade)
-  for (const u of mapaUnidades) set.add(u.unidadePrisional)
-  for (const u of aipUnidades) if (u.unidade) set.add(u.unidade)
-  for (const u of UNIDADES_ENDERECOS_RO) set.add(u.unidade)
+  for (const item of catalog) {
+    if (item.unidade) set.add(item.unidade)
+  }
 
   const unidades = Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
 
