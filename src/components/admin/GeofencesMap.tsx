@@ -38,8 +38,8 @@ interface GeofencesMapProps {
 
 const TILE_LAYERS = {
   standard: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  satellite: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+  satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 };
 
 // Componente para capturar os cliques no mapa
@@ -71,6 +71,22 @@ export default function GeofencesMap({
 }: GeofencesMapProps) {
   const [mapStyle, setMapStyle] = useState<'standard' | 'dark' | 'satellite'>('standard');
   const [isMounted, setIsMounted] = useState(false);
+
+  const customPinIcon = useMemo(() => {
+    return L.divIcon({
+      html: `
+        <div style="position:relative;width:32px;height:32px;display:flex;align-items:center;justify-content:center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0Z"/>
+            <circle cx="12" cy="10" r="3" fill="#2563eb"/>
+          </svg>
+        </div>
+      `,
+      className: '',
+      iconSize: [32, 32],
+      iconAnchor: [16, 28],
+    });
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -188,7 +204,7 @@ export default function GeofencesMap({
         {/* Marcador e círculo para a nova cerca em edição */}
         {newFence.lat !== null && newFence.lng !== null && (
           <>
-            <Marker position={[newFence.lat, newFence.lng]} />
+            <Marker position={[newFence.lat, newFence.lng]} icon={customPinIcon} />
             {newFence.type === 'circle' && (
               <Circle
                 center={[newFence.lat, newFence.lng]}
