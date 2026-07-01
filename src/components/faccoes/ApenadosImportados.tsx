@@ -341,12 +341,12 @@ export function ApenadoModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div 
-        className="bg-white dark:bg-gray-800 rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:max-w-2xl h-[92vh] md:h-auto md:max-h-[85vh] overflow-y-auto transition-all duration-300 flex flex-col" 
+        className="bg-white dark:bg-gray-800 rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:max-w-2xl h-[92vh] md:h-auto md:max-h-[85vh] flex flex-col transition-all duration-300 overflow-hidden" 
         onClick={e => e.stopPropagation()}
       >
         {/* Drag handle visual para mobile */}
         <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto my-3 md:hidden shrink-0" />
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <div className="flex items-start justify-between gap-4">
             <div className="flex gap-4 items-start">
               {/* Foto grande */}
@@ -368,52 +368,19 @@ export function ApenadoModal({
                 }}
               />
 
-              <div className="space-y-3">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{apenado.nome}</h2>
-                    {apenado.faccao && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-bold text-white shrink-0" style={{ backgroundColor: apenado.faccao.cor || '#ef4444' }}>
-                        {apenado.faccao.sigla || apenado.faccao.nome}
-                      </span>
-                    )}
-                  </div>
-                  {apenado.nomeOutro && <p className="text-sm text-gray-500 mt-1">Também: {apenado.nomeOutro}</p>}
-                  {apenado.alcunhas.length > 0 && (
-                    <p className="text-sm text-gray-500 mt-0.5">Alcunha: {apenado.alcunhas.map(a => `"${a.alcunha}"`).join(', ')}</p>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{apenado.nome}</h2>
+                  {apenado.faccao && (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold text-white shrink-0" style={{ backgroundColor: apenado.faccao.cor || '#ef4444' }}>
+                      {apenado.faccao.sigla || apenado.faccao.nome}
+                    </span>
                   )}
                 </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleCadastrarEmAIP}
-                    disabled={cadastrandoEmAIP || sincronizando}
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 rounded-xl disabled:opacity-50 transition-all active:scale-95 shadow-sm shadow-purple-500/10"
-                  >
-                    {cadastrandoEmAIP ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
-                    Cadastrar em AIP
-                  </button>
-
-                  <button
-                    onClick={handleSincronizarSipe}
-                    disabled={cadastrandoEmAIP || sincronizando}
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 rounded-xl disabled:opacity-50 transition-all active:scale-95 shadow-sm shadow-blue-500/10"
-                  >
-                    {sincronizando ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    Atualizar SIPE
-                  </button>
-
-                  {isSuperAdmin && (
-                    <button
-                      onClick={handleDeletar}
-                      disabled={deletando || cadastrandoEmAIP || sincronizando}
-                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 rounded-xl disabled:opacity-50 transition-all active:scale-95 shadow-sm shadow-red-500/10"
-                    >
-                      {deletando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                      Excluir
-                    </button>
-                  )}
-                </div>
+                {apenado.nomeOutro && <p className="text-sm text-gray-500 mt-1">Também: {apenado.nomeOutro}</p>}
+                {apenado.alcunhas.length > 0 && (
+                  <p className="text-sm text-gray-500 mt-0.5">Alcunha: {apenado.alcunhas.map(a => `"${a.alcunha}"`).join(', ')}</p>
+                )}
               </div>
             </div>
             <div className="flex items-center">
@@ -428,7 +395,8 @@ export function ApenadoModal({
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        {/* Corpo rolável */}
+        <div className="p-6 space-y-6 overflow-y-auto flex-1">
           {/* Dados Pessoais */}
           <section>
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
@@ -707,6 +675,44 @@ export function ApenadoModal({
               </div>
             </section>
           )}
+        </div>
+
+        {/* Rodapé de Ações (Fixo) */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 rounded-b-2xl">
+          {/* Lado Esquerdo / Inferior em Mobile (Excluir) */}
+          <div className="w-full sm:w-auto order-last sm:order-first">
+            {isSuperAdmin && (
+              <button
+                onClick={handleDeletar}
+                disabled={deletando || cadastrandoEmAIP || sincronizando}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 bg-transparent hover:bg-red-50 dark:hover:bg-red-950/20 border border-red-200 dark:border-red-900/50 hover:border-red-300 dark:hover:border-red-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all active:scale-95 shadow-sm"
+              >
+                {deletando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Excluir Apenado
+              </button>
+            )}
+          </div>
+
+          {/* Lado Direito / Superior em Mobile (Atualizar & Cadastrar) */}
+          <div className="w-full sm:w-auto flex flex-col-reverse sm:flex-row gap-2 order-first sm:order-last">
+            <button
+              onClick={handleSincronizarSipe}
+              disabled={cadastrandoEmAIP || sincronizando}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-blue-600 dark:text-blue-400 bg-transparent hover:bg-blue-50 dark:hover:bg-blue-950/20 border border-blue-200 dark:border-blue-900/50 hover:border-blue-300 dark:hover:border-blue-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all active:scale-95 shadow-sm"
+            >
+              {sincronizando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Atualizar SIPE
+            </button>
+
+            <button
+              onClick={handleCadastrarEmAIP}
+              disabled={cadastrandoEmAIP || sincronizando}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all active:scale-95 shadow-sm shadow-purple-500/20"
+            >
+              {cadastrandoEmAIP ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+              Cadastrar em AIP
+            </button>
+          </div>
         </div>
       </div>
 
