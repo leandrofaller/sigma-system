@@ -393,15 +393,17 @@ export function MobileApenadosView({ stats: initialStats, letterCounts, userRole
                 {searchTotal.toLocaleString('pt-BR')} resultado{searchTotal !== 1 ? 's' : ''} para &quot;{debouncedSearch}&quot;
               </p>
             )}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-3">
               {displayedItems.map((a) => (
                 <ApenadoCard
+                  key={a.id}
                   apenado={a}
                   userRole={userRole}
                   canEditApenados={canEditApenados}
                   onEdit={(ap) => { setEditing(ap); setModalOpen(true); }}
                   onDelete={handleDelete}
                   onPhotoClick={setLightbox}
+                  isMobile={true}
                 />
               ))}
             </div>

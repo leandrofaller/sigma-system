@@ -46,9 +46,10 @@ interface Props {
   onEdit: (a: Apenado) => void;
   onDelete: (id: string) => void;
   onPhotoClick?: (a: Apenado) => void;
+  isMobile?: boolean;
 }
 
-export function ApenadoCard({ apenado, userRole, canEditApenados, onEdit, onDelete, onPhotoClick }: Props) {
+export function ApenadoCard({ apenado, userRole, canEditApenados, onEdit, onDelete, onPhotoClick, isMobile }: Props) {
   const canDelete = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
   const photoUrl = apenado.photoPath
     ? `/api/apenados/${apenado.id}/foto${apenado._photoTs ? `?t=${apenado._photoTs}` : ''}`
@@ -61,6 +62,81 @@ export function ApenadoCard({ apenado, userRole, canEditApenados, onEdit, onDele
     a.download = `${apenado.name}${apenado.matricula ? '_' + apenado.matricula : ''}.jpg`;
     a.click();
   };
+
+  if (isMobile) {
+    return (
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-150 dark:border-gray-800 shadow-sm p-3 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          {/* Foto na esquerda */}
+          <div
+            className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 cursor-pointer shrink-0 relative"
+            onClick={() => onPhotoClick?.(apenado)}
+          >
+            {photoUrl ? (
+              <img src={photoUrl} alt={apenado.name} loading="lazy" className="w-full h-full object-cover" />
+            ) : (
+              <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-sigma-400 to-sigma-700`}>
+                <span className="text-white font-bold text-lg">{initial}</span>
+              </div>
+            )}
+            
+            {/* Badges de biometria sobre a foto */}
+            {apenado.photoPath && (() => { const p = faceStatusPill(apenado); return p ? (
+              <div className={`absolute top-1 left-1 px-1 py-0.5 rounded text-[7px] font-black leading-none pointer-events-none ${p.cls}`}>
+                {p.label === 'Facial ativo' ? 'ATIVO' : p.label === 'Sem rosto' ? 'SEM' : 'PEND'}
+              </div>
+            ) : null; })()}
+          </div>
+
+          {/* Dados do Apenado */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+              <p className="text-xs font-bold text-title truncate">{apenado.name}</p>
+              {apenado.isLinkedToSipe && (
+                <span className="px-1 py-0.2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[8px] font-black rounded shrink-0">
+                  SIPE
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-subtle truncate">Matrícula: {apenado.matricula || 'Sem matrícula'}</p>
+            <p className="text-[10px] text-subtle truncate">Unidade: {apenado.unidade || 'Sem unidade'}</p>
+            {apenado.faccao && <p className="text-[9px] text-orange-600 dark:text-orange-400 font-bold mt-0.5">{apenado.faccao}</p>}
+          </div>
+        </div>
+
+        {/* Botões de Ação na base - toques diretos e intuitivos */}
+        <div className="flex gap-2 border-t border-gray-50 dark:border-gray-800/60 pt-2">
+          <button
+            onClick={() => onEdit(apenado)}
+            className="flex-1 py-2 rounded-xl text-[10px] font-bold transition-all bg-sigma-50 dark:bg-sigma-900/30 text-sigma-600 dark:text-sigma-400 flex items-center justify-center gap-1 active:scale-95"
+          >
+            {canEditApenados ? <Pencil className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            {canEditApenados ? 'Editar' : 'Visualizar'}
+          </button>
+          
+          {photoUrl && (
+            <button
+              onClick={handleDownload}
+              className="py-2 px-3 rounded-xl transition-all bg-gray-50 dark:bg-gray-850 text-gray-500 hover:text-sigma-600 flex items-center justify-center active:scale-95"
+              title="Baixar Foto"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {canDelete && (
+            <button
+              onClick={() => onDelete(apenado.id)}
+              className="py-2 px-3 rounded-xl transition-all bg-red-50 dark:bg-red-950/20 text-red-500 hover:bg-red-100 flex items-center justify-center active:scale-95"
+              title="Excluir"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-sigma-500/10 hover:-translate-y-0.5">
