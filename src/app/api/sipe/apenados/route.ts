@@ -39,15 +39,28 @@ export async function GET(req: NextRequest) {
 
   if (q) {
     const pattern = `%${q}%`
-    whereClause += ` AND (
-      immutable_unaccent(nome) ILIKE immutable_unaccent($${idx})
-      OR COALESCE(cpf,'') ILIKE $${idx}
-      OR COALESCE(rg,'') ILIKE $${idx}
-      OR immutable_unaccent(COALESCE("nomeMae",'')) ILIKE immutable_unaccent($${idx})
-      OR id IN (SELECT "apenadoId" FROM sipe_alcunhas WHERE immutable_unaccent(alcunha) ILIKE immutable_unaccent($${idx}))
-    )`
-    params.push(pattern)
-    idx++
+    const isNumeric = /^\d+$/.test(q);
+    const sipeIdNum = isNumeric ? parseInt(q, 10) : null;
+
+    if (sipeIdNum !== null) {
+      whereClause += ` AND (
+        "sipeId" = $${idx}
+        OR COALESCE(cpf,'') ILIKE $${idx + 1}
+        OR COALESCE(rg,'') ILIKE $${idx + 1}
+      )`
+      params.push(sipeIdNum, pattern)
+      idx += 2
+    } else {
+      whereClause += ` AND (
+        immutable_unaccent(nome) ILIKE immutable_unaccent($${idx})
+        OR COALESCE(cpf,'') ILIKE $${idx}
+        OR COALESCE(rg,'') ILIKE $${idx}
+        OR immutable_unaccent(COALESCE("nomeMae",'')) ILIKE immutable_unaccent($${idx})
+        OR id IN (SELECT "apenadoId" FROM sipe_alcunhas WHERE immutable_unaccent(alcunha) ILIKE immutable_unaccent($${idx}))
+      )`
+      params.push(pattern)
+      idx++
+    }
   }
 
   if (unidade) {
