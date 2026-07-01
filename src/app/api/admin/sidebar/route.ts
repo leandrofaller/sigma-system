@@ -16,7 +16,7 @@ const DEFAULT_NAV_ITEMS = [
   { key: 'ia', label: 'Consulta IA', href: '/ia', iconName: 'Sparkles', position: 100, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'apenados', label: 'Identificação de Apenados', href: '/apenados', iconName: 'UserCheck', position: 110, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'faccoes', label: 'Apenados & Facções', href: '/faccoes', iconName: 'Shield', position: 120, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: false },
-  { key: 'visitantes', label: 'Visitantes', href: '/visitantes', iconName: 'Users', position: 125, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: false },
+  { key: 'visitantes', label: 'Visitantes', href: '/visitantes', iconName: 'Users', position: 125, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'servidores', label: 'Servidores', href: '/servidores', iconName: 'Briefcase', position: 128, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: false },
   { key: 'siaip', label: 'SIAIP', href: '/siaip', iconName: 'Database', position: 130, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'aparelhos', label: 'Celulares Recebidos', href: '/aparelhos', iconName: 'Smartphone', position: 140, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     const hasVisitantesConfig = configs.some(c => c.key === 'visitantes');
     if (configs.length > 0 && !hasVisitantesConfig) {
       await prisma.sidebarConfig.create({
-        data: { key: 'visitantes', label: 'Visitantes', href: '/visitantes', iconName: 'Users', position: 125, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: false }
+        data: { key: 'visitantes', label: 'Visitantes', href: '/visitantes', iconName: 'Users', position: 125, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false }
       });
       configs = await prisma.sidebarConfig.findMany({
         orderBy: { position: 'asc' }
@@ -120,6 +120,19 @@ export async function GET(req: NextRequest) {
       await prisma.sidebarConfig.update({
         where: { key: 'admin-grupos' },
         data: { roles: newRoles }
+      });
+      configs = await prisma.sidebarConfig.findMany({
+        orderBy: { position: 'asc' }
+      });
+    }
+
+    // Atualização dinâmica: garante que a aba visitantes tenha 'ADMIN' e 'OPERATOR' nas roles no banco de dados
+    const visitantesConfig = configs.find(c => c.key === 'visitantes');
+    if (visitantesConfig && (!visitantesConfig.roles.includes('ADMIN') || !visitantesConfig.roles.includes('OPERATOR'))) {
+      const uniqueRoles = Array.from(new Set([...visitantesConfig.roles, 'ADMIN', 'OPERATOR']));
+      await prisma.sidebarConfig.update({
+        where: { key: 'visitantes' },
+        data: { roles: uniqueRoles }
       });
       configs = await prisma.sidebarConfig.findMany({
         orderBy: { position: 'asc' }
