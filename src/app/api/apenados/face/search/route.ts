@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
           faces: facesResult,
           imageWidth: analysis.imageWidth,
           imageHeight: analysis.imageHeight,
-          indexed: countQuery[0]?.c ?? 0,
+          indexed: countQuery[0]?.c ? Number(countQuery[0].c) : 0,
           backend: 'pgvector',
         });
       }
@@ -347,7 +347,7 @@ export async function POST(req: NextRequest) {
           faces: facesResult,
           imageWidth: analysis.imageWidth,
           imageHeight: analysis.imageHeight,
-          indexed: countQuery[0]?.c ?? 0,
+          indexed: countQuery[0]?.c ? Number(countQuery[0].c) : 0,
           backend: 'pgvector',
         });
       }
@@ -466,11 +466,12 @@ export async function POST(req: NextRequest) {
           .filter(Boolean),
       }));
 
+      const apenadosCountQuery = await prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM apenados WHERE "faceVector" IS NOT NULL`;
       return NextResponse.json({
         faces: facesResult,
         imageWidth: analysis.imageWidth,
         imageHeight: analysis.imageHeight,
-        indexed: (await prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM apenados WHERE "faceVector" IS NOT NULL`)[0]?.c ?? 0,
+        indexed: apenadosCountQuery[0]?.c ? Number(apenadosCountQuery[0].c) : 0,
         backend: 'pgvector',
       });
     }
