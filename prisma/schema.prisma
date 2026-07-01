@@ -131,6 +131,7 @@ model User {
 
   ordensEmitidas      OrdemMissao[]             @relation("OrdensMissaoEmitidas")
   ordensParticipacoes OrdemMissaoParticipante[] @relation("OrdensMissaoParticipacoes")
+  ordensConcluidas    OrdemMissao[]             @relation("OrdensMissaoConcluidas")
 
   unidadeEnderecoOverridesAtualizados UnidadeEnderecoOverride[] @relation("UnidadeOverrideAtualizado")
   unidadeEnderecoSolicitacoesEnviadas UnidadeEnderecoSolicitacao[] @relation("UnidadeSolicitacaoEnviada")
@@ -1426,12 +1427,18 @@ model OrdemMissao {
   emitidoPor           User              @relation("OrdensMissaoEmitidas", fields: [emitidoPorId], references: [id])
   demandanteNome       String?
   demandanteFuncao     String?
+  concluidoPorId       String?
+  concluidoPor         User?             @relation("OrdensMissaoConcluidas", fields: [concluidoPorId], references: [id])
+  concluidoEm          DateTime?
+  relatorioConclusao   String?           @db.Text
+  arquivosConclusao    String[]
   participantes        OrdemMissaoParticipante[]
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
   @@index([status])
   @@index([emitidoPorId])
+  @@index([concluidoPorId])
   @@index([prazo])
   @@map("ordens_missao")
 }

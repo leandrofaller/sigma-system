@@ -7,6 +7,7 @@ import {
   CheckCircle2, XCircle, AlertTriangle, Clock, Users,
   Search, X, Check, Loader2, ChevronRight, Shield,
   FileText, Calendar, MapPin, User, AlertCircle, Map,
+  Upload,
 } from 'lucide-react'
 
 const MiniMapPicker = dynamic(() => import('./MiniMapPicker'), {
@@ -48,6 +49,11 @@ interface OrdemMissao {
   emitidoPor: { id: string; name: string; role: string; avatar?: string | null }
   demandanteNome?: string | null
   demandanteFuncao?: string | null
+  concluidoPorId?: string | null
+  concluidoPor?: { id: string; name: string; role: string; avatar?: string | null } | null
+  concluidoEm?: string | null
+  relatorioConclusao?: string | null
+  arquivosConclusao?: string[] | null
   participantes: Participante[]
   createdAt: string
   updatedAt: string
@@ -290,6 +296,46 @@ function DocumentPreview({
         Dada e lavrada nos autos da Agência de Inteligência Penal, em{' '}
         {new Date(ordem.createdAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}.
       </p>
+
+      {ordem.status === 'CONCLUIDA' && (
+        <div style={{ marginTop: '24px', padding: '16px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#f9fafb', breakInside: 'avoid' }}>
+          <p style={{ fontWeight: 'bold', fontSize: '11pt', textTransform: 'uppercase', color: '#111827', margin: '0 0 8px' }}>
+            Relatório de Conclusão de Missão
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '10pt', color: '#374151', marginBottom: '12px' }}>
+            <p><strong>Concluído em:</strong> {ordem.concluidoEm ? formatDateTime(ordem.concluidoEm) : 'N/A'}</p>
+            <p><strong>Responsável:</strong> {ordem.concluidoPor?.name || 'Não informado'}</p>
+          </div>
+          <div style={{ fontSize: '10pt', color: '#4b5563', whiteSpace: 'pre-wrap', lineHeight: '1.6', textAlign: 'justify', borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>
+            <strong>Relato de Imprevistos / Ocorrências:</strong><br />
+            {ordem.relatorioConclusao || 'Nenhum imprevisto registrado.'}
+          </div>
+          {ordem.arquivosConclusao && ordem.arquivosConclusao.length > 0 && (
+            <div style={{ marginTop: '12px', borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>
+              <strong style={{ fontSize: '10pt', color: '#374151' }}>Arquivos e Imagens Anexados:</strong>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+                {ordem.arquivosConclusao.map((url, idx) => {
+                  const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(url);
+                  const fileName = url.split('/').pop() || `Arquivo ${idx + 1}`;
+                  return (
+                    <a key={idx} href={url} target="_blank" rel="noreferrer" 
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', backgroundColor: '#fff', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '9pt', color: '#2563eb', textDecoration: 'none' }}>
+                      {isImage ? (
+                        <img src={url} alt="anexo" style={{ width: '20px', height: '20px', objectFit: 'cover', borderRadius: '2px' }} />
+                      ) : (
+                        <FileText style={{ width: '16px', height: '16px', color: '#4b5563' }} />
+                      )}
+                      <span style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {fileName}
+                      </span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -755,13 +801,86 @@ function ViewerModal({
   badgeTs: number
   onEdit: () => void
   onClose: () => void
-  onStatusChange: (status: OrdemMissao['status']) => Promise<void>
+  onStatusChange: (status: OrdemMissao['status'], updatedOrdem?: OrdemMissao) => Promise<void>
   onCiencia: () => Promise<void>
 }) {
   const printRef = useRef<HTMLDivElement>(null)
   const [confirmCiencia, setConfirmCiencia] = useState(false)
   const [givingCiencia, setGivingCiencia] = useState(false)
   const [changingStatus, setChangingStatus] = useState(false)
+  
+  const [showConcluirModal, setShowConcluirModal] = useState(false)
+  const [relatorio, setRelatorio] = useState('')
+  const [anexos, setAnexos] = useState<string[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [concluindo, setConcluindo] = useState(false)
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setUploading(true)
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const res = await fetch(`/api/aip/ordens-missao/${ordem.id}/upload`, {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          setAnexos(prev => [...prev, data.url])
+        } else {
+          const data = await res.json()
+          alert(data.error || 'Erro ao enviar arquivo.')
+        }
+      }
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao enviar arquivo.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleConcluir = async () => {
+    if (!relatorio.trim()) {
+      alert('O relatório de conclusão é obrigatório.')
+      return
+    }
+
+    setConcluindo(true)
+    try {
+      const res = await fetch(`/api/aip/ordens-missao/${ordem.id}/concluir`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          relatorioConclusao: relatorio,
+          arquivosConclusao: anexos,
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        await onStatusChange(data.ordem.status, data.ordem)
+        setShowConcluirModal(false)
+        setRelatorio('')
+        setAnexos([])
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Erro ao concluir ordem de missão.')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao concluir ordem de missão.')
+    } finally {
+      setConcluindo(false)
+    }
+  }
 
   const myParticipacao = ordem.participantes.find(p => p.userId === currentUserId)
   const total = ordem.participantes.length
@@ -845,13 +964,15 @@ function ViewerModal({
               DAR CIÊNCIA
             </button>
           )}
+          {((canEdit || myParticipacao) && ordem.status === 'ATIVA') && (
+            <button onClick={() => setShowConcluirModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Concluir Missão
+            </button>
+          )}
           {canEdit && ordem.status === 'ATIVA' && (
             <>
-              <button onClick={() => handleStatus('CONCLUIDA')} disabled={changingStatus}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Concluir
-              </button>
               <button onClick={() => handleStatus('CANCELADA')} disabled={changingStatus}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 border border-gray-200 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
                 <XCircle className="w-3.5 h-3.5" />
@@ -969,6 +1090,123 @@ function ViewerModal({
           </div>
         </div>
       )}
+
+      {/* Conclusão Modal */}
+      {showConcluirModal && (
+        <div className="fixed inset-0 z-60 bg-black/70 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 max-w-lg w-full flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                  <CheckCircle2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-white">Concluir Ordem de Missão</h3>
+                  <p className="text-xs text-gray-500">{ordem.numero}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowConcluirModal(false)} className="text-gray-500 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">
+                  Relatório de Cumprimento e Imprevistos *
+                </label>
+                <textarea
+                  required
+                  rows={5}
+                  value={relatorio}
+                  onChange={(e) => setRelatorio(e.target.value)}
+                  placeholder="Descreva aqui de forma detalhada o cumprimento da ordem de missão, incluindo qualquer imprevisto ou ocorrência relevante..."
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-905 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">
+                  Anexar Fotos ou Arquivos (Opcional)
+                </label>
+                <div className="flex items-center justify-center w-full">
+                  <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      {uploading ? (
+                        <Loader2 className="w-6 h-6 animate-spin text-purple-600 dark:text-purple-400" />
+                      ) : (
+                        <Upload className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                      )}
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {uploading ? 'Enviando arquivo...' : 'Clique para selecionar fotos ou arquivos'}
+                      </p>
+                      <p className="text-[10px] text-gray-400">PDF, JPG, PNG, DOCX, XLSX (Máx: 50MB)</p>
+                    </div>
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={handleFileUpload}
+                      disabled={uploading}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {anexos.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Arquivos Anexados ({anexos.length})</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {anexos.map((url, idx) => {
+                      const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(url);
+                      const name = url.split('/').pop() || 'Arquivo';
+                      return (
+                        <div key={idx} className="relative flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden group">
+                          {isImage ? (
+                            <img src={url} alt="preview" className="w-8 h-8 object-cover rounded" />
+                          ) : (
+                            <div className="w-8 h-8 bg-gray-200 dark:bg-gray-800 rounded flex items-center justify-center">
+                              <FileText className="w-4 h-4 text-gray-500" />
+                            </div>
+                          )}
+                          <span className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[120px] font-medium">
+                            {name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setAnexos(prev => prev.filter((_, i) => i !== idx))}
+                            className="absolute right-2 p-1 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t border-gray-100 dark:border-gray-700 mt-4">
+              <button
+                onClick={() => setShowConcluirModal(false)}
+                disabled={concluindo}
+                className="flex-1 py-2.5 text-sm font-semibold text-gray-600 border border-gray-200 dark:border-gray-600 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConcluir}
+                disabled={concluindo || uploading || !relatorio.trim()}
+                className="flex-1 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                {concluindo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                {concluindo ? 'Concluindo...' : 'Confirmar Conclusão'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1074,8 +1312,13 @@ export function OrdemMissaoPanel({ userRole, currentUserId, currentUserName }: O
     }
   }
 
-  const handleStatusChange = async (status: OrdemMissao['status']) => {
+  const handleStatusChange = async (status: OrdemMissao['status'], updatedOrdem?: OrdemMissao) => {
     if (!viewerOrdem) return
+    if (updatedOrdem) {
+      setViewerOrdem(updatedOrdem)
+      setOrdens(prev => prev.map(o => o.id === updatedOrdem.id ? updatedOrdem : o))
+      return
+    }
     const res = await fetch(`/api/aip/ordens-missao/${viewerOrdem.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
