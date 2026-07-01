@@ -24,14 +24,28 @@ export async function GET(req: NextRequest) {
 
   let whereClause = '';
   const sqlParams: any[] = [];
+  let isNumericSearch = false;
 
   if (search) {
     const pattern = `%${search}%`;
-    whereClause = `WHERE immutable_unaccent(name) % immutable_unaccent($1)
-      OR immutable_unaccent(name) ILIKE immutable_unaccent($2)
-      OR immutable_unaccent(COALESCE(matricula,'')) ILIKE immutable_unaccent($2)
-      OR immutable_unaccent(COALESCE(unidade,'')) ILIKE immutable_unaccent($2)`;
-    sqlParams.push(search, pattern);
+    const isNumeric = /^\d+$/.test(search);
+    const sipeIdNum = isNumeric ? parseInt(search, 10) : null;
+
+    if (sipeIdNum !== null) {
+      isNumericSearch = true;
+      whereClause = `WHERE COALESCE(matricula,'') ILIKE $2
+        OR id IN (
+          SELECT "apenadoLocalId" FROM sipe_apenados_importados 
+          WHERE "sipeId" = $1
+        )`;
+      sqlParams.push(sipeIdNum, pattern);
+    } else {
+      whereClause = `WHERE immutable_unaccent(name) % immutable_unaccent($1)
+        OR immutable_unaccent(name) ILIKE immutable_unaccent($2)
+        OR immutable_unaccent(COALESCE(matricula,'')) ILIKE immutable_unaccent($2)
+        OR immutable_unaccent(COALESCE(unidade,'')) ILIKE immutable_unaccent($2)`;
+      sqlParams.push(search, pattern);
+    }
   } else if (letter) {
     whereClause = `WHERE immutable_unaccent(name) ILIKE immutable_unaccent($1)`;
     sqlParams.push(`${letter}%`);
@@ -44,7 +58,7 @@ export async function GET(req: NextRequest) {
   const dataQuery = `
     SELECT id, name, matricula, unidade, faccao, "photoPath", notes, "createdAt",
            "photoQuality", "faceDescriptor",
-           ${search ? `similarity(immutable_unaccent(name), immutable_unaccent($1)) AS "searchScore",` : ''}
+           ${(search && !isNumericSearch) ? `similarity(immutable_unaccent(name), immutable_unaccent($1)) AS "searchScore",` : ''}
            EXISTS (
              SELECT 1 FROM sipe_apenados_importados s 
              WHERE s."apenadoLocalId" = apenados.id
@@ -52,7 +66,7 @@ export async function GET(req: NextRequest) {
     FROM apenados
     ${whereClause}
     ORDER BY 
-      ${search ? `CASE WHEN immutable_unaccent(name) % immutable_unaccent($1) THEN similarity(immutable_unaccent(name), immutable_unaccent($1)) ELSE 0 END DESC,` : ''}
+      ${(search && !isNumericSearch) ? `CASE WHEN immutable_unaccent(name) % immutable_unaccent($1) THEN similarity(immutable_unaccent(name), immutable_unaccent($1)) ELSE 0 END DESC,` : ''}
       name ASC
     LIMIT $${takeIdx} OFFSET $${skipIdx}
   `;
@@ -64,6 +78,47 @@ export async function GET(req: NextRequest) {
 
   const total = countResult[0]?.total ?? 0;
 
+  const apenadoIds = apenados.map((a: any) => a.id);
+  const importacoes = apenadoIds.length > 0
+    ? await prisma.sipeApenadoImportado.findMany({
+        where: { apenadoLocalId: { in: apenadoIds } },
+        select: {
+          apenadoLocalId: true,
+          nomeMae: true,
+          nomePai: true,
+          vinculosVisitante: {
+            select: {
+              visitante: { select: { nome: true, cpf: true, parentesco: true } },
+            },
+          },
+          vinculosAdvogado: {
+            select: {
+              advogado: { select: { nome: true, oab: true } },
+            },
+          },
+        },
+      })
+    : [];
+
+  const vinculosMap = new Map<string, any>();
+  importacoes.forEach((imp) => {
+    if (imp.apenadoLocalId) {
+      vinculosMap.set(imp.apenadoLocalId, {
+        nomeMae: imp.nomeMae,
+        nomePai: imp.nomePai,
+        visitantes: imp.vinculosVisitante.map((v) => ({
+          nome: v.visitante.nome,
+          cpf: v.visitante.cpf,
+          parentesco: v.visitante.parentesco,
+        })),
+        advogados: imp.vinculosAdvogado.map((v) => ({
+          nome: v.advogado.nome,
+          oab: v.advogado.oab,
+        })),
+      });
+    }
+  });
+
   const mappedApenados = apenados.map((a: any) => {
     const { faceDescriptor, isLinkedToSipe, ...rest } = a;
     return {
@@ -71,6 +126,7 @@ export async function GET(req: NextRequest) {
       isFaceIndexed: faceDescriptor !== null && faceDescriptor !== 'NONE',
       noFaceDetected: faceDescriptor === 'NONE',
       isLinkedToSipe: !!isLinkedToSipe,
+      vinculos: vinculosMap.get(a.id) || { nomeMae: null, nomePai: null, visitantes: [], advogados: [] },
     };
   });
 
