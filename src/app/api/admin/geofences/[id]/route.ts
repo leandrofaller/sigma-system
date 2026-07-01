@@ -55,7 +55,7 @@ export async function PUT(
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error(`[Admin/Geofences] PUT error: ${errorMsg}`);
     return NextResponse.json(
-      { error: 'Erro ao atualizar cerca geográfica', success: false },
+      { error: `Erro ao atualizar cerca geográfica: ${errorMsg}`, success: false },
       { status: 500 }
     );
   }
@@ -103,7 +103,7 @@ export async function DELETE(
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error(`[Admin/Geofences] DELETE error: ${errorMsg}`);
     return NextResponse.json(
-      { error: 'Erro ao excluir cerca geográfica', success: false },
+      { error: `Erro ao excluir cerca geográfica: ${errorMsg}`, success: false },
       { status: 500 }
     );
   }

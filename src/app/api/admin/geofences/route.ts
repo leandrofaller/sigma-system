@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error(`[Admin/Geofences] GET error: ${errorMsg}`);
     return NextResponse.json(
-      { error: 'Erro ao buscar cercas geográficas', success: false },
+      { error: `Erro ao buscar cercas geográficas: ${errorMsg}`, success: false },
       { status: 500 }
     );
   }
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error(`[Admin/Geofences] POST error: ${errorMsg}`);
     return NextResponse.json(
-      { error: 'Erro ao criar cerca geográfica', success: false },
+      { error: `Erro ao criar cerca geográfica: ${errorMsg}`, success: false },
       { status: 500 }
     );
   }
