@@ -35,12 +35,12 @@ export async function POST(req: NextRequest) {
     const cleanAccuracy = Math.max(0, accuracy || 0);
     const cleanAddress = address ? String(address).substring(0, 255) : null;
 
-    // Verificar cercas geográficas (isenta ADMIN/SUPER_ADMIN)
-    const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+    // Verificar cercas geográficas (isenta apenas SUPER_ADMIN)
+    const isSuperAdmin = user.role === 'SUPER_ADMIN';
     let isAllowed = true;
     let blockedByFenceName: string | undefined = undefined;
 
-    if (!isAdmin) {
+    if (!isSuperAdmin) {
       const fenceCheck = await checkLocationAgainstGeofences(lat, lng);
       isAllowed = fenceCheck.isAllowed;
       blockedByFenceName = fenceCheck.blockedByFenceName;

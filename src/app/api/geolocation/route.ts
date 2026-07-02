@@ -43,12 +43,12 @@ export async function POST(req: NextRequest) {
     // Validar que address não ultrapasse 255 caracteres
     const address = body.address ? String(body.address).substring(0, 255) : null;
 
-    // Verificar cercas geográficas (isenta ADMIN/SUPER_ADMIN)
-    const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+    // Verificar cercas geográficas (isenta apenas SUPER_ADMIN)
+    const isSuperAdmin = user.role === 'SUPER_ADMIN';
     let isAllowed = true;
     let blockedByFenceName: string | undefined = undefined;
 
-    if (!isAdmin) {
+    if (!isSuperAdmin) {
       const fenceCheck = await checkLocationAgainstGeofences(body.lat, body.lng);
       isAllowed = fenceCheck.isAllowed;
       blockedByFenceName = fenceCheck.blockedByFenceName;

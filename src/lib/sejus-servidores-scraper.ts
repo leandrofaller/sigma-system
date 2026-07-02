@@ -290,7 +290,7 @@ export function startServidoresSync(jobId: string): void {
 
         $('a').each((_, a) => {
           const href = $(a).attr('href') || '';
-          const match = href.match(/vinculo\/(\d+)/) || href.match(/servidor\/(\d+)/);
+          const match = href.match(/vinculo\/(\d+)/) || href.match(/servidor\/ficha\/(\d+)/) || href.match(/servidor\/(\d+)/);
           if (match) {
             const id = parseInt(match[1]);
             if (!isNaN(id)) sejusIds.push(id);
@@ -383,7 +383,7 @@ export function startServidoresSync(jobId: string): void {
         }
 
         try {
-          const vinculoUrl = `/vinculo/${sejusId}`;
+          const vinculoUrl = `/servidor/ficha/${sejusId}`;
           const detailsRes = await client.request(vinculoUrl);
           const htmlDetails = await detailsRes.text();
           const $details = cheerio.load(htmlDetails);
