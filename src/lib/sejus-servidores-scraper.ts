@@ -261,8 +261,17 @@ export function startServidoresSync(jobId: string): void {
       });
       refreshMemory(jobId, { fase: 'Coletando IDs', ultimoLog: 'Login efetuado com sucesso.' });
 
-      // 3. Acessa listagem de servidores para coletar os IDs
-      const sejusIds: number[] = [];
+      // 3. Acessa listagem de servidores para coletar dados e IDs
+      interface ServidorListagem {
+        sejusId: number;
+        nome: string;
+        cpf: string;
+        matricula: string;
+        cargo: string;
+        lotacao: string;
+      }
+
+      const servidoresColetados: ServidorListagem[] = [];
       let pageCount = 1;
       let currentPath = '/servidor';
 
@@ -279,7 +288,7 @@ export function startServidoresSync(jobId: string): void {
           return;
         }
 
-        const logMsg = `Coletando IDs dos servidores: Página ${pageCount}...`;
+        const logMsg = `Coletando listagem de servidores: Página ${pageCount}...`;
         console.log(`[SERVIDORES SCRAPER] ${logMsg}`);
         refreshMemory(jobId, { ultimoLog: logMsg });
         await dbProgress(jobId, { log: logMsg });
@@ -288,12 +297,60 @@ export function startServidoresSync(jobId: string): void {
         const html = await res.text();
         const $ = cheerio.load(html);
 
+        // Capturar dados estruturados da tabela da listagem
+        $('table tbody tr').each((_, tr) => {
+          const cells = $(tr).find('td');
+          if (cells.length >= 7) {
+            const idText = $(cells[0]).text().trim();
+            const id = parseInt(idText);
+
+            let linkId: number | null = null;
+            $(tr).find('a').each((_, a) => {
+              const href = $(a).attr('href') || '';
+              const match = href.match(/servidor\/ficha\/(\d+)/) || href.match(/vinculo\/(\d+)/) || href.match(/servidor\/(\d+)/);
+              if (match) {
+                linkId = parseInt(match[1]);
+                return false; // break
+              }
+            });
+
+            const finalId = id || linkId;
+            if (!finalId || isNaN(finalId)) return;
+
+            const nome = $(cells[1]).text().trim();
+            const cpf = $(cells[2]).text().trim();
+            const matricula = $(cells[3]).text().trim();
+            const cargo = $(cells[4]).text().trim().replace(/\s+/g, ' ');
+            const unidade = $(cells[5]).text().trim();
+            const setor = $(cells[6]).text().trim();
+
+            servidoresColetados.push({
+              sejusId: finalId,
+              nome,
+              cpf,
+              matricula,
+              cargo,
+              lotacao: `${unidade} - ${setor}`.trim(),
+            });
+          }
+        });
+
+        // Fallback clássico para capturar IDs de links se a estrutura da tabela diferir
         $('a').each((_, a) => {
           const href = $(a).attr('href') || '';
           const match = href.match(/vinculo\/(\d+)/) || href.match(/servidor\/ficha\/(\d+)/) || href.match(/servidor\/(\d+)/);
           if (match) {
             const id = parseInt(match[1]);
-            if (!isNaN(id)) sejusIds.push(id);
+            if (!isNaN(id) && !servidoresColetados.some(s => s.sejusId === id)) {
+              servidoresColetados.push({
+                sejusId: id,
+                nome: '',
+                cpf: '',
+                matricula: '',
+                cargo: '',
+                lotacao: '',
+              });
+            }
           }
         });
 
@@ -318,17 +375,21 @@ export function startServidoresSync(jobId: string): void {
         if (nextHref && nextHref !== '#' && nextHref !== currentPath) {
           currentPath = nextHref;
           pageCount++;
-          // Pequeno delay preventivo
           await new Promise(r => setTimeout(r, 300));
         } else {
           break;
         }
       }
 
-      const uniqueIds = [...new Set(sejusIds)];
-      console.log(`[SERVIDORES SCRAPER] Encontrados ${uniqueIds.length} servidores exclusivos.`);
+      // Remover duplicados de servidoresColetados com base no sejusId
+      const uniqueServidoresMap = new Map<number, ServidorListagem>();
+      servidoresColetados.forEach(s => {
+        uniqueServidoresMap.set(s.sejusId, s);
+      });
+      const uniqueServidores = Array.from(uniqueServidoresMap.values());
+      console.log(`[SERVIDORES SCRAPER] Encontrados ${uniqueServidores.length} servidores exclusivos.`);
 
-      if (uniqueIds.length === 0) {
+      if (uniqueServidores.length === 0) {
         const msg = 'Nenhum servidor encontrado na listagem.';
         await dbProgress(jobId, {
           status: 'COMPLETED',
@@ -347,18 +408,18 @@ export function startServidoresSync(jobId: string): void {
         mkdirSync(servidoresDir, { recursive: true });
       }
 
-      refreshMemory(jobId, { total: uniqueIds.length, fase: 'Processando' });
+      refreshMemory(jobId, { total: uniqueServidores.length, fase: 'Processando' });
       await dbProgress(jobId, {
-        total: uniqueIds.length,
+        total: uniqueServidores.length,
         fase: 'Processando',
-        idsColetados: JSON.stringify(uniqueIds),
-        log: `Coletados ${uniqueIds.length} IDs de servidores. Iniciando processamento dos vínculos...`,
+        idsColetados: JSON.stringify(uniqueServidores.map(s => s.sejusId)),
+        log: `Coletados ${uniqueServidores.length} servidores na listagem. Iniciando processamento das fotos e fichas...`,
       });
 
       const processedIds: string[] = [];
 
-      // 4. Processamento individual de cada servidor
-      for (let i = 0; i < uniqueIds.length; i++) {
+      // 4. Processamento individual de cada servidor para obter a foto na ficha
+      for (let i = 0; i < uniqueServidores.length; i++) {
         if (globalThis.__sipeStopFlag) {
           const msg = 'Sincronização interrompida pelo usuário.';
           await dbProgress(jobId, {
@@ -371,12 +432,13 @@ export function startServidoresSync(jobId: string): void {
           return;
         }
 
-        const sejusId = uniqueIds[i];
-        const logMsg = `[${i + 1}/${uniqueIds.length}] Processando servidor ID ${sejusId}...`;
+        const item = uniqueServidores[i];
+        const sejusId = item.sejusId;
+        const logMsg = `[${i + 1}/${uniqueServidores.length}] Processando servidor ID ${sejusId} (Foto)...`;
         console.log(`[SERVIDORES SCRAPER] ${logMsg}`);
         refreshMemory(jobId, { processado: i, ultimoLog: logMsg });
 
-        if (i % 20 === 0 || i === uniqueIds.length - 1) {
+        if (i % 20 === 0 || i === uniqueServidores.length - 1) {
           await dbProgress(jobId, { processado: i, log: logMsg });
         } else {
           await dbProgress(jobId, { processado: i });
@@ -388,18 +450,15 @@ export function startServidoresSync(jobId: string): void {
           const htmlDetails = await detailsRes.text();
           const $details = cheerio.load(htmlDetails);
 
-          // Função inteligente de extração baseada em regex
+          // Função inteligente de extração baseada em regex para fallbacks
           const extractField = (labelRegex: RegExp): string => {
             let foundVal = '';
             $details('td, th, label, span, p, div, li').each((_, el) => {
               const $el = $details(el);
-              // Só processa elementos "folha" ou que tenham texto direto curto
-              // para evitar que divs pai (que acumulam texto de filhos) capturem antes
               const hasBlockChildren = $el.children('div, table, ul, ol, section, article').length > 0;
               if (hasBlockChildren) return; // skip containers
 
               const text = $el.text().trim();
-              // Ignora texto muito longo (provavelmente acumulou filhos)
               if (text.length > 120) return;
               if (!labelRegex.test(text)) return;
 
@@ -431,29 +490,29 @@ export function startServidoresSync(jobId: string): void {
             return foundVal;
           };
 
-          const cpf = extractField(/CPF/i);
-          const matricula = extractField(/Matrícula|Matricula/i);
-          const cargo = extractField(/Cargo|Função/i);
-          const lotacao = extractField(/Lotação|Lotacao|Unidade|Setor/i);
-          const situacao = extractField(/Situação|Situacao|Status/i);
-          const regime = extractField(/Regime|Vínculo|Vinculo/i);
-          const dataAdmissao = extractField(/Admissão|Admissao|Posse|Exercício/i);
-
-          let nome = extractField(/Nome/i);
-          if (!nome) {
-            nome = $details('h1, h2, h3, .nome, .titulo, title').first().text().trim();
-            nome = nome.replace(/SGP|Servidor|Detalhe/gi, '').trim();
-          }
-
-          // 5. Coleta da foto do Servidor
+          // 5. Coleta da foto do Servidor na ficha técnica
           let photoUrl = '';
-          $details('img').each((_, img) => {
+          // Seletores focados na área da ficha/cartão de perfil
+          $details('.card-body img, .card img, img.profile-user-img, .profile-user-img, .content img').each((_, img) => {
             const src = $details(img).attr('src') || '';
-            if (src && !src.includes('logo') && !src.includes('icon') && !src.includes('menu') && !src.includes('captcha')) {
+            // Ignora imagens sabidamente do menu, logos ou captcha
+            if (src && !src.includes('logo') && !src.includes('icon') && !src.includes('menu') && !src.includes('captcha') && !src.includes('avatar')) {
               photoUrl = src;
               return false;
             }
           });
+
+          // Fallback se não achou pelos seletores do cartão
+          if (!photoUrl) {
+            $details('img').each((_, img) => {
+              const src = $details(img).attr('src') || '';
+              const isNavbarUser = $details(img).hasClass('user-image') || $details(img).closest('.navbar').length > 0 || $details(img).closest('.main-header').length > 0;
+              if (src && !isNavbarUser && !src.includes('logo') && !src.includes('icon') && !src.includes('menu') && !src.includes('captcha')) {
+                photoUrl = src;
+                return false;
+              }
+            });
+          }
 
           let localPhotoPath: string | null = null;
           let photoHashSha: string | null = null;
@@ -499,17 +558,49 @@ export function startServidoresSync(jobId: string): void {
           }
 
           // 6. Grava ou atualiza SejusServidor no Banco
-          const cleanCpf = cpf ? cpf.replace(/\D/g, '') : null;
+          const cleanCpfListagem = item.cpf ? item.cpf.replace(/\D/g, '') : null;
+
+          // Se por algum motivo as colunas vieram em branco da listagem, tenta extrair da ficha técnica
+          let finalNome = item.nome;
+          let finalCpf = cleanCpfListagem;
+          let finalMatricula = item.matricula;
+          let finalCargo = item.cargo;
+          let finalLotacao = item.lotacao;
+
+          if (!finalNome || !finalCpf) {
+            const cpfFicha = extractField(/CPF/i);
+            const cleanCpfFicha = cpfFicha ? cpfFicha.replace(/\D/g, '') : null;
+            const matriculaFicha = extractField(/Matrícula|Matricula/i);
+            const cargoFicha = extractField(/Cargo|Função/i);
+            const lotacaoFicha = extractField(/Lotação|Lotacao|Unidade|Setor/i);
+
+            let nomeFicha = extractField(/Nome/i);
+            if (!nomeFicha) {
+              nomeFicha = $details('h1, h2, h3, .nome, .titulo, title').first().text().trim();
+              nomeFicha = nomeFicha.replace(/SGP|Servidor|Detalhe/gi, '').trim();
+            }
+
+            if (!finalNome) finalNome = nomeFicha;
+            if (!finalCpf) finalCpf = cleanCpfFicha;
+            if (!finalMatricula) finalMatricula = matriculaFicha;
+            if (!finalCargo) finalCargo = cargoFicha;
+            if (!finalLotacao) finalLotacao = lotacaoFicha;
+          }
+
+          const situacao = extractField(/Situação|Situacao|Status/i);
+          const regime = extractField(/Regime|Vínculo|Vinculo/i);
+          const dataAdmissao = extractField(/Admissão|Admissao|Posse|Exercício/i);
+
           let servidor = await prisma.sejusServidor.findUnique({
             where: { sejusId }
           });
 
           const updateData = {
-            nome: nome || `Servidor #${sejusId}`,
-            cpf: cleanCpf,
-            matricula: matricula || null,
-            cargo: cargo || null,
-            lotacao: lotacao || null,
+            nome: finalNome || `Servidor #${sejusId}`,
+            cpf: finalCpf || null,
+            matricula: finalMatricula || null,
+            cargo: finalCargo || null,
+            lotacao: finalLotacao || null,
             situacao: situacao || null,
             regime: regime || null,
             dataAdmissao: dataAdmissao || null,
@@ -546,7 +637,7 @@ export function startServidoresSync(jobId: string): void {
       if (processedIds.length > 0) {
         refreshMemory(jobId, { fase: 'Indexando Rostos' });
         await dbProgress(jobId, {
-          processado: uniqueIds.length,
+          processado: uniqueServidores.length,
           fase: 'Indexando Rostos',
           log: `Scraping de dados concluído. Iniciando indexação facial de ${processedIds.length} servidor(es)...`,
         });
@@ -562,18 +653,18 @@ export function startServidoresSync(jobId: string): void {
       }
 
       // Conclusão com sucesso
-      const finalMsg = `Sincronização de servidores concluída! Processados: ${uniqueIds.length}, Erros: ${globalThis.__sipeState!.erros}`;
+      const finalMsg = `Sincronização de servidores concluída! Processados: ${uniqueServidores.length}, Erros: ${globalThis.__sipeState!.erros}`;
       refreshMemory(jobId, {
         status: 'COMPLETED',
         fase: 'Concluído',
         ultimoLog: finalMsg,
-        processado: uniqueIds.length,
+        processado: uniqueServidores.length,
       });
       await dbProgress(jobId, {
         status: 'COMPLETED',
         fase: 'Concluído',
         log: finalMsg,
-        processado: uniqueIds.length,
+        processado: uniqueServidores.length,
         finalizadoEm: new Date(),
       });
 
