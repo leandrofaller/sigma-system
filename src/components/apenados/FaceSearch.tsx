@@ -87,7 +87,7 @@ function fmtTime(seconds: number): string {
 
 // ─── MatchCard ────────────────────────────────────────────────────────────────
 
-function MatchCard({ match, rank, onEdit, onViewPhoto }: { match: FaceMatch; rank: number; onEdit?: (id: string) => void; onViewPhoto?: (match: FaceMatch) => void }) {
+function MatchCard({ match, rank, onEdit, onViewPhoto, showSourceBadge }: { match: FaceMatch; rank: number; onEdit?: (id: string) => void; onViewPhoto?: (match: FaceMatch) => void; showSourceBadge?: boolean }) {
   const isVisitante = match.targetType === 'visitantes';
   const isServidor = match.targetType === 'servidores';
   const photoUrl = isVisitante
@@ -119,6 +119,17 @@ function MatchCard({ match, rank, onEdit, onViewPhoto }: { match: FaceMatch; ran
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-title truncate">{match.name}</p>
+          {showSourceBadge && (
+            <span className={`inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full mt-0.5 ${
+              match.targetType === 'visitantes'
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                : match.targetType === 'servidores'
+                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+            }`}>
+              {match.targetType === 'visitantes' ? 'Visitante' : match.targetType === 'servidores' ? 'Servidor' : 'Apenado'}
+            </span>
+          )}
           {isVisitante ? (
             <>
               <p className="text-xs text-subtle truncate">
@@ -804,7 +815,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {selectedFace?.matches.map((m, i) => <MatchCard key={m.id} match={m} rank={i + 1} onEdit={onEditApenado} onViewPhoto={setViewingPhotoMatch} />)}
+                      {selectedFace?.matches.map((m, i) => <MatchCard key={m.id} match={m} rank={i + 1} onEdit={onEditApenado} onViewPhoto={setViewingPhotoMatch} showSourceBadge={targetType === 'all'} />)}
                     </div>
                   )}
                 </>
