@@ -591,7 +591,13 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
               <div className="flex justify-center gap-1 mb-4 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-full max-w-[480px] mx-auto border border-gray-200 dark:border-gray-700">
                 <button
                   type="button"
-                  onClick={() => { setTargetType('all'); reset(); }}
+                  onClick={() => {
+                    setTargetType('all');
+                    reset();
+                    fetch('/api/apenados/face/search?type=apenados').catch(() => {});
+                    fetch('/api/apenados/face/search?type=visitantes').catch(() => {});
+                    fetch('/api/apenados/face/search?type=servidores').catch(() => {});
+                  }}
                   className={`flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs font-bold rounded-lg transition-all ${
                     targetType === 'all'
                       ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'

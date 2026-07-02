@@ -714,10 +714,13 @@ export async function GET(req: NextRequest) {
   const type = searchParams.get('type') || 'apenados';
 
   if (type === 'visitantes') {
+    warmVisitanteFaceCache();
     return NextResponse.json(getVisitanteCacheStatus());
   }
   if (type === 'servidores') {
+    warmServidorFaceCache();
     return NextResponse.json(getServidorCacheStatus());
   }
+  warmFaceCache();
   return NextResponse.json(getCacheStatus());
 }
