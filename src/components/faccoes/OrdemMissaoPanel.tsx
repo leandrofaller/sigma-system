@@ -118,14 +118,21 @@ function prazoColor(prazo: string, status: string) {
 }
 
 function prazoLabel(prazo: string, status: string) {
-  const diff = new Date(prazo).getTime() - Date.now()
-  const days = Math.ceil(diff / 86400000)
   if (status === 'CONCLUIDA') return 'Concluída'
   if (status === 'CANCELADA') return 'Cancelada'
-  if (days < 0) return `Venceu há ${Math.abs(days)} dia(s)`
-  if (days === 0) return 'Vence hoje'
-  if (days === 1) return 'Vence amanhã'
-  return `${days} dia(s) restante(s)`
+  const now = new Date()
+  const deadline = new Date(prazo)
+  const diff = deadline.getTime() - now.getTime()
+  if (diff < 0) {
+    const days = Math.floor(Math.abs(diff) / 86400000)
+    return days === 0 ? 'Venceu hoje' : `Venceu há ${days} dia(s)`
+  }
+  const toDay = (d: Date) => d.toLocaleDateString('pt-BR')
+  const tomorrow = new Date(now)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  if (toDay(deadline) === toDay(now)) return 'Vence hoje'
+  if (toDay(deadline) === toDay(tomorrow)) return 'Vence amanhã'
+  return `${Math.ceil(diff / 86400000)} dia(s) restante(s)`
 }
 
 function formatDateTime(iso: string) {
@@ -139,6 +146,12 @@ function formatDateOnly(iso: string) {
   return new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
   })
+}
+
+function toLocalDatetimeInput(iso: string): string {
+  const d = new Date(iso)
+  const offset = d.getTimezoneOffset() * 60000
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16)
 }
 
 const LEGAL_TEXT = `"O teor sigiloso deste documento é protegido e controlado pela Lei nº 12.527, de 18.11.2011, que restringe o acesso, a divulgação e o tratamento deste documento a pessoa devidamente credenciadas que tenham necessidade de conhecê-lo."`
@@ -493,7 +506,7 @@ function EditorModal({
       vitima: ordem.vitima || '',
       naturezaInvestigacao: ordem.naturezaInvestigacao || '',
       observacoes: ordem.observacoes || '',
-      prazo: ordem.prazo ? ordem.prazo.slice(0, 16) : '',
+      prazo: ordem.prazo ? toLocalDatetimeInput(ordem.prazo) : '',
       participanteIds: (ordem.participantes ?? []).map(p => p.userId),
       demandanteNome: ordem.demandanteNome || '',
       demandanteFuncao: ordem.demandanteFuncao || 'Diretor da Agência de Inteligência Penal',
