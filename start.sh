@@ -57,6 +57,10 @@ Promise.all([
   p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS apenados_face_hnsw_idx ON apenados USING hnsw (\"faceVector\" vector_cosine_ops) WITH (m = 32, ef_construction = 128)'),
   p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS apenados_face_advanced_hnsw_idx ON apenados USING hnsw (\"faceVectorAdvanced\" vector_cosine_ops) WITH (m = 32, ef_construction = 128)'),
   p.\$executeRawUnsafe('ALTER TABLE mapa_faccoes_vinculos ADD COLUMN IF NOT EXISTS origem TEXT NOT NULL DEFAULT \'MANUAL\''),
+  p.\$executeRawUnsafe('ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"criadoPorId\" TEXT'),
+  p.\$executeRawUnsafe('ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"editavel\" BOOLEAN DEFAULT false'),
+  p.\$executeRawUnsafe('ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"statusEdicao\" VARCHAR(50) DEFAULT \'NORMAL\''),
+  p.\$executeRawUnsafe('ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"motivoEdicao\" TEXT'),
 ]).then(() => { console.log('pgvector avancado OK'); }).catch(e => { console.error('AVISO pgvector:', e.message); }).finally(() => p.\$disconnect());
 " || echo "AVISO: pgvector insert falhou (nao critico)"
 

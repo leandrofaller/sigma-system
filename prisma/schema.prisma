@@ -133,6 +133,7 @@ model User {
   ordensParticipacoes OrdemMissaoParticipante[] @relation("OrdensMissaoParticipacoes")
   ordensConcluidas    OrdemMissao[]             @relation("OrdensMissaoConcluidas")
   pichacoesCadastradas PichacaoFacciosa[]        @relation("PichacoesCadastradas")
+  aparelhosCriados     AparelhoApreendido[]      @relation("AparelhosCriados")
 
   unidadeEnderecoOverridesAtualizados UnidadeEnderecoOverride[] @relation("UnidadeOverrideAtualizado")
   unidadeEnderecoSolicitacoesEnviadas UnidadeEnderecoSolicitacao[] @relation("UnidadeSolicitacaoEnviada")
@@ -1288,6 +1289,12 @@ model AparelhoApreendido {
   fotos                  Json?     // Fotos do aparelho em formato JSON
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
+
+  criadoPorId        String?
+  criadoPor          User?     @relation("AparelhosCriados", fields: [criadoPorId], references: [id])
+  editavel           Boolean   @default(false)
+  statusEdicao       String    @default("NORMAL") // NORMAL | SOLICITADA | LIBERADA | EDITADA
+  motivoEdicao       String?   @db.Text
 
   @@index([unidadePrisional])
   @@index([municipio])

@@ -214,6 +214,9 @@ export async function POST(req: NextRequest) {
         responsavelRecebimento,
         loteGrupo,
         fotos: fotos || undefined,
+        criadoPorId: (session.user as any).id,
+        editavel: false, // Bloqueado por padrão após criação
+        statusEdicao: 'NORMAL',
       },
     })
 
@@ -230,5 +233,160 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('Error creating device:', error)
     return NextResponse.json({ error: 'Erro ao criar aparelho' }, { status: 500 })
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
+
+  const user = session.user as any
+  const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN'
+
+  try {
+    const body = await req.json()
+    const { action, id } = body
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID do dispositivo obrigatório' }, { status: 400 })
+    }
+
+    const aparelho = await prisma.aparelhoApreendido.findUnique({
+      where: { id }
+    })
+
+    if (!aparelho) {
+      return NextResponse.json({ error: 'Dispositivo não encontrado' }, { status: 404 })
+    }
+
+    // Ação 1: Solicitar Edição
+    if (action === 'solicitar-edicao') {
+      const { motivoEdicao } = body
+      if (!motivoEdicao) {
+        return NextResponse.json({ error: 'Motivo da edição é obrigatório' }, { status: 400 })
+      }
+
+      const updated = await prisma.aparelhoApreendido.update({
+        where: { id },
+        data: {
+          statusEdicao: 'SOLICITADA',
+          motivoEdicao,
+          editavel: false
+        }
+      })
+
+      await createAuditLog({
+        userId: user.id,
+        action: 'REQUEST_EDIT_APARELHO',
+        entity: 'AparelhoApreendido',
+        entityId: id,
+        details: { motivoEdicao },
+      })
+
+      return NextResponse.json(updated)
+    }
+
+    // Ação 2: Responder Solicitação (Admin/Superadmin apenas)
+    if (action === 'responder-edicao') {
+      if (!isAdmin) {
+        return NextResponse.json({ error: 'Acesso restrito a administradores' }, { status: 403 })
+      }
+
+      const { aprovar } = body
+
+      const updated = await prisma.aparelhoApreendido.update({
+        where: { id },
+        data: {
+          statusEdicao: aprovar ? 'LIBERADA' : 'NORMAL',
+          editavel: aprovar ? true : false,
+          motivoEdicao: aprovar ? aparelho.motivoEdicao : null
+        }
+      })
+
+      await createAuditLog({
+        userId: user.id,
+        action: aprovar ? 'APPROVE_EDIT_APARELHO' : 'REJECT_EDIT_APARELHO',
+        entity: 'AparelhoApreendido',
+        entityId: id,
+        details: { statusEdicao: updated.statusEdicao },
+      })
+
+      return NextResponse.json(updated)
+    }
+
+    // Ação 3: Executar Edição
+    if (action === 'editar') {
+      const isOwner = aparelho.criadoPorId === user.id
+      const canEdit = aparelho.editavel || isAdmin || (isOwner && aparelho.statusEdicao === 'LIBERADA')
+
+      if (!canEdit) {
+        return NextResponse.json({ error: 'Este registro não está liberado para edição' }, { status: 403 })
+      }
+
+      const {
+        timestamp,
+        responsavel,
+        dataArrecadacao,
+        dataRecebimento,
+        municipio,
+        unidadePrisional,
+        celaPavilhao,
+        unidadeExterna,
+        localExterno,
+        processoSei,
+        marca,
+        smartwatch,
+        chip,
+        responsavelRecebimento,
+        loteGrupo,
+        fotos
+      } = body.data
+
+      if (!responsavel || !municipio || !unidadePrisional) {
+        return NextResponse.json({ error: 'Campos obrigatórios ausentes' }, { status: 400 })
+      }
+
+      const updated = await prisma.aparelhoApreendido.update({
+        where: { id },
+        data: {
+          timestamp: timestamp ? parseFormDate(timestamp) || new Date() : aparelho.timestamp,
+          responsavel,
+          dataArrecadacao: parseFormDate(dataArrecadacao),
+          dataRecebimento: parseFormDate(dataRecebimento),
+          municipio,
+          unidadePrisional,
+          celaPavilhao,
+          unidadeExterna,
+          localExterno,
+          processoSei,
+          marca,
+          smartwatch,
+          chip,
+          responsavelRecebimento,
+          loteGrupo,
+          fotos: fotos || undefined,
+          editavel: false,
+          statusEdicao: 'EDITADA',
+          motivoEdicao: null
+        }
+      })
+
+      await createAuditLog({
+        userId: user.id,
+        action: 'UPDATE_APARELHO',
+        entity: 'AparelhoApreendido',
+        entityId: id,
+        details: { responsavel, processoSei, marca, unidadePrisional },
+      })
+
+      return NextResponse.json(updated)
+    }
+
+    return NextResponse.json({ error: 'Ação inválida' }, { status: 400 })
+  } catch (error: any) {
+    console.error('Error updating device:', error)
+    return NextResponse.json({ error: 'Erro ao atualizar aparelho' }, { status: 500 })
   }
 }

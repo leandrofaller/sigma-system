@@ -6,7 +6,7 @@ import {
   Smartphone, Search, Plus, Upload, Filter, Loader2, X, 
   Calendar, MapPin, Building2, User, FileText, CheckCircle, 
   AlertTriangle, ChevronLeft, ChevronRight, BarChart2, ShieldAlert, Cpu, Radio,
-  TrendingUp, PieChart as PieIcon, Wifi, Printer
+  TrendingUp, PieChart as PieIcon, Wifi, Printer, Pencil, Bell
 } from 'lucide-react'
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -213,6 +213,184 @@ export function AparelhosClient() {
   // Estados do Dashboard
   const [dbStats, setDbStats] = useState<DashboardStats | null>(null)
   const [loadingDbStats, setLoadingDbStats] = useState(false)
+
+  // Controle de Edição e Sessão
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; role: string } | null>(null)
+  const [editingAparelhoId, setEditingAparelhoId] = useState<string | null>(null)
+  const [solicitacoesPendentes, setSolicitacoesPendentes] = useState<any[]>([])
+  const [modalSolicitacoesOpen, setModalSolicitacoesOpen] = useState(false)
+  const [ultimaQtdSolicitacoes, setUltimaQtdSolicitacoes] = useState(0)
+
+  // Solicitar Edição
+  const [modalSolicitarOpen, setModalSolicitarOpen] = useState(false)
+  const [idParaSolicitar, setIdParaSolicitar] = useState<string | null>(null)
+  const [motivoSolicitacaoText, setMotivoSolicitacaoText] = useState('')
+  const [solicitandoSave, setSolicitandoSave] = useState(false)
+
+  // Sintetizador Sonoro de Alerta Nativo via Web Audio API
+  const playNotificationSound = useCallback(() => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(587.33, ctx.currentTime);
+      gain1.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start();
+      osc1.stop(ctx.currentTime + 0.25);
+
+      setTimeout(() => {
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(880, ctx.currentTime);
+        gain2.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start();
+        osc2.stop(ctx.currentTime + 0.35);
+      }, 100);
+    } catch (e) {
+      console.warn('Erro de áudio sintetizado:', e);
+    }
+  }, [])
+
+  // Carregar usuário logado
+  useEffect(() => {
+    fetch('/api/auth/session')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.user) {
+          setCurrentUser(data.user)
+        }
+      })
+      .catch(console.error)
+  }, [])
+
+  // Polling de Solicitações Pendentes (apenas para Admin)
+  const checkSolicitacoes = useCallback(async () => {
+    if (!currentUser) return
+    const isAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN'
+    if (!isAdmin) return
+
+    try {
+      const res = await fetch('/api/aparelhos/solicitacoes')
+      if (res.ok) {
+        const data = await res.json()
+        setSolicitacoesPendentes(data)
+        if (data.length > 0 && data.length > ultimaQtdSolicitacoes) {
+          playNotificationSound()
+        }
+        setUltimaQtdSolicitacoes(data.length)
+      }
+    } catch (err) {
+      console.error('Erro ao buscar solicitações:', err)
+    }
+  }, [currentUser, ultimaQtdSolicitacoes, playNotificationSound])
+
+  useEffect(() => {
+    checkSolicitacoes()
+    const interval = setInterval(checkSolicitacoes, 12000)
+    return () => clearInterval(interval)
+  }, [checkSolicitacoes])
+
+  // Ações de Solicitação / Liberação
+  const handleResponderSolicitacao = async (id: string, aprovar: boolean) => {
+    try {
+      const res = await fetch('/api/aparelhos', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'responder-edicao', id, aprovar })
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Erro ao responder')
+      }
+      checkSolicitacoes()
+      fetchAparelhos(pagination.page)
+    } catch (err: any) {
+      alert('Erro ao responder solicitação: ' + err.message)
+    }
+  }
+
+  const handleAbrirEdicao = (item: any) => {
+    setEditingAparelhoId(item.id)
+    
+    const mapDateToInput = (dateStr: string | null) => {
+      if (!dateStr) return ''
+      return dateStr.split('T')[0]
+    }
+
+    setCadForm({
+      responsavel: item.responsavel || '',
+      municipio: item.municipio || '',
+      unidadePrisional: item.unidadePrisional || '',
+      celaPavilhao: item.celaPavilhao || '',
+      unidadeExterna: item.unidadeExterna || '',
+      localExterno: item.localExterno || '',
+      processoSei: item.processoSei || '',
+      marca: item.marca || '',
+      smartwatch: item.smartwatch || '',
+      chip: item.chip || '',
+      dataArrecadacao: mapDateToInput(item.dataArrecadacao),
+      dataRecebimento: mapDateToInput(item.dataRecebimento),
+      responsavelRecebimento: item.responsavelRecebimento || '',
+      loteGrupo: item.loteGrupo || '',
+    })
+
+    setAparelhoFotos(item.fotos || [])
+    
+    const isMocked = UNIDADES_OPCOES.includes(item.unidadePrisional)
+    if (!isMocked && item.unidadePrisional) {
+      setIsOutroUnidade(true)
+      setOutroUnidadeTexto(item.unidadePrisional)
+    } else {
+      setIsOutroUnidade(false)
+      setOutroUnidadeTexto('')
+    }
+
+    setModalCadOpen(true)
+  }
+
+  const handleEnviarSolicitacaoEdicao = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!idParaSolicitar || !motivoSolicitacaoText.trim()) return
+
+    setSolicitandoSave(true)
+    try {
+      const res = await fetch('/api/aparelhos', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'solicitar-edicao',
+          id: idParaSolicitar,
+          motivoEdicao: motivoSolicitacaoText.trim()
+        })
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Erro ao enviar solicitação')
+      }
+
+      setModalSolicitarOpen(false)
+      setIdParaSolicitar(null)
+      setMotivoSolicitacaoText('')
+      fetchAparelhos(pagination.page || 1)
+      alert('Solicitação de edição enviada com sucesso!')
+    } catch (err: any) {
+      alert('Erro ao solicitar: ' + err.message)
+    } finally {
+      setSolicitandoSave(false)
+    }
+  }
 
   // Filtros
   const [search, setSearch] = useState('')
@@ -488,16 +666,20 @@ export function AparelhosClient() {
       }
 
       const res = await fetch('/api/aparelhos', {
-        method: 'POST',
+        method: editingAparelhoId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(
+          editingAparelhoId
+            ? { action: 'editar', id: editingAparelhoId, data: payload }
+            : payload
+        ),
       })
 
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Erro ao salvar dispositivo')
 
       setCadSuccess(true)
-      fetchAparelhos(1)
+      fetchAparelhos(pagination.page || 1)
 
       // Limpar formulário
       setCadForm({
@@ -519,6 +701,7 @@ export function AparelhosClient() {
       setAparelhoFotos([])
       setIsOutroUnidade(false)
       setOutroUnidadeTexto('')
+      setEditingAparelhoId(null)
 
       setTimeout(() => {
         setModalCadOpen(false)
@@ -782,6 +965,24 @@ export function AparelhosClient() {
           </div>
           
           <div className="flex items-center gap-3">
+            {currentUser && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN') && (
+              <button
+                onClick={() => setModalSolicitacoesOpen(true)}
+                className={`relative flex items-center gap-2 px-4 py-2.5 border rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 ${
+                  solicitacoesPendentes.length > 0
+                    ? 'bg-amber-500 hover:bg-amber-600 border-amber-400 text-white animate-pulse'
+                    : 'bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-750 dark:text-gray-100 border-gray-200 dark:border-gray-700 text-gray-805'
+                }`}
+              >
+                <Bell className={`w-4 h-4 ${solicitacoesPendentes.length > 0 ? 'text-white animate-bounce' : 'text-gray-500 dark:text-gray-400'}`} />
+                <span>Solicitações</span>
+                {solicitacoesPendentes.length > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 px-2 py-0.5 bg-red-600 text-white rounded-full text-[9px] font-black shadow-sm">
+                    {solicitacoesPendentes.length}
+                  </span>
+                )}
+              </button>
+            )}
             <button
               onClick={() => setModalPrintOpen(true)}
               disabled={printing}
@@ -1072,6 +1273,7 @@ export function AparelhosClient() {
                           <th className="py-3 px-4">Data Apreensão</th>
                           <th className="py-3 px-4">Chip/Operadora</th>
                           <th className="py-3 px-4">Responsável</th>
+                          <th className="py-3 px-4 text-center">Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -1112,6 +1314,49 @@ export function AparelhosClient() {
                             </td>
                             <td className="py-3 px-4 text-gray-500 dark:text-gray-400 truncate max-w-[150px]" title={item.responsavel}>
                               {item.responsavel}
+                            </td>
+                            <td className="py-3 px-4 text-center flex items-center justify-center gap-1.5">
+                              {/* Caso 1: Editável ou Admin */}
+                              {(item.editavel || (currentUser && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN'))) ? (
+                                <button
+                                  onClick={() => handleAbrirEdicao(item)}
+                                  className="p-1 hover:bg-sigma-100 text-sigma-600 dark:hover:bg-sigma-900/30 dark:text-sigma-400 rounded-lg active:scale-95 transition-all animate-none"
+                                  title="Editar Registro"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                /* Caso 2: Não editável. Solicitar se for o criador do registro e não tiver solicitado ainda */
+                                currentUser && item.statusEdicao === 'NORMAL' && (
+                                  <button
+                                    onClick={() => {
+                                      setIdParaSolicitar(item.id)
+                                      setModalSolicitarOpen(true)
+                                    }}
+                                    className="px-2 py-1 bg-gray-150 hover:bg-gray-250 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-bold text-[9px] active:scale-95 transition-all"
+                                    title="Solicitar liberação de edição"
+                                  >
+                                    Solicitar Edição
+                                  </button>
+                                )
+                              )}
+                              
+                              {/* Badges de Status */}
+                              {item.statusEdicao === 'SOLICITADA' && (
+                                <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded text-[9px] font-bold uppercase animate-pulse">
+                                  Solicitada
+                                </span>
+                              )}
+                              {item.statusEdicao === 'LIBERADA' && (
+                                <span className="px-1.5 py-0.5 bg-green-150 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded text-[9px] font-bold uppercase">
+                                  Liberada
+                                </span>
+                              )}
+                              {item.statusEdicao === 'EDITADA' && (
+                                <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-505 rounded text-[9px] font-bold uppercase">
+                                  Editada
+                                </span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -2180,6 +2425,176 @@ export function AparelhosClient() {
                 </div>
 
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Solicitação de Edição (Operador) */}
+      <AnimatePresence>
+        {modalSolicitarOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !solicitandoSave && setModalSolicitarOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-5 shadow-2xl z-10 text-xs"
+            >
+              <div className="flex justify-between items-center pb-3 border-b border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4.5 h-4.5 text-amber-500" />
+                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">Solicitar Liberação de Edição</h3>
+                </div>
+                {!solicitandoSave && (
+                  <button
+                    onClick={() => setModalSolicitarOpen(false)}
+                    className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              <form onSubmit={handleEnviarSolicitacaoEdicao} className="pt-4 space-y-4">
+                <p className="text-gray-500 dark:text-gray-400 font-medium leading-relaxed">
+                  Por favor, explique o motivo da edição deste registro de apreensão de celular. Esta justificativa será enviada para aprovação do administrador.
+                </p>
+
+                <div>
+                  <label className="block text-gray-400 font-bold mb-1.5 uppercase tracking-wider text-[9px]">
+                    Motivo / Justificativa da Alteração *
+                  </label>
+                  <textarea
+                    required
+                    rows={4}
+                    placeholder="Descreva o que foi digitado incorretamente e o que precisa ser corrigido..."
+                    value={motivoSolicitacaoText}
+                    onChange={e => setMotivoSolicitacaoText(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-sigma-500 focus:outline-none placeholder-gray-455 resize-none text-gray-700 dark:text-gray-200"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => setModalSolicitarOpen(false)}
+                    disabled={solicitandoSave}
+                    className="px-4 py-2 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-850 text-gray-500 dark:text-gray-400 rounded-xl font-bold active:scale-95 transition-all animate-none"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={solicitandoSave}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-md shadow-amber-500/10 active:scale-95 transition-all animate-none"
+                  >
+                    {solicitandoSave && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    Enviar Solicitação
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Solicitações Pendentes (Admin) */}
+      <AnimatePresence>
+        {modalSolicitacoesOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setModalSolicitacoesOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-5 shadow-2xl z-10 text-xs overflow-y-auto max-h-[85vh]"
+            >
+              <div className="flex justify-between items-center pb-3 border-b border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4.5 h-4.5 text-amber-500" />
+                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">Solicitações de Edição Pendentes</h3>
+                </div>
+                <button
+                  onClick={() => setModalSolicitacoesOpen(false)}
+                  className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="pt-4 space-y-3.5">
+                {solicitacoesPendentes.length === 0 ? (
+                  <div className="text-center py-10 space-y-2">
+                    <CheckCircle className="w-10 h-10 text-green-500 mx-auto" />
+                    <p className="font-bold text-gray-700 dark:text-gray-300">Nenhuma solicitação pendente</p>
+                    <p className="text-[10px] text-gray-450">Todos os pedidos de alteração foram resolvidos.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-[50vh] overflow-y-auto pr-1">
+                    {solicitacoesPendentes.map((reqItem) => (
+                      <div key={reqItem.id} className="py-3.5 first:pt-0 last:pb-0 space-y-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-bold text-gray-800 dark:text-gray-200 block text-xs">
+                              Celular: {reqItem.marca || 'Celular Genérico'}
+                            </span>
+                            <span className="text-[10px] text-gray-450 dark:text-gray-450 block">
+                              Lançado por: <strong className="text-gray-600 dark:text-gray-300">{reqItem.responsavel}</strong>
+                            </span>
+                            <span className="text-[10px] text-gray-455 dark:text-gray-450 block">
+                              Unidade: {reqItem.unidadePrisional} | SEI: {reqItem.processoSei || '—'}
+                            </span>
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleResponderSolicitacao(reqItem.id, false)}
+                              className="px-2.5 py-1.5 border border-red-200 hover:bg-red-50 text-red-600 dark:border-red-900/30 dark:hover:bg-red-950/20 dark:text-red-400 rounded-xl font-bold active:scale-95 transition-all"
+                            >
+                              Negar
+                            </button>
+                            <button
+                              onClick={() => handleResponderSolicitacao(reqItem.id, true)}
+                              className="px-2.5 py-1.5 bg-green-600 hover:bg-green-550 text-white rounded-xl font-bold active:scale-95 transition-all shadow-sm"
+                            >
+                              Liberar
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-gray-50 dark:bg-gray-850 border border-gray-100 dark:border-gray-800 rounded-2xl">
+                          <span className="block text-[8px] font-black text-amber-500 uppercase tracking-widest mb-0.5">Motivo Informado:</span>
+                          <p className="text-[11px] text-gray-700 dark:text-gray-300 italic leading-relaxed whitespace-pre-line">
+                            "{reqItem.motivoEdicao}"
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    onClick={() => setModalSolicitacoesOpen(false)}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-xl font-bold"
+                  >
+                    Fechar Painel
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}
