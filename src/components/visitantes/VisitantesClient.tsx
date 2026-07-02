@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSession } from 'next-auth/react';
 import { ApenadoModal } from '../faccoes/ApenadosImportados';
 import type { ApenadoImportado } from '../faccoes/ApenadosImportados';
 
@@ -87,6 +88,8 @@ interface SyncJob {
 }
 
 export function VisitantesClient() {
+  const { data: session } = useSession();
+  const isOperator = session?.user?.role === 'OPERATOR';
   const [visitantes, setVisitantes] = useState<Visitante[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -338,31 +341,33 @@ export function VisitantesClient() {
             Gestão, scraping e biometria facial ArcFace de visitantes e controle de entradas registradas.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowSyncModal(true)}
-            className="px-4 py-2 text-sm font-semibold rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700/60 transition-all flex items-center gap-2"
-          >
-            Histórico de Sync
-          </button>
-          <button
-            onClick={handleStartSync}
-            disabled={disparandoSync || activeJob?.status === 'RUNNING'}
-            className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-600/50 rounded-xl transition-all active:scale-95 shadow-md shadow-indigo-600/20 flex items-center gap-2"
-          >
-            {activeJob?.status === 'RUNNING' ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Sincronizando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4" />
-                Sincronizar Visitantes
-              </>
-            )}
-          </button>
-        </div>
+        {!isOperator && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowSyncModal(true)}
+              className="px-4 py-2 text-sm font-semibold rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700/60 transition-all flex items-center gap-2"
+            >
+              Histórico de Sync
+            </button>
+            <button
+              onClick={handleStartSync}
+              disabled={disparandoSync || activeJob?.status === 'RUNNING'}
+              className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-600/50 rounded-xl transition-all active:scale-95 shadow-md shadow-indigo-600/20 flex items-center gap-2"
+            >
+              {activeJob?.status === 'RUNNING' ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Sincronizando...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  Sincronizar Visitantes
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Conteúdo Principal: Tabela e Detalhes */}
