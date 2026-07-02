@@ -275,7 +275,7 @@ export function startServidoresSync(jobId: string): void {
       let pageCount = 1;
       let currentPath = '/servidor';
 
-      while (pageCount <= 50) {
+      while (true) {
         if (globalThis.__sipeStopFlag) {
           const msg = 'Sincronização interrompida pelo usuário durante a coleta de IDs.';
           await dbProgress(jobId, {
@@ -493,7 +493,7 @@ export function startServidoresSync(jobId: string): void {
           // 5. Coleta da foto do Servidor na ficha técnica
           let photoUrl = '';
           // Seletores focados na área da ficha/cartão de perfil
-          $details('.card-body img, .card img, img.profile-user-img, .profile-user-img, .content img').each((_, img) => {
+          $details('.card-body img, .card img, img.profile-user-img, .profile-user-img, .content img, div.d-flex.justify-content-center.mb- img, div.d-flex.justify-content-center.mb- > img').each((_, img) => {
             const src = $details(img).attr('src') || '';
             // Ignora imagens sabidamente do menu, logos ou captcha
             if (src && !src.includes('logo') && !src.includes('icon') && !src.includes('menu') && !src.includes('captcha') && !src.includes('avatar')) {
@@ -523,7 +523,12 @@ export function startServidoresSync(jobId: string): void {
                 ? photoUrl 
                 : new URL(photoUrl, 'https://sgp.sejus.ro.gov.br').toString();
 
-              const photoResponse = await client.request(absolutePhotoUrl);
+              let photoResponse;
+              if (absolutePhotoUrl.includes('storage.ro.gov.br') || !absolutePhotoUrl.includes('sgp.sejus.ro.gov.br')) {
+                photoResponse = await fetch(absolutePhotoUrl);
+              } else {
+                photoResponse = await client.request(absolutePhotoUrl);
+              }
               if (photoResponse.ok) {
                 const imageBuffer = Buffer.from(await photoResponse.arrayBuffer());
 
