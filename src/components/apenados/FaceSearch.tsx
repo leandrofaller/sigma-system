@@ -1420,7 +1420,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
           {tab === 'index' && (
             <div className="space-y-5">
               {/* Seletor de Base de Dados para Indexação */}
-              <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[280px] border border-gray-200 dark:border-gray-700">
+              <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[380px] border border-gray-200 dark:border-gray-700">
                 <button
                   type="button"
                   onClick={() => setIndexSubTab('apenados')}
@@ -1442,6 +1442,17 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                   }`}
                 >
                   Visitantes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIndexSubTab('servidores')}
+                  className={`flex-1 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                    indexSubTab === 'servidores'
+                      ? 'bg-white dark:bg-gray-700 text-teal-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  Servidores
                 </button>
               </div>
 
