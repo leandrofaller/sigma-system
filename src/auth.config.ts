@@ -3,9 +3,10 @@ import type { NextAuthConfig } from 'next-auth';
 if (!process.env.NEXTAUTH_SECRET) {
   if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE !== 'phase-production-build') {
     throw new Error('[auth] NEXTAUTH_SECRET é obrigatória em produção. Defina a variável de ambiente antes de iniciar o servidor.');
-  } else {
+  } else if (process.env.NODE_ENV !== 'production') {
     console.warn('[auth] ATENÇÃO: NEXTAUTH_SECRET ausente. Defina em .env.local antes de ir para produção.');
   }
+  // Durante phase-production-build: silêncio esperado (variável injetada em runtime pelo Coolify)
 }
 
 // Configuração Edge-compatible (sem imports Node.js: bcrypt, prisma, etc.)
