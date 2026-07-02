@@ -151,13 +151,17 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Atualização dinâmica: garante que a aba servidores tenha 'ADMIN' e 'OPERATOR' nas roles no banco de dados para bases existentes
+    // Atualização dinâmica: garante que a aba servidores tenha 'ADMIN' e 'OPERATOR' nas roles, esteja habilitada e na seção principal do menu (isAdmin: false)
     const servidoresConfig = configs.find(c => c.key === 'servidores');
-    if (servidoresConfig && (!servidoresConfig.roles.includes('ADMIN') || !servidoresConfig.roles.includes('OPERATOR'))) {
+    if (servidoresConfig && (!servidoresConfig.roles.includes('ADMIN') || !servidoresConfig.roles.includes('OPERATOR') || servidoresConfig.isAdmin || !servidoresConfig.enabled)) {
       const uniqueRoles = Array.from(new Set([...servidoresConfig.roles, 'ADMIN', 'OPERATOR']));
       await prisma.sidebarConfig.update({
         where: { key: 'servidores' },
-        data: { roles: uniqueRoles }
+        data: { 
+          roles: uniqueRoles,
+          isAdmin: false,
+          enabled: true
+        }
       });
       configs = await prisma.sidebarConfig.findMany({
         orderBy: { position: 'asc' }
