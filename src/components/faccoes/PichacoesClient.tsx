@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import {
   Paintbrush, Plus, Eye, Pencil, Trash2, Search, X, Check, Loader2,
   MapPin, Grid, Map, Image as ImageIcon, Calendar, User, Compass,
-  ChevronLeft, ChevronRight, AlertCircle, RefreshCw
+  ChevronLeft, ChevronRight, AlertCircle, RefreshCw, Upload
 } from 'lucide-react';
 
 const PichacoesMap = dynamic(() => import('./PichacoesMap'), {
@@ -515,7 +515,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                   required
                   value={form.municipio}
                   onChange={e => setForm(prev => ({ ...prev, municipio: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-905 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                   <option value="">Selecione o município...</option>
                   {MUNICIPIOS_RO.map(m => (
@@ -535,7 +535,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                   value={form.endereco}
                   onChange={e => setForm(prev => ({ ...prev, endereco: e.target.value }))}
                   placeholder="Ex: Muro da Escola X, Esquina da Av. Sete com T-14..."
-                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-905 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
 
@@ -567,7 +567,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                     value={form.latitude}
                     onChange={e => setForm(prev => ({ ...prev, latitude: e.target.value }))}
                     placeholder="Ex: -10.923451"
-                    className="w-full px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-905 text-gray-900 dark:text-white"
+                    className="w-full px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
@@ -578,7 +578,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                     value={form.longitude}
                     onChange={e => setForm(prev => ({ ...prev, longitude: e.target.value }))}
                     placeholder="Ex: -62.823451"
-                    className="w-full px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-905 text-gray-900 dark:text-white"
+                    className="w-full px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                   />
                 </div>
               </div>
@@ -591,7 +591,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                 <select
                   value={form.faccaoId}
                   onChange={e => setForm(prev => ({ ...prev, faccaoId: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-905 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                   <option value="">Sem vínculo / Sigla Isolada</option>
                   {faccoes.map(f => (
@@ -658,7 +658,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                   value={form.descricao}
                   onChange={e => setForm(prev => ({ ...prev, descricao: e.target.value }))}
                   placeholder="Escreva quais siglas foram desenhadas (ex: 'CV R.O', 'Tudo 2', etc.) e descreva detalhes adicionais relevantes..."
-                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-905 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
 
