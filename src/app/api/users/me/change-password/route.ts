@@ -38,6 +38,9 @@ export async function POST(req: NextRequest) {
     if (target?.role === 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'Permissão insuficiente' }, { status: 403 });
     }
+    if (target?.groupId !== current.groupId) {
+      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    }
   }
 
   if (!newPassword || newPassword.length < 8) {

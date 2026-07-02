@@ -59,7 +59,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       content: body.content,
       classification: body.classification,
       status: body.status,
-      groupId: body.groupId,
+      groupId: user.role === 'SUPER_ADMIN' ? body.groupId : existing.groupId,
     },
     include: { author: true, group: true },
   });

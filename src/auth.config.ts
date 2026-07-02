@@ -1,11 +1,8 @@
 import type { NextAuthConfig } from 'next-auth';
 
 if (!process.env.NEXTAUTH_SECRET) {
-  if (process.env.NODE_ENV === 'production') {
-    if (process.env.NEXT_PHASE !== 'phase-production-build') {
-      console.warn('[auth] ATENÇÃO: NEXTAUTH_SECRET não está definida. Usando fallback temporário para permitir a compilação.');
-    }
-    process.env.NEXTAUTH_SECRET = 'temporary_build_fallback_secret_must_be_overridden_at_runtime';
+  if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE !== 'phase-production-build') {
+    throw new Error('[auth] NEXTAUTH_SECRET é obrigatória em produção. Defina a variável de ambiente antes de iniciar o servidor.');
   } else {
     console.warn('[auth] ATENÇÃO: NEXTAUTH_SECRET ausente. Defina em .env.local antes de ir para produção.');
   }

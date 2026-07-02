@@ -51,7 +51,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     });
 
-    return NextResponse.json({ success: true, userId: user.id, tempPassword: password });
+    return NextResponse.json({ success: true, userId: user.id });
   }
 
   return NextResponse.json({ success: true });
