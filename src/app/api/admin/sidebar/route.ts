@@ -7,6 +7,7 @@ const DEFAULT_NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', href: '/dashboard', iconName: 'LayoutDashboard', position: 10, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'relints', label: 'Relatórios (RELINTs)', href: '/relints', iconName: 'FileText', position: 20, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'relints-recebidos', label: 'RELINTs Recebidos', href: '/relints-recebidos', iconName: 'Inbox', position: 30, roles: ['SUPER_ADMIN', 'ADMIN'], enabled: true, isAdmin: false },
+  { key: 'arquivo', label: 'Arquivo', href: '/arquivo', iconName: 'Archive', position: 31, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'debriefings', label: 'Debriefings', href: '/debriefings', iconName: 'BookOpen', position: 40, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'forca-tarefa', label: 'Força-Tarefa', href: '/forca-tarefa', iconName: 'ClipboardList', position: 50, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'missoes', label: 'Calendário de Missões', href: '/missoes', iconName: 'Calendar', position: 60, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },

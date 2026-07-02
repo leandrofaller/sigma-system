@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Map, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert, List, Paintbrush
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Map, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert, List, Paintbrush, Archive
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -27,13 +27,14 @@ interface NavItem {
 const iconMap: Record<string, React.ComponentType<any>> = {
   LayoutDashboard, FileText, Inbox, BookOpen, ClipboardList, Calendar, CalendarDays,
   Trello, MessageSquare, Sparkles, UserCheck, Shield, Database, Smartphone, Brain, Building2,
-  Users, FolderOpen, Monitor, MapPin, Map, AlertCircle, Settings, ShieldAlert, List, Paintbrush
+  Users, FolderOpen, Monitor, MapPin, Map, AlertCircle, Settings, ShieldAlert, List, Paintbrush, Archive
 };
 
 const defaultNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', iconName: 'LayoutDashboard', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Relatórios (RELINTs)', href: '/relints', iconName: 'FileText', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'RELINTs Recebidos', href: '/relints-recebidos', iconName: 'Inbox', roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Arquivo', href: '/arquivo', iconName: 'Archive', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Debriefings', href: '/debriefings', iconName: 'BookOpen', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Força-Tarefa', href: '/forca-tarefa', iconName: 'ClipboardList', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Calendário de Missões', href: '/missoes', iconName: 'Calendar', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },

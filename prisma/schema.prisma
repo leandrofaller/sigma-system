@@ -111,6 +111,7 @@ model User {
   auditLogs        AuditLog[]
   aiQueries        AIQuery[]
   uploadedFiles    ReceivedRelint[]
+  arquivoFiles     ArquivoFile[]
   locations        UserLocation[]
   missions         Mission[]
   boardCardsCreated BoardCard[]         @relation("CreatedCards")
@@ -161,6 +162,8 @@ model Group {
   receivedRelints ReceivedRelint[]
   missions        Mission[]
   relatoriosForcaTarefa RelatorioForcaTarefa[]
+  arquivoFiles    ArquivoFile[]
+  arquivoFolders  ArquivoFolder[]
 
   @@map("groups")
 }
@@ -1620,5 +1623,42 @@ model PichacaoFacciosa {
   @@map("pichacoes_faccionados")
 }
 
+// ─── Arquivo ──────────────────────────────────────────────────────────────────
 
+model ArquivoFolder {
+  id        String        @id @default(cuid())
+  name      String
+  color     String?       @default("#6172f3")
+  groupId   String?
+  group     Group?        @relation(fields: [groupId], references: [id])
+  createdAt DateTime      @default(now())
 
+  files ArquivoFile[]
+
+  @@map("arquivo_folders")
+}
+
+model ArquivoFile {
+  id             String          @id @default(cuid())
+  title          String
+  filename       String
+  originalName   String
+  source         String?
+  fileType       String
+  fileSize       Int
+  localPath      String?
+  classification Classification
+  uploadedById   String
+  uploadedBy     User            @relation(fields: [uploadedById], references: [id])
+  groupId        String?
+  group          Group?          @relation(fields: [groupId], references: [id])
+  folderId       String?
+  folder         ArquivoFolder?  @relation(fields: [folderId], references: [id])
+  notes          String?
+  tags           String[]
+  createdAt      DateTime        @default(now())
+
+  @@index([groupId])
+  @@index([folderId])
+  @@map("arquivo_files")
+}
