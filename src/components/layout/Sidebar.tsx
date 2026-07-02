@@ -96,39 +96,13 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
-  // Controle de Abas Dinâmicas
-  const [navItems, setNavItems] = useState<NavItem[]>(() => 
-    defaultNavItems.filter((item) => !item.roles || item.roles.includes(user?.role ?? ''))
+  // Controle de Abas Estáticas baseadas em regras de acesso
+  const navItems = defaultNavItems.filter(
+    (item) => !item.roles || item.roles.includes(user?.role ?? '')
   );
-  const [adminItems, setAdminItems] = useState<NavItem[]>(() =>
-    defaultAdminItems.filter((item) => !item.roles || item.roles.includes(user?.role ?? ''))
+  const adminItems = defaultAdminItems.filter(
+    (item) => !item.roles || item.roles.includes(user?.role ?? '')
   );
-
-  // Carregar as configurações da Sidebar do banco de dados
-  useEffect(() => {
-    async function fetchSidebar() {
-      try {
-        const res = await fetch('/api/admin/sidebar');
-        if (!res.ok) return;
-        const data = await res.json();
-        
-        // A API para SUPER_ADMIN traz tudo (incluindo desabilitados ou sem a role correspondente).
-        // Filtramos para exibir na Sidebar somente as abas habilitadas e permitidas para o papel atual.
-        const visibleItems = data.filter(
-          (item: any) => item.enabled && item.roles.includes(user?.role ?? '')
-        );
-
-        const navs = visibleItems.filter((item: any) => !item.isAdmin);
-        const admins = visibleItems.filter((item: any) => item.isAdmin);
-
-        setNavItems(navs);
-        setAdminItems(admins);
-      } catch (err) {
-        console.error('Erro ao carregar Sidebar dinamicamente:', err);
-      }
-    }
-    fetchSidebar();
-  }, [user?.role, pathname]);
 
   // Fecha o drawer mobile quando o usuário navega
   useEffect(() => { setMobileOpen(false); }, [pathname]);

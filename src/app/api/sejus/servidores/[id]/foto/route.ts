@@ -15,9 +15,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
 
-  // Validação de Role se for acesso via sessão (apenas SUPER_ADMIN pode visualizar fotos de servidores)
-  if (session && (session.user as any).role !== 'SUPER_ADMIN') {
-    return NextResponse.json({ error: 'Acesso negado. Apenas SUPER_ADMIN pode visualizar fotos de servidores.' }, { status: 403 });
+  // Validação de Role se for acesso via sessão (apenas SUPER_ADMIN, ADMIN e OPERATOR podem visualizar fotos de servidores)
+  if (session) {
+    const userRole = (session.user as any).role;
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN' && userRole !== 'OPERATOR') {
+      return NextResponse.json({ error: 'Acesso negado. Permissão insuficiente para visualizar fotos de servidores.' }, { status: 403 });
+    }
   }
 
   const { id } = await params;
