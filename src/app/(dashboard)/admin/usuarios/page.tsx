@@ -1,5 +1,4 @@
-import { auth } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { requirePageAccess } from '@/lib/require-page-access';
 import { prisma } from '@/lib/db';
 import { UsersTable } from '@/components/admin/UsersTable';
 import { AccessRequestsPanel } from '@/components/admin/AccessRequestsPanel';
@@ -26,12 +25,7 @@ async function getData() {
 }
 
 export default async function UsuariosPage() {
-  const session = await auth();
-  const user = session!.user as any;
-
-  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-    redirect('/dashboard');
-  }
+  const user = await requirePageAccess('admin-usuarios');
 
   const { users, groups, requests } = await getData();
   const pendingCount = requests.filter((r: { status: string }) => r.status === 'PENDING').length;

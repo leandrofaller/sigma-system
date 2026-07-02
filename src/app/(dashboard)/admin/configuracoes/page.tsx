@@ -1,5 +1,4 @@
-import { auth } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { requirePageAccess } from '@/lib/require-page-access';
 import { prisma } from '@/lib/db';
 import { ConfigPanel } from '@/components/admin/ConfigPanel';
 import { LogosPanel } from '@/components/admin/LogosPanel';
@@ -11,12 +10,7 @@ async function getConfigs() {
 }
 
 export default async function ConfiguracoesPage() {
-  const session = await auth();
-  const user = session!.user as any;
-
-  if (user.role !== 'SUPER_ADMIN') {
-    redirect('/dashboard');
-  }
+  await requirePageAccess('admin-configuracoes');
 
   const configs = await getConfigs();
 

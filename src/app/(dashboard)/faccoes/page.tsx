@@ -1,15 +1,10 @@
-import { auth } from '@/lib/auth'
-import { redirect } from 'next/navigation'
+import { requirePageAccess } from '@/lib/require-page-access'
 import { FaccoesClient } from '@/components/faccoes/FaccoesClient'
 
 export const metadata = { title: 'Apenados & Facções' }
 
 export default async function FaccoesPage() {
-  const session = await auth()
-  if (!session?.user) redirect('/login')
-
-  const user = session.user as any
-  if (user.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  await requirePageAccess('faccoes')
 
   return <FaccoesClient />
 }

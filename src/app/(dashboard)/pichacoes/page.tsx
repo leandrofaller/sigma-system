@@ -1,5 +1,4 @@
-import { redirect } from 'next/navigation';
-import { auth } from '@/lib/auth';
+import { requirePageAccess } from '@/lib/require-page-access';
 import { PichacoesClient } from '@/components/faccoes/PichacoesClient';
 
 export const metadata = {
@@ -8,23 +7,11 @@ export const metadata = {
 };
 
 export default async function PichacoesPage() {
-  const session = await auth();
-
-  if (!session?.user) {
-    redirect('/login');
-  }
-
-  const user = session.user as any;
-  const role = user.role || 'OPERATOR';
-
-  // Apenas operadores credenciados
-  if (!['SUPER_ADMIN', 'ADMIN', 'OPERATOR'].includes(role)) {
-    redirect('/dashboard');
-  }
+  const user = await requirePageAccess('pichacoes');
 
   return (
     <PichacoesClient
-      userRole={role}
+      userRole={user.role}
       currentUserId={user.id}
       currentUserName={user.name || ''}
     />

@@ -1,5 +1,4 @@
-import { auth } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { requirePageAccess } from '@/lib/require-page-access';
 import { prisma } from '@/lib/db';
 import { AuditTable } from '@/components/admin/AuditTable';
 
@@ -18,12 +17,7 @@ async function getAuditLogs(page = 1, pageSize = 50) {
 }
 
 export default async function AuditoriaPage() {
-  const session = await auth();
-  const user = session!.user as any;
-
-  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-    redirect('/dashboard');
-  }
+  await requirePageAccess('admin-auditoria');
 
   const { logs, total } = await getAuditLogs();
 

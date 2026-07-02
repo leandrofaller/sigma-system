@@ -1,5 +1,4 @@
-import { auth } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { requirePageAccess } from '@/lib/require-page-access';
 import { prisma } from '@/lib/db';
 import { DevicesPanel } from '@/components/admin/DevicesPanel';
 
@@ -19,12 +18,7 @@ async function getData() {
 }
 
 export default async function DispositivosPage() {
-  const session = await auth();
-  const user = session!.user as any;
-
-  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-    redirect('/dashboard');
-  }
+  const user = await requirePageAccess('admin-dispositivos');
 
   const { devices, enforcementEnabled } = await getData();
   const isSuperAdmin = user.role === 'SUPER_ADMIN';

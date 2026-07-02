@@ -1,5 +1,4 @@
-import { auth } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { requirePageAccess } from '@/lib/require-page-access';
 import { prisma } from '@/lib/db';
 import { GroupsTable } from '@/components/admin/GroupsTable';
 
@@ -12,12 +11,7 @@ async function getGroups() {
 }
 
 export default async function GruposPage() {
-  const session = await auth();
-  const user = session!.user as any;
-
-  if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-    redirect('/dashboard');
-  }
+  await requirePageAccess('admin-grupos');
 
   const groups = await getGroups();
 

@@ -1,5 +1,4 @@
-import { auth } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { requirePageAccess } from '@/lib/require-page-access';
 import { readdirSync, statSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { BackupPanel } from '@/components/admin/BackupPanel';
@@ -22,9 +21,7 @@ function getLocalBackups() {
 }
 
 export default async function BackupsPage() {
-  const session = await auth();
-  const user = session!.user as any;
-  if (user.role !== 'SUPER_ADMIN') redirect('/dashboard');
+  await requirePageAccess('admin-backups');
 
   const [backups, cloudIndex, cloudConfig] = await Promise.all([
     getLocalBackups(),
