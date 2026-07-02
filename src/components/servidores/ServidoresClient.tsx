@@ -20,7 +20,8 @@ import {
   FileText,
   MapPin,
   Shield,
-  FileSpreadsheet
+  FileSpreadsheet,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -58,6 +59,7 @@ interface SyncJob {
 
 export function ServidoresClient() {
   const [servidores, setServidores] = useState<Servidor[]>([]);
+  const [zoomedPhoto, setZoomedPhoto] = useState<{ url: string; nome: string } | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -352,7 +354,14 @@ export function ServidoresClient() {
                             <img
                               src={`/api/sejus/servidores/${s.id}/foto`}
                               alt={s.nome}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-cover cursor-zoom-in transition-transform hover:scale-105"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setZoomedPhoto({
+                                  url: `/api/sejus/servidores/${s.id}/foto`,
+                                  nome: s.nome,
+                                });
+                              }}
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display = 'none';
                               }}
@@ -454,7 +463,21 @@ export function ServidoresClient() {
               <div className="p-4 space-y-6">
                 {/* Foto e Nome */}
                 <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-900 border-2 border-sky-500/20 flex-shrink-0 flex items-center justify-center">
+                  <div
+                    onClick={() => {
+                      if (selected.photoPath) {
+                        setZoomedPhoto({
+                          url: `/api/sejus/servidores/${selected.id}/foto`,
+                          nome: selected.nome,
+                        });
+                      }
+                    }}
+                    className={`w-20 h-20 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-900 border-2 border-sky-500/20 flex-shrink-0 flex items-center justify-center transition-all duration-200 ${
+                      selected.photoPath
+                        ? 'cursor-zoom-in hover:scale-105 hover:border-sky-500'
+                        : ''
+                    }`}
+                  >
                     {selected.photoPath ? (
                       <img
                         src={`/api/sejus/servidores/${selected.id}/foto`}
@@ -699,6 +722,33 @@ export function ServidoresClient() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {zoomedPhoto && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative max-w-2xl bg-gray-900 rounded-3xl border border-white/10 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Botão fechar */}
+            <button
+              onClick={() => setZoomedPhoto(null)}
+              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 hover:bg-black/80 text-white/80 hover:text-white border border-white/10 transition-all active:scale-95 shadow-lg"
+              title="Fechar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Imagem em tamanho real */}
+            <img
+              src={zoomedPhoto.url}
+              alt={zoomedPhoto.nome}
+              className="max-w-full max-h-[75vh] object-contain select-none"
+            />
+
+            {/* Nome do servidor */}
+            <div className="w-full bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 text-white text-center">
+              <p className="font-semibold text-lg drop-shadow-md text-slate-100">{zoomedPhoto.nome}</p>
             </div>
           </div>
         </div>
