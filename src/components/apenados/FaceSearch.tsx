@@ -577,54 +577,54 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
           {tab === 'search' && (
             <>
               {/* Seletor de Base de Dados Premium */}
-              <div className="flex justify-center gap-2 mb-4 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[380px] mx-auto border border-gray-200 dark:border-gray-700">
-                <button
-                  type="button"
-                  onClick={() => { setTargetType('apenados'); reset(); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
-                    targetType === 'apenados'
-                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
-                      : 'text-subtle hover:text-body'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  Apenados
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setTargetType('visitantes'); reset(); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
-                    targetType === 'visitantes'
-                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
-                      : 'text-subtle hover:text-body'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  Visitantes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setTargetType('servidores'); reset(); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
-                    targetType === 'servidores'
-                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
-                      : 'text-subtle hover:text-body'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  Servidores
-                </button>
+              <div className="flex justify-center gap-1 mb-4 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-full max-w-[480px] mx-auto border border-gray-200 dark:border-gray-700">
                 <button
                   type="button"
                   onClick={() => { setTargetType('all'); reset(); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs font-bold rounded-lg transition-all ${
                     targetType === 'all'
                       ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
                       : 'text-subtle hover:text-body'
                   }`}
                 >
-                  <Users className="w-3.5 h-3.5" />
-                  Todos
+                  <Users className="w-3 h-3 shrink-0" />
+                  <span>Todos</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTargetType('apenados'); reset(); }}
+                  className={`flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs font-bold rounded-lg transition-all ${
+                    targetType === 'apenados'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  <Users className="w-3 h-3 shrink-0" />
+                  <span>Apenados</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTargetType('visitantes'); reset(); }}
+                  className={`flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs font-bold rounded-lg transition-all ${
+                    targetType === 'visitantes'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  <Users className="w-3 h-3 shrink-0" />
+                  <span>Visitantes</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTargetType('servidores'); reset(); }}
+                  className={`flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs font-bold rounded-lg transition-all ${
+                    targetType === 'servidores'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  <Users className="w-3 h-3 shrink-0" />
+                  <span>Servidores</span>
                 </button>
               </div>
 
