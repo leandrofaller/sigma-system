@@ -1355,6 +1355,69 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
 
                   {/* Barra de progresso do job avançado */}
                   {(isAdvIndexing || (advIndexProgress && advIndexProgress.current > 0)) && (
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs">
+                        <span className="font-semibold text-title">
+                          {advIndexProgress.current.toLocaleString('pt-BR')} / {advIndexProgress.total.toLocaleString('pt-BR')} fotos processadas
+                        </span>
+                        {isAdvIndexing && advIndexProgress.current > 0 && (
+                          <span className="text-subtle">
+                            {(() => {
+                              const elapsed = (Date.now() - advIndexProgress.startTime) / 1000;
+                              const rate = advIndexProgress.current / elapsed;
+                              const remainingSecs = (advIndexProgress.total - advIndexProgress.current) / rate;
+                              return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(remainingSecs)}`;
+                            })()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-green-500 to-emerald-600 transition-all duration-300 rounded-full"
+                          style={{ width: advIndexProgress.total > 0 ? `${(advIndexProgress.current / advIndexProgress.total) * 100}%` : '0%' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    {!isAdvIndexing ? (
+                      <button
+                        onClick={startAdvIndexing}
+                        disabled={advIndexStatus.remaining === 0}
+                        className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-bold text-xs transition-colors disabled:opacity-50"
+                      >
+                        <ScanFace className="w-3.5 h-3.5" /> Iniciar Migração Completa
+                      </button>
+                    ) : (
+                      <button
+                        onClick={stopAdvIndexing}
+                        className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold text-xs transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" /> Parar Migração
+                      </button>
+                    )}
+                    <button onClick={fetchAdvStatus} className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 text-subtle px-4 py-2 rounded-xl font-bold text-xs hover:text-body transition-colors">
+                      <RefreshCw className="w-3.5 h-3.5" /> Atualizar Status
+                    </button>
+                    {isSuperAdmin && !isAdvIndexing && (
+                      <button
+                        onClick={() => setShowAdvancedClearConfirm(true)}
+                        className="flex items-center gap-1.5 text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2 rounded-xl font-bold text-xs transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Limpar Progresso
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              ABA: INDEXAR
+          ════════════════════════════════════════════════════════════════════ */}
+          {tab === 'index' && (
             <div className="space-y-5">
               {/* Seletor de Base de Dados para Indexação */}
               <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[280px] border border-gray-200 dark:border-gray-700">
