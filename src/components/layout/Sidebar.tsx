@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Map, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert, List, Paintbrush, Archive
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Map, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert, List, Paintbrush, Archive, Briefcase
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -27,7 +27,7 @@ interface NavItem {
 const iconMap: Record<string, React.ComponentType<any>> = {
   LayoutDashboard, FileText, Inbox, BookOpen, ClipboardList, Calendar, CalendarDays,
   Trello, MessageSquare, Sparkles, UserCheck, Shield, Database, Smartphone, Brain, Building2,
-  Users, FolderOpen, Monitor, MapPin, Map, AlertCircle, Settings, ShieldAlert, List, Paintbrush, Archive
+  Users, FolderOpen, Monitor, MapPin, Map, AlertCircle, Settings, ShieldAlert, List, Paintbrush, Archive, Briefcase
 };
 
 const defaultNavItems: NavItem[] = [
@@ -45,6 +45,7 @@ const defaultNavItems: NavItem[] = [
   { label: 'Identificação de Apenados', href: '/apenados', iconName: 'UserCheck', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Apenados & Facções', href: '/faccoes', iconName: 'Shield', roles: ['SUPER_ADMIN'] },
   { label: 'Visitantes', href: '/visitantes', iconName: 'Users', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Servidores', href: '/servidores', iconName: 'Briefcase', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Mapa de Facções', href: '/mapa-faccoes', iconName: 'Map', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Lista de Endereços', href: '/lista-enderecos', iconName: 'List', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'SIAIP', href: '/siaip', iconName: 'Database', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },

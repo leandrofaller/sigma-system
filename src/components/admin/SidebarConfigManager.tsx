@@ -20,13 +20,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, FileText, Inbox, BookOpen, ClipboardList, Calendar, CalendarDays,
   Trello, MessageSquare, Sparkles, UserCheck, Shield as ShieldIcon, Database, Smartphone, Brain, Building2,
-  Users, FolderOpen, Monitor, MapPin, AlertCircle
+  Users, FolderOpen, Monitor, MapPin, AlertCircle, Briefcase
 } from 'lucide-react';
 
 const iconMap: Record<string, React.ComponentType<any>> = {
   LayoutDashboard, FileText, Inbox, BookOpen, ClipboardList, Calendar, CalendarDays,
   Trello, MessageSquare, Sparkles, UserCheck, Shield: ShieldIcon, Database, Smartphone, Brain, Building2,
-  Users, FolderOpen, Monitor, MapPin, AlertCircle, Settings
+  Users, FolderOpen, Monitor, MapPin, AlertCircle, Settings, Briefcase
 };
 
 interface SidebarItemConfig {
