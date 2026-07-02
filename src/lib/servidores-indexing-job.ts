@@ -1,0 +1,173 @@
+import { prisma } from './db';
+import { runIndexBatch } from './arcface-batch';
+import * as path from 'path';
+import { upsertServidorVector } from './pgvector';
+import { invalidateServidorFaceCache } from './servidor-face-cache';
+
+const BATCH_SIZE = 100;
+const MAX_DURATION_MS = 170 * 60 * 1000; // 170 minutos
+
+export const FACE_NONE = 'NONE';
+
+export interface ServidorJobProgress {
+  current: number;
+  total: number;
+  faces: number;
+  skipped: number;
+  errors: number;
+  startTime: number;
+}
+
+interface ServidorJobState {
+  isRunning: boolean;
+  timedOut: boolean;
+  progress: ServidorJobProgress;
+  error: string;
+}
+
+let state: ServidorJobState = {
+  isRunning: false,
+  timedOut: false,
+  progress: { current: 0, total: 0, faces: 0, skipped: 0, errors: 0, startTime: 0 },
+  error: '',
+};
+
+let stopFlag = false;
+
+export function getServidorJobState(): ServidorJobState {
+  return state;
+}
+
+export function stopServidorJob(): void {
+  stopFlag = true;
+}
+
+export function startServidorJob(): void {
+  if (state.isRunning) return;
+  state.isRunning = true;
+  state.timedOut = false;
+  state.error = '';
+  stopFlag = false;
+
+  runLoop().catch((err) => {
+    state.error = err?.message ?? 'Erro desconhecido';
+    state.isRunning = false;
+  });
+}
+
+async function runLoop(): Promise<void> {
+  const baseDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+  const servidoresDir = path.join(baseDir, 'servidores');
+
+  // Limpa embeddings órfãos: registros sem foto mas com faceDescriptor (foto foi deletada).
+  await prisma.sejusServidor.updateMany({
+    where: { photoPath: null, faceDescriptor: { not: null } },
+    data: { faceDescriptor: null, detScore: null },
+  });
+
+  // Reseta registros com null bytes no faceDescriptor (forçam re-indexação limpa).
+  await prisma.$executeRaw`
+    UPDATE sejus_servidores
+    SET "faceDescriptor" = NULL
+    WHERE "faceDescriptor" IS NOT NULL
+      AND strpos(encode("faceDescriptor"::bytea, 'hex'), '00') > 0
+  `;
+
+  // Conta total de fotos e já processadas para mostrar progresso real
+  const [totalWithPhoto, alreadyProcessed] = await Promise.all([
+    prisma.sejusServidor.count({ where: { photoPath: { not: null } } }),
+    prisma.sejusServidor.count({ where: { photoPath: { not: null }, faceDescriptor: { not: null } } }),
+  ]);
+
+  const startTime = Date.now();
+  state.progress = {
+    current: alreadyProcessed,
+    total: totalWithPhoto,
+    faces: 0,
+    skipped: 0,
+    errors: 0,
+    startTime,
+  };
+
+  let processed = alreadyProcessed;
+  let faces = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  while (!stopFlag) {
+    if (Date.now() - startTime >= MAX_DURATION_MS) {
+      state.timedOut = true;
+      break;
+    }
+
+    const records = await prisma.sejusServidor.findMany({
+      where: { photoPath: { not: null }, faceDescriptor: null },
+      select: { id: true, photoPath: true },
+      take: BATCH_SIZE,
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (records.length === 0) break;
+
+    const ids = records.map((r) => r.id);
+    const photoPaths: Record<string, string> = {};
+
+    for (const r of records) {
+      if (r.photoPath) {
+        const relativePath = r.photoPath.startsWith('uploads/')
+          ? r.photoPath.substring(8)
+          : r.photoPath;
+        photoPaths[r.id] = path.join(baseDir, relativePath);
+      }
+    }
+
+    const results = await runIndexBatch(ids, servidoresDir, photoPaths);
+
+    const updates: Promise<any>[] = [];
+    for (const r of results) {
+      if (r.done) continue;
+      if (!r.id) continue;
+
+      if (r.embedding && Array.isArray(r.embedding) && r.embedding.length === 512) {
+        updates.push(
+          prisma.sejusServidor.update({
+            where: { id: r.id },
+            data: {
+              faceDescriptor: JSON.stringify(r.embedding).replace(/\x00/g, ''),
+              detScore: r.det_score ?? null,
+            },
+          })
+        );
+        updates.push(upsertServidorVector(r.id, r.embedding));
+        faces++;
+      } else if (r.no_face || r.no_photo) {
+        updates.push(
+          prisma.sejusServidor.update({
+            where: { id: r.id },
+            data: {
+              faceDescriptor: FACE_NONE,
+              detScore: null,
+            },
+          })
+        );
+        updates.push(
+          prisma.$executeRawUnsafe(
+            `UPDATE sejus_servidores SET "faceVector" = NULL WHERE id = $1`,
+            r.id
+          ).catch(() => {})
+        );
+        skipped++;
+      } else {
+        errors++;
+      }
+    }
+
+    await Promise.all(updates);
+
+    processed += ids.length;
+    state.progress = { current: processed, total: totalWithPhoto, faces, skipped, errors, startTime };
+  }
+
+  state.isRunning = false;
+  invalidateServidorFaceCache();
+}
