@@ -509,10 +509,12 @@ model Apenado {
   advancedLivenessScore  Float?
   ocrText        String?  @db.Text
   ocrName        String?
-  photoCategory      String?   // FACE_OK | FACE_MISSED | DOCUMENT | TATTOO | BODY | NO_FACE
+  photoCategory      String?
   photoCategoryConf  Float?
   photoCategoryReason String?  @db.Text
   photoClassifiedAt  DateTime?
+  faceVector         Unsupported("vector(512)")?
+  faceVectorAdvanced Unsupported("vector(512)")?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdById String?
@@ -798,6 +800,7 @@ model SipeVisitante {
   faceDescriptor     String?  @db.Text
   detScore           Float?
   photoQuality       Float?
+  faceVector         Unsupported("vector(512)")?
 
   vinculos SipeVinculoVisitante[]
   entradas SipeVisitanteEntrada[]
