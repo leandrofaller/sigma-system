@@ -1,3 +1,6 @@
+# Claude Code local settings (permissões locais, não commitar)
+.claude/settings.local.json
+
 # Dependencies
 node_modules/
 .pnp
