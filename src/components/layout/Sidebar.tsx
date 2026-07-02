@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Map, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert, List
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Map, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert, List, Paintbrush
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -27,7 +27,7 @@ interface NavItem {
 const iconMap: Record<string, React.ComponentType<any>> = {
   LayoutDashboard, FileText, Inbox, BookOpen, ClipboardList, Calendar, CalendarDays,
   Trello, MessageSquare, Sparkles, UserCheck, Shield, Database, Smartphone, Brain, Building2,
-  Users, FolderOpen, Monitor, MapPin, Map, AlertCircle, Settings, ShieldAlert, List
+  Users, FolderOpen, Monitor, MapPin, Map, AlertCircle, Settings, ShieldAlert, List, Paintbrush
 };
 
 const defaultNavItems: NavItem[] = [
@@ -49,6 +49,7 @@ const defaultNavItems: NavItem[] = [
   { label: 'SIAIP', href: '/siaip', iconName: 'Database', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Celulares Recebidos', href: '/aparelhos', iconName: 'Smartphone', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'AIP', href: '/aip', iconName: 'Brain', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
+  { label: 'Pichações e Simbologias', href: '/pichacoes', iconName: 'Paintbrush', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Ordens de Missão', href: '/ordens-missao', iconName: 'ClipboardList', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Unidades Prisionais', href: '/unidades-prisionais', iconName: 'Building2', roles: ['SUPER_ADMIN'] },
 ];

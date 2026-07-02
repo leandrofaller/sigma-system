@@ -132,6 +132,7 @@ model User {
   ordensEmitidas      OrdemMissao[]             @relation("OrdensMissaoEmitidas")
   ordensParticipacoes OrdemMissaoParticipante[] @relation("OrdensMissaoParticipacoes")
   ordensConcluidas    OrdemMissao[]             @relation("OrdensMissaoConcluidas")
+  pichacoesCadastradas PichacaoFacciosa[]        @relation("PichacoesCadastradas")
 
   unidadeEnderecoOverridesAtualizados UnidadeEnderecoOverride[] @relation("UnidadeOverrideAtualizado")
   unidadeEnderecoSolicitacoesEnviadas UnidadeEnderecoSolicitacao[] @relation("UnidadeSolicitacaoEnviada")
@@ -632,6 +633,7 @@ model SipeFaccao {
 
   apenados SipeApenadoImportado[]
   apenadosUnidades SipeApenadoUnidadePrisional[]
+  pichacoes        PichacaoFacciosa[]          @relation("FaccoesPichacoes")
 
   @@map("sipe_faccoes")
 }
@@ -1587,6 +1589,28 @@ model Geofence {
   updatedAt   DateTime @updatedAt
 
   @@map("geofences")
+}
+
+model PichacaoFacciosa {
+  id              String      @id @default(cuid())
+  municipio       String      // Município de RO onde foi localizada
+  endereco        String      // Endereço ou ponto de referência
+  latitude        Float?
+  longitude       Float?
+  faccaoId        String?
+  faccao          SipeFaccao? @relation("FaccoesPichacoes", fields: [faccaoId], references: [id], onDelete: SetNull)
+  descricao       String?     @db.Text // Detalhes da pichação ou símbolos
+  fotos           String[]    // URLs/caminhos das imagens carregadas
+  cadastradoPorId String
+  cadastradoPor   User        @relation("PichacoesCadastradas", fields: [cadastradoPorId], references: [id])
+  dataRegistro    DateTime    @default(now())
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([municipio])
+  @@index([faccaoId])
+  @@index([cadastradoPorId])
+  @@map("pichacoes_faccionados")
 }
 
 

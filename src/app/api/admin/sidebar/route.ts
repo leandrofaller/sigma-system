@@ -21,6 +21,7 @@ const DEFAULT_NAV_ITEMS = [
   { key: 'siaip', label: 'SIAIP', href: '/siaip', iconName: 'Database', position: 130, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'aparelhos', label: 'Celulares Recebidos', href: '/aparelhos', iconName: 'Smartphone', position: 140, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'aip', label: 'AIP', href: '/aip', iconName: 'Brain', position: 150, roles: ['SUPER_ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
+  { key: 'pichacoes', label: 'Pichações e Simbologias', href: '/pichacoes', iconName: 'Paintbrush', position: 155, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false },
   { key: 'unidades-prisionais', label: 'Unidades Prisionais', href: '/unidades-prisionais', iconName: 'Building2', position: 160, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: false },
 ];
 
@@ -95,6 +96,16 @@ export async function GET(req: NextRequest) {
     if (configs.length > 0 && !hasServidoresConfig) {
       await prisma.sidebarConfig.create({
         data: { key: 'servidores', label: 'Servidores', href: '/servidores', iconName: 'Briefcase', position: 128, roles: ['SUPER_ADMIN'], enabled: true, isAdmin: false }
+      });
+      configs = await prisma.sidebarConfig.findMany({
+        orderBy: { position: 'asc' }
+      });
+    }
+
+    const hasPichacoesConfig = configs.some(c => c.key === 'pichacoes');
+    if (configs.length > 0 && !hasPichacoesConfig) {
+      await prisma.sidebarConfig.create({
+        data: { key: 'pichacoes', label: 'Pichações e Simbologias', href: '/pichacoes', iconName: 'Paintbrush', position: 155, roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'], enabled: true, isAdmin: false }
       });
       configs = await prisma.sidebarConfig.findMany({
         orderBy: { position: 'asc' }
