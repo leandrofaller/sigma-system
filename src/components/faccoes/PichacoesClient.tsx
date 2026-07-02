@@ -6,8 +6,14 @@ import {
   Paintbrush, Plus, Eye, Pencil, Trash2, Search, X, Check, Loader2,
   MapPin, Grid, Map, Image as ImageIcon, Calendar, User, Compass,
   ChevronLeft, ChevronRight, AlertCircle, RefreshCw, Upload,
-  Target, Flame, EyeOff, SlidersHorizontal
+  Target, Flame, EyeOff, SlidersHorizontal, Download, BarChart3
 } from 'lucide-react';
+import {
+  getValidGeoPichacoes,
+  groupPichacoesByFaccao,
+  detectTerritoryConflicts,
+  aggregateByMunicipio,
+} from './pichacoes-territory-utils';
 
 const PichacoesMap = dynamic(() => import('./PichacoesMap'), {
   ssr: false,
@@ -29,6 +35,8 @@ const PichacoesTerritoryMap = dynamic(() => import('./PichacoesTerritoryMap'), {
     </div>
   ),
 });
+
+
 
 // Lista dos 52 municípios de Rondônia
 const MUNICIPIOS_RO = [
@@ -127,20 +135,59 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
     });
   }, [pichacoes, search, municipioFilter, faccaoFilter]);
 
-  // Derived list of facções that have geo coords in current filtered results (for toggles)
+  // Full live territory analysis (used by sidebar stats, visibility chips, and export)
+  const territoryAnalysis = useMemo(() => {
+    const validRaw = getValidGeoPichacoes(filtered);
+    // Map to the shape expected by the pure utils
+    const valid = validRaw.map((p: any) => ({
+      id: p.id,
+      municipio: p.municipio,
+      endereco: p.endereco,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      descricao: p.descricao,
+      faccaoId: p.faccaoId,
+      faccao: p.faccao,
+    }));
+
+    const groups = groupPichacoesByFaccao(valid, hiddenFaccaoIds);
+    const conflicts = detectTerritoryConflicts(valid, conflictThreshold, hiddenFaccaoIds);
+    const byMunicipio = aggregateByMunicipio(valid as any);
+
+    const totalGeoMarks = valid.length;
+    const activeFaccoes = groups.length;
+
+    return {
+      totalGeoMarks,
+      groups,
+      conflicts,
+      byMunicipio,
+      activeFaccoes,
+      conflictCount: conflicts.length,
+    };
+  }, [filtered, hiddenFaccaoIds, conflictThreshold]);
+
+  // For the chips (re-uses the groups from analysis but without hidden applied for display choices)
   const territoryFaccaoVisibility = useMemo(() => {
-    const present: Record<string, { label: string; cor: string; count: number }> = {};
-    filtered.forEach((p) => {
-      if (p.latitude == null || p.longitude == null) return;
-      const key = p.faccaoId || 'SEM_FACCAO';
-      const label = p.faccao?.sigla || p.faccao?.nome || 'Fato Isolado';
-      const cor = p.faccao?.cor || '#6b7280';
-      if (!present[key]) {
-        present[key] = { label, cor, count: 0 };
-      }
-      present[key].count += 1;
-    });
-    return Object.keys(present).map((key) => ({ key, ...present[key] }));
+    // Show all present even if currently hidden so user can re-enable them
+    const validRaw = getValidGeoPichacoes(filtered);
+    const valid = validRaw.map((p: any) => ({
+      id: p.id,
+      municipio: p.municipio,
+      endereco: p.endereco,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      descricao: p.descricao,
+      faccaoId: p.faccaoId,
+      faccao: p.faccao,
+    }));
+    const allGroups = groupPichacoesByFaccao(valid, new Set<string>()); // ignore hidden for the toggle list
+    return allGroups.map((g) => ({
+      key: g.key,
+      label: g.label,
+      cor: g.cor,
+      count: g.count,
+    }));
   }, [filtered]);
 
   // Modais e Estados do Formulário
@@ -337,6 +384,109 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
     setActiveFotoIdx(0);
   };
 
+  // ==================== EXPORT FUNCTIONS (Territory Analysis) ====================
+  const buildAnalysisPayload = () => {
+    const now = new Date().toISOString();
+    const appliedFilters = {
+      search: search || null,
+      municipio: municipioFilter,
+      faccao: faccaoFilter,
+    };
+
+    return {
+      generatedAt: now,
+      source: 'Pichações e Simbologias - Modo Território',
+      appliedFilters,
+      parameters: {
+        influenceRadiusMeters: influenceRadius,
+        conflictThresholdMeters: conflictThreshold,
+        hiddenFaccaoIds: Array.from(hiddenFaccaoIds),
+      },
+      summary: {
+        totalGeoMarks: territoryAnalysis.totalGeoMarks,
+        activeFaccoes: territoryAnalysis.activeFaccoes,
+        conflictCount: territoryAnalysis.conflictCount,
+      },
+      faccoes: territoryAnalysis.groups.map((g) => ({
+        key: g.key,
+        label: g.label,
+        cor: g.cor,
+        count: g.count,
+        percentage:
+          territoryAnalysis.totalGeoMarks > 0
+            ? Number(((g.count / territoryAnalysis.totalGeoMarks) * 100).toFixed(1))
+            : 0,
+      })),
+      conflicts: territoryAnalysis.conflicts.map((c) => ({
+        faccaoA: c.faccaoA,
+        faccaoB: c.faccaoB,
+        distanceMeters: c.distance,
+        lat: c.lat,
+        lng: c.lng,
+        municipioA: c.municipioA,
+        municipioB: c.municipioB,
+      })),
+      topMunicipios: territoryAnalysis.byMunicipio.slice(0, 10),
+    };
+  };
+
+  const exportTerritoryAnalysis = () => {
+    try {
+      const payload = buildAnalysisPayload();
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const date = new Date().toISOString().slice(0, 10);
+      a.download = `analise-territorial-pichacoes-${date}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao gerar exportação.');
+    }
+  };
+
+  const exportConflictsCSV = () => {
+    if (territoryAnalysis.conflictCount === 0) return;
+
+    try {
+      const header = 'faccao_a,faccao_b,distancia_metros,latitude,longitude,municipio_a,municipio_b\n';
+      const rows = territoryAnalysis.conflicts
+        .map((c) =>
+          [
+            `"${c.faccaoA.replace(/"/g, '""')}"`,
+            `"${c.faccaoB.replace(/"/g, '""')}"`,
+            c.distance,
+            c.lat,
+            c.lng,
+            `"${(c.municipioA || '').replace(/"/g, '""')}"`,
+            `"${(c.municipioB || '').replace(/"/g, '""')}"`,
+          ].join(',')
+        )
+        .join('\n');
+
+      const csv = header + rows;
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const date = new Date().toISOString().slice(0, 10);
+      a.download = `conflitos-territoriais-pichacoes-${date}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao gerar CSV de conflitos.');
+    }
+  };
+
   // filtered is now declared earlier as useMemo (for ordering with territory visibility)
 
   return (
@@ -463,7 +613,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
           </div>
         ) : viewMode === 'TERRITORY' ? (
           <div className="flex flex-col gap-3">
-            {/* Territory-specific controls (completely optional layer) */}
+            {/* Territory controls - full width */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-3 text-sm">
               <div className="flex items-center gap-2 mb-3 text-purple-600 dark:text-purple-400">
                 <Target className="w-4 h-4" />
@@ -541,7 +691,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                 </div>
               </div>
 
-              {/* Facção visibility chips (from current filtered data) */}
+              {/* Facção visibility chips */}
               {territoryFaccaoVisibility.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
                   <div className="text-[10px] uppercase font-bold tracking-widest text-gray-500 mb-1.5">Alternar visibilidade por facção</div>
@@ -582,17 +732,135 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
               )}
             </div>
 
-            <div className="w-full h-[520px] relative z-0">
-              <PichacoesTerritoryMap
-                pichacoes={filtered}
-                onSelect={openView}
-                influenceRadius={influenceRadius}
-                conflictThreshold={conflictThreshold}
-                showPoints={showPoints}
-                showInfluenceZones={showInfluenceZones}
-                showConflicts={showConflicts}
-                hiddenFaccaoIds={hiddenFaccaoIds}
-              />
+            {/* Map + Lateral Stats Panel */}
+            <div className="flex flex-col lg:flex-row gap-3 min-h-[520px]">
+              {/* Map */}
+              <div className="flex-1 min-h-[420px] lg:min-h-0 relative z-0 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                <PichacoesTerritoryMap
+                  pichacoes={filtered}
+                  onSelect={openView}
+                  influenceRadius={influenceRadius}
+                  conflictThreshold={conflictThreshold}
+                  showPoints={showPoints}
+                  showInfluenceZones={showInfluenceZones}
+                  showConflicts={showConflicts}
+                  hiddenFaccaoIds={hiddenFaccaoIds}
+                />
+              </div>
+
+              {/* Lateral Statistical Summary + Export */}
+              <aside className="w-full lg:w-80 shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 flex flex-col text-sm max-h-[520px] overflow-auto">
+                <div className="flex items-center gap-2 mb-3 text-purple-600 dark:text-purple-400">
+                  <BarChart3 className="w-4 h-4" />
+                  <span className="font-bold text-xs uppercase tracking-widest">Resumo Estatístico</span>
+                </div>
+
+                {/* Quick numbers */}
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="bg-gray-50 dark:bg-gray-900/60 rounded-xl p-2 text-center">
+                    <div className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">
+                      {territoryAnalysis.totalGeoMarks}
+                    </div>
+                    <div className="text-[9px] text-gray-500 leading-tight">Marcas<br />georreferenciadas</div>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-900/60 rounded-xl p-2 text-center">
+                    <div className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">
+                      {territoryAnalysis.activeFaccoes}
+                    </div>
+                    <div className="text-[9px] text-gray-500 leading-tight">Facções<br />ativas</div>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-900/60 rounded-xl p-2 text-center border border-red-200 dark:border-red-900/50">
+                    <div className="text-lg font-bold text-red-600 tabular-nums">
+                      {territoryAnalysis.conflictCount}
+                    </div>
+                    <div className="text-[9px] text-red-600/80 leading-tight">Zonas de<br />conflito</div>
+                  </div>
+                </div>
+
+                {/* Per Facção */}
+                <div className="mb-3">
+                  <div className="font-semibold text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">Por facção</div>
+                  {territoryAnalysis.groups.length === 0 ? (
+                    <div className="text-xs text-gray-500">Nenhuma facção com coordenadas</div>
+                  ) : (
+                    <div className="space-y-1">
+                      {territoryAnalysis.groups.slice(0, 6).map((g) => (
+                        <div key={g.key} className="flex items-center gap-2 text-xs">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: g.cor }} />
+                          <span className="truncate flex-1 text-gray-800 dark:text-gray-200">{g.label}</span>
+                          <span className="font-mono tabular-nums text-gray-600 dark:text-gray-400">{g.count}</span>
+                          <span className="text-[10px] text-gray-400 w-8 text-right">
+                            {territoryAnalysis.totalGeoMarks > 0
+                              ? Math.round((g.count / territoryAnalysis.totalGeoMarks) * 100)
+                              : 0}%
+                          </span>
+                        </div>
+                      ))}
+                      {territoryAnalysis.groups.length > 6 && (
+                        <div className="text-[10px] text-gray-400 pl-5">+{territoryAnalysis.groups.length - 6} outras</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Conflitos */}
+                {territoryAnalysis.conflictCount > 0 && (
+                  <div className="mb-3">
+                    <div className="font-semibold text-[10px] uppercase tracking-wider text-red-600 mb-1">Conflitos detectados</div>
+                    <div className="space-y-1 text-xs max-h-[92px] overflow-auto pr-1">
+                      {territoryAnalysis.conflicts.slice(0, 5).map((c, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-[10px] bg-red-50 dark:bg-red-950/30 rounded px-2 py-0.5">
+                          <span className="truncate">
+                            <span style={{ color: c.corA }} className="font-medium">{c.faccaoA}</span>
+                            <span className="mx-1 text-gray-400">×</span>
+                            <span style={{ color: c.corB }} className="font-medium">{c.faccaoB}</span>
+                          </span>
+                          <span className="font-mono text-red-600/80 shrink-0 pl-2">{c.distance}m</span>
+                        </div>
+                      ))}
+                      {territoryAnalysis.conflictCount > 5 && (
+                        <div className="text-[10px] text-red-500 pl-1">+{territoryAnalysis.conflictCount - 5} outros conflitos</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Top municípios */}
+                {territoryAnalysis.byMunicipio.length > 0 && (
+                  <div className="mb-4">
+                    <div className="font-semibold text-[10px] uppercase tracking-wider text-gray-500 mb-1">Top municípios</div>
+                    <div className="text-xs space-y-0.5">
+                      {territoryAnalysis.byMunicipio.slice(0, 3).map((m, i) => (
+                        <div key={i} className="flex justify-between">
+                          <span className="truncate pr-2">{m.municipio}</span>
+                          <span className="font-mono text-gray-500">{m.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Export */}
+                <div className="mt-auto pt-3 border-t border-gray-100 dark:border-gray-700">
+                  <button
+                    onClick={() => exportTerritoryAnalysis()}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    Exportar Análise Atual (JSON)
+                  </button>
+                  <button
+                    onClick={() => exportConflictsCSV()}
+                    disabled={territoryAnalysis.conflictCount === 0}
+                    className="w-full mt-1.5 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-900 disabled:opacity-50"
+                  >
+                    Exportar Conflitos (CSV)
+                  </button>
+                  <p className="text-[9px] text-gray-400 mt-1.5 text-center">
+                    Inclui filtros aplicados + parâmetros + dados calculados
+                  </p>
+                </div>
+              </aside>
             </div>
           </div>
         ) : (

@@ -4,6 +4,12 @@ import { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Circle, CircleMarker, Popup, useMap, LayerGroup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import {
+  groupPichacoesByFaccao,
+  detectTerritoryConflicts,
+  getValidGeoPichacoes,
+  type ValidPichacao,
+} from './pichacoes-territory-utils';
 
 // Fix Leaflet icons for Next.js
 // @ts-ignore
@@ -42,38 +48,12 @@ interface TerritoryMapProps {
   hiddenFaccaoIds: Set<string>; // faccaoId or 'SEM_FACCAO'
 }
 
-interface Conflict {
-  id: string;
-  lat: number;
-  lng: number;
-  faccaoA: string;
-  corA: string;
-  faccaoB: string;
-  corB: string;
-  distance: number;
-}
-
 function MapController({ center, zoom }: { center: [number, number]; zoom: number }) {
   const map = useMap();
   useEffect(() => {
     map.setView(center, zoom, { animate: true });
   }, [center, zoom, map]);
   return null;
-}
-
-// Haversine distance in meters (accurate enough, fast)
-function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000; // Earth radius
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
 }
 
 export default function PichacoesTerritoryMap({
@@ -88,86 +68,30 @@ export default function PichacoesTerritoryMap({
   showConflicts,
   hiddenFaccaoIds,
 }: TerritoryMapProps) {
-  // Only points with valid coordinates
-  const validPichacoes = useMemo(
-    () =>
-      pichacoes.filter(
-        (p): p is PichacaoForMap & { latitude: number; longitude: number } =>
-          p.latitude !== null && p.longitude !== null
-      ),
-    [pichacoes]
+  // Normalize input to shared type
+  const normalized = useMemo(() => {
+    return pichacoes.map((p) => ({
+      id: p.id,
+      municipio: p.municipio,
+      endereco: p.endereco,
+      latitude: p.latitude!,
+      longitude: p.longitude!,
+      descricao: p.descricao,
+      faccaoId: p.faccaoId,
+      faccao: p.faccao,
+    })) as ValidPichacao[];
+  }, [pichacoes]);
+
+  const validPichacoes = useMemo(() => getValidGeoPichacoes(normalized), [normalized]);
+
+  const groups = useMemo(
+    () => groupPichacoesByFaccao(validPichacoes, hiddenFaccaoIds),
+    [validPichacoes, hiddenFaccaoIds]
   );
 
-  // Group by facção (key = faccaoId or 'SEM_FACCAO')
-  const groups = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        key: string;
-        label: string;
-        cor: string;
-        items: (PichacaoForMap & { latitude: number; longitude: number })[];
-      }
-    >();
-
-    for (const p of validPichacoes) {
-      const key = p.faccaoId || 'SEM_FACCAO';
-      if (hiddenFaccaoIds.has(key)) continue;
-
-      const label = p.faccao?.sigla || p.faccao?.nome || 'Fato Isolado';
-      const cor = p.faccao?.cor || '#6b7280';
-
-      if (!map.has(key)) {
-        map.set(key, { key, label, cor, items: [] });
-      }
-      map.get(key)!.items.push(p);
-    }
-
-    return Array.from(map.values());
-  }, [validPichacoes, hiddenFaccaoIds]);
-
-  // Detect conflicts between different facções
-  const conflicts = useMemo<Conflict[]>(() => {
+  const conflicts = useMemo(() => {
     if (!showConflicts) return [];
-
-    const conflictsList: Conflict[] = [];
-    const seen = new Set<string>();
-
-    for (let i = 0; i < validPichacoes.length; i++) {
-      const a = validPichacoes[i];
-      const keyA = a.faccaoId || 'SEM_FACCAO';
-      if (hiddenFaccaoIds.has(keyA)) continue;
-
-      for (let j = i + 1; j < validPichacoes.length; j++) {
-        const b = validPichacoes[j];
-        const keyB = b.faccaoId || 'SEM_FACCAO';
-        if (keyA === keyB) continue;
-        if (hiddenFaccaoIds.has(keyB)) continue;
-
-        const dist = distanceMeters(a.latitude, a.longitude, b.latitude, b.longitude);
-        if (dist <= conflictThreshold) {
-          const midLat = (a.latitude + b.latitude) / 2;
-          const midLng = (a.longitude + b.longitude) / 2;
-          const conflictId = [a.id, b.id].sort().join('_');
-
-          if (!seen.has(conflictId)) {
-            seen.add(conflictId);
-            conflictsList.push({
-              id: conflictId,
-              lat: midLat,
-              lng: midLng,
-              faccaoA: a.faccao?.sigla || a.faccao?.nome || 'Isolada',
-              corA: a.faccao?.cor || '#6b7280',
-              faccaoB: b.faccao?.sigla || b.faccao?.nome || 'Isolada',
-              corB: b.faccao?.cor || '#6b7280',
-              distance: Math.round(dist),
-            });
-          }
-        }
-      }
-    }
-
-    return conflictsList;
+    return detectTerritoryConflicts(validPichacoes, conflictThreshold, hiddenFaccaoIds);
   }, [validPichacoes, conflictThreshold, showConflicts, hiddenFaccaoIds]);
 
   const totalValid = validPichacoes.length;
@@ -336,7 +260,7 @@ export default function PichacoesTerritoryMap({
                 style={{ backgroundColor: g.cor }}
               />
               <span className="font-semibold truncate text-gray-800 dark:text-gray-200">{g.label}</span>
-              <span className="ml-auto tabular-nums text-gray-500">{g.items.length}</span>
+              <span className="ml-auto tabular-nums text-gray-500">{g.count}</span>
             </div>
           ))}
         </div>
