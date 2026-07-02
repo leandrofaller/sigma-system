@@ -6,6 +6,7 @@ import { VisitanteIndexingProvider } from '@/contexts/VisitanteIndexingContext';
 import { ServidorIndexingProvider } from '@/contexts/ServidorIndexingContext';
 import { IndexingStatusFloat } from '@/components/apenados/IndexingStatusFloat';
 import { VisitanteIndexingStatusFloat } from '@/components/visitantes/VisitanteIndexingStatusFloat';
+import { ServidorIndexingStatusFloat } from '@/components/servidores/ServidorIndexingStatusFloat';
 import type { ReactNode } from 'react';
 
 export function IndexingWrapper({ children }: { children: ReactNode }) {
@@ -21,6 +22,7 @@ export function IndexingWrapper({ children }: { children: ReactNode }) {
             <>
               <IndexingStatusFloat />
               <VisitanteIndexingStatusFloat />
+              <ServidorIndexingStatusFloat />
             </>
           )}
         </ServidorIndexingProvider>

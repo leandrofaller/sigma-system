@@ -2075,9 +2075,13 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
             
             <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 relative">
               {viewingPhotoMatch.photoPath ? (
-                <img 
-                  src={viewingPhotoMatch.targetType === 'visitantes' ? `/api/sipe/visitantes/${viewingPhotoMatch.id}/foto` : `/api/apenados/${viewingPhotoMatch.id}/foto`} 
-                  alt={viewingPhotoMatch.name} 
+                <img
+                  src={viewingPhotoMatch.targetType === 'visitantes'
+                    ? `/api/sipe/visitantes/${viewingPhotoMatch.id}/foto`
+                    : viewingPhotoMatch.targetType === 'servidores'
+                    ? `/api/sejus/servidores/${viewingPhotoMatch.id}/foto`
+                    : `/api/apenados/${viewingPhotoMatch.id}/foto`}
+                  alt={viewingPhotoMatch.name}
                   className="w-full h-full object-contain"
                 />
               ) : (
@@ -2108,6 +2112,21 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                       </span>
                     </div>
                   )}
+                </>
+              ) : viewingPhotoMatch.targetType === 'servidores' ? (
+                <>
+                  <div className="flex justify-between">
+                    <span>Matrícula:</span>
+                    <span className="font-semibold text-title">{viewingPhotoMatch.matricula || 'Sem matrícula'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Cargo:</span>
+                    <span className="font-semibold text-title">{viewingPhotoMatch.cargo || 'Sem cargo'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Lotação:</span>
+                    <span className="font-semibold text-title">{viewingPhotoMatch.lotacao || 'Sem lotação'}</span>
+                  </div>
                 </>
               ) : (
                 <>
