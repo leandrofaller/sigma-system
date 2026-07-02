@@ -6,11 +6,21 @@ export interface UserWithGroup extends User {
   group?: Group | null;
 }
 
+export interface RelintCienciaWithUser {
+  id: string;
+  relintId: string;
+  userId: string;
+  user: Pick<User, 'id' | 'name' | 'role'> & { avatar?: string | null };
+  ip?: string | null;
+  createdAt: Date;
+}
+
 export interface RelintWithRelations extends Relint {
   author: User;
   group: Group;
   template?: RelintTemplate | null;
   attachments?: any[];
+  ciencias?: RelintCienciaWithUser[];
 }
 
 export interface DebriefingWithRelations extends Debriefing {

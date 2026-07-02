@@ -141,6 +141,7 @@ model User {
   unidadeEnderecoSolicitacoesRevisadas UnidadeEnderecoSolicitacao[] @relation("UnidadeSolicitacaoRevisada")
   unidadeEnderecoCustomCriadas         UnidadeEnderecoCustom[] @relation("UnidadeCustomCriada")
   unidadeEnderecoCustomRevisadas       UnidadeEnderecoCustom[] @relation("UnidadeCustomRevisada")
+  relintCiencias                       RelintCiencia[]
 
   @@map("users")
 }
@@ -189,11 +190,26 @@ model Relint {
   updatedAt      DateTime       @updatedAt
 
   attachments Attachment[]
+  ciencias    RelintCiencia[]
 
   @@index([groupId])
   @@index([authorId])
   @@index([status])
   @@map("relints")
+}
+
+model RelintCiencia {
+  id        String   @id @default(cuid())
+  relintId  String
+  relint    Relint   @relation(fields: [relintId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@unique([relintId, userId])
+  @@index([relintId])
+  @@map("relint_ciencias")
 }
 
 model RelintTemplate {

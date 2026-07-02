@@ -3,13 +3,21 @@ import { redirect, notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import Link from 'next/link';
 import { RelintPreview } from '@/components/relint/RelintPreview';
+import { RelintCienciaPanel } from '@/components/relint/RelintCienciaPanel';
 import { ArrowLeft, Pencil } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
 async function getRelint(id: string, userId: string, role: string, groupId?: string) {
   const relint = await prisma.relint.findUnique({
     where: { id },
-    include: { author: true, group: true },
+    include: {
+      author: true,
+      group: true,
+      ciencias: {
+        include: { user: { select: { id: true, name: true, role: true, avatar: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
   });
   if (!relint) return null;
 
@@ -75,6 +83,15 @@ export default async function RelintViewPage({ params }: { params: Promise<{ id:
       </div>
 
       <RelintPreview form={form} />
+
+      {relint.status === 'PUBLISHED' && (
+        <RelintCienciaPanel
+          relintId={relint.id}
+          ciencias={(relint as any).ciencias ?? []}
+          currentUserId={user.id}
+          currentUserRole={user.role}
+        />
+      )}
     </div>
   );
 }

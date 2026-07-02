@@ -7,7 +7,11 @@ async function getRelints(role: string, groupId?: string) {
   return prisma.relint.findMany({
     where: isAdmin ? {} : { groupId: groupId ?? '' },
     orderBy: { createdAt: 'desc' },
-    include: { author: true, group: true },
+    include: {
+      author: true,
+      group: true,
+      ciencias: { include: { user: { select: { id: true, name: true, role: true, avatar: true } } }, orderBy: { createdAt: 'asc' } },
+    },
   });
 }
 

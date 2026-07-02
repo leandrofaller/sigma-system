@@ -4,10 +4,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { FileText, Plus, Search, Eye, Pencil, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { FileText, Plus, Search, Eye, Pencil, Trash2, Loader2, AlertTriangle, CheckCheck } from 'lucide-react';
 import { formatDate, getClassificationColor } from '@/lib/utils';
 import { containsNormalized } from '@/lib/search';
-import type { RelintWithRelations } from '@/types';
+import type { RelintWithRelations, RelintCienciaWithUser } from '@/types';
 
 interface Props {
   relints: RelintWithRelations[];
@@ -33,6 +33,35 @@ export function RelintsList({ relints, role, userId, userGroupId, userGroupName 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [cienciaId, setCienciaId] = useState<string | null>(null);
+  const [cienciaMap, setCienciaMap] = useState<Record<string, RelintCienciaWithUser[]>>(() => {
+    const map: Record<string, RelintCienciaWithUser[]> = {};
+    relints.forEach(r => { if (r.ciencias) map[r.id] = r.ciencias; });
+    return map;
+  });
+
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
+
+  const handleCiencia = async (relintId: string) => {
+    setCienciaId(relintId);
+    try {
+      const res = await fetch(`/api/relints/${relintId}/ciencia`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Erro ao registrar ciência');
+        return;
+      }
+      const data = await res.json();
+      setCienciaMap(prev => ({
+        ...prev,
+        [relintId]: [...(prev[relintId] ?? []), data.ciencia],
+      }));
+    } catch {
+      alert('Erro ao registrar ciência');
+    } finally {
+      setCienciaId(null);
+    }
+  };
 
   const handleDelete = async (id: string, status: string) => {
     const isRequested = status === 'DELETION_REQUESTED';
@@ -133,13 +162,28 @@ export function RelintsList({ relints, role, userId, userGroupId, userGroupName 
                     </span>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex items-center gap-1.5">
-                      {relint.status === 'DELETION_REQUESTED' && (
-                        <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 animate-pulse" />
-                      )}
-                      <span className={`text-xs px-2 py-1 rounded-full border font-medium ${statusColors[relint.status]}`}>
-                        {statusLabels[relint.status]}
-                      </span>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-1.5">
+                        {relint.status === 'DELETION_REQUESTED' && (
+                          <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 animate-pulse" />
+                        )}
+                        <span className={`text-xs px-2 py-1 rounded-full border font-medium ${statusColors[relint.status]}`}>
+                          {statusLabels[relint.status]}
+                        </span>
+                      </div>
+                      {relint.status === 'PUBLISHED' && isAdmin && (() => {
+                        const ciencias = cienciaMap[relint.id] ?? [];
+                        const jaDeuCiencia = ciencias.some(c => c.userId === userId);
+                        return ciencias.length > 0 ? (
+                          <div className="flex items-center gap-1" title={ciencias.map(c => c.user.name).join(', ')}>
+                            <CheckCheck className="w-3 h-3 text-emerald-500" />
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                              {ciencias.length} ciência{ciencias.length > 1 ? 's' : ''}
+                              {jaDeuCiencia ? ' (você ✓)' : ''}
+                            </span>
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                   </td>
                   <td className="px-4 py-4 text-sm text-body">{relint.author?.name}</td>
@@ -150,6 +194,27 @@ export function RelintsList({ relints, role, userId, userGroupId, userGroupName 
                         className="p-1.5 text-gray-400 hover:text-sigma-600 dark:hover:text-sigma-400 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 rounded-lg transition-colors">
                         <Eye className="w-4 h-4" />
                       </Link>
+                      {isAdmin && relint.status === 'PUBLISHED' && (() => {
+                        const ciencias = cienciaMap[relint.id] ?? [];
+                        const jaDeuCiencia = ciencias.some(c => c.userId === userId);
+                        return (
+                          <button
+                            onClick={() => handleCiencia(relint.id)}
+                            disabled={jaDeuCiencia || cienciaId === relint.id}
+                            title={jaDeuCiencia ? 'Ciência já registrada' : 'Dar ciência'}
+                            className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                              jaDeuCiencia
+                                ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 cursor-default'
+                                : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                            }`}
+                          >
+                            {cienciaId === relint.id
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <CheckCheck className="w-4 h-4" />
+                            }
+                          </button>
+                        );
+                      })()}
                       {(() => {
                         const canModify = role === 'SUPER_ADMIN' || 
                                           role === 'ADMIN' || 
