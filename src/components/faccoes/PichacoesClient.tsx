@@ -1318,7 +1318,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
 
       {/* Modal de Confirmação de Exclusão */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 z-60 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 max-w-sm w-full">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2.5 bg-red-100 dark:bg-red-900/30 rounded-full">
