@@ -77,12 +77,32 @@ const MUNICIPIOS_RONDONIA = [
 
 interface Props {
   initialMissions: Mission[];
-  currentUser: { id: string; role: string; groupId?: string };
+  currentUser: { id: string; role: string; name?: string; groupId?: string };
   groups: any[];
 }
 
 export function MissionCalendar({ initialMissions, currentUser, groups }: Props) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  const canUserActionMission = (mission: Mission) => {
+    const user = currentUser;
+    const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+    const isCreator = mission.userId === user.id;
+    
+    const userNormalizedName = user.name ? user.name.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+    const userParts = userNormalizedName.split(' ').filter(Boolean);
+    const isParticipant = mission.participants.some(p => {
+      const pNormalized = p.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const pParts = pNormalized.split(' ').filter(Boolean);
+      if (userNormalizedName.includes(pNormalized) || pNormalized.includes(userNormalizedName)) return true;
+      const ignoreWords = ['DE', 'DA', 'DO', 'DOS', 'DAS', 'E', 'O', 'A'];
+      const userMeaningfulParts = userParts.filter(w => !ignoreWords.includes(w));
+      const pMeaningfulParts = pParts.filter(w => !ignoreWords.includes(w));
+      return pMeaningfulParts.some(pw => userMeaningfulParts.includes(pw));
+    });
+
+    return isAdmin || isCreator || isParticipant;
+  };
   const [missions, setMissions] = useState<Mission[]>(initialMissions);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -759,6 +779,8 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                   <div className="flex gap-3 pt-2">
                     {viewingMission.status === 'PLANNED' && (() => {
                       const reachable = isScheduledDateReached(viewingMission.startDate);
+                      const hasPermission = canUserActionMission(viewingMission);
+                      if (!hasPermission) return null;
                       return (
                         <>
                           <button
@@ -786,7 +808,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                       );
                     })()}
 
-                    {viewingMission.status === 'IN_PROGRESS' && (
+                    {viewingMission.status === 'IN_PROGRESS' && canUserActionMission(viewingMission) && (
                       <button
                         onClick={() => setEndInput({ open: true, km: '', note: '' })}
                         className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold shadow-lg shadow-green-600/20 transition-all active:scale-95"

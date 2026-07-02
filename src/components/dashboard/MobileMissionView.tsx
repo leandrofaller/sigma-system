@@ -56,7 +56,7 @@ const AVAILABLE_PARTICIPANTS = [
 interface Props {
   initialMissions: Mission[];
   groups: { id: string; name: string; color?: string | null }[];
-  currentUser: { id: string; name: string; groupId?: string | null };
+  currentUser: { id: string; name: string; role: string; groupId?: string | null };
 }
 
 const STATUS_LABEL: Record<Mission['status'], string> = {
@@ -67,7 +67,26 @@ const STATUS_LABEL: Record<Mission['status'], string> = {
 };
 
 export function MobileMissionView({ initialMissions, groups, currentUser }: Props) {
-  // Filtra cancelladas — não devem poluir o dashboard mobile
+  const canUserActionMission = (mission: Mission) => {
+    const user = currentUser;
+    const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+    const isCreator = mission.userId === user.id;
+    
+    const userNormalizedName = user.name ? user.name.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+    const userParts = userNormalizedName.split(' ').filter(Boolean);
+    const isParticipant = mission.participants.some(p => {
+      const pNormalized = p.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const pParts = pNormalized.split(' ').filter(Boolean);
+      if (userNormalizedName.includes(pNormalized) || pNormalized.includes(userNormalizedName)) return true;
+      const ignoreWords = ['DE', 'DA', 'DO', 'DOS', 'DAS', 'E', 'O', 'A'];
+      const userMeaningfulParts = userParts.filter(w => !ignoreWords.includes(w));
+      const pMeaningfulParts = pParts.filter(w => !ignoreWords.includes(w));
+      return pMeaningfulParts.some(pw => userMeaningfulParts.includes(pw));
+    });
+
+    return isAdmin || isCreator || isParticipant;
+  };
+
   const [missions, setMissions] = useState<Mission[]>(
     initialMissions.filter(m => m.status !== 'CANCELLED')
   );
@@ -480,37 +499,39 @@ export function MobileMissionView({ initialMissions, groups, currentUser }: Prop
                 <MissionCard
                   mission={m}
                   action={
-                    m.status === 'IN_PROGRESS' ? (
-                      <button
-                        onClick={() => { setEndingMission(m); setEndKmValue(''); }}
-                        className="bg-green-600 active:scale-95 text-white text-xs font-bold px-3 py-2.5 rounded-xl shadow-md flex items-center gap-1"
-                      >
-                        <Flag className="w-3.5 h-3.5" /> Fim
-                      </button>
-                    ) : m.status === 'PLANNED' ? (
-                      <div className="flex flex-col gap-1.5">
+                    canUserActionMission(m) ? (
+                      m.status === 'IN_PROGRESS' ? (
                         <button
-                          onClick={() => requestStart(m)}
-                          disabled={!isScheduledDateReached(m.startDate)}
-                          className="bg-sigma-600 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md disabled:opacity-40 disabled:bg-gray-400"
+                          onClick={() => { setEndingMission(m); setEndKmValue(''); }}
+                          className="bg-green-600 active:scale-95 text-white text-xs font-bold px-3 py-2.5 rounded-xl shadow-md flex items-center gap-1"
                         >
-                          Iniciar
+                          <Flag className="w-3.5 h-3.5" /> Fim
                         </button>
-                        <div className="flex gap-1 justify-end">
+                      ) : m.status === 'PLANNED' ? (
+                        <div className="flex flex-col gap-1.5">
                           <button
-                            onClick={() => openEdit(m)}
-                            className="bg-gray-100 dark:bg-gray-800 text-body p-1.5 rounded-lg active:scale-95"
+                            onClick={() => requestStart(m)}
+                            disabled={!isScheduledDateReached(m.startDate)}
+                            className="bg-sigma-600 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md disabled:opacity-40 disabled:bg-gray-400"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            Iniciar
                           </button>
-                          <button
-                            onClick={() => setConfirmCancelMission(m)}
-                            className="bg-red-50 dark:bg-red-900/20 text-red-500 p-1.5 rounded-lg active:scale-95"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex gap-1 justify-end">
+                            <button
+                              onClick={() => openEdit(m)}
+                              className="bg-gray-100 dark:bg-gray-800 text-body p-1.5 rounded-lg active:scale-95"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setConfirmCancelMission(m)}
+                              className="bg-red-50 dark:bg-red-900/20 text-red-500 p-1.5 rounded-lg active:scale-95"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      ) : undefined
                     ) : undefined
                   }
                 />

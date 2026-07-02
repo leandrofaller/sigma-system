@@ -75,6 +75,7 @@ export default async function MissoesPage() {
           id: user.id,
           name: user.name,
           groupId: user.groupId,
+          role: user.role,
         }}
       />
     );
