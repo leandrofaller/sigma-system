@@ -118,7 +118,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
       const res = await fetch('/api/sipe/faccoes');
       if (res.ok) {
         const data = await res.json();
-        setFaccoes(data.faccoes || []);
+        setFaccoes(Array.isArray(data) ? data : data.faccoes || []);
       }
     } catch (err) {
       console.error(err);
