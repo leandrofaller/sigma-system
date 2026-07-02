@@ -30,7 +30,7 @@ interface PichacaoData {
 
 interface PichacoesMapProps {
   pichacoes: PichacaoData[];
-  onSelect: (pichacao: PichacaoData) => void;
+  onSelect: (pichacao: any) => void;
   center?: [number, number];
   zoom?: number;
 }

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Paintbrush, Plus, Eye, Pencil, Trash2, Search, X, Check, Loader2,
   MapPin, Grid, Map, Image as ImageIcon, Calendar, User, Compass,
-  ChevronLeft, ChevronRight, AlertCircle, RefreshCw, Upload
+  ChevronLeft, ChevronRight, AlertCircle, RefreshCw, Upload,
+  Target, Flame, EyeOff, SlidersHorizontal
 } from 'lucide-react';
 
 const PichacoesMap = dynamic(() => import('./PichacoesMap'), {
@@ -13,6 +14,18 @@ const PichacoesMap = dynamic(() => import('./PichacoesMap'), {
   loading: () => (
     <div className="w-full h-[500px] rounded-2xl border border-gray-200 dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
       <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+    </div>
+  ),
+});
+
+const PichacoesTerritoryMap = dynamic(() => import('./PichacoesTerritoryMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[550px] rounded-2xl border border-gray-200 dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="flex flex-col items-center gap-2">
+        <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+        <span className="text-xs text-gray-500">Calculando zonas de influência e conflitos...</span>
+      </div>
     </div>
   ),
 });
@@ -74,12 +87,61 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
   const [pichacoes, setPichacoes] = useState<Pichacao[]>([]);
   const [faccoes, setFaccoes] = useState<FaccaoOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'GRID' | 'MAP'>('GRID');
+  const [viewMode, setViewMode] = useState<'GRID' | 'MAP' | 'TERRITORY'>('GRID');
+
+  // Territory / Heatmap visualization controls (only used in TERRITORY mode)
+  const [influenceRadius, setInfluenceRadius] = useState(1200); // meters
+  const [conflictThreshold, setConflictThreshold] = useState(1500); // meters
+  const [showPoints, setShowPoints] = useState(true);
+  const [showInfluenceZones, setShowInfluenceZones] = useState(true);
+  const [showConflicts, setShowConflicts] = useState(true);
+  const [hiddenFaccaoIds, setHiddenFaccaoIds] = useState<Set<string>>(() => new Set<string>());
 
   // Filtros
   const [search, setSearch] = useState('');
   const [municipioFilter, setMunicipioFilter] = useState('TODOS');
   const [faccaoFilter, setFaccaoFilter] = useState('TODAS');
+
+  // Memoized filtered list (moved up so territory visibility useMemo can depend on it)
+  const filtered = useMemo(() => {
+    return pichacoes.filter((p) => {
+      const matchSearch =
+        !search ||
+        p.endereco.toLowerCase().includes(search.toLowerCase()) ||
+        (p.descricao && p.descricao.toLowerCase().includes(search.toLowerCase())) ||
+        (p.faccao?.nome && p.faccao.nome.toLowerCase().includes(search.toLowerCase())) ||
+        (p.faccao?.sigla && p.faccao.sigla.toLowerCase().includes(search.toLowerCase()));
+
+      const matchMunicipio = municipioFilter === 'TODOS' || p.municipio === municipioFilter;
+
+      let matchFaccao = true;
+      if (faccaoFilter !== 'TODAS') {
+        if (faccaoFilter === 'SEM_FACCAO') {
+          matchFaccao = p.faccaoId === null;
+        } else {
+          matchFaccao = p.faccaoId === faccaoFilter;
+        }
+      }
+
+      return matchSearch && matchMunicipio && matchFaccao;
+    });
+  }, [pichacoes, search, municipioFilter, faccaoFilter]);
+
+  // Derived list of facções that have geo coords in current filtered results (for toggles)
+  const territoryFaccaoVisibility = useMemo(() => {
+    const present: Record<string, { label: string; cor: string; count: number }> = {};
+    filtered.forEach((p) => {
+      if (p.latitude == null || p.longitude == null) return;
+      const key = p.faccaoId || 'SEM_FACCAO';
+      const label = p.faccao?.sigla || p.faccao?.nome || 'Fato Isolado';
+      const cor = p.faccao?.cor || '#6b7280';
+      if (!present[key]) {
+        present[key] = { label, cor, count: 0 };
+      }
+      present[key].count += 1;
+    });
+    return Object.keys(present).map((key) => ({ key, ...present[key] }));
+  }, [filtered]);
 
   // Modais e Estados do Formulário
   const [modalOpen, setModalOpen] = useState(false);
@@ -275,26 +337,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
     setActiveFotoIdx(0);
   };
 
-  const filtered = pichacoes.filter(p => {
-    const matchSearch = !search || 
-      p.endereco.toLowerCase().includes(search.toLowerCase()) ||
-      (p.descricao && p.descricao.toLowerCase().includes(search.toLowerCase())) ||
-      (p.faccao?.nome && p.faccao.nome.toLowerCase().includes(search.toLowerCase())) ||
-      (p.faccao?.sigla && p.faccao.sigla.toLowerCase().includes(search.toLowerCase()));
-
-    const matchMunicipio = municipioFilter === 'TODOS' || p.municipio === municipioFilter;
-    
-    let matchFaccao = true;
-    if (faccaoFilter !== 'TODAS') {
-      if (faccaoFilter === 'SEM_FACCAO') {
-        matchFaccao = p.faccaoId === null;
-      } else {
-        matchFaccao = p.faccaoId === faccaoFilter;
-      }
-    }
-
-    return matchSearch && matchMunicipio && matchFaccao;
-  });
+  // filtered is now declared earlier as useMemo (for ordering with territory visibility)
 
   return (
     <div className="flex flex-col h-full gap-4">
@@ -331,9 +374,20 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                   ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
-              title="Visualização no Mapa"
+              title="Mapa de Pontos (básico)"
             >
               <Map className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('TERRITORY')}
+              className={`p-2 rounded-lg transition-all ${
+                viewMode === 'TERRITORY'
+                  ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+              title="Análise de Território, Calor e Conflitos (opcional)"
+            >
+              <Target className="w-4 h-4" />
             </button>
           </div>
 
@@ -406,6 +460,140 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
               pichacoes={filtered}
               onSelect={openView}
             />
+          </div>
+        ) : viewMode === 'TERRITORY' ? (
+          <div className="flex flex-col gap-3">
+            {/* Territory-specific controls (completely optional layer) */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-3 text-sm">
+              <div className="flex items-center gap-2 mb-3 text-purple-600 dark:text-purple-400">
+                <Target className="w-4 h-4" />
+                <span className="font-bold text-xs uppercase tracking-widest">Análise de Território e Conflitos</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                {/* Influence radius */}
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <label className="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                      <Flame className="w-3.5 h-3.5" /> Raio de influência (cobertura)
+                    </label>
+                    <span className="tabular-nums font-mono text-purple-600">{(influenceRadius / 1000).toFixed(1)} km</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={200}
+                    max={4000}
+                    step={100}
+                    value={influenceRadius}
+                    onChange={(e) => setInfluenceRadius(parseInt(e.target.value))}
+                    className="w-full accent-purple-600"
+                  />
+                  <div className="text-[10px] text-gray-500">Zonas ao redor de cada marca registrada (análoga a área de sinal)</div>
+                </div>
+
+                {/* Conflict threshold */}
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <label className="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5" /> Distância para conflito
+                    </label>
+                    <span className="tabular-nums font-mono text-red-600">{(conflictThreshold / 1000).toFixed(1)} km</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={300}
+                    max={5000}
+                    step={100}
+                    value={conflictThreshold}
+                    onChange={(e) => setConflictThreshold(parseInt(e.target.value))}
+                    className="w-full accent-red-600"
+                  />
+                  <div className="text-[10px] text-gray-500">Marcas de facções diferentes mais próximas que isso = zona de disputa</div>
+                </div>
+
+                {/* Layer toggles */}
+                <div className="flex flex-wrap gap-2 md:col-span-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPoints(!showPoints)}
+                    className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition ${showPoints ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-300 text-purple-700 dark:text-purple-300' : 'border-gray-300 text-gray-500'}`}
+                  >
+                    {showPoints ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />} Pontos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowInfluenceZones(!showInfluenceZones)}
+                    className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition ${showInfluenceZones ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-300 text-purple-700 dark:text-purple-300' : 'border-gray-300 text-gray-500'}`}
+                  >
+                    {showInfluenceZones ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />} Zonas de influência
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowConflicts(!showConflicts)}
+                    className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition ${showConflicts ? 'bg-red-100 dark:bg-red-900/30 border-red-300 text-red-700 dark:text-red-300' : 'border-gray-300 text-gray-500'}`}
+                  >
+                    {showConflicts ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />} Conflitos / Disputas
+                  </button>
+
+                  <div className="ml-auto text-[10px] text-gray-400 self-center flex items-center gap-1">
+                    <SlidersHorizontal className="w-3 h-3" /> Ajustes ao vivo — não altera os dados
+                  </div>
+                </div>
+              </div>
+
+              {/* Facção visibility chips (from current filtered data) */}
+              {territoryFaccaoVisibility.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                  <div className="text-[10px] uppercase font-bold tracking-widest text-gray-500 mb-1.5">Alternar visibilidade por facção</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {territoryFaccaoVisibility.map(({ key, label, cor, count }: { key: string; label: string; cor: string; count: number }) => {
+                      const isHidden = hiddenFaccaoIds.has(key);
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            setHiddenFaccaoIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(key)) next.delete(key);
+                              else next.add(key);
+                              return next;
+                            });
+                          }}
+                          className={`text-[10px] px-2.5 py-0.5 rounded-full border flex items-center gap-1 transition ${isHidden ? 'line-through opacity-50 border-gray-300' : 'border-gray-300'}`}
+                          style={{ backgroundColor: isHidden ? undefined : cor + '22' }}
+                          title={isHidden ? 'Mostrar esta facção' : 'Ocultar esta facção no mapa'}
+                        >
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cor }} />
+                          {label} <span className="font-mono opacity-60">({count})</span>
+                          {isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        </button>
+                      );
+                    })}
+                    {hiddenFaccaoIds.size > 0 && (
+                      <button
+                        onClick={() => setHiddenFaccaoIds(new Set<string>())}
+                        className="text-[10px] px-2 py-0.5 rounded-full border border-gray-300 hover:bg-gray-100 text-gray-500"
+                      >
+                        Mostrar todas
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="w-full h-[520px] relative z-0">
+              <PichacoesTerritoryMap
+                pichacoes={filtered}
+                onSelect={openView}
+                influenceRadius={influenceRadius}
+                conflictThreshold={conflictThreshold}
+                showPoints={showPoints}
+                showInfluenceZones={showInfluenceZones}
+                showConflicts={showConflicts}
+                hiddenFaccaoIds={hiddenFaccaoIds}
+              />
+            </div>
           </div>
         ) : (
           /* Grid de Cards */
