@@ -46,6 +46,8 @@ interface TerritoryMapProps {
   showInfluenceZones: boolean;
   showConflicts: boolean;
   hiddenFaccaoIds: Set<string>; // faccaoId or 'SEM_FACCAO'
+  /** Increment this to force a refit to current data (used by "Ajustar visão" button) */
+  refitVersion?: number;
 }
 
 function MapController({ center, zoom }: { center: [number, number]; zoom: number }) {
@@ -53,6 +55,40 @@ function MapController({ center, zoom }: { center: [number, number]; zoom: numbe
   useEffect(() => {
     map.setView(center, zoom, { animate: true });
   }, [center, zoom, map]);
+  return null;
+}
+
+/**
+ * Best practice component: automatically frames the map to show all current data points.
+ * This solves the "default distance / zoom too wide" problem.
+ * It only runs when the list of points actually changes.
+ */
+function DataBoundsController({ 
+  points, 
+  refitVersion = 0 
+}: { 
+  points: Array<{ latitude: number; longitude: number }>; 
+  refitVersion?: number;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!points || points.length === 0) return;
+
+    const latLngs = points.map(p => [p.latitude, p.longitude] as [number, number]);
+    const bounds = L.latLngBounds(latLngs);
+
+    if (bounds.isValid()) {
+      // Nice padding + reasonable max zoom so dense city data (e.g. Porto Velho) doesn't zoom in too extremely
+      map.flyToBounds(bounds, {
+        padding: [35, 35],
+        maxZoom: 15,
+        duration: 0.9,
+        easeLinearity: 0.25,
+      });
+    }
+  }, [points.length, JSON.stringify(points.map(p => `${p.latitude.toFixed(4)},${p.longitude.toFixed(4)}`)), refitVersion, map]);
+
   return null;
 }
 
@@ -67,6 +103,7 @@ export default function PichacoesTerritoryMap({
   showInfluenceZones,
   showConflicts,
   hiddenFaccaoIds,
+  refitVersion = 0,
 }: TerritoryMapProps) {
   // Normalize input to shared type
   const normalized = useMemo(() => {
@@ -97,6 +134,12 @@ export default function PichacoesTerritoryMap({
   const totalValid = validPichacoes.length;
   const totalConflicts = conflicts.length;
 
+  // Stable list of points for auto-fitting (best practice for data-driven maps)
+  const fitPoints = useMemo(
+    () => validPichacoes.map(p => ({ latitude: p.latitude, longitude: p.longitude })),
+    [validPichacoes]
+  );
+
   if (totalValid === 0) {
     return (
       <div className="w-full h-full rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -126,6 +169,8 @@ export default function PichacoesTerritoryMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapController center={center} zoom={zoom} />
+        {/* Auto fit to current events - this is the main improvement for "default distance" problem */}
+        <DataBoundsController points={fitPoints} refitVersion={refitVersion} />
 
         {/* Influence Zones (large translucent circles = "cobertura" like cell signal) */}
         {showInfluenceZones && (

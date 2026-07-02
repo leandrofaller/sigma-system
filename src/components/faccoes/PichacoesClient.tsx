@@ -98,8 +98,9 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
   const [viewMode, setViewMode] = useState<'GRID' | 'MAP' | 'TERRITORY'>('GRID');
 
   // Territory / Heatmap visualization controls (only used in TERRITORY mode)
-  const [influenceRadius, setInfluenceRadius] = useState(1200); // meters
-  const [conflictThreshold, setConflictThreshold] = useState(1500); // meters
+  const [influenceRadius, setInfluenceRadius] = useState(450); // meters - smaller default for better urban readability
+  const [conflictThreshold, setConflictThreshold] = useState(1200); // meters
+  const [refitVersion, setRefitVersion] = useState(0); // used to manually trigger fit to data from sidebar
   const [showPoints, setShowPoints] = useState(true);
   const [showInfluenceZones, setShowInfluenceZones] = useState(true);
   const [showConflicts, setShowConflicts] = useState(true);
@@ -688,6 +689,15 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                   <div className="ml-auto text-[10px] text-gray-400 self-center flex items-center gap-1">
                     <SlidersHorizontal className="w-3 h-3" /> Ajustes ao vivo — não altera os dados
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setRefitVersion(v => v + 1)}
+                    className="text-[10px] px-2.5 py-1 rounded-lg border border-purple-300 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-1"
+                    title="Centralizar e ajustar zoom automaticamente nos pontos atuais"
+                  >
+                    Ajustar visão aos eventos
+                  </button>
                 </div>
               </div>
 
@@ -745,6 +755,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                   showInfluenceZones={showInfluenceZones}
                   showConflicts={showConflicts}
                   hiddenFaccaoIds={hiddenFaccaoIds}
+                  refitVersion={refitVersion}
                 />
               </div>
 

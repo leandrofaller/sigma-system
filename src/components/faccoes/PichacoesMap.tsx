@@ -43,11 +43,38 @@ function MapController({ center, zoom }: { center: [number, number]; zoom: numbe
   return null;
 }
 
+/**
+ * Best practice: automatically zooms/pans to frame all current data points nicely.
+ * Solves the problem of events appearing "too far away" by default.
+ */
+function DataBoundsController({ points }: { points: Array<{ latitude: number; longitude: number }> }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!points || points.length === 0) return;
+
+    const latLngs = points.map((p) => [p.latitude, p.longitude] as [number, number]);
+    const bounds = L.latLngBounds(latLngs);
+
+    if (bounds.isValid()) {
+      map.flyToBounds(bounds, {
+        padding: [30, 30],
+        maxZoom: 16, // allow closer view for individual pichações
+        duration: 0.8,
+      });
+    }
+  }, [points.length, JSON.stringify(points.map((p) => `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`)), map]);
+
+  return null;
+}
+
 export default function PichacoesMap({ pichacoes, onSelect, center = [-10.9, -62.8], zoom = 7 }: PichacoesMapProps) {
   // Filtra as pichações que possuem coordenadas válidas
   const validPichacoes = pichacoes.filter(
     (p) => p.latitude !== null && p.longitude !== null
   ) as (PichacaoData & { latitude: number; longitude: number })[];
+
+  const fitPoints = validPichacoes.map(p => ({ latitude: p.latitude, longitude: p.longitude }));
 
   return (
     <div className="w-full h-full rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-inner relative z-0">
@@ -63,6 +90,8 @@ export default function PichacoesMap({ pichacoes, onSelect, center = [-10.9, -62
         />
         
         <MapController center={center} zoom={zoom} />
+        {/* Auto-fit to current data - greatly improves default visualization experience */}
+        <DataBoundsController points={fitPoints} />
 
         {validPichacoes.map((p) => {
           const faccaoColor = p.faccao?.cor || '#6b7280'; // cinza se não houver facção
