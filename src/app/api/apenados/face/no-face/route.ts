@@ -12,9 +12,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '12', 10)));
   const offset = (page - 1) * limit;
 
-  const whereCondition = type === 'classic'
-    ? { faceDescriptor: 'NONE' }
-    : { faceDescriptorAdvanced: 'NONE' };
+  const whereCondition = { faceDescriptor: 'NONE' };
 
   try {
     const [total, records] = await Promise.all([

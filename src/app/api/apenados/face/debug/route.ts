@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     }
 
     const uploadsDir = getApenadosDir();
-    const scriptPath = join(process.cwd(), 'scripts', 'advanced_face_index.py');
+    const scriptPath = join(process.cwd(), 'scripts', 'arcface_index.py');
     const input = JSON.stringify({ ids: [apenadoId], uploads_dir: uploadsDir });
 
     const envPython = process.env.ARCFACE_PYTHON;

@@ -107,12 +107,9 @@ export async function GET(req: NextRequest) {
 
   // 3. Execução de Teste do Python avançado com um Apenado real do Banco
   try {
-    // Busca um apenado que possua faceDescriptor básico válido (a foto existia)
-    // mas que no avançado deu NONE (ou seja, falhou no processamento avançado)
     const testApenado = await prisma.apenado.findFirst({
       where: {
-        faceDescriptor: { not: null, notIn: ['NONE'] },
-        faceDescriptorAdvanced: 'NONE',
+        faceDescriptor: 'NONE',
         photoPath: { not: null },
       },
       select: { id: true, name: true, photoPath: true },
@@ -125,8 +122,8 @@ export async function GET(req: NextRequest) {
       report.testExecution.photoExists = photoExists;
 
       if (photoExists) {
-        // Tenta rodar o script python avançado apenas para este apenado
-        const scriptPath = join(process.cwd(), 'scripts', 'advanced_face_index.py');
+        // Testa o script de indexação ArcFace com este apenado
+        const scriptPath = join(process.cwd(), 'scripts', 'arcface_index.py');
         const inputData = JSON.stringify({
           ids: [testApenado.id],
           uploads_dir: getApenadosDir(),
