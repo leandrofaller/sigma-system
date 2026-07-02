@@ -24,6 +24,7 @@ import {
   X
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSession } from 'next-auth/react';
 
 interface Servidor {
   id: string;
@@ -58,6 +59,8 @@ interface SyncJob {
 }
 
 export function ServidoresClient() {
+  const { data: session } = useSession();
+  const isOperator = session?.user?.role === 'OPERATOR';
   const [servidores, setServidores] = useState<Servidor[]>([]);
   const [zoomedPhoto, setZoomedPhoto] = useState<{ url: string; nome: string } | null>(null);
   const [total, setTotal] = useState(0);
@@ -269,34 +272,36 @@ export function ServidoresClient() {
             <h1 className="text-2xl font-bold tracking-tight">Servidores SEJUS</h1>
           </div>
           <p className="text-gray-400 text-sm">
-            Consulta de vínculos de servidores do SGP e biometria facial. Visível apenas para o Superadmin.
+            Consulta de vínculos de servidores do SGP e biometria facial.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowSyncModal(true)}
-            className="px-4 py-2 text-sm font-semibold rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700/60 transition-all flex items-center gap-2"
-          >
-            Monitorar Sincronismo
-          </button>
-          <button
-            onClick={handleStartSync}
-            disabled={disparandoSync || activeJob?.status === 'RUNNING'}
-            className="px-4 py-2 text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 disabled:bg-sky-600/50 rounded-xl transition-all active:scale-95 shadow-md shadow-sky-600/20 flex items-center gap-2"
-          >
-            {activeJob?.status === 'RUNNING' ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Sincronizando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4" />
-                Sincronizar Servidores
-              </>
-            )}
-          </button>
-        </div>
+        {!isOperator && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowSyncModal(true)}
+              className="px-4 py-2 text-sm font-semibold rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700/60 transition-all flex items-center gap-2"
+            >
+              Monitorar Sincronismo
+            </button>
+            <button
+              onClick={handleStartSync}
+              disabled={disparandoSync || activeJob?.status === 'RUNNING'}
+              className="px-4 py-2 text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 disabled:bg-sky-600/50 rounded-xl transition-all active:scale-95 shadow-md shadow-sky-600/20 flex items-center gap-2"
+            >
+              {activeJob?.status === 'RUNNING' ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Sincronizando...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  Sincronizar Servidores
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Conteúdo Principal: Tabela e Detalhes */}

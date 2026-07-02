@@ -7,8 +7,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!session?.user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
-  if ((session.user as any).role !== 'SUPER_ADMIN') {
-    return NextResponse.json({ error: 'Acesso restrito ao Superadmin' }, { status: 403 });
+  const userRole = (session.user as any).role;
+  if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN' && userRole !== 'OPERATOR') {
+    return NextResponse.json({ error: 'Acesso restrito a administradores e operadores' }, { status: 403 });
   }
 
   const { id } = await params;
