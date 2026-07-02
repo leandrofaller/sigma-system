@@ -110,6 +110,8 @@ export async function POST(req: NextRequest) {
     warmVisitanteFaceCache();
   } else if (targetType === 'servidores') {
     warmServidorFaceCache();
+  } else if (targetType === 'all') {
+    warmFaceCache(); warmVisitanteFaceCache(); warmServidorFaceCache();
   } else {
     warmFaceCache();
   }
@@ -131,16 +133,16 @@ export async function POST(req: NextRequest) {
     ]);
 
     if (!analysis.faces || analysis.faces.length === 0) {
-      const cacheStatus = targetType === 'visitantes' 
-        ? getVisitanteCacheStatus() 
-        : targetType === 'servidores' 
-        ? getServidorCacheStatus() 
+      const cacheStatus = targetType === 'visitantes'
+        ? getVisitanteCacheStatus()
+        : targetType === 'servidores'
+        ? getServidorCacheStatus()
         : getCacheStatus();
       return NextResponse.json({
         faces: [],
         imageWidth: analysis.imageWidth,
         imageHeight: analysis.imageHeight,
-        indexed: cacheStatus.count ?? 0,
+        indexed: targetType === 'all' ? null : (cacheStatus.count ?? 0),
         backend: pvecAvail ? 'pgvector' : 'memory',
       });
     }
@@ -428,6 +430,174 @@ export async function POST(req: NextRequest) {
         imageHeight: analysis.imageHeight,
         indexed: count,
         backend: 'memory',
+      });
+    }
+
+    // ── Caminho Unificado: busca nas 3 bases simultaneamente ──
+    if (targetType === 'all') {
+      let facesResult: any[];
+
+      if (pvecAvail) {
+        facesResult = await Promise.all(
+          analysis.faces.map(async (face) => {
+            const [hitsApenados, hitsVisitantes, hitsServidores] = await Promise.all([
+              searchByVector(face.embedding, minSim01, topN),
+              searchByVectorForVisitantes(face.embedding, minSim01, topN),
+              searchByVectorForServidores(face.embedding, minSim01, topN),
+            ]);
+
+            const apenadoIds = hitsApenados.map((h) => h.id);
+            const visitanteIds = hitsVisitantes.map((h) => h.id);
+            const servidorIds = hitsServidores.map((h) => h.id);
+
+            const [apenadosMeta, visitantesMeta, servidoresMeta] = await Promise.all([
+              apenadoIds.length
+                ? prisma.apenado.findMany({
+                    where: { id: { in: apenadoIds } },
+                    select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true },
+                  })
+                : [],
+              visitanteIds.length
+                ? prisma.sipeVisitante.findMany({
+                    where: { id: { in: visitanteIds } },
+                    select: {
+                      id: true,
+                      nome: true,
+                      cpf: true,
+                      parentesco: true,
+                      photoPath: true,
+                      vinculos: { select: { apenado: { select: { id: true, nome: true } } } },
+                    },
+                  })
+                : [],
+              servidorIds.length
+                ? prisma.sejusServidor.findMany({
+                    where: { id: { in: servidorIds } },
+                    select: { id: true, nome: true, cpf: true, matricula: true, cargo: true, lotacao: true, photoPath: true },
+                  })
+                : [],
+            ]);
+
+            const apenadoMap = new Map(apenadosMeta.map((r) => [r.id, r]));
+            const visitanteMap = new Map(visitantesMeta.map((r) => [r.id, r]));
+            const servidorMap = new Map(servidoresMeta.map((r) => [r.id, r]));
+
+            const matches = [
+              ...hitsApenados.flatMap(({ id, similarity }) => {
+                const m = apenadoMap.get(id);
+                if (!m) return [];
+                return [{ ...m, targetType: 'apenados', similarity: toPercent(similarity) }];
+              }),
+              ...hitsVisitantes.flatMap(({ id, similarity }) => {
+                const m = visitanteMap.get(id);
+                if (!m) return [];
+                return [{ id: m.id, name: m.nome, cpf: m.cpf, parentesco: m.parentesco, photoPath: m.photoPath, vinculos: m.vinculos, targetType: 'visitantes', similarity: toPercent(similarity) }];
+              }),
+              ...hitsServidores.flatMap(({ id, similarity }) => {
+                const m = servidorMap.get(id);
+                if (!m) return [];
+                return [{ id: m.id, name: m.nome, cpf: m.cpf, matricula: m.matricula, cargo: m.cargo, lotacao: m.lotacao, photoPath: m.photoPath, targetType: 'servidores', similarity: toPercent(similarity) }];
+              }),
+            ].sort((a, b) => b.similarity - a.similarity).slice(0, topN);
+
+            return { index: face.index, det_score: face.det_score, bbox: face.bbox, kps: face.kps, liveness_score: face.liveness_score ?? null, matches };
+          }),
+        );
+      } else {
+        // Fallback memória: aguarda os 3 caches em paralelo
+        const [cacheApenados, cacheVisitantes, cacheServidores] = await Promise.all([
+          awaitFaceCache(25_000),
+          awaitVisitanteFaceCache(25_000),
+          awaitServidorFaceCache(25_000),
+        ]);
+
+        function scanCache(
+          cache: { ids: string[]; vecs: Float32Array; count: number },
+          embedding: number[],
+        ): Array<{ id: string; similarity: number }> {
+          const queryVec = new Float32Array(embedding);
+          const hits: Array<{ idx: number; similarity: number }> = [];
+          for (let i = 0; i < cache.count; i++) {
+            const offset = i * 512;
+            let dot = 0;
+            for (let j = 0; j < 512; j++) dot += queryVec[j] * cache.vecs[offset + j];
+            if (dot >= minSim01) hits.push({ idx: i, similarity: dot });
+          }
+          hits.sort((a, b) => b.similarity - a.similarity);
+          return hits.slice(0, topN).map(({ idx, similarity }) => ({ id: cache.ids[idx], similarity }));
+        }
+
+        facesResult = await Promise.all(
+          analysis.faces.map(async (face) => {
+            const hitsApenados = scanCache(cacheApenados, face.embedding);
+            const hitsVisitantes = scanCache(cacheVisitantes, face.embedding);
+            const hitsServidores = scanCache(cacheServidores, face.embedding);
+
+            const apenadoIds = hitsApenados.map((h) => h.id);
+            const visitanteIds = hitsVisitantes.map((h) => h.id);
+            const servidorIds = hitsServidores.map((h) => h.id);
+
+            const [apenadosMeta, visitantesMeta, servidoresMeta] = await Promise.all([
+              apenadoIds.length
+                ? prisma.apenado.findMany({
+                    where: { id: { in: apenadoIds } },
+                    select: { id: true, name: true, matricula: true, unidade: true, faccao: true, photoPath: true },
+                  })
+                : [],
+              visitanteIds.length
+                ? prisma.sipeVisitante.findMany({
+                    where: { id: { in: visitanteIds } },
+                    select: {
+                      id: true,
+                      nome: true,
+                      cpf: true,
+                      parentesco: true,
+                      photoPath: true,
+                      vinculos: { select: { apenado: { select: { id: true, nome: true } } } },
+                    },
+                  })
+                : [],
+              servidorIds.length
+                ? prisma.sejusServidor.findMany({
+                    where: { id: { in: servidorIds } },
+                    select: { id: true, nome: true, cpf: true, matricula: true, cargo: true, lotacao: true, photoPath: true },
+                  })
+                : [],
+            ]);
+
+            const apenadoMap = new Map(apenadosMeta.map((r) => [r.id, r]));
+            const visitanteMap = new Map(visitantesMeta.map((r) => [r.id, r]));
+            const servidorMap = new Map(servidoresMeta.map((r) => [r.id, r]));
+
+            const matches = [
+              ...hitsApenados.flatMap(({ id, similarity }) => {
+                const m = apenadoMap.get(id);
+                if (!m) return [];
+                return [{ ...m, targetType: 'apenados', similarity: toPercent(similarity) }];
+              }),
+              ...hitsVisitantes.flatMap(({ id, similarity }) => {
+                const m = visitanteMap.get(id);
+                if (!m) return [];
+                return [{ id: m.id, name: m.nome, cpf: m.cpf, parentesco: m.parentesco, photoPath: m.photoPath, vinculos: m.vinculos, targetType: 'visitantes', similarity: toPercent(similarity) }];
+              }),
+              ...hitsServidores.flatMap(({ id, similarity }) => {
+                const m = servidorMap.get(id);
+                if (!m) return [];
+                return [{ id: m.id, name: m.nome, cpf: m.cpf, matricula: m.matricula, cargo: m.cargo, lotacao: m.lotacao, photoPath: m.photoPath, targetType: 'servidores', similarity: toPercent(similarity) }];
+              }),
+            ].sort((a, b) => b.similarity - a.similarity).slice(0, topN);
+
+            return { index: face.index, det_score: face.det_score, bbox: face.bbox, kps: face.kps, liveness_score: face.liveness_score ?? null, matches };
+          }),
+        );
+      }
+
+      return NextResponse.json({
+        faces: facesResult,
+        imageWidth: analysis.imageWidth,
+        imageHeight: analysis.imageHeight,
+        indexed: null,
+        backend: pvecAvail ? 'pgvector' : 'memory',
       });
     }
 

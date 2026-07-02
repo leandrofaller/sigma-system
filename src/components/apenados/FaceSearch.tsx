@@ -40,7 +40,7 @@ interface SearchResult {
   faces: DetectedFace[];
   imageWidth: number;
   imageHeight: number;
-  indexed: number;
+  indexed: number | null;
 }
 
 interface IndexStatus {
@@ -272,7 +272,7 @@ interface Props { onClose: () => void; userRole: string; onEditApenado?: (id: st
 
 export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [tab, setTab] = useState<Tab>('search');
-  const [targetType, setTargetType] = useState<'apenados' | 'visitantes' | 'servidores'>('apenados');
+  const [targetType, setTargetType] = useState<'apenados' | 'visitantes' | 'servidores' | 'all'>('apenados');
 
   // Visualizar foto ampliada
   const [viewingPhotoMatch, setViewingPhotoMatch] = useState<FaceMatch | null>(null);
@@ -614,6 +614,18 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                   <Users className="w-3.5 h-3.5" />
                   Servidores
                 </button>
+                <button
+                  type="button"
+                  onClick={() => { setTargetType('all'); reset(); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                    targetType === 'all'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Todos
+                </button>
               </div>
 
               {searchState === 'ready' && (
@@ -769,7 +781,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                     </span>
                     <span className="text-subtle">·</span>
                     <span className="text-subtle">
-                      <span className="font-bold text-title">{result.indexed.toLocaleString('pt-BR')}</span> registros comparados
+                      <span className="font-bold text-title">{result.indexed != null ? result.indexed.toLocaleString('pt-BR') : '3 bases'}</span> registros comparados
                     </span>
                     {selectedFace?.liveness_score != null && (
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
