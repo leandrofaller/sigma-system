@@ -50,18 +50,29 @@ echo "Garantindo suporte pgvector avancado (idempotente)..."
 gosu nextjs node -e "
 const { PrismaClient } = require('@prisma/client');
 const p = new PrismaClient();
-Promise.all([
-  p.\$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS vector'),
-  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"faceVector\" vector(512)'),
-  p.\$executeRawUnsafe('ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"faceVectorAdvanced\" vector(512)'),
-  p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS apenados_face_hnsw_idx ON apenados USING hnsw (\"faceVector\" vector_cosine_ops) WITH (m = 32, ef_construction = 128)'),
-  p.\$executeRawUnsafe('CREATE INDEX IF NOT EXISTS apenados_face_advanced_hnsw_idx ON apenados USING hnsw (\"faceVectorAdvanced\" vector_cosine_ops) WITH (m = 32, ef_construction = 128)'),
-  p.\$executeRawUnsafe('ALTER TABLE mapa_faccoes_vinculos ADD COLUMN IF NOT EXISTS origem TEXT NOT NULL DEFAULT \'MANUAL\''),
-  p.\$executeRawUnsafe('ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"criadoPorId\" TEXT'),
-  p.\$executeRawUnsafe('ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"editavel\" BOOLEAN DEFAULT false'),
-  p.\$executeRawUnsafe('ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"statusEdicao\" VARCHAR(50) DEFAULT \'NORMAL\''),
-  p.\$executeRawUnsafe('ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"motivoEdicao\" TEXT'),
-]).then(() => { console.log('pgvector avancado OK'); }).catch(e => { console.error('AVISO pgvector:', e.message); }).finally(() => p.\$disconnect());
+// Executar sequencialmente para que falha em um passo nao bloqueie os outros
+async function run() {
+  const steps = [
+    ['extension vector',    'CREATE EXTENSION IF NOT EXISTS vector'],
+    ['faceVector col',      'ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"faceVector\" vector(512)'],
+    ['faceVectorAdv col',   'ALTER TABLE apenados ADD COLUMN IF NOT EXISTS \"faceVectorAdvanced\" vector(512)'],
+    ['visitante faceVector','ALTER TABLE sipe_visitantes ADD COLUMN IF NOT EXISTS \"faceVector\" vector(512)'],
+    ['mapa_faccoes origem', 'ALTER TABLE mapa_faccoes_vinculos ADD COLUMN IF NOT EXISTS origem TEXT NOT NULL DEFAULT \'MANUAL\''],
+    ['aparelhos criadoPorId','ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"criadoPorId\" TEXT'],
+    ['aparelhos editavel',  'ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"editavel\" BOOLEAN DEFAULT false'],
+    ['aparelhos statusEdicao','ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"statusEdicao\" VARCHAR(50) DEFAULT \'NORMAL\''],
+    ['aparelhos motivoEdicao','ALTER TABLE aparelhos_apreendidos ADD COLUMN IF NOT EXISTS \"motivoEdicao\" TEXT'],
+    // Indices HNSW com parametros conservadores (m=8 usa ~4x menos memoria que m=32)
+    ['hnsw faceVector',     'CREATE INDEX IF NOT EXISTS apenados_face_hnsw_idx ON apenados USING hnsw (\"faceVector\" vector_cosine_ops) WITH (m = 8, ef_construction = 32)'],
+    ['hnsw faceVectorAdv',  'CREATE INDEX IF NOT EXISTS apenados_face_adv_hnsw_idx ON apenados USING hnsw (\"faceVectorAdvanced\" vector_cosine_ops) WITH (m = 8, ef_construction = 32)'],
+  ];
+  for (const [name, sql] of steps) {
+    try { await p.\$executeRawUnsafe(sql); }
+    catch (e) { console.error('AVISO pgvector [' + name + ']:', e.message.split('\n')[0]); }
+  }
+  console.log('pgvector avancado OK');
+}
+run().finally(() => p.\$disconnect());
 " || echo "AVISO: pgvector insert falhou (nao critico)"
 
 echo "Garantindo item de sidebar Ordens de Missão (idempotente)..."
