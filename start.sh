@@ -11,9 +11,9 @@ echo "[2/5] Preparando cache do Next.js..."
 mkdir -p /app/.next/cache
 chown -R 1001:1001 /app/.next
 
-echo "[3/5] Executando prisma db push (timeout 90s)..."
-timeout 90 gosu nextjs node_modules/.bin/prisma db push --skip-generate || \
-timeout 90 gosu nextjs npx prisma db push --skip-generate || \
+echo "[3/5] Executando prisma db push (timeout 600s)..."
+timeout 600 gosu nextjs node_modules/.bin/prisma db push --skip-generate || \
+timeout 600 gosu nextjs npx prisma db push --skip-generate || \
 echo "AVISO: prisma db push falhou ou expirou (continuando...)"
 echo "[3/5] prisma db push concluido."
 
