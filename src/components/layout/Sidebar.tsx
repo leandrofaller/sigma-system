@@ -127,7 +127,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
       }
     }
     fetchSidebar();
-  }, [user?.role]);
+  }, [user?.role, pathname]);
 
   // Fecha o drawer mobile quando o usuário navega
   useEffect(() => { setMobileOpen(false); }, [pathname]);
