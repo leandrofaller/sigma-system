@@ -17,6 +17,12 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status')
 
+    // Expira automaticamente ordens ATIVA com prazo vencido
+    await prisma.ordemMissao.updateMany({
+      where: { status: 'ATIVA', prazo: { lt: new Date() } },
+      data: { status: 'VENCIDA' },
+    })
+
     const ordens = await prisma.ordemMissao.findMany({
       where: status && status !== 'TODAS' ? { status: status as any } : undefined,
       include: {
