@@ -49,6 +49,11 @@ interface IndexStatus {
   withPhoto: number;
   noFace: number;
   remaining: number;
+  cacheStatus?: {
+    loaded: boolean;
+    loading: boolean;
+    count: number;
+  };
 }
 
 type Tab = 'search' | 'index' | 'no-face';
@@ -387,6 +392,33 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   useEffect(() => { if (!isVisitanteIndexing) fetchVisitanteStatus(); }, [isVisitanteIndexing]);
   useEffect(() => { if (!isServidorIndexing) fetchServidorStatus(); }, [isServidorIndexing]);
 
+  // Pooling para acompanhar o carregamento inicial do cache de embeddings na memória
+  useEffect(() => {
+    const isApenadosLoading = indexStatus?.cacheStatus?.loading ?? false;
+    const isVisitantesLoading = visitanteIndexStatus?.cacheStatus?.loading ?? false;
+    const isServidoresLoading = servidorIndexStatus?.cacheStatus?.loading ?? false;
+
+    const needsPooling = (targetType === 'apenados' && isApenadosLoading) ||
+                         (targetType === 'visitantes' && isVisitantesLoading) ||
+                         (targetType === 'servidores' && isServidoresLoading) ||
+                         (targetType === 'all' && (isApenadosLoading || isVisitantesLoading || isServidoresLoading));
+
+    if (!needsPooling) return;
+
+    const interval = setInterval(() => {
+      if (targetType === 'apenados' || targetType === 'all') fetchStatus();
+      if (targetType === 'visitantes' || targetType === 'all') fetchVisitanteStatus();
+      if (targetType === 'servidores' || targetType === 'all') fetchServidorStatus();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [
+    targetType,
+    indexStatus?.cacheStatus?.loading,
+    visitanteIndexStatus?.cacheStatus?.loading,
+    servidorIndexStatus?.cacheStatus?.loading
+  ]);
+
   // ── Analisar foto no servidor ─────────────────────────────────────────────
   const analyzeImage = useCallback(async (file: File, minSim: number) => {
     setSearchState('analyzing');
@@ -524,6 +556,49 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     }
   };
 
+  // Verifica se a API de status já respondeu para a base correspondente
+  const isStatusLoaded = (() => {
+    if (targetType === 'apenados') return indexStatus !== null;
+    if (targetType === 'visitantes') return visitanteIndexStatus !== null;
+    if (targetType === 'servidores') return servidorIndexStatus !== null;
+    if (targetType === 'all') return indexStatus !== null && visitanteIndexStatus !== null && servidorIndexStatus !== null;
+    return false;
+  })();
+
+  // Verifica se o cache de embeddings está totalmente carregado na RAM do servidor
+  const isCacheReady = (() => {
+    const isApenadosReady = indexStatus?.cacheStatus?.loaded ?? false;
+    const isVisitantesReady = visitanteIndexStatus?.cacheStatus?.loaded ?? false;
+    const isServidoresReady = servidorIndexStatus?.cacheStatus?.loaded ?? false;
+
+    if (targetType === 'apenados') return isApenadosReady;
+    if (targetType === 'visitantes') return isVisitantesReady;
+    if (targetType === 'servidores') return isServidoresReady;
+    if (targetType === 'all') return isApenadosReady && isVisitantesReady && isServidoresReady;
+    return false;
+  })();
+
+  // Calcula o progresso de carregamento de cada cache (count / indexed)
+  const cacheProgress = (() => {
+    const calc = (status: IndexStatus | null) => {
+      if (!status || !status.indexed) return 0;
+      const count = status.cacheStatus?.count ?? 0;
+      return Math.min(100, Math.round((count / status.indexed) * 100));
+    };
+
+    if (targetType === 'apenados') return { pct: calc(indexStatus), label: 'Apenados' };
+    if (targetType === 'visitantes') return { pct: calc(visitanteIndexStatus), label: 'Visitantes' };
+    if (targetType === 'servidores') return { pct: calc(servidorIndexStatus), label: 'Servidores' };
+    
+    const pApenados = calc(indexStatus);
+    const pVisitantes = calc(visitanteIndexStatus);
+    const pServidores = calc(servidorIndexStatus);
+    return {
+      pct: Math.round((pApenados + pVisitantes + pServidores) / 3),
+      label: `Geral (Apenados: ${pApenados}%, Visitantes: ${pVisitantes}%, Servidores: ${pServidores}%)`
+    };
+  })();
+
   const etaSeconds = (() => {
     const { current, total, startTime } = indexProgress;
     if (!startTime || !current) return Infinity;
@@ -646,24 +721,53 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
               </div>
 
               {searchState === 'ready' && (
-                <div
-                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={(e) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all ${
-                    isDragging
-                      ? 'border-sigma-400 bg-sigma-50 dark:bg-sigma-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-sigma-300 hover:bg-sigma-50/50 dark:hover:bg-sigma-900/10'
-                  }`}
-                >
-                  <Upload className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                  <p className="text-title font-semibold">Arraste uma foto ou clique para selecionar</p>
-                  <p className="text-subtle text-sm mt-1">O servidor detecta e compara rostos automaticamente</p>
-                  <p className="text-subtle text-xs mt-0.5">JPG · PNG · WEBP</p>
-                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-                </div>
+                !isStatusLoaded ? (
+                  <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-12 text-center bg-gray-50/30 dark:bg-gray-800/10">
+                    <Loader2 className="w-8 h-8 text-sigma-600 animate-spin mx-auto mb-3" />
+                    <p className="text-title font-semibold">Verificando bases de dados...</p>
+                    <p className="text-subtle text-xs mt-1">Aguardando resposta do servidor de biometria</p>
+                  </div>
+                ) : !isCacheReady ? (
+                  <div className="border-2 border-dashed border-sigma-300 dark:border-sigma-800 rounded-2xl p-12 text-center bg-sigma-50/10 dark:bg-sigma-950/5">
+                    <Database className="w-10 h-10 text-sigma-500 animate-pulse mx-auto mb-3" />
+                    <p className="text-title font-semibold">Preparando base de dados facial...</p>
+                    <p className="text-subtle text-sm mt-1">
+                      Carregando embeddings na memória RAM do servidor para garantir buscas instantâneas.
+                    </p>
+                    
+                    <div className="w-full max-w-xs mx-auto mt-6 bg-gray-200 dark:bg-gray-700 h-2.5 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-sigma-600 h-full transition-all duration-500 ease-out"
+                        style={{ width: `${cacheProgress.pct}%` }}
+                      />
+                    </div>
+                    <p className="text-sigma-600 dark:text-sigma-400 font-bold text-xs mt-2">
+                      {cacheProgress.pct}% carregado
+                    </p>
+                    <p className="text-[10px] text-subtle mt-1 italic">
+                      Base: {cacheProgress.label}
+                    </p>
+                  </div>
+                ) : (
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(e) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all ${
+                      isDragging
+                        ? 'border-sigma-400 bg-sigma-50 dark:bg-sigma-900/20'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-sigma-300 hover:bg-sigma-50/50 dark:hover:bg-sigma-900/10'
+                    }`}
+                  >
+                    <Upload className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                    <p className="text-title font-semibold">Arraste uma foto ou clique para selecionar</p>
+                    <p className="text-subtle text-sm mt-1">O servidor detecta e compara rostos automaticamente</p>
+                    <p className="text-subtle text-xs mt-0.5">JPG · PNG · WEBP</p>
+                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+                  </div>
+                )
               )}
 
               {searchState === 'analyzing' && (
