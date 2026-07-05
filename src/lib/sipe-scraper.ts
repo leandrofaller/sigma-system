@@ -120,6 +120,19 @@ export function normalizeCPF(cpf: string | null | undefined): string | null {
   return cleaned.length === 11 ? cleaned : null
 }
 
+export function isPlaceholderPhoto(url: string | null | undefined): boolean {
+  if (!url) return true
+  const s = url.toLowerCase()
+  const placeholders = [
+    'avatar.png', 'avatar.jpg', 'avatar.gif', 'avatar.jpeg', 'avatar.webp',
+    'no-avatar', 'default-avatar', 'default_avatar', 'sem-foto', 'sem_foto',
+    'semfoto', 'no-photo', 'no-image', 'default-user', 'placeholder',
+    'silhouette', 'silhueta', 'shadow', 'usuario.png', 'usuario.jpg', 'usuario.jpeg',
+    'default_profile', 'default-profile', 'images/no_photo', 'images/sem_foto'
+  ]
+  return placeholders.some(p => s.includes(p))
+}
+
 /**
  * Tenta obter o HTML ou Imagem do SIPE através do Proxy Python FastAPI (curl_cffi).
  * Caso a chamada falhe ou o motor de scraping não seja "python-sdk", retorna null (para ativar o fallback).
@@ -3038,10 +3051,22 @@ async function scrapeApenadoFicha(
       return { mainSrc, allSrcs };
     });
 
-    const photoSrc = imagesInfo.mainSrc;
+    let photoSrc = imagesInfo.mainSrc;
+    if (photoSrc && isPlaceholderPhoto(photoSrc)) {
+      photoSrc = null;
+    }
+
     complementaryPhotoSrcs = imagesInfo.allSrcs.filter(src => {
       const s = src.toLowerCase();
-      return src && s !== photoSrc &&
+      const isPlaceholder = [
+        'avatar.png', 'avatar.jpg', 'avatar.gif', 'avatar.jpeg', 'avatar.webp',
+        'no-avatar', 'default-avatar', 'default_avatar', 'sem-foto', 'sem_foto',
+        'semfoto', 'no-photo', 'no-image', 'default-user', 'placeholder',
+        'silhouette', 'silhueta', 'shadow', 'usuario.png', 'usuario.jpg', 'usuario.jpeg',
+        'default_profile', 'default-profile', 'images/no_photo', 'images/sem_foto'
+      ].some(p => s.includes(p));
+
+      return src && s !== photoSrc && !isPlaceholder &&
         !s.includes('logo') && !s.includes('sejus') && !s.includes('governo') &&
         !s.includes('brasao') && !s.includes('bandeira') && !s.includes('icon') &&
         !s.includes('chosen') && !s.includes('select');
@@ -6250,15 +6275,22 @@ function parseApenadoFichaHtmlCheerio(html: string) {
     mainSrc = containerImg.attr('src') || mainSrc
   }
 
+  if (mainSrc && isPlaceholderPhoto(mainSrc)) {
+    mainSrc = null
+  }
+
   if (!mainSrc && imgs.length > 0) {
     const candidates = imgs.filter(img => {
       const src = img.src.toLowerCase()
-      return !src.includes('logo') && !src.includes('sejus') && !src.includes('governo') && !src.includes('brasao') && !src.includes('bandeira') && !src.includes('icon')
+      const isSystem = src.includes('logo') || src.includes('sejus') || src.includes('governo') || src.includes('brasao') || src.includes('bandeira') || src.includes('icon')
+      return !isSystem && !isPlaceholderPhoto(src)
     })
     if (candidates.length > 0) {
       mainSrc = candidates[0].src
     }
   }
+
+  const filteredAllSrcs = allSrcs.filter(src => !isPlaceholderPhoto(src))
 
   // Tenta extrair valor de elementos estáticos (read-only Bootstrap: <p class="form-control-static">)
   const staticVal = (name: string): string | null => {
@@ -6348,7 +6380,7 @@ function parseApenadoFichaHtmlCheerio(html: string) {
       celaFicha,
       unidadeFicha,
     },
-    imagesInfo: { mainSrc, allSrcs }
+    imagesInfo: { mainSrc, allSrcs: filteredAllSrcs }
   }
 }
 
@@ -7812,10 +7844,13 @@ export async function scrapeApenadoFichaFast(
 
   let photoPath: string | null = null
   let fotoAtualizada = false
-  const photoSrc = imagesInfo.mainSrc
+  let photoSrc = imagesInfo.mainSrc
+  if (photoSrc && isPlaceholderPhoto(photoSrc)) {
+    photoSrc = null
+  }
   const complementaryPhotoSrcs = imagesInfo.allSrcs.filter(src => {
     const s = src.toLowerCase()
-    return src && s !== photoSrc &&
+    return src && s !== photoSrc && !isPlaceholderPhoto(src) &&
       !s.includes('logo') && !s.includes('sejus') && !s.includes('governo') &&
       !s.includes('brasao') && !s.includes('bandeira') && !s.includes('icon') &&
       !s.includes('chosen') && !s.includes('select')
