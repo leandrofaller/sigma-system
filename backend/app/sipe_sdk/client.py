@@ -640,6 +640,25 @@ class SIPEClient:
                 else:
                     raise SIPEHTTPError(f"Erro HTTP do SIPE: {status_code}") from exc
             except RequestException as exc:
+                if not session_renewed:
+                    acquired = self._auth_lock.acquire(blocking=False)
+                    if acquired:
+                        try:
+                            logger.warning(f"Falha de rede/conexao no SIPE ({exc}). Tentando reautenticar para renovar cookies/sessao...")
+                            self.login()
+                            session_renewed = True
+                            continue
+                        except Exception as login_err:
+                            logger.error(f"Falha ao reautenticar apos falha de rede/conexao: {login_err}")
+                        finally:
+                            self._auth_lock.release()
+                    else:
+                        logger.info("Outra thread esta renovando a sessao apos falha de rede. Aguardando conclusao...")
+                        with self._auth_lock:
+                            pass
+                        session_renewed = True
+                        continue
+
                 if attempt == max_network_retries:
                     raise SIPEHTTPError(f"Falha de conexao persistente com o SIPE: {exc}") from exc
                 delay = initial_delay * (backoff_factor ** (attempt - 1))
