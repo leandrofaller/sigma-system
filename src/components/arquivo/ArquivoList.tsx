@@ -55,11 +55,14 @@ export function ArquivoList({ files: initialFiles, groups, folders: initialFolde
   const [search, setSearch] = useState('');
   const [activeFolder, setActiveFolder] = useState<string>('all');
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     title: '', source: '', groupId: userGroupId || '', folderId: '', notes: '', classification: 'RESERVADO',
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderColor, setNewFolderColor] = useState(FOLDER_COLORS[0]);
   const [showNewFolder, setShowNewFolder] = useState(false);
@@ -75,6 +78,7 @@ export function ArquivoList({ files: initialFiles, groups, folders: initialFolde
       if (accepted[0]) {
         const file = accepted[0];
         setSelectedFile(file);
+        setSelectedFiles([]); // Limpa a pasta anterior se arrastou um arquivo único
         setForm((prev) => ({ ...prev, title: file.name.replace(/\.[^/.]+$/, '') }));
       }
     },
@@ -91,6 +95,31 @@ export function ArquivoList({ files: initialFiles, groups, folders: initialFolde
     maxFiles: 1,
   });
 
+  const handleFolderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const filesList = e.target.files;
+    if (!filesList) return;
+    
+    const validExts = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.zip'];
+    const filtered: File[] = [];
+    
+    for (let i = 0; i < filesList.length; i++) {
+      const file = filesList[i];
+      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (validExts.includes(ext)) {
+        filtered.push(file);
+      }
+    }
+    
+    if (filtered.length === 0) {
+      alert('Nenhum arquivo compatível encontrado na pasta.');
+      return;
+    }
+    
+    setSelectedFiles(filtered);
+    setSelectedFile(null); // Limpa o arquivo único do dropzone
+    setForm(prev => ({ ...prev, title: `Pasta: ${filtered.length} arquivos` }));
+  };
+
   // Recarrega arquivos e pastas quando admin muda filtro de grupo
   useEffect(() => {
     if (!isAdmin) return;
@@ -106,21 +135,68 @@ export function ArquivoList({ files: initialFiles, groups, folders: initialFolde
   }, [selectedGroupFilter, isAdmin]);
 
   const handleUpload = async () => {
-    if (!selectedFile || !form.title) return;
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', selectedFile);
-      Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-      const res = await fetch('/api/arquivo', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) { alert(data.error || 'Erro ao importar arquivo.'); return; }
-      setFiles((prev) => [data, ...prev]);
+    if (selectedFiles.length > 0) {
+      setUploading(true);
+      setUploadProgress({ current: 0, total: selectedFiles.length });
+      
+      let successCount = 0;
+      const uploadedRecords: any[] = [];
+
+      for (let i = 0; i < selectedFiles.length; i++) {
+        setUploadProgress({ current: i + 1, total: selectedFiles.length });
+        const file = selectedFiles[i];
+        
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const fileNameNoExt = file.name.replace(/\.[^/.]+$/, "");
+          fd.append('title', fileNameNoExt);
+          fd.append('source', form.source || '');
+          fd.append('groupId', form.groupId);
+          fd.append('folderId', form.folderId);
+          fd.append('notes', form.notes);
+          fd.append('classification', form.classification);
+          
+          const res = await fetch('/api/arquivo', { method: 'POST', body: fd });
+          if (res.ok) {
+            const data = await res.json();
+            uploadedRecords.push(data);
+            successCount++;
+          } else {
+            const errData = await res.json();
+            console.error(`Erro ao subir ${file.name}:`, errData.error);
+          }
+        } catch (e) {
+          console.error(`Erro de rede ao subir ${file.name}`, e);
+        }
+      }
+      
+      if (uploadedRecords.length > 0) {
+        setFiles((prev) => [...uploadedRecords, ...prev]);
+      }
+      
+      alert(`${successCount} de ${selectedFiles.length} arquivos importados com sucesso!`);
+      setUploadProgress(null);
+      setUploading(false);
+      setSelectedFiles([]);
       setShowForm(false);
-      setSelectedFile(null);
       setForm({ title: '', source: '', groupId: userGroupId || '', folderId: '', notes: '', classification: 'RESERVADO' });
-    } catch { alert('Erro ao conectar ao servidor.'); }
-    finally { setUploading(false); }
+    } else if (selectedFile && form.title) {
+      setUploading(true);
+      try {
+        const fd = new FormData();
+        fd.append('file', selectedFile);
+        Object.entries(form).forEach(([k, v]) => fd.append(k, v));
+        const res = await fetch('/api/arquivo', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Erro ao importar arquivo.'); return; }
+        setFiles((prev) => [data, ...prev]);
+        setShowForm(false);
+        setSelectedFile(null);
+        setForm({ title: '', source: '', groupId: userGroupId || '', folderId: '', notes: '', classification: 'RESERVADO' });
+      } catch { alert('Erro ao conectar ao servidor.'); }
+      finally { setUploading(false); }
+    }
   };
 
   const handleCreateFolder = async () => {
@@ -353,7 +429,13 @@ export function ArquivoList({ files: initialFiles, groups, folders: initialFolde
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-subtle mb-1.5">Título *</label>
-                <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className={inputCls} />
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  className={inputCls}
+                  disabled={selectedFiles.length > 0}
+                  placeholder={selectedFiles.length > 0 ? "Os títulos serão gerados a partir do nome de cada arquivo" : ""}
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-subtle mb-1.5">Classificação</label>
@@ -389,6 +471,36 @@ export function ArquivoList({ files: initialFiles, groups, folders: initialFolde
                 <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={inputCls} />
               </div>
             </div>
+
+            {/* Opção para selecionar pasta inteira */}
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                type="button"
+                onClick={() => folderInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 rounded-xl text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-body disabled:opacity-50"
+              >
+                <FolderOpen className="w-4 h-4 text-sigma-500" />
+                Selecionar Pasta
+              </button>
+              <input
+                type="file"
+                ref={folderInputRef}
+                {...{
+                  webkitdirectory: "",
+                  directory: "",
+                  multiple: true
+                } as any}
+                className="hidden"
+                onChange={handleFolderChange}
+              />
+              {selectedFiles.length > 0 && (
+                <span className="text-xs text-sigma-600 dark:text-sigma-400 font-medium animate-pulse">
+                  {selectedFiles.length} arquivos compatíveis selecionados
+                </span>
+              )}
+            </div>
+
             <div
               {...getRootProps()}
               className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors mb-4
@@ -397,24 +509,42 @@ export function ArquivoList({ files: initialFiles, groups, folders: initialFolde
                   : 'border-gray-200 dark:border-gray-700 hover:border-sigma-300 dark:hover:border-sigma-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
             >
               <input {...getInputProps()} />
-              {selectedFile
-                ? <p className="text-sm text-sigma-600 dark:text-sigma-400 font-medium">{selectedFile.name} ({formatFileSize(selectedFile.size)})</p>
-                : <p className="text-sm text-subtle">Arraste o arquivo aqui ou clique para selecionar<br /><span className="text-xs">PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP, TXT</span></p>}
+              {selectedFiles.length > 0 ? (
+                <div className="text-sm text-sigma-600 dark:text-sigma-400 font-medium space-y-1">
+                  <p>Pasta selecionada com {selectedFiles.length} arquivos compatíveis.</p>
+                  <p className="text-xs text-subtle truncate max-w-md mx-auto">
+                    {selectedFiles.slice(0, 3).map(f => f.name).join(', ')}
+                    {selectedFiles.length > 3 ? '...' : ''}
+                  </p>
+                </div>
+              ) : selectedFile ? (
+                <p className="text-sm text-sigma-600 dark:text-sigma-400 font-medium">{selectedFile.name} ({formatFileSize(selectedFile.size)})</p>
+              ) : (
+                <p className="text-sm text-subtle">Arraste o arquivo aqui ou clique para selecionar<br /><span className="text-xs">PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, WEBP, ZIP, TXT</span></p>
+              )}
             </div>
             <div className="flex justify-end gap-2">
               <button
-                onClick={() => setShowForm(false)}
+                onClick={() => { setShowForm(false); setSelectedFiles([]); setSelectedFile(null); }}
                 className="px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl text-body hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleUpload}
-                disabled={uploading || !selectedFile || !form.title}
+                disabled={uploading || (!selectedFile && selectedFiles.length === 0) || (!form.title && selectedFiles.length === 0)}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-sigma-600 hover:bg-sigma-700 text-white rounded-xl transition-colors disabled:opacity-50"
               >
-                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                Enviar
+                {uploading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4" />
+                )}
+                {uploading
+                  ? uploadProgress
+                    ? `Enviando (${uploadProgress.current}/${uploadProgress.total})...`
+                    : 'Enviando...'
+                  : 'Enviar'}
               </button>
             </div>
           </motion.div>
