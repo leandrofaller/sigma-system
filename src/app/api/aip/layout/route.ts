@@ -26,15 +26,33 @@ export async function GET() {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    const config = await prisma.systemConfig.findUnique({
-      where: { key: LAYOUT_KEY }
-    })
+    const [config, watermarkEnabled, watermarkSize, watermarkColor, watermarkOpacity, watermarkRotation, watermarkPosition] = await Promise.all([
+      prisma.systemConfig.findUnique({ where: { key: LAYOUT_KEY } }),
+      prisma.systemConfig.findUnique({ where: { key: 'watermark_enabled' } }),
+      prisma.systemConfig.findUnique({ where: { key: 'watermark_font_size' } }),
+      prisma.systemConfig.findUnique({ where: { key: 'watermark_color' } }),
+      prisma.systemConfig.findUnique({ where: { key: 'watermark_opacity' } }),
+      prisma.systemConfig.findUnique({ where: { key: 'watermark_rotation' } }),
+      prisma.systemConfig.findUnique({ where: { key: 'watermark_position' } }),
+    ])
 
-    if (!config) {
-      return NextResponse.json(DEFAULT_LAYOUT)
+    const layoutVal = config ? (config.value as any) : DEFAULT_LAYOUT
+
+    const watermark = {
+      enabled: watermarkEnabled ? (watermarkEnabled.value as boolean) : true,
+      fontSize: watermarkSize ? (watermarkSize.value as number) : 60,
+      color: watermarkColor ? (watermarkColor.value as string) : '#cbd5e1',
+      opacity: watermarkOpacity ? (watermarkOpacity.value as number) : 0.15,
+      rotation: watermarkRotation ? (watermarkRotation.value as number) : -45,
+      position: watermarkPosition ? (watermarkPosition.value as string) : 'repeat',
     }
 
-    return NextResponse.json(config.value)
+    // Se o layoutVal for um objeto simples, mesclamos a propriedade watermark
+    const responseBody = typeof layoutVal === 'object' && layoutVal !== null
+      ? { ...layoutVal, watermark }
+      : { ...DEFAULT_LAYOUT, watermark }
+
+    return NextResponse.json(responseBody)
   } catch (error) {
     console.error('[AIP Layout] Erro ao buscar layout:', error)
     return NextResponse.json({ error: 'Erro interno ao buscar layout' }, { status: 500 })

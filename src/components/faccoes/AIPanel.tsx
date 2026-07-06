@@ -1254,7 +1254,11 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
             setGerandoDossie(true)
             const toastId = toast.loading('Gerando Ficha de Qualificação (Dossiê)...')
             try {
-              await printAIPDossier(apenado, session?.user?.email || session?.user?.name, userRole, tempLayout)
+              const printLayout = {
+                ...tempLayout,
+                watermark: layout?.watermark
+              }
+              await printAIPDossier(apenado, session?.user?.email || session?.user?.name, userRole, printLayout)
               toast.success('Dossiê enviado para impressão com sucesso!', { id: toastId })
             } catch (err: any) {
               console.error(err)
@@ -1486,6 +1490,34 @@ function AIFichaLayoutModal({ layout, onClose, onSave, submitLabel = 'Salvar Lay
   const [photoStyle, setPhotoStyle] = useState(layout?.photoStyle || 'avatar')
   const [photoFit, setPhotoFit] = useState(layout?.photoFit || 'cover')
 
+  const { data: session } = useSession()
+  const [watermarkEnabled, setWatermarkEnabled] = useState(true)
+  const [watermarkText, setWatermarkText] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('aip_watermark_text')
+      if (saved !== null) return saved
+    }
+    return ''
+  })
+
+  useEffect(() => {
+    if (!watermarkText && session?.user) {
+      const email = session.user.email || ''
+      let defaultText = 'CONFIDENCIAL'
+      if (email) {
+        let hash = 0
+        const str = email.toLowerCase().trim()
+        for (let i = 0; i < str.length; i++) {
+          hash = (hash << 5) - hash + str.charCodeAt(i)
+          hash |= 0
+        }
+        const hex = Math.abs(hash).toString(16).toUpperCase().padStart(8, '0')
+        defaultText = `OP-${hex.slice(0, 8)}`
+      }
+      setWatermarkText(defaultText)
+    }
+  }, [session, watermarkText])
+
   const defaultSections = [
     { id: 'dados_pessoais', title: 'Dados Pessoais (SIPE)', visible: true },
     { id: 'situacao_prisional', title: 'Situação Prisional (SIPE)', visible: true },
@@ -1534,7 +1566,13 @@ function AIFichaLayoutModal({ layout, onClose, onSave, submitLabel = 'Salvar Lay
   const handleSave = async () => {
     const isPrinting = submitLabel && submitLabel !== 'Salvar Layout'
     if (isPrinting) {
-      onSave({ photoStyle, photoFit, sections })
+      onSave({ 
+        photoStyle, 
+        photoFit, 
+        sections,
+        watermarkEnabled,
+        watermarkText
+      })
       return
     }
 
@@ -1726,6 +1764,50 @@ function AIFichaLayoutModal({ layout, onClose, onSave, submitLabel = 'Salvar Lay
               ))}
             </div>
           </div>
+
+          {/* Marca d'Água (Apenas para geração do relatório) */}
+          {submitLabel === 'Gerar Relatório' && layout?.watermark?.enabled !== false && (
+            <div className="space-y-3 p-4 bg-purple-50/15 dark:bg-purple-950/5 rounded-xl border border-purple-100/50 dark:border-purple-900/40">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  Marca d'Água no Documento
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setWatermarkEnabled(!watermarkEnabled)}
+                  className={`relative w-10 h-5.5 rounded-full transition-colors ${
+                    watermarkEnabled ? 'bg-purple-600' : 'bg-gray-200 dark:bg-gray-700'
+                  }`}
+                >
+                  <div
+                    className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${
+                      watermarkEnabled ? 'left-5.5' : 'left-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {watermarkEnabled && (
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-gray-500">Texto da Marca d'Água</label>
+                  <input
+                    type="text"
+                    value={watermarkText}
+                    onChange={(e) => {
+                      setWatermarkText(e.target.value)
+                      localStorage.setItem('aip_watermark_text', e.target.value)
+                    }}
+                    placeholder="Ex: CONFIDENCIAL, COPIA 01, etc."
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent focus:outline-none"
+                  />
+                  <p className="text-[10px] text-gray-500">
+                    A formatação, transparência e rotação são definidas globalmente pelo superadmin.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}

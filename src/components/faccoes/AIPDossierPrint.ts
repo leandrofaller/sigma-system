@@ -49,6 +49,15 @@ function generateOperatorCode(email: string): string {
   return `OP-${hex.slice(0, 8)}`
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 export async function printAIPDossier(
   apenado: AIPApenado,
   userEmail?: string | null,
@@ -57,6 +66,70 @@ export async function printAIPDossier(
 ): Promise<void> {
   const opCode = generateOperatorCode(userEmail || '')
   const operatorText = opCode
+
+  // Configuração da marca d'água
+  const watermarkGlobal = layout?.watermark
+  const watermarkEnabled = layout?.watermarkEnabled && watermarkGlobal?.enabled !== false && !!layout?.watermarkText
+  
+  let watermarkCss = ''
+  let watermarkHtml = ''
+  
+  if (watermarkEnabled) {
+    const text = escapeHtml(layout.watermarkText)
+    const fontSize = watermarkGlobal?.fontSize || 60
+    const color = watermarkGlobal?.color || '#cbd5e1'
+    const opacity = watermarkGlobal?.opacity || 0.15
+    const rotation = watermarkGlobal?.rotation ?? -45
+    const position = watermarkGlobal?.position || 'repeat'
+    
+    if (position === 'repeat') {
+      const svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><text x="150" y="100" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${color}" opacity="${opacity}" transform="rotate(${rotation}, 150, 100)" text-anchor="middle" dominant-baseline="middle">${text}</text></svg>`
+      const svgBase64 = typeof window !== 'undefined' ? btoa(unescape(encodeURIComponent(svgString))) : ''
+      watermarkCss = `
+        .watermark-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          z-index: 9999;
+          background-image: url("data:image/svg+xml;base64,${svgBase64}");
+          background-repeat: repeat;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+      `
+      watermarkHtml = `<div class="watermark-overlay"></div>`
+    } else {
+      watermarkCss = `
+        .watermark-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          z-index: 9999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .watermark-text {
+          font-family: Arial, sans-serif;
+          font-size: ${fontSize}px;
+          font-weight: bold;
+          color: ${color};
+          opacity: ${opacity};
+          transform: rotate(${rotation}deg);
+          white-space: nowrap;
+        }
+      `
+      watermarkHtml = `<div class="watermark-overlay"><span class="watermark-text">${text}</span></div>`
+    }
+  }
 
   // 1. Converter fotos e logotipos para Base64 para evitar problemas de CORS/sessão
   const [photoUri, aipLogo, ppLogo] = await Promise.all([
@@ -826,9 +899,11 @@ export async function printAIPDossier(
     .avoid-break {
       break-inside: avoid;
     }
+    ${watermarkCss}
   </style>
 </head>
 <body>
+  ${watermarkHtml}
   
   <!-- CABEÇALHO -->
   <div class="header-container">

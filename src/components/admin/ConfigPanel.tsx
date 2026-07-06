@@ -397,6 +397,57 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
             label="Chat interno habilitado"
             onChange={(v: boolean) => update('chat_enabled', { enabled: v })} />
         </SectionCard>
+
+        <SectionCard icon={FileText} title="Marca d'Água do Dossiê">
+          <Toggle checked={configs.watermark_enabled !== false}
+            label="Habilitar Marca d'Água no Dossiê"
+            onChange={(v: boolean) => update('watermark_enabled', v)} />
+          <Field label="Posição da Marca d'Água">
+            <Select value={configs.watermark_position || 'repeat'}
+              onChange={(e: any) => update('watermark_position', e.target.value)}>
+              <option value="repeat">Repetida (Grade na página)</option>
+              <option value="center">Centralizada (Uma por página)</option>
+            </Select>
+          </Field>
+          <Field label="Tamanho da Fonte (px)">
+            <Input type="number" min="10" max="150"
+              value={configs.watermark_font_size ?? 60}
+              onChange={(e: any) => update('watermark_font_size', parseInt(e.target.value) || 60)} />
+          </Field>
+          <Field label="Cor do Texto">
+            <div className="flex gap-2">
+              <input type="color"
+                className="w-10 h-10 p-1 border rounded-lg cursor-pointer bg-transparent border-gray-200 dark:border-gray-700"
+                value={configs.watermark_color || '#cbd5e1'}
+                onChange={(e: any) => update('watermark_color', e.target.value)} />
+              <Input value={configs.watermark_color || '#cbd5e1'}
+                onChange={(e: any) => update('watermark_color', e.target.value)}
+                placeholder="#HEX" />
+            </div>
+          </Field>
+          <Field label={`Transparência / Opacidade (${Math.round((configs.watermark_opacity ?? 0.15) * 100)}%)`}>
+            <input type="range" min="0.01" max="0.5" step="0.01"
+              className="w-full accent-sigma-500 bg-gray-200 dark:bg-gray-700 h-1.5 rounded-lg appearance-none cursor-pointer"
+              value={configs.watermark_opacity ?? 0.15}
+              onChange={(e: any) => update('watermark_opacity', parseFloat(e.target.value) || 0.15)} />
+          </Field>
+          <Field label="Rotação (graus)">
+            <Select value={configs.watermark_rotation ?? -45}
+              onChange={(e: any) => update('watermark_rotation', parseInt(e.target.value) || -45)}>
+              <option value="0">Horizontal (0°)</option>
+              <option value="-15">-15°</option>
+              <option value="-30">-30°</option>
+              <option value="-45">-45° (Padrão)</option>
+              <option value="-60">-60°</option>
+              <option value="-90">Vertical (-90°)</option>
+              <option value="15">15°</option>
+              <option value="30">30°</option>
+              <option value="45">45°</option>
+              <option value="60">60°</option>
+              <option value="90">Vertical (90°)</option>
+            </Select>
+          </Field>
+        </SectionCard>
       </div>
 
       <div className="flex justify-end">
