@@ -52,7 +52,8 @@ function generateOperatorCode(email: string): string {
 export async function printAIPDossier(
   apenado: AIPApenado,
   userEmail?: string | null,
-  userRole?: string | null
+  userRole?: string | null,
+  layout?: any
 ): Promise<void> {
   const opCode = generateOperatorCode(userEmail || '')
   const operatorText = opCode
@@ -128,6 +129,347 @@ export async function printAIPDossier(
   }
 
   const barcodeSvg = generateBarcodeSvg(apenado.rji || String(apenado.sipeId))
+
+  // 1.3 Obter configurações do layout da foto e seções
+  const photoFit = layout?.photoFit || 'cover'
+  const defaultSections = [
+    { id: 'dados_pessoais', title: 'Dados Pessoais (SIPE)', visible: true },
+    { id: 'situacao_prisional', title: 'Situação Prisional (SIPE)', visible: true },
+    { id: 'endereco_residencial', title: 'Endereço Residencial (SIPE)', visible: true },
+    { id: 'advogados', title: 'Advogados (SIPE)', visible: true },
+    { id: 'dados_inteligencia', title: 'Dados de Inteligência', visible: true },
+    { id: 'visitantes', title: 'Visitantes Cadastrados', visible: true },
+    { id: 'vinculos', title: 'Vínculos no Sistema', visible: true }
+  ];
+
+  let activeSections = layout?.sections || defaultSections;
+  const existingIds = new Set(activeSections.map((s: any) => s.id));
+  const missingSections = defaultSections.filter(s => !existingIds.has(s.id));
+  if (missingSections.length > 0) {
+    activeSections = [...activeSections, ...missingSections];
+  }
+
+  function toRoman(num: number): string {
+    const romanMap = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+    return romanMap[num - 1] || String(num);
+  }
+
+  const getSectionTitle = (id: string, defaultTitle: string) => {
+    const section = activeSections.find((s: any) => s.id === id);
+    return section?.title || defaultTitle;
+  };
+
+  const sectionRenders: Record<string, () => string> = {
+    dados_pessoais: () => `
+      <div class="avoid-break" style="margin-top: 15px;">
+        <div class="section-header">__ROMAN__. ${getSectionTitle('dados_pessoais', 'DADOS CADASTRAIS (BASE SIPE)')}</div>
+        <table class="info-table">
+          <tr>
+            <td style="width: 25%;">
+              <div class="info-label">SIPE ID</div>
+              <div class="info-value">#${apenado.sipeId}</div>
+            </td>
+            <td style="width: 25%;">
+              <div class="info-label">RJI</div>
+              <div class="info-value">${apenado.rji || '—'}</div>
+            </td>
+            <td style="width: 25%;">
+              <div class="info-label">CPF</div>
+              <div class="info-value">${apenado.cpf || '—'}</div>
+            </td>
+            <td style="width: 25%;">
+              <div class="info-label">RG / Órgão Expedidor</div>
+              <div class="info-value">${apenado.rg || '—'}${apenado.rgOrgao ? ` / ${apenado.rgOrgao}` : ''}</div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="info-label">Data de Nascimento</div>
+              <div class="info-value">${apenado.dataNascimento || '—'}</div>
+            </td>
+            <td>
+              <div class="info-label">Sexo</div>
+              <div class="info-value">${apenado.sexo || '—'}</div>
+            </td>
+            <td>
+              <div class="info-label">Etnia / Cor</div>
+              <div class="info-value">${apenado.etnia || '—'}</div>
+            </td>
+            <td>
+              <div class="info-label">Tipo Sanguíneo</div>
+              <div class="info-value">${apenado.tipoSanguineo || '—'}</div>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <div class="info-label">Naturalidade / UF</div>
+              <div class="info-value">${apenado.naturalidade || '—'}</div>
+            </td>
+            <td>
+              <div class="info-label">Estado Civil</div>
+              <div class="info-value">${apenado.estadoCivil || '—'}</div>
+            </td>
+            <td>
+              <div class="info-label">Telefone Cadastrado</div>
+              <div class="info-value">${apenado.telefone || '—'}</div>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <div class="info-label">Nome da Mãe</div>
+              <div class="info-value">${apenado.nomeMae ? apenado.nomeMae.toUpperCase() : '—'}</div>
+            </td>
+            <td colspan="2">
+              <div class="info-label">Nome do Pai</div>
+              <div class="info-value">${apenado.nomePai ? apenado.nomePai.toUpperCase() : '—'}</div>
+            </td>
+          </tr>
+          ${
+            apenado.nomeConjuge
+              ? `<tr>
+                  <td colspan="3">
+                    <div class="info-label">Cônjuge / Companheiro(a)</div>
+                    <div class="info-value">${apenado.nomeConjuge.toUpperCase()}</div>
+                  </td>
+                  <td>
+                    <div class="info-label">Filhos Cadastrados</div>
+                    <div class="info-value">${apenado.qtdFilhos ?? 0}</div>
+                  </td>
+                 </tr>`
+              : ''
+          }
+        </table>
+      </div>
+    `,
+    situacao_prisional: () => `
+      <div class="avoid-break" style="margin-top: 15px;">
+        <div class="section-header">__ROMAN__. ${getSectionTitle('situacao_prisional', 'SITUAÇÃO PRISIONAL E CUSTÓDIA')}</div>
+        <table class="info-table">
+          <tr>
+            <td style="width: 50%;">
+              <div class="info-label font-bold">Unidade de Custódia Atual</div>
+              <div class="info-value" style="color: #1e3a8a;">${apenado.unidade || 'NÃO INFORMADA'}</div>
+            </td>
+            <td style="width: 25%;">
+              <div class="info-label">Cela</div>
+              <div class="info-value">${apenado.cela || '—'}</div>
+            </td>
+            <td style="width: 25%;">
+              <div class="info-label">Situação do Apenado</div>
+              <div class="info-value">${apenado.situacao || '—'}</div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="info-label">Regime Atual</div>
+              <div class="info-value">${apenado.regime || '—'}</div>
+            </td>
+            <td>
+              <div class="info-label">Data de Entrada na Unidade</div>
+              <div class="info-value">${apenado.dataEntrada || '—'}</div>
+            </td>
+            <td>
+              <div class="info-label">Tempo de Pena</div>
+              <div class="info-value">${apenado.tempoPena || '—'}</div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="info-label">Monitoramento Eletrônico (Tornozeleira)</div>
+              <div class="info-value">${apenado.monitorado === true ? 'SIM (MONITORADO)' : apenado.monitorado === false ? 'NÃO' : '—'}</div>
+            </td>
+            <td>
+              <div class="info-label">Intramuro</div>
+              <div class="info-value">${apenado.intramuro === true ? 'SIM' : apenado.intramuro === false ? 'NÃO' : '—'}</div>
+            </td>
+            <td>
+              <div class="info-label">Preso Oriundo</div>
+              <div class="info-value">${apenado.presoOriundo || '—'}</div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `,
+    endereco_residencial: () => {
+      if (!(apenado.logradouro || apenado.cidade || apenado.cep)) return '';
+      return `
+        <div class="avoid-break" style="margin-top: 15px;">
+          <div class="section-header">__ROMAN__. ${getSectionTitle('endereco_residencial', 'ENDEREÇO RESIDENCIAL DECLARADO')}</div>
+          <table class="info-table">
+            <tr>
+              <td style="width: 60%;">
+                <div class="info-label">Logradouro / Número / Complemento</div>
+                <div class="info-value">
+                  ${apenado.logradouro || ''}
+                  ${apenado.numero ? `, Nº ${apenado.numero}` : ''}
+                  ${apenado.complemento ? ` - ${apenado.complemento}` : ''}
+                </div>
+              </td>
+              <td style="width: 20%;">
+                <div class="info-label">Bairro</div>
+                <div class="info-value">${apenado.bairro || '—'}</div>
+              </td>
+              <td style="width: 20%;">
+                <div class="info-label">CEP</div>
+                <div class="info-value">${apenado.cep || '—'}</div>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="3">
+                <div class="info-label">Cidade / UF</div>
+                <div class="info-value">${apenado.cidade || '—'}${apenado.uf ? ` / ${apenado.uf}` : ''}</div>
+              </td>
+            </tr>
+          </table>
+        </div>
+      `;
+    },
+    dados_inteligencia: () => `
+      <div class="avoid-break" style="margin-top: 15px;">
+        <div class="section-header">__ROMAN__. ${getSectionTitle('dados_inteligencia', 'NOTAS E ANÁLISE DE INTELIGÊNCIA')}</div>
+        <div class="notes-box">${apenado.notasInteligencia || 'Nenhum registro de inteligência inserido para este apenado.'}</div>
+        ${
+          apenado.observacoes
+            ? `
+            <div style="font-family:'Courier New', Courier, monospace; font-size:7.5pt; color:#475569; font-weight:bold; margin-bottom: 2px;">OBSERVAÇÕES ADICIONAIS DE CAMPO</div>
+            <div class="notes-box" style="border-left-color: #b45309; min-height: 40px; margin-bottom: 15px;">${apenado.observacoes}</div>
+            `
+            : ''
+        }
+      </div>
+    `,
+    advogados: () => `
+      <div class="avoid-break" style="margin-top: 15px;">
+        <div class="section-header">__ROMAN__. ${getSectionTitle('advogados', 'VÍNCULOS JURÍDICOS DE DEFESA (ADVOGADOS CADASTRADOS)')}</div>
+        ${
+          apenado.sipeApenado?.vinculosAdvogado && apenado.sipeApenado.vinculosAdvogado.length > 0
+            ? `
+            <div class="advocates-list">
+              ${apenado.sipeApenado.vinculosAdvogado
+                .map(
+                  (v) => `
+                <div class="advocate-item">
+                  <span>${v.advogado.nome.toUpperCase()}</span>
+                  <span class="advocate-oab">OAB: ${v.advogado.oab || 'NÃO INFORMADA'}</span>
+                </div>
+              `
+                )
+                .join('')}
+            </div>
+            `
+            : '<div style="font-size: 8.5pt; color: #64748b; padding: 6px 10px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 4px;">Nenhum advogado vinculado nas bases do SIPE.</div>'
+        }
+      </div>
+    `,
+    visitantes: () => `
+      <div class="avoid-break" style="margin-top: 15px;">
+        <div class="section-header">__ROMAN__. ${getSectionTitle('visitantes', 'VÍNCULOS DE CONTATO E VISITANTES CADASTRADOS')}</div>
+        ${
+          apenado.fotoVisitantes && apenado.fotoVisitantes.length > 0
+            ? `
+            <div class="visitors-grid">
+              ${apenado.fotoVisitantes
+                .map((v) => {
+                  const visitorPhotoUri = visitorPhotos[v.id]
+                  const statusClass = v.ativoVisitante ? 'status-active' : 'status-inactive'
+                  const statusText = v.ativoVisitante ? 'Ativo' : 'Inativo'
+
+                  return `
+                  <div class="visitor-card">
+                    <div class="visitor-photo">
+                      ${
+                        visitorPhotoUri
+                          ? `<img src="${visitorPhotoUri}" alt="Visitante" />`
+                          : `<svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.2" style="width: 24px; height: 24px;">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                              <circle cx="12" cy="7" r="4" />
+                             </svg>`
+                      }
+                    </div>
+                    <div class="visitor-info">
+                      <div class="visitor-name" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 2px; margin-bottom: 4px;" title="${v.nomeVisitante || '—'}">${v.nomeVisitante || '—'}</div>
+                      <div>
+                        <span class="visitor-status ${statusClass}">${statusText}</span>
+                      </div>
+                      <div class="visitor-meta">Parentesco: <strong>${v.parentescoVisitante || '—'}</strong></div>
+                      <div class="visitor-meta">CPF: ${v.cpfVisitante || '—'}</div>
+                    </div>
+                  </div>
+                `
+                })
+                .join('')}
+            </div>
+            `
+            : '<div style="font-size: 8.5pt; color: #64748b; padding: 6px 10px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 4px;">Nenhum visitante cadastrado ou importado para este apenado.</div>'
+        }
+      </div>
+    `,
+    vinculos: () => `
+      <div class="avoid-break" style="margin-top: 15px;">
+        <div class="section-header">__ROMAN__. ${getSectionTitle('vinculos', 'VÍNCULOS E ASSOCIAÇÕES DETECTADAS NO SISTEMA')}</div>
+        ${
+          vinculos.length > 0
+            ? `
+            <div class="visitors-grid">
+              ${vinculos
+                .map((v) => {
+                  if (!v.outroApenado) return ''
+                  const outroPhotoUri = linkedPhotos[v.outroApenado.id]
+                  const forcaLabel = v.forca === 'confirmado' ? 'Confirmado' : 'Suspeita'
+                  const statusClass = v.forca === 'confirmado' ? 'status-active' : 'status-inactive'
+
+                  return `
+                  <div class="visitor-card">
+                    <div class="visitor-photo">
+                      ${
+                        outroPhotoUri
+                          ? `<img src="${outroPhotoUri}" alt="Foto" />`
+                          : `<svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.2" style="width: 24px; height: 24px;">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                              <circle cx="12" cy="7" r="4" />
+                             </svg>`
+                      }
+                    </div>
+                    <div class="visitor-info">
+                      <div class="visitor-name" style="font-size: 9.5pt; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px; margin-bottom: 4px;" title="${v.outroApenado.nome || ''}">
+                        ${v.outroApenado.nome.toUpperCase()}
+                      </div>
+                      <div>
+                        <span class="visitor-status ${statusClass}">${v.tipo.toUpperCase()} (${forcaLabel.toUpperCase()})</span>
+                      </div>
+                      <div class="visitor-meta">SIPE ID: <strong>#${v.outroApenado.sipeId}</strong> · Facção: <strong style="color: #b91c1c;">${(v.outroApenado.facaoRealNome || 'NÃO CONSTATADO').toUpperCase()}</strong></div>
+                      <div class="visitor-meta">Custódia: ${v.outroApenado.unidade || 'NÃO INFORMADA'} - Cela: ${v.outroApenado.cela || '—'}</div>
+                      ${
+                        v.notaVinculo
+                          ? `<div class="visitor-meta" style="font-style: italic; color: #475569; margin-top: 3px; background: #f8fafc; padding: 2px 4px; border-left: 2px solid #cbd5e1; word-break: break-all;">Obs: ${v.notaVinculo}</div>`
+                          : ''
+                      }
+                    </div>
+                  </div>
+                `
+                })
+                .join('')}
+            </div>
+            `
+            : '<div style="font-size: 8.5pt; color: #64748b; padding: 6px 10px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 4px;">Nenhum outro apenado vinculado a este registro no sistema.</div>'
+        }
+      </div>
+    `
+  };
+
+  let visibleIndex = 0;
+  const sectionsHtml = activeSections
+    .filter((s: any) => s.visible)
+    .map((s: any) => {
+      const render = sectionRenders[s.id];
+      if (!render) return '';
+      const htmlContent = render();
+      if (!htmlContent) return '';
+      visibleIndex++;
+      const roman = toRoman(visibleIndex);
+      return htmlContent.replace('__ROMAN__', roman);
+    })
+    .join('\n');
 
   // Renderizar o layout HTML premium
   const html = `<!DOCTYPE html>
@@ -301,7 +643,8 @@ export async function printAIPDossier(
     .photo-img {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: ${photoFit === 'contain' ? 'contain' : 'cover'};
+      ${photoFit === 'cover-top' ? 'object-position: top;' : ''}
     }
     /* Cantoneiras Táticas estilo Alvo */
     .tactical-corner {
@@ -575,295 +918,8 @@ export async function printAIPDossier(
     </table>
   </div>
 
-  <!-- SEÇÃO 1: DADOS CADASTRAIS COMPLETOS -->
-  <div class="section-header">I. DADOS CADASTRAIS (BASE SIPE)</div>
-  <table class="info-table">
-    <tr>
-      <td style="width: 25%;">
-        <div class="info-label">SIPE ID</div>
-        <div class="info-value">#${apenado.sipeId}</div>
-      </td>
-      <td style="width: 25%;">
-        <div class="info-label">RJI</div>
-        <div class="info-value">${apenado.rji || '—'}</div>
-      </td>
-      <td style="width: 25%;">
-        <div class="info-label">CPF</div>
-        <div class="info-value">${apenado.cpf || '—'}</div>
-      </td>
-      <td style="width: 25%;">
-        <div class="info-label">RG / Órgão Expedidor</div>
-        <div class="info-value">${apenado.rg || '—'}${apenado.rgOrgao ? ` / ${apenado.rgOrgao}` : ''}</div>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <div class="info-label">Data de Nascimento</div>
-        <div class="info-value">${apenado.dataNascimento || '—'}</div>
-      </td>
-      <td>
-        <div class="info-label">Sexo</div>
-        <div class="info-value">${apenado.sexo || '—'}</div>
-      </td>
-      <td>
-        <div class="info-label">Etnia / Cor</div>
-        <div class="info-value">${apenado.etnia || '—'}</div>
-      </td>
-      <td>
-        <div class="info-label">Tipo Sanguíneo</div>
-        <div class="info-value">${apenado.tipoSanguineo || '—'}</div>
-      </td>
-    </tr>
-    <tr>
-      <td colspan="2">
-        <div class="info-label">Naturalidade / UF</div>
-        <div class="info-value">${apenado.naturalidade || '—'}</div>
-      </td>
-      <td>
-        <div class="info-label">Estado Civil</div>
-        <div class="info-value">${apenado.estadoCivil || '—'}</div>
-      </td>
-      <td>
-        <div class="info-label">Telefone Cadastrado</div>
-        <div class="info-value">${apenado.telefone || '—'}</div>
-      </td>
-    </tr>
-    <tr>
-      <td colspan="2">
-        <div class="info-label">Nome da Mãe</div>
-        <div class="info-value">${apenado.nomeMae ? apenado.nomeMae.toUpperCase() : '—'}</div>
-      </td>
-      <td colspan="2">
-        <div class="info-label">Nome do Pai</div>
-        <div class="info-value">${apenado.nomePai ? apenado.nomePai.toUpperCase() : '—'}</div>
-      </td>
-    </tr>
-    ${
-      apenado.nomeConjuge
-        ? `<tr>
-            <td colspan="3">
-              <div class="info-label">Cônjuge / Companheiro(a)</div>
-              <div class="info-value">${apenado.nomeConjuge.toUpperCase()}</div>
-            </td>
-            <td>
-              <div class="info-label">Filhos Cadastrados</div>
-              <div class="info-value">${apenado.qtdFilhos ?? 0}</div>
-            </td>
-           </tr>`
-        : ''
-    }
-  </table>
-
-  <!-- SEÇÃO 2: SITUAÇÃO PRISIONAL E CUSTÓDIA -->
-  <div class="section-header">II. SITUAÇÃO PRISIONAL E CUSTÓDIA</div>
-  <table class="info-table">
-    <tr>
-      <td style="width: 50%;">
-        <div class="info-label font-bold">Unidade de Custódia Atual</div>
-        <div class="info-value" style="color: #1e3a8a;">${apenado.unidade || 'NÃO INFORMADA'}</div>
-      </td>
-      <td style="width: 25%;">
-        <div class="info-label">Cela</div>
-        <div class="info-value">${apenado.cela || '—'}</div>
-      </td>
-      <td style="width: 25%;">
-        <div class="info-label">Situação do Apenado</div>
-        <div class="info-value">${apenado.situacao || '—'}</div>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <div class="info-label">Regime Atual</div>
-        <div class="info-value">${apenado.regime || '—'}</div>
-      </td>
-      <td>
-        <div class="info-label">Data de Entrada na Unidade</div>
-        <div class="info-value">${apenado.dataEntrada || '—'}</div>
-      </td>
-      <td>
-        <div class="info-label">Tempo de Pena</div>
-        <div class="info-value">${apenado.tempoPena || '—'}</div>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <div class="info-label">Monitoramento Eletrônico (Tornozeleira)</div>
-        <div class="info-value">${apenado.monitorado === true ? 'SIM (MONITORADO)' : apenado.monitorado === false ? 'NÃO' : '—'}</div>
-      </td>
-      <td>
-        <div class="info-label">Intramuro</div>
-        <div class="info-value">${apenado.intramuro === true ? 'SIM' : apenado.intramuro === false ? 'NÃO' : '—'}</div>
-      </td>
-      <td>
-        <div class="info-label">Preso Oriundo</div>
-        <div class="info-value">${apenado.presoOriundo || '—'}</div>
-      </td>
-    </tr>
-  </table>
-
-  <!-- SEÇÃO 3: ENDEREÇO RESIDENCIAL -->
-  ${
-    apenado.logradouro || apenado.cidade || apenado.cep
-      ? `
-      <div class="section-header">III. ENDEREÇO RESIDENCIAL DECLARADO</div>
-      <table class="info-table">
-        <tr>
-          <td style="width: 60%;">
-            <div class="info-label">Logradouro / Número / Complemento</div>
-            <div class="info-value">
-              ${apenado.logradouro || ''}
-              ${apenado.numero ? `, Nº ${apenado.numero}` : ''}
-              ${apenado.complemento ? ` - ${apenado.complemento}` : ''}
-            </div>
-          </td>
-          <td style="width: 20%;">
-            <div class="info-label">Bairro</div>
-            <div class="info-value">${apenado.bairro || '—'}</div>
-          </td>
-          <td style="width: 20%;">
-            <div class="info-label">CEP</div>
-            <div class="info-value">${apenado.cep || '—'}</div>
-          </td>
-        </tr>
-        <tr>
-          <td colspan="3">
-            <div class="info-label">Cidade / UF</div>
-            <div class="info-value">${apenado.cidade || '—'}${apenado.uf ? ` / ${apenado.uf}` : ''}</div>
-          </td>
-        </tr>
-      </table>
-      `
-      : ''
-  }
-
-  <!-- SEÇÃO 4: DADOS DE INTELIGÊNCIA PENAL -->
-  <div class="section-header">IV. NOTAS E ANÁLISE DE INTELIGÊNCIA</div>
-  <div class="notes-box">${apenado.notasInteligencia || 'Nenhum registro de inteligência inserido para este apenado.'}</div>
-  ${
-    apenado.observacoes
-      ? `
-      <div style="font-family:'Courier New', Courier, monospace; font-size:7.5pt; color:#475569; font-weight:bold; margin-bottom: 2px;">OBSERVAÇÕES ADICIONAIS DE CAMPO</div>
-      <div class="notes-box" style="border-left-color: #b45309; min-height: 40px; margin-bottom: 15px;">${apenado.observacoes}</div>
-      `
-      : ''
-  }
-
-  <!-- SEÇÃO 5: VÍNCULOS JURÍDICOS (ADVOGADOS) -->
-  <div class="avoid-break">
-    <div class="section-header">V. VÍNCULOS JURÍDICOS DE DEFESA (ADVOGADOS CADASTRADOS)</div>
-    ${
-      apenado.sipeApenado?.vinculosAdvogado && apenado.sipeApenado.vinculosAdvogado.length > 0
-        ? `
-        <div class="advocates-list">
-          ${apenado.sipeApenado.vinculosAdvogado
-            .map(
-              (v) => `
-            <div class="advocate-item">
-              <span>${v.advogado.nome.toUpperCase()}</span>
-              <span class="advocate-oab">OAB: ${v.advogado.oab || 'NÃO INFORMADA'}</span>
-            </div>
-          `
-            )
-            .join('')}
-        </div>
-        `
-        : '<div style="font-size: 8.5pt; color: #64748b; padding: 6px 10px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 4px;">Nenhum advogado vinculado nas bases do SIPE.</div>'
-    }
-  </div>
-
-  <!-- SEÇÃO 6: VÍNCULOS FAMILIARES E VISITANTES -->
-  <div class="avoid-break" style="margin-top: 15px;">
-    <div class="section-header">VI. VÍNCULOS DE CONTATO E VISITANTES CADASTRADOS</div>
-    ${
-      apenado.fotoVisitantes && apenado.fotoVisitantes.length > 0
-        ? `
-        <div class="visitors-grid">
-          ${apenado.fotoVisitantes
-            .map((v) => {
-              const visitorPhotoUri = visitorPhotos[v.id]
-              const statusClass = v.ativoVisitante ? 'status-active' : 'status-inactive'
-              const statusText = v.ativoVisitante ? 'Ativo' : 'Inativo'
-
-              return `
-              <div class="visitor-card">
-                <div class="visitor-photo">
-                  ${
-                    visitorPhotoUri
-                      ? `<img src="${visitorPhotoUri}" alt="Visitante" />`
-                      : `<svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.2" style="width: 24px; height: 24px;">
-                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                          <circle cx="12" cy="7" r="4" />
-                         </svg>`
-                  }
-                </div>
-                <div class="visitor-info">
-                  <div class="visitor-name" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 2px; margin-bottom: 4px;" title="${v.nomeVisitante || '—'}">${v.nomeVisitante || '—'}</div>
-                  <div>
-                    <span class="visitor-status ${statusClass}">${statusText}</span>
-                  </div>
-                  <div class="visitor-meta">Parentesco: <strong>${v.parentescoVisitante || '—'}</strong></div>
-                  <div class="visitor-meta">CPF: ${v.cpfVisitante || '—'}</div>
-                </div>
-              </div>
-            `
-            })
-            .join('')}
-        </div>
-        `
-        : '<div style="font-size: 8.5pt; color: #64748b; padding: 6px 10px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 4px;">Nenhum visitante cadastrado ou importado para este apenado.</div>'
-    }
-  </div>
-
-  <!-- SEÇÃO 7: VÍNCULOS ENCONTRADOS NO SISTEMA -->
-  <div class="avoid-break" style="margin-top: 15px;">
-    <div class="section-header">VII. VÍNCULOS E ASSOCIAÇÕES DETECTADAS NO SISTEMA</div>
-    ${
-      vinculos.length > 0
-        ? `
-        <div class="visitors-grid">
-          ${vinculos
-            .map((v) => {
-              if (!v.outroApenado) return ''
-              const outroPhotoUri = linkedPhotos[v.outroApenado.id]
-              const forcaLabel = v.forca === 'confirmado' ? 'Confirmado' : 'Suspeita'
-              const statusClass = v.forca === 'confirmado' ? 'status-active' : 'status-inactive'
-
-              return `
-              <div class="visitor-card">
-                <div class="visitor-photo">
-                  ${
-                    outroPhotoUri
-                      ? `<img src="${outroPhotoUri}" alt="Foto" />`
-                      : `<svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.2" style="width: 24px; height: 24px;">
-                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                          <circle cx="12" cy="7" r="4" />
-                         </svg>`
-                  }
-                </div>
-                <div class="visitor-info">
-                  <div class="visitor-name" style="font-size: 9.5pt; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px; margin-bottom: 4px;" title="${v.outroApenado.nome || ''}">
-                    ${v.outroApenado.nome.toUpperCase()}
-                  </div>
-                  <div>
-                    <span class="visitor-status ${statusClass}">${v.tipo.toUpperCase()} (${forcaLabel.toUpperCase()})</span>
-                  </div>
-                  <div class="visitor-meta">SIPE ID: <strong>#${v.outroApenado.sipeId}</strong> · Facção: <strong style="color: #b91c1c;">${(v.outroApenado.facaoRealNome || 'NÃO CONSTATADO').toUpperCase()}</strong></div>
-                  <div class="visitor-meta">Custódia: ${v.outroApenado.unidade || 'NÃO INFORMADA'} - Cela: ${v.outroApenado.cela || '—'}</div>
-                  ${
-                    v.notaVinculo
-                      ? `<div class="visitor-meta" style="font-style: italic; color: #475569; margin-top: 3px; background: #f8fafc; padding: 2px 4px; border-left: 2px solid #cbd5e1; word-break: break-all;">Obs: ${v.notaVinculo}</div>`
-                      : ''
-                  }
-                </div>
-              </div>
-            `
-            })
-            .join('')}
-        </div>
-        `
-        : '<div style="font-size: 8.5pt; color: #64748b; padding: 6px 10px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 4px;">Nenhum outro apenado vinculado a este registro no sistema.</div>'
-    }
-  </div>
+  <!-- SEÇÕES DINÂMICAS -->
+  ${sectionsHtml}
 
   <!-- RODAPÉ LEGAL E SEGURANÇA -->
   <div class="footer-container">

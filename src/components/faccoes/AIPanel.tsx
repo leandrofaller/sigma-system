@@ -271,20 +271,11 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
   const [faccoes, setFaccoes] = useState<{ id: string; nome: string; cor: string }[]>([])
   const [sincronizando, setSincronizando] = useState(false)
   const { data: session } = useSession()
+  const [showPrintConfig, setShowPrintConfig] = useState(false)
   const [gerandoDossie, setGerandoDossie] = useState(false)
 
-  const handleGerarDossie = async () => {
-    setGerandoDossie(true)
-    const toastId = toast.loading('Gerando Ficha de Qualificação (Dossiê)...')
-    try {
-      await printAIPDossier(apenado, session?.user?.email || session?.user?.name, userRole)
-      toast.success('Dossiê enviado para impressão com sucesso!', { id: toastId })
-    } catch (err: any) {
-      console.error(err)
-      toast.error('Erro ao gerar dossiê de qualificação.', { id: toastId })
-    } finally {
-      setGerandoDossie(false)
-    }
+  const handleGerarDossie = () => {
+    setShowPrintConfig(true)
   }
 
   useEffect(() => {
@@ -1253,6 +1244,27 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
           </div>
         </div>
       )}
+      {showPrintConfig && (
+        <AIFichaLayoutModal
+          layout={layout}
+          submitLabel="Gerar Relatório"
+          onClose={() => setShowPrintConfig(false)}
+          onSave={async (tempLayout) => {
+            setShowPrintConfig(false)
+            setGerandoDossie(true)
+            const toastId = toast.loading('Gerando Ficha de Qualificação (Dossiê)...')
+            try {
+              await printAIPDossier(apenado, session?.user?.email || session?.user?.name, userRole, tempLayout)
+              toast.success('Dossiê enviado para impressão com sucesso!', { id: toastId })
+            } catch (err: any) {
+              console.error(err)
+              toast.error('Erro ao gerar dossiê de qualificação.', { id: toastId })
+            } finally {
+              setGerandoDossie(false)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -1465,22 +1477,35 @@ export function AIPanel({
 }
 
 // ── Modal de Configuração de Layout pelo Superadmin ──────────────────
-function AIFichaLayoutModal({ layout, onClose, onSave }: {
+function AIFichaLayoutModal({ layout, onClose, onSave, submitLabel = 'Salvar Layout' }: {
   layout: any
   onClose: () => void
   onSave: (newLayout: any) => void
+  submitLabel?: string
 }) {
   const [photoStyle, setPhotoStyle] = useState(layout?.photoStyle || 'avatar')
-  const [sections, setSections] = useState<any[]>(
-    layout?.sections || [
-      { id: 'dados_pessoais', title: 'Dados Pessoais (SIPE)', visible: true },
-      { id: 'situacao_prisional', title: 'Situação Prisional (SIPE)', visible: true },
-      { id: 'endereco_residencial', title: 'Endereço Residencial (SIPE)', visible: true },
-      { id: 'advogados', title: 'Advogados (SIPE)', visible: true },
-      { id: 'dados_inteligencia', title: 'Dados de Inteligência', visible: true },
-      { id: 'visitantes', title: 'Visitantes Cadastrados', visible: true }
-    ]
-  )
+  const [photoFit, setPhotoFit] = useState(layout?.photoFit || 'cover')
+
+  const defaultSections = [
+    { id: 'dados_pessoais', title: 'Dados Pessoais (SIPE)', visible: true },
+    { id: 'situacao_prisional', title: 'Situação Prisional (SIPE)', visible: true },
+    { id: 'endereco_residencial', title: 'Endereço Residencial (SIPE)', visible: true },
+    { id: 'advogados', title: 'Advogados (SIPE)', visible: true },
+    { id: 'dados_inteligencia', title: 'Dados de Inteligência', visible: true },
+    { id: 'visitantes', title: 'Visitantes Cadastrados', visible: true },
+    { id: 'vinculos', title: 'Vínculos no Sistema', visible: true }
+  ];
+
+  const [sections, setSections] = useState<any[]>(() => {
+    let initialSections = layout?.sections || defaultSections;
+    const existingIds = new Set(initialSections.map((s: any) => s.id));
+    const missingSections = defaultSections.filter(s => !existingIds.has(s.id));
+    if (missingSections.length > 0) {
+      initialSections = [...initialSections, ...missingSections];
+    }
+    return initialSections;
+  });
+
   const [saving, setSaving] = useState(false)
 
   const handleMove = (index: number, direction: 'up' | 'down') => {
@@ -1507,6 +1532,12 @@ function AIFichaLayoutModal({ layout, onClose, onSave }: {
   }
 
   const handleSave = async () => {
+    const isPrinting = submitLabel && submitLabel !== 'Salvar Layout'
+    if (isPrinting) {
+      onSave({ photoStyle, photoFit, sections })
+      return
+    }
+
     setSaving(true)
     try {
       const res = await fetch('/api/aip/layout', {
@@ -1514,6 +1545,7 @@ function AIFichaLayoutModal({ layout, onClose, onSave }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           photoStyle,
+          photoFit,
           sections
         })
       })
@@ -1546,6 +1578,7 @@ function AIFichaLayoutModal({ layout, onClose, onSave }: {
             <h2 className="text-lg font-bold text-gray-900 dark:text-white font-semibold">Configurar Layout da Ficha</h2>
           </div>
           <button 
+            type="button"
             onClick={onClose} 
             className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
             title="Fechar"
@@ -1558,9 +1591,10 @@ function AIFichaLayoutModal({ layout, onClose, onSave }: {
         <div className="p-6 flex-1 overflow-y-auto space-y-6">
           {/* Estilo da Foto */}
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-gray-850 dark:text-gray-200">Foto de Perfil do Apenado</h3>
+            <h3 className="text-sm font-semibold text-gray-855 dark:text-gray-200">Foto de Perfil do Apenado</h3>
             <div className="grid grid-cols-2 gap-3">
               <button
+                type="button"
                 onClick={() => setPhotoStyle('avatar')}
                 className={`p-4 rounded-xl border-2 text-left transition-all flex flex-col gap-1.5 ${
                   photoStyle === 'avatar'
@@ -1572,6 +1606,7 @@ function AIFichaLayoutModal({ layout, onClose, onSave }: {
                 <span className="text-xs text-gray-550">Foto pequena recortada ao lado do nome do apenado.</span>
               </button>
               <button
+                type="button"
                 onClick={() => setPhotoStyle('full')}
                 className={`p-4 rounded-xl border-2 text-left transition-all flex flex-col gap-1.5 ${
                   photoStyle === 'full'
@@ -1581,6 +1616,49 @@ function AIFichaLayoutModal({ layout, onClose, onSave }: {
               >
                 <span className="font-semibold text-sm text-gray-900 dark:text-white">Tamanho Real (Destaque)</span>
                 <span className="text-xs text-gray-550">Foto original sem recortes, exibida de forma ampla no topo.</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Ajuste/Enquadramento da Foto */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-gray-855 dark:text-gray-200">Ajuste da Foto (Enquadramento)</h3>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setPhotoFit('cover-top')}
+                className={`p-3 rounded-xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1.5 ${
+                  photoFit === 'cover-top'
+                    ? 'border-purple-600 bg-purple-50/10 dark:border-purple-500 dark:bg-purple-950/10'
+                    : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
+                }`}
+                title="Mantém a foto inteira em largura, focando na parte superior (rosto)."
+              >
+                <span className="font-semibold text-xs text-gray-900 dark:text-white">Focar no Rosto (Topo)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPhotoFit('contain')}
+                className={`p-3 rounded-xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1.5 ${
+                  photoFit === 'contain'
+                    ? 'border-purple-600 bg-purple-50/10 dark:border-purple-500 dark:bg-purple-950/10'
+                    : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
+                }`}
+                title="Mostra a foto inteira sem cortes, mantendo a proporção."
+              >
+                <span className="font-semibold text-xs text-gray-900 dark:text-white">Ajustar Inteira</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPhotoFit('cover')}
+                className={`p-3 rounded-xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1.5 ${
+                  photoFit === 'cover'
+                    ? 'border-purple-600 bg-purple-50/10 dark:border-purple-500 dark:bg-purple-950/10'
+                    : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
+                }`}
+                title="Corta e centraliza a imagem para preencher a caixa de foto."
+              >
+                <span className="font-semibold text-xs text-gray-900 dark:text-white">Centralizado</span>
               </button>
             </div>
           </div>
@@ -1604,6 +1682,7 @@ function AIFichaLayoutModal({ layout, onClose, onSave }: {
                 >
                   {/* Visibilidade Checkbox */}
                   <button
+                    type="button"
                     onClick={() => handleToggleVisible(index)}
                     className={`p-1.5 rounded-lg transition-colors ${
                       section.visible 
@@ -1627,6 +1706,7 @@ function AIFichaLayoutModal({ layout, onClose, onSave }: {
                   {/* Botões Ordenação */}
                   <div className="flex items-center gap-1 shrink-0">
                     <button
+                      type="button"
                       onClick={() => handleMove(index, 'up')}
                       disabled={index === 0}
                       className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-750 disabled:opacity-20 text-gray-600 dark:text-gray-400"
@@ -1634,6 +1714,7 @@ function AIFichaLayoutModal({ layout, onClose, onSave }: {
                       <ArrowUp className="w-4 h-4" />
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleMove(index, 'down')}
                       disabled={index === sections.length - 1}
                       className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-750 disabled:opacity-20 text-gray-600 dark:text-gray-400"
@@ -1650,18 +1731,26 @@ function AIFichaLayoutModal({ layout, onClose, onSave }: {
         {/* Footer */}
         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3 shrink-0">
           <button
+            type="button"
             onClick={onClose}
             className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
           >
             Cancelar
           </button>
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
             className="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Salvar Layout
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : submitLabel === 'Gerar Relatório' ? (
+              <FileText className="w-4 h-4" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {submitLabel}
           </button>
         </div>
       </div>

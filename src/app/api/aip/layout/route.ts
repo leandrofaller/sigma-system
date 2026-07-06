@@ -7,13 +7,15 @@ const LAYOUT_KEY = 'aip_ficha_layout'
 // Layout Padrão
 const DEFAULT_LAYOUT = {
   photoStyle: 'avatar', // 'avatar' ou 'full'
+  photoFit: 'cover', // 'cover', 'cover-top', 'contain'
   sections: [
     { id: 'dados_pessoais', title: 'Dados Pessoais (SIPE)', visible: true },
     { id: 'situacao_prisional', title: 'Situação Prisional (SIPE)', visible: true },
     { id: 'endereco_residencial', title: 'Endereço Residencial (SIPE)', visible: true },
     { id: 'advogados', title: 'Advogados (SIPE)', visible: true },
     { id: 'dados_inteligencia', title: 'Dados de Inteligência', visible: true },
-    { id: 'visitantes', title: 'Visitantes Cadastrados', visible: true }
+    { id: 'visitantes', title: 'Visitantes Cadastrados', visible: true },
+    { id: 'vinculos', title: 'Vínculos no Sistema', visible: true }
   ]
 }
 
