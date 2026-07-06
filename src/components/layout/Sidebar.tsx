@@ -14,7 +14,7 @@ import {
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
 
-interface NavItem {
+export interface NavItem {
   id?: string;
   label: string;
   href: string;
@@ -24,13 +24,13 @@ interface NavItem {
   badgePulse?: boolean;
 }
 
-const iconMap: Record<string, React.ComponentType<any>> = {
+export const iconMap: Record<string, React.ComponentType<any>> = {
   LayoutDashboard, FileText, Inbox, BookOpen, ClipboardList, Calendar, CalendarDays,
   Trello, MessageSquare, Sparkles, UserCheck, Shield, Database, Smartphone, Brain, Building2,
   Users, FolderOpen, Monitor, MapPin, Map, AlertCircle, Settings, ShieldAlert, List, Paintbrush, Archive, Briefcase
 };
 
-const defaultNavItems: NavItem[] = [
+export const defaultNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', iconName: 'LayoutDashboard', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Relatórios (RELINTs)', href: '/relints', iconName: 'FileText', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'RELINTs Recebidos', href: '/relints-recebidos', iconName: 'Inbox', roles: ['SUPER_ADMIN', 'ADMIN'] },
@@ -56,7 +56,7 @@ const defaultNavItems: NavItem[] = [
   { label: 'Unidades Prisionais', href: '/unidades-prisionais', iconName: 'Building2', roles: ['SUPER_ADMIN'] },
 ];
 
-const defaultAdminItems: NavItem[] = [
+export const defaultAdminItems: NavItem[] = [
   { label: 'Usuários', href: '/admin/usuarios', iconName: 'Users', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Grupos / Setores', href: '/admin/grupos', iconName: 'FolderOpen', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Dispositivos', href: '/admin/dispositivos', iconName: 'Monitor', roles: ['SUPER_ADMIN', 'ADMIN'] },
@@ -69,10 +69,25 @@ const defaultAdminItems: NavItem[] = [
   { label: 'Configurações', href: '/admin/configuracoes', iconName: 'Settings', roles: ['SUPER_ADMIN'] },
 ];
 
-interface SidebarProps {
+export function sortItems(items: NavItem[], orderHrefs: string[]) {
+  if (!orderHrefs || !Array.isArray(orderHrefs) || orderHrefs.length === 0) return items;
+  const orderMap = new globalThis.Map(orderHrefs.map((href, index) => [href, index]));
+  
+  return [...items].sort((a, b) => {
+    const idxA = orderMap.get(a.href);
+    const idxB = orderMap.get(b.href);
+    if (idxA !== undefined && idxB !== undefined) return idxA - idxB;
+    if (idxA !== undefined) return -1;
+    if (idxB !== undefined) return 1;
+    return 0;
+  });
+}
+
+export interface SidebarProps {
   user: SessionUser;
   logoSize?: number;
   pendingDeviceCount?: number;
+  sidebarOrder?: { nav?: string[]; admin?: string[] };
 }
 
 interface ChatChannel {
@@ -82,7 +97,7 @@ interface ChatChannel {
   unread: number;
 }
 
-export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: SidebarProps) {
+export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0, sidebarOrder }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
@@ -96,11 +111,14 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0 }: Sidebar
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
-  // Controle de Abas Estáticas baseadas em regras de acesso
-  const navItems = defaultNavItems.filter(
+  // Controle de Abas Estáticas baseadas em regras de acesso e reordenação resiliente
+  const orderedNavItems = sortItems(defaultNavItems, sidebarOrder?.nav ?? []);
+  const orderedAdminItems = sortItems(defaultAdminItems, sidebarOrder?.admin ?? []);
+
+  const navItems = orderedNavItems.filter(
     (item) => !item.roles || item.roles.includes(user?.role ?? '')
   );
-  const adminItems = defaultAdminItems.filter(
+  const adminItems = orderedAdminItems.filter(
     (item) => !item.roles || item.roles.includes(user?.role ?? '')
   );
 

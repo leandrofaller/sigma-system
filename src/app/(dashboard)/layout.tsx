@@ -18,23 +18,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   let logoSize = 36;
   let pendingDeviceCount = 0;
+  let sidebarOrder: any = undefined;
   try {
-    const [cfg, deviceCount] = await Promise.all([
+    const [cfg, deviceCount, orderCfg] = await Promise.all([
       prisma.systemConfig.findUnique({ where: { key: 'sidebar_logo_size' } }),
       isAdmin
         ? prisma.userDevice.count({ where: { status: 'PENDING' } })
         : Promise.resolve(0),
+      prisma.systemConfig.findUnique({ where: { key: 'sidebar_order' } }),
     ]);
     const px = (cfg?.value as any)?.px;
     if (typeof px === 'number' && px > 0) logoSize = px;
     pendingDeviceCount = deviceCount;
+    if (orderCfg?.value) {
+      sidebarOrder = orderCfg.value;
+    }
   } catch {}
 
   return (
     <QueryProvider>
       <IndexingWrapper>
         <div className="flex h-screen min-h-[100dvh] bg-gray-50 dark:bg-gray-950 overflow-hidden">
-          <Sidebar user={session.user as any} logoSize={logoSize} pendingDeviceCount={pendingDeviceCount} />
+          <Sidebar user={session.user as any} logoSize={logoSize} pendingDeviceCount={pendingDeviceCount} sidebarOrder={sidebarOrder} />
           <div className="flex-1 flex flex-col min-w-0">
             <Header user={session.user as any} />
             <main className="flex-1 overflow-auto p-3 md:p-6">
