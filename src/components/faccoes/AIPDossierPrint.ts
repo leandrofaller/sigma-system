@@ -83,7 +83,12 @@ export async function printAIPDossier(
     const position = watermarkGlobal?.position || 'repeat'
     
     if (position === 'repeat') {
-      const svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><text x="150" y="100" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${color}" opacity="${opacity}" transform="rotate(${rotation}, 150, 100)" text-anchor="middle" dominant-baseline="middle">${text}</text></svg>`
+      const gridSpacing = watermarkGlobal?.gridSpacing || 300
+      const width = gridSpacing
+      const height = Math.round(gridSpacing * (2 / 3))
+      const x = Math.round(width / 2)
+      const y = Math.round(height / 2)
+      const svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><text x="${x}" y="${y}" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${color}" opacity="${opacity}" transform="rotate(${rotation}, ${x}, ${y})" text-anchor="middle" dominant-baseline="middle">${text}</text></svg>`
       const svgBase64 = typeof window !== 'undefined' ? btoa(unescape(encodeURIComponent(svgString))) : ''
       watermarkCss = `
         .watermark-overlay {

@@ -26,7 +26,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    const [config, watermarkEnabled, watermarkSize, watermarkColor, watermarkOpacity, watermarkRotation, watermarkPosition] = await Promise.all([
+    const [config, watermarkEnabled, watermarkSize, watermarkColor, watermarkOpacity, watermarkRotation, watermarkPosition, watermarkGridSpacing] = await Promise.all([
       prisma.systemConfig.findUnique({ where: { key: LAYOUT_KEY } }),
       prisma.systemConfig.findUnique({ where: { key: 'watermark_enabled' } }),
       prisma.systemConfig.findUnique({ where: { key: 'watermark_font_size' } }),
@@ -34,6 +34,7 @@ export async function GET() {
       prisma.systemConfig.findUnique({ where: { key: 'watermark_opacity' } }),
       prisma.systemConfig.findUnique({ where: { key: 'watermark_rotation' } }),
       prisma.systemConfig.findUnique({ where: { key: 'watermark_position' } }),
+      prisma.systemConfig.findUnique({ where: { key: 'watermark_grid_spacing' } }),
     ])
 
     const layoutVal = config ? (config.value as any) : DEFAULT_LAYOUT
@@ -45,6 +46,7 @@ export async function GET() {
       opacity: watermarkOpacity ? (watermarkOpacity.value as number) : 0.15,
       rotation: watermarkRotation ? (watermarkRotation.value as number) : -45,
       position: watermarkPosition ? (watermarkPosition.value as string) : 'repeat',
+      gridSpacing: watermarkGridSpacing ? (watermarkGridSpacing.value as number) : 300,
     }
 
     // Se o layoutVal for um objeto simples, mesclamos a propriedade watermark

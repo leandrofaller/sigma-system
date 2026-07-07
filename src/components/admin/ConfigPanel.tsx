@@ -409,6 +409,13 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
               <option value="center">Centralizada (Uma por página)</option>
             </Select>
           </Field>
+          {(!configs.watermark_position || configs.watermark_position === 'repeat') && (
+            <Field label="Espaçamento da Grade (px)">
+              <Input type="number" min="150" max="800" step="50"
+                value={configs.watermark_grid_spacing ?? 300}
+                onChange={(e: any) => update('watermark_grid_spacing', parseInt(e.target.value) || 300)} />
+            </Field>
+          )}
           <Field label="Tamanho da Fonte (px)">
             <Input type="number" min="10" max="150"
               value={configs.watermark_font_size ?? 60}
