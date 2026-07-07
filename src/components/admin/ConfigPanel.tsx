@@ -7,6 +7,42 @@ interface Props {
   configs: Record<string, any>;
 }
 
+const inputCls = 'w-full input-base px-3 py-2';
+
+const SectionCard = ({ icon: Icon, title, children }: any) => (
+  <div className="card p-6">
+    <div className="flex items-center gap-2 mb-5 pb-4 card-header">
+      <div className="w-8 h-8 icon-badge-sigma rounded-lg flex items-center justify-center">
+        <Icon className="w-4 h-4" />
+      </div>
+      <h3 className="font-semibold text-title">{title}</h3>
+    </div>
+    <div className="space-y-4">{children}</div>
+  </div>
+);
+
+const Field = ({ label, children }: any) => (
+  <div>
+    <label className="block text-xs font-medium text-subtle mb-1.5">{label}</label>
+    {children}
+  </div>
+);
+
+const Input = (props: any) => <input {...props} className={inputCls} />;
+const Select = ({ children, ...props }: any) => (
+  <select {...props} className={inputCls}>{children}</select>
+);
+
+const Toggle = ({ checked, onChange, label }: any) => (
+  <div className="flex items-center justify-between py-1">
+    <span className="text-sm text-body">{label}</span>
+    <button type="button" onClick={() => onChange(!checked)}
+      className={`relative w-11 h-6 rounded-full transition-colors ${checked ? 'bg-sigma-500' : 'bg-gray-200 dark:bg-gray-700'}`}>
+      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${checked ? 'left-6' : 'left-1'}`} />
+    </button>
+  </div>
+);
+
 export function ConfigPanel({ configs: initialConfigs }: Props) {
   const [configs, setConfigs] = useState(initialConfigs);
   const [saving, setSaving] = useState(false);
@@ -22,7 +58,6 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
   const testAI = async () => {
     setTestingAI(true);
     setTestResult(null);
-    // Save current config first so the test uses the latest key
     try {
       await fetch('/api/admin/config', {
         method: 'PUT',
@@ -63,42 +98,6 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
       setSaving(false);
     }
   };
-
-  const SectionCard = ({ icon: Icon, title, children }: any) => (
-    <div className="card p-6">
-      <div className="flex items-center gap-2 mb-5 pb-4 card-header">
-        <div className="w-8 h-8 icon-badge-sigma rounded-lg flex items-center justify-center">
-          <Icon className="w-4 h-4" />
-        </div>
-        <h3 className="font-semibold text-title">{title}</h3>
-      </div>
-      <div className="space-y-4">{children}</div>
-    </div>
-  );
-
-  const Field = ({ label, children }: any) => (
-    <div>
-      <label className="block text-xs font-medium text-subtle mb-1.5">{label}</label>
-      {children}
-    </div>
-  );
-
-  const inputCls = 'w-full input-base px-3 py-2';
-
-  const Input = (props: any) => <input {...props} className={inputCls} />;
-  const Select = ({ children, ...props }: any) => (
-    <select {...props} className={inputCls}>{children}</select>
-  );
-
-  const Toggle = ({ checked, onChange, label }: any) => (
-    <div className="flex items-center justify-between py-1">
-      <span className="text-sm text-body">{label}</span>
-      <button onClick={() => onChange(!checked)}
-        className={`relative w-11 h-6 rounded-full transition-colors ${checked ? 'bg-sigma-500' : 'bg-gray-200 dark:bg-gray-700'}`}>
-        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${checked ? 'left-6' : 'left-1'}`} />
-      </button>
-    </div>
-  );
 
   return (
     <div className="space-y-6">
