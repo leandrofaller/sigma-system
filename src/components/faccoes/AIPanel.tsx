@@ -1501,7 +1501,11 @@ function AIFichaLayoutModal({ layout, onClose, onSave, submitLabel = 'Salvar Lay
   })
 
   useEffect(() => {
-    if (!watermarkText && session?.user) {
+    if (typeof window !== 'undefined' && localStorage.getItem('aip_watermark_text') !== null) {
+      return
+    }
+
+    if (session?.user) {
       const email = session.user.email || ''
       let defaultText = 'CONFIDENCIAL'
       if (email) {
@@ -1515,8 +1519,9 @@ function AIFichaLayoutModal({ layout, onClose, onSave, submitLabel = 'Salvar Lay
         defaultText = `OP-${hex.slice(0, 8)}`
       }
       setWatermarkText(defaultText)
+      localStorage.setItem('aip_watermark_text', defaultText)
     }
-  }, [session, watermarkText])
+  }, [session])
 
   const defaultSections = [
     { id: 'dados_pessoais', title: 'Dados Pessoais (SIPE)', visible: true },
