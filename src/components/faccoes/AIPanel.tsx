@@ -343,7 +343,7 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
     { id: 'situacao_prisional', title: 'Situação Prisional (SIPE)', visible: true },
     { id: 'endereco_residencial', title: 'Endereço Residencial (SIPE)', visible: true },
     { id: 'advogados', title: 'Advogados (SIPE)', visible: true },
-    { id: 'dados_inteligencia', title: 'Dados de Inteligência', visible: true },
+    { id: 'dados_inteligencia', title: 'Dados de Inteligência', visible: false },
     { id: 'visitantes', title: 'Visitantes Cadastrados', visible: true }
   ]
 
@@ -1488,7 +1488,7 @@ function AIFichaLayoutModal({ layout, onClose, onSave, submitLabel = 'Salvar Lay
   submitLabel?: string
 }) {
   const [photoStyle, setPhotoStyle] = useState(layout?.photoStyle || 'avatar')
-  const [photoFit, setPhotoFit] = useState(layout?.photoFit || 'cover')
+  const [photoFit, setPhotoFit] = useState(layout?.photoFit || 'cover-top')
 
   const { data: session } = useSession()
   const [watermarkEnabled, setWatermarkEnabled] = useState(true)
@@ -1528,7 +1528,7 @@ function AIFichaLayoutModal({ layout, onClose, onSave, submitLabel = 'Salvar Lay
     { id: 'situacao_prisional', title: 'Situação Prisional (SIPE)', visible: true },
     { id: 'endereco_residencial', title: 'Endereço Residencial (SIPE)', visible: true },
     { id: 'advogados', title: 'Advogados (SIPE)', visible: true },
-    { id: 'dados_inteligencia', title: 'Dados de Inteligência', visible: true },
+    { id: 'dados_inteligencia', title: 'Dados de Inteligência', visible: false },
     { id: 'visitantes', title: 'Visitantes Cadastrados', visible: true },
     { id: 'vinculos', title: 'Vínculos no Sistema', visible: true }
   ];

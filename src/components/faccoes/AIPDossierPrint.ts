@@ -200,7 +200,7 @@ export async function printAIPDossier(
     stampTextColor = '#ffffff'
     stampBgColor = '#991b1b'
   } else if (apenado.facaoRealNome) {
-    classificationLabel = 'CONFIDENCIAL // INFORMAÇÃO DE INTELIGÊNCIA'
+    classificationLabel = 'RESERVADO // INFORMAÇÃO DE INTELIGÊNCIA'
     stampBorderColor = '#b45309'
     stampTextColor = '#ffffff'
     stampBgColor = '#b45309'
@@ -209,13 +209,13 @@ export async function printAIPDossier(
   const barcodeSvg = generateBarcodeSvg(apenado.rji || String(apenado.sipeId))
 
   // 1.3 Obter configurações do layout da foto e seções
-  const photoFit = layout?.photoFit || 'cover'
+  const photoFit = layout?.photoFit || 'cover-top'
   const defaultSections = [
     { id: 'dados_pessoais', title: 'Dados Pessoais (SIPE)', visible: true },
     { id: 'situacao_prisional', title: 'Situação Prisional (SIPE)', visible: true },
     { id: 'endereco_residencial', title: 'Endereço Residencial (SIPE)', visible: true },
     { id: 'advogados', title: 'Advogados (SIPE)', visible: true },
-    { id: 'dados_inteligencia', title: 'Dados de Inteligência', visible: true },
+    { id: 'dados_inteligencia', title: 'Dados de Inteligência', visible: false },
     { id: 'visitantes', title: 'Visitantes Cadastrados', visible: true },
     { id: 'vinculos', title: 'Vínculos no Sistema', visible: true }
   ];
@@ -1006,7 +1006,7 @@ export async function printAIPDossier(
     <p class="footer-text">${LEGAL_TEXT}</p>
     <div class="footer-metadata">
       <span>GERADO EM: ${new Date().toLocaleString('pt-BR')} · OPERADOR: ${operatorText}</span>
-      <span>CLASSIFICAÇÃO: CONFIDENCIAL / AIP / SEJUS</span>
+      <span>CLASSIFICAÇÃO: RESERVADO / AIP / SEJUS</span>
     </div>
   </div>
 
