@@ -123,6 +123,9 @@ export function normalizeCPF(cpf: string | null | undefined): string | null {
 export function isPlaceholderPhoto(url: string | null | undefined): boolean {
   if (!url) return true
   const s = url.toLowerCase()
+  // Evita falsos positivos com fotos reais do SIPE que contêm 'fotoUsuario' no nome
+  if (s.includes('fotousuario')) return false
+
   const placeholders = [
     'avatar.png', 'avatar.jpg', 'avatar.gif', 'avatar.jpeg', 'avatar.webp',
     'no-avatar', 'default-avatar', 'default_avatar', 'sem-foto', 'sem_foto',
