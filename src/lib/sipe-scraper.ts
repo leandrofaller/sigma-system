@@ -3130,8 +3130,8 @@ async function scrapeApenadoFicha(
       }
 
 
-      if (base64Data && base64Data.includes(',')) {
-        const base64Content = base64Data.split(',')[1];
+      if (base64Data) {
+        const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
         const imageBuffer = Buffer.from(base64Content, 'base64');
 
         const webpBuffer = await sharp(imageBuffer)
@@ -3570,8 +3570,8 @@ async function saveAndLinkComplementaryPhoto(
     }
 
 
-    if (base64Data && base64Data.includes(',')) {
-      const base64Content = base64Data.split(',')[1];
+    if (base64Data) {
+      const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
       const imageBuffer = Buffer.from(base64Content, 'base64');
 
       const webpBuffer = await sharp(imageBuffer)
@@ -4057,8 +4057,8 @@ async function scrapeVisitantes(
             }, absoluteUrlFallback)
           }
 
-          if (base64Data && base64Data.includes(',')) {
-            const base64Content = base64Data.split(',')[1]
+          if (base64Data) {
+            const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
             const imageBuffer = Buffer.from(base64Content, 'base64')
 
             const webpBuffer = await sharp(imageBuffer)
@@ -4472,8 +4472,8 @@ async function downloadSipeImage(page: Page, photoSrc: string): Promise<Buffer |
     }
   }
 
-  if (base64Data && base64Data.includes(',')) {
-    const base64Content = base64Data.split(',')[1];
+  if (base64Data) {
+    const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
     return Buffer.from(base64Content, 'base64');
   }
   return null;
@@ -6903,8 +6903,8 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
             }
             if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
               const base64Data = proxyPhoto.data
-              if (base64Data.includes(',')) {
-                const base64Content = base64Data.split(',')[1]
+              if (base64Data) {
+                const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
                 const imageBuffer = Buffer.from(base64Content, 'base64')
                 const webpBuffer = await sharp(imageBuffer)
                   .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
@@ -7024,8 +7024,8 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
             }
             if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
               const base64Data = proxyPhoto.data
-              if (base64Data.includes(',')) {
-                const base64Content = base64Data.split(',')[1]
+              if (base64Data) {
+                const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
                 const imageBuffer = Buffer.from(base64Content, 'base64')
                 const webpBuffer = await sharp(imageBuffer)
                   .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
@@ -7232,8 +7232,8 @@ async function parseAndSaveDocumentosCheerio(html: string, apenadoId: string, ap
         
         if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
           const base64Data = proxyPhoto.data
-          if (base64Data.includes(',')) {
-            const base64Content = base64Data.split(',')[1]
+          if (base64Data) {
+            const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
             const imageBuffer = Buffer.from(base64Content, 'base64')
             const webpBuffer = await sharp(imageBuffer)
               .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
@@ -7427,8 +7427,8 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
 
         if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
           const base64Data = proxyPhoto.data
-          if (base64Data.includes(',')) {
-            const base64Content = base64Data.split(',')[1]
+          if (base64Data) {
+            const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
             const imageBuffer = Buffer.from(base64Content, 'base64')
             const webpBuffer = await sharp(imageBuffer)
               .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
@@ -7575,8 +7575,8 @@ async function saveAndLinkComplementaryPhotoCheerio(
 
     if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
       const base64Data = proxyPhoto.data
-      if (base64Data.includes(',')) {
-        const base64Content = base64Data.split(',')[1]
+      if (base64Data) {
+        const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
         const imageBuffer = Buffer.from(base64Content, 'base64')
         const webpBuffer = await sharp(imageBuffer)
           .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
@@ -7867,8 +7867,8 @@ export async function scrapeApenadoFichaFast(
 
     if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
       const base64Data = proxyPhoto.data
-      if (base64Data.includes(',')) {
-        const base64Content = base64Data.split(',')[1]
+      if (base64Data) {
+        const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
         const imageBuffer = Buffer.from(base64Content, 'base64')
         const webpBuffer = await sharp(imageBuffer)
           .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
