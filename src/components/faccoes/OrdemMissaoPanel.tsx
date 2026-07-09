@@ -143,7 +143,11 @@ function formatDateTime(iso: string) {
 }
 
 function formatDateOnly(iso: string) {
-  return new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', {
+  if (!iso) return '';
+  const dateStr = iso.includes('T') ? iso : iso + 'T12:00:00';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
   })
 }

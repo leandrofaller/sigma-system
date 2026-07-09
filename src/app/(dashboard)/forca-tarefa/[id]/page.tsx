@@ -32,13 +32,23 @@ export default async function RelatorioForcaTarefaViewPage({ params }: { params:
 
   const form = {
     number: relatorio.number,
-    date: new Date(relatorio.date).toISOString().split('T')[0],
-    periodoInicio: new Date(relatorio.periodoInicio).toISOString().split('T')[0],
-    periodoFim: new Date(relatorio.periodoFim).toISOString().split('T')[0],
+    date: relatorio.date ? new Date(relatorio.date).toISOString().split('T')[0] : '',
+    periodoInicio: relatorio.periodoInicio ? new Date(relatorio.periodoInicio).toISOString().split('T')[0] : '',
+    periodoFim: relatorio.periodoFim ? new Date(relatorio.periodoFim).toISOString().split('T')[0] : '',
     forcaTarefa: relatorio.forcaTarefa,
     status: relatorio.status,
     author: relatorio.author,
     group: relatorio.group,
+    municipio: relatorio.municipio,
+    faccoes: relatorio.faccoes,
+    iipScore: relatorio.iipScore,
+    iipLevel: relatorio.iipLevel,
+    ripStatus: relatorio.ripStatus,
+    iipFactors: relatorio.iipFactors,
+    alertaAtivo: relatorio.alertaAtivo,
+    alertaResolvido: relatorio.alertaResolvido,
+    providencias: relatorio.providencias,
+    observacoesAip: relatorio.observacoesAip,
     content: {
       identificacao: {
         servidor: content.identificacao?.servidor || relatorio.author?.name || '',

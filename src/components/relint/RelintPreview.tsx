@@ -221,7 +221,7 @@ export function RelintPreview({ form }: Props) {
         {/* Campos */}
         <div style={{ marginBottom: '14px' }}>
           <p style={{ margin: '0 0 3px', fontSize: '11pt' }}><strong><u>{form.number || 'RELINT Nº___/20__/AIP/SEJUS/RO'}</u></strong></p>
-          <p style={{ margin: '0 0 3px', fontSize: '11pt' }}><strong>Data:</strong>&nbsp;{form.date ? formatDate(new Date(form.date + 'T12:00:00')) : '__/__/____'}</p>
+          <p style={{ margin: '0 0 3px', fontSize: '11pt' }}><strong>Data:</strong>&nbsp;{form.date ? formatDate(form.date) : '__/__/____'}</p>
           <p style={{ margin: '0 0 3px', fontSize: '11pt' }}><strong>Assunto:</strong>&nbsp;{form.subject || '_______________'}</p>
           <p style={{ margin: '0 0 3px', fontSize: '11pt' }}><strong>Difusão:</strong>&nbsp;{form.diffusion || '_______________'}</p>
           <p style={{ margin: '0 0 3px', fontSize: '11pt' }}><strong>Difusão anterior:</strong>&nbsp;{diffusionPrev}</p>

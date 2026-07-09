@@ -218,12 +218,12 @@ export function DebriefingPreview({ form }: Props) {
         {/* Campos de identificação */}
         <div style={{ marginBottom: '14px' }}>
           <p style={fieldRow}><strong><u>{form.number || 'DEBRIEFING Nº___/20__/AIP/SEJUS/RO'}</u></strong></p>
-          <p style={fieldRow}><strong>Data do Debriefing:</strong>&nbsp;{form.date ? formatDate(new Date(form.date + 'T12:00:00')) : '__/__/____'}</p>
+          <p style={fieldRow}><strong>Data do Debriefing:</strong>&nbsp;{form.date ? formatDate(form.date) : '__/__/____'}</p>
           {form.missionDate && (
-            <p style={fieldRow}><strong>Data inicial da Missão:</strong>&nbsp;{formatDate(new Date(form.missionDate + 'T12:00:00'))}</p>
+            <p style={fieldRow}><strong>Data inicial da Missão:</strong>&nbsp;{formatDate(form.missionDate)}</p>
           )}
           {form.missionEndDate && (
-            <p style={fieldRow}><strong>Data final da Missão:</strong>&nbsp;{formatDate(new Date(form.missionEndDate + 'T12:00:00'))}</p>
+            <p style={fieldRow}><strong>Data final da Missão:</strong>&nbsp;{formatDate(form.missionEndDate)}</p>
           )}
           {form.missionCode && (
             <p style={fieldRow}><strong>Código da Missão:</strong>&nbsp;{form.missionCode}</p>

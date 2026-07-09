@@ -8,12 +8,52 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(date: Date | string): string {
-  return format(new Date(date), "dd/MM/yyyy", { locale: ptBR });
+export function parseSafeDateOnly(val: any): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val;
+  }
+  
+  const str = String(val).trim();
+  if (!str) return null;
+
+  // matches YYYY-MM-DD optionally followed by T00:00:00 (midnights)
+  const dateOnlyPattern = /^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z?)?$/;
+  const match = str.match(dateOnlyPattern);
+  if (match) {
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1;
+    const day = parseInt(match[3], 10);
+    return new Date(year, month, day, 12, 0, 0); // local noon
+  }
+
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
 }
 
-export function formatDateTime(date: Date | string): string {
-  return format(new Date(date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+export function parseSafeDateTime(val: any): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val;
+  }
+  
+  const str = String(val).trim();
+  if (!str) return null;
+
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+export function formatDate(date: Date | string | null | undefined): string {
+  const d = parseSafeDateOnly(date);
+  if (!d) return '__/__/____';
+  return format(d, "dd/MM/yyyy", { locale: ptBR });
+}
+
+export function formatDateTime(date: Date | string | null | undefined): string {
+  const d = parseSafeDateTime(date);
+  if (!d) return '__/__/____ às __:__';
+  return format(d, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 }
 
 export function generateRelintNumber(prefix: string, year?: number): string {

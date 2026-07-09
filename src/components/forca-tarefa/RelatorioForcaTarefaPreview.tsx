@@ -258,7 +258,7 @@ export function RelatorioForcaTarefaPreview({ form }: Props) {
             {form.number || 'RELATÓRIO DE FORÇA-TAREFA Nº ___/20__'}
           </p>
           <p style={{ fontSize: '9.5pt', color: '#333', margin: 0 }}>
-            <strong>Período de Referência:</strong> {form.periodoInicio ? formatDate(new Date(form.periodoInicio + 'T12:00:00')) : '__/__/____'} a {form.periodoFim ? formatDate(new Date(form.periodoFim + 'T12:00:00')) : '__/__/____'}
+            <strong>Período de Referência:</strong> {form.periodoInicio ? formatDate(form.periodoInicio) : '__/__/____'} a {form.periodoFim ? formatDate(form.periodoFim) : '__/__/____'}
           </p>
         </div>
 
@@ -280,7 +280,7 @@ export function RelatorioForcaTarefaPreview({ form }: Props) {
                 <td><strong>Status do Relatório:</strong> {form.status === 'PUBLISHED' ? 'PUBLICADO' : 'RASCUNHO'}</td>
               </tr>
               <tr>
-                <td><strong>Data de Preenchimento:</strong> {form.date ? formatDate(new Date(form.date + 'T12:00:00')) : '__/__/____'}</td>
+                <td><strong>Data de Preenchimento:</strong> {form.date ? formatDate(form.date) : '__/__/____'}</td>
                 <td><strong>Facções Relacionadas:</strong> {form.faccoes && form.faccoes.length > 0 ? form.faccoes.join(', ') : 'Nenhuma'}</td>
               </tr>
             </tbody>
