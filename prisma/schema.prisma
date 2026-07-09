@@ -1044,6 +1044,7 @@ model AIPApenado {
 
   // Fotos (caminho local do arquivo salvo)
   photoPath         String? // foto de identificação do apenado
+  customPhotoPath   String? // foto enviada manualmente pelo usuário na AIP
 
   // Identificadores SIPE
   sipeId            Int     @unique

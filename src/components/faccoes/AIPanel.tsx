@@ -71,6 +71,7 @@ export interface AIPApenado {
   cep?: string | null
 
   photoPath?: string | null
+  customPhotoPath?: string | null
 
   // Inteligência
   facaoRealNome?: string
@@ -153,7 +154,7 @@ function AIApenadoCard({
         <div className={`w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-white text-lg relative ${
           isFaccaoConfirmada ? 'bg-red-500' : temInteligencia ? 'bg-purple-500' : 'bg-blue-500'
         }`}>
-          {apenado.photoPath ? (
+          {(apenado.photoPath || apenado.customPhotoPath) ? (
             <img
               src={`/api/aip/apenados/${apenado.id}/foto`}
               alt={apenado.nome}
@@ -273,6 +274,69 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
   const { data: session } = useSession()
   const [showPrintConfig, setShowPrintConfig] = useState(false)
   const [gerandoDossie, setGerandoDossie] = useState(false)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingPhoto(true)
+    const toastId = toast.loading('Enviando nova foto...')
+    try {
+      const data = new FormData()
+      data.append('foto', file)
+
+      const res = await fetch(`/api/aip/apenados/${apenado.id}/foto`, {
+        method: 'POST',
+        body: data,
+      })
+
+      const result = await res.json()
+      if (res.ok && result.success) {
+        toast.success('Foto atualizada com sucesso!', { id: toastId })
+        setApenadoState(result.apenado)
+        setFormData(result.apenado)
+        onUpdate(result.apenado)
+      } else {
+        toast.error(result.error || 'Erro ao enviar foto', { id: toastId })
+      }
+    } catch (err: any) {
+      console.error('[AIP FOTO UPLOAD] Erro:', err)
+      toast.error('Erro de rede ao enviar foto', { id: toastId })
+    } finally {
+      setUploadingPhoto(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handlePhotoDelete = async () => {
+    if (!confirm('Deseja realmente remover a foto customizada? A foto original do SIPE voltará a ser exibida.')) return
+
+    setUploadingPhoto(true)
+    const toastId = toast.loading('Removendo foto customizada...')
+    try {
+      const res = await fetch(`/api/aip/apenados/${apenado.id}/foto`, {
+        method: 'DELETE',
+      })
+
+      const result = await res.json()
+      if (res.ok && result.success) {
+        toast.success('Foto customizada removida!', { id: toastId })
+        setApenadoState(result.apenado)
+        setFormData(result.apenado)
+        onUpdate(result.apenado)
+      } else {
+        toast.error(result.error || 'Erro ao remover foto', { id: toastId })
+      }
+    } catch (err: any) {
+      console.error('[AIP FOTO DELETE] Erro:', err)
+      toast.error('Erro de rede ao remover foto', { id: toastId })
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
 
   const handleGerarDossie = () => {
     setShowPrintConfig(true)
@@ -516,29 +580,71 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
             <div className="flex gap-4 items-center flex-1 min-w-0">
               {/* Foto grande/avatar condicional baseada no layout */}
               {!isPhotoStyleFull && (
-                <div
-                  onClick={() => {
-                    if (apenado.photoPath) {
-                      setZoomedPhotoUrl(`/api/aip/apenados/${apenado.id}/foto`);
-                      setZoomedPhotoTitle(apenado.nome);
-                    }
-                  }}
-                  className={`w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-purple-400 to-purple-600 shadow-md flex items-center justify-center text-white font-bold text-3xl select-none ${
-                    apenado.photoPath ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all' : ''
-                  }`}
-                >
-                  {apenado.photoPath ? (
-                    <img
-                      src={`/api/aip/apenados/${apenado.id}/foto`}
-                      alt={apenado.nome}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
+                <div className="relative group">
+                  <div
+                    onClick={() => {
+                      if (editing) {
+                        fileInputRef.current?.click()
+                      } else if (apenado.photoPath || apenado.customPhotoPath) {
+                        setZoomedPhotoUrl(`/api/aip/apenados/${apenado.id}/foto`);
+                        setZoomedPhotoTitle(apenado.nome);
+                      }
+                    }}
+                    className={`w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-purple-400 to-purple-600 shadow-md flex items-center justify-center text-white font-bold text-3xl select-none relative ${
+                      editing 
+                        ? 'cursor-pointer hover:brightness-90 active:scale-95 transition-all' 
+                        : (apenado.photoPath || apenado.customPhotoPath)
+                          ? 'cursor-zoom-in hover:opacity-90 active:scale-95 transition-all'
+                          : ''
+                    }`}
+                  >
+                    {(apenado.photoPath || apenado.customPhotoPath) ? (
+                      <img
+                        src={`/api/aip/apenados/${apenado.id}/foto`}
+                        alt={apenado.nome}
+                        className="w-full h-full object-cover animate-fade-in"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <span>{apenado.nome.charAt(0).toUpperCase()}</span>
+                    )}
+
+                    {editing && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Image className="w-6 h-6 animate-pulse" />
+                      </div>
+                    )}
+                  </div>
+
+                  {editing && apenado.customPhotoPath && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePhotoDelete();
                       }}
-                    />
-                  ) : (
-                    <span>{apenado.nome.charAt(0).toUpperCase()}</span>
+                      className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-650 text-white rounded-full p-1 shadow-md hover:scale-105 transition-all z-20"
+                      title="Remover foto customizada"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   )}
+
+                  {uploadingPhoto && (
+                    <div className="absolute inset-0 bg-black/55 flex items-center justify-center text-white rounded-2xl z-10 animate-fade-in">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handlePhotoUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
                 </div>
               )}
 
@@ -618,31 +724,73 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
           {/* Foto grande em tamanho real (se habilitado no layout) */}
           {isPhotoStyleFull && (
             <div className="p-5 flex justify-center bg-gray-50/50 dark:bg-gray-950/20 border-b border-gray-100 dark:border-gray-800">
-              <div 
-                onClick={() => {
-                  if (apenado.photoPath) {
-                    setZoomedPhotoUrl(`/api/aip/apenados/${apenado.id}/foto`);
-                    setZoomedPhotoTitle(apenado.nome);
-                  }
-                }}
-                className={`relative max-w-full rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-850 border border-gray-200 dark:border-gray-800 shadow-md ${
-                  apenado.photoPath ? 'cursor-zoom-in hover:opacity-95 transition-opacity' : ''
-                }`}
-              >
-                {apenado.photoPath ? (
-                  <img
-                    src={`/api/aip/apenados/${apenado.id}/foto`}
-                    alt={apenado.nome}
-                    className="max-h-[320px] w-auto object-contain animate-fade-in"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
+              <div className="relative group">
+                <div 
+                  onClick={() => {
+                    if (editing) {
+                      fileInputRef.current?.click()
+                    } else if (apenado.photoPath || apenado.customPhotoPath) {
+                      setZoomedPhotoUrl(`/api/aip/apenados/${apenado.id}/foto`);
+                      setZoomedPhotoTitle(apenado.nome);
+                    }
+                  }}
+                  className={`relative max-w-full rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-850 border border-gray-200 dark:border-gray-800 shadow-md ${
+                    editing 
+                      ? 'cursor-pointer hover:brightness-95 transition-all' 
+                      : (apenado.photoPath || apenado.customPhotoPath)
+                        ? 'cursor-zoom-in hover:opacity-95 transition-opacity'
+                        : ''
+                  }`}
+                >
+                  {(apenado.photoPath || apenado.customPhotoPath) ? (
+                    <img
+                      src={`/api/aip/apenados/${apenado.id}/foto`}
+                      alt={apenado.nome}
+                      className="max-h-[320px] w-auto object-contain animate-fade-in"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-40 h-40 flex items-center justify-center text-gray-400 text-5xl font-bold select-none">
+                      {apenado.nome.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+
+                  {editing && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Image className="w-8 h-8 animate-pulse" />
+                    </div>
+                  )}
+                </div>
+
+                {editing && apenado.customPhotoPath && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePhotoDelete();
                     }}
-                  />
-                ) : (
-                  <div className="w-40 h-40 flex items-center justify-center text-gray-400 text-5xl font-bold select-none">
-                    {apenado.nome.charAt(0).toUpperCase()}
+                    className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-650 text-white rounded-full p-1.5 shadow-md hover:scale-105 transition-all z-20"
+                    title="Remover foto customizada"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {uploadingPhoto && (
+                  <div className="absolute inset-0 bg-black/55 flex items-center justify-center text-white rounded-2xl z-10 animate-fade-in">
+                    <Loader2 className="w-8 h-8 animate-spin" />
                   </div>
                 )}
+
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handlePhotoUpload}
+                  accept="image/*"
+                  className="hidden"
+                />
               </div>
             </div>
           )}
