@@ -36,6 +36,15 @@ const PichacoesTerritoryMap = dynamic(() => import('./PichacoesTerritoryMap'), {
   ),
 });
 
+const PichacaoGeoPickerMap = dynamic(() => import('./PichacaoGeoPickerMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-44 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+    </div>
+  ),
+});
+
 
 
 // Lista dos 52 municípios de Rondônia
@@ -200,6 +209,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [rotatingIdx, setRotatingIdx] = useState<number | null>(null);
 
   // Confirmação de exclusão
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -297,6 +307,34 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
     }
   };
 
+  const handleRotatePhoto = async (url: string, index: number) => {
+    setRotatingIdx(index);
+    try {
+      const res = await fetch('/api/aip/pichacoes/rotate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, direction: 'cw' }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setForm(prev => {
+          const nextFotos = [...prev.fotos];
+          nextFotos[index] = data.url;
+          return { ...prev, fotos: nextFotos };
+        });
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Falha ao rotacionar imagem.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao processar rotação da foto.');
+    } finally {
+      setRotatingIdx(null);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.municipio) {
@@ -312,11 +350,18 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
     const url = editingPichacao ? `/api/aip/pichacoes/${editingPichacao.id}` : '/api/aip/pichacoes';
     const method = editingPichacao ? 'PATCH' : 'POST';
 
+    // Remove parâmetros de cache-busting (?t=...) antes de enviar para salvar no banco
+    const cleanedFotos = form.fotos.map(f => f.split('?')[0]);
+    const payload = {
+      ...form,
+      fotos: cleanedFotos,
+    };
+
     try {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
@@ -1048,6 +1093,19 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                     className="w-full px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                   />
                 </div>
+
+                {/* Mapa para selecionar/ajustar localização com marcador arrastável */}
+                <div className="col-span-2 h-44 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 relative z-0">
+                  <PichacaoGeoPickerMap
+                    latitude={form.latitude ? parseFloat(form.latitude) : null}
+                    longitude={form.longitude ? parseFloat(form.longitude) : null}
+                    onPick={(lat, lng) => setForm(prev => ({
+                      ...prev,
+                      latitude: lat.toFixed(6),
+                      longitude: lng.toFixed(6),
+                    }))}
+                  />
+                </div>
               </div>
 
               {/* Facção */}
@@ -1103,13 +1161,31 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                   {form.fotos.map((url, idx) => (
                     <div key={idx} className="relative aspect-video rounded-xl overflow-hidden group border border-gray-200 dark:border-gray-700">
                       <img src={url} alt="upload" className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => setForm(prev => ({ ...prev, fotos: prev.fotos.filter((_, i) => i !== idx) }))}
-                        className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                      
+                      {/* Botoes de Acao (aparece no hover) */}
+                      <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleRotatePhoto(url, idx)}
+                          disabled={rotatingIdx === idx}
+                          className="p-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                          title="Rotacionar 90° Horário"
+                        >
+                          {rotatingIdx === idx ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, fotos: prev.fotos.filter((_, i) => i !== idx) }))}
+                          className="p-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                          title="Remover Foto"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
