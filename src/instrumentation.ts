@@ -12,6 +12,8 @@ export async function register() {
       const {
         initPgVector,
         populateVectorsFromDescriptors,
+        populateServidoresVectorsFromDescriptors,
+        populateVisitantesVectorsFromDescriptors,
         getPgVectorStats,
       } = await import('@/lib/pgvector');
 
@@ -21,11 +23,17 @@ export async function register() {
         console.warn('[pgvector] Falha na inicialização automática:', init.error);
         console.warn('[pgvector] Busca facial usará fallback em memória.');
       } else {
-        const migrated = await populateVectorsFromDescriptors(500);
+        const migratedApenados = await populateVectorsFromDescriptors(500);
+        const migratedServidores = await populateServidoresVectorsFromDescriptors(500);
+        const migratedVisitantes = await populateVisitantesVectorsFromDescriptors(500);
         const stats = await getPgVectorStats();
+        
+        const totalMigrated = migratedApenados + migratedServidores + migratedVisitantes;
         console.log(
           `[pgvector] ✓ Inicializado — ${stats.vectorCount} vetores clássicos` +
-            (migrated > 0 ? ` (+${migrated} migrados)` : '') +
+            (totalMigrated > 0 
+              ? ` (+${totalMigrated} sincronizados no boot: apenados: ${migratedApenados}, servidores: ${migratedServidores}, visitantes: ${migratedVisitantes})` 
+              : '') +
             ` | índice HNSW: ${stats.indexExists ? 'ativo' : 'ausente'}`,
         );
       }

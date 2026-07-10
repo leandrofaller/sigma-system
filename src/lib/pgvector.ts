@@ -99,6 +99,49 @@ export async function initPgVector(): Promise<{ ok: boolean; error?: string }> {
       WITH (m = 32, ef_construction = 128)
     `);
 
+    // Cria função de trigger para sincronização automática de faceDescriptor -> faceVector em tempo real
+    await prisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION sync_face_descriptor_to_vector()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW."faceDescriptor" IS NOT NULL AND NEW."faceDescriptor" LIKE '[%' THEN
+          BEGIN
+            NEW."faceVector" := ARRAY(
+              SELECT json_array_elements_text(NEW."faceDescriptor"::json)::double precision
+            )::double precision[]::vector(512);
+          EXCEPTION WHEN OTHERS THEN
+            NEW."faceVector" := NULL;
+          END;
+        ELSE
+          NEW."faceVector" := NULL;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    // Registra os triggers de forma idempotente para as tabelas apenados, servidores e visitantes
+    await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS trigger_sync_apenados_vector ON apenados');
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER trigger_sync_apenados_vector
+      BEFORE INSERT OR UPDATE OF "faceDescriptor" ON apenados
+      FOR EACH ROW EXECUTE FUNCTION sync_face_descriptor_to_vector()
+    `);
+
+    await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS trigger_sync_servidores_vector ON sejus_servidores');
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER trigger_sync_servidores_vector
+      BEFORE INSERT OR UPDATE OF "faceDescriptor" ON sejus_servidores
+      FOR EACH ROW EXECUTE FUNCTION sync_face_descriptor_to_vector()
+    `);
+
+    await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS trigger_sync_visitantes_vector ON sipe_visitantes');
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER trigger_sync_visitantes_vector
+      BEFORE INSERT OR UPDATE OF "faceDescriptor" ON sipe_visitantes
+      FOR EACH ROW EXECUTE FUNCTION sync_face_descriptor_to_vector()
+    `);
+
     _available = true;
     return { ok: true };
   } catch (err: any) {
