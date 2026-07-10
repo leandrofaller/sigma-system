@@ -38,7 +38,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   // Tenta pgvector primeiro (índice HNSW — rápido e sem RAM)
-  warmFaceCache();
   const pvecAvail = await pgvectorAvailable();
 
   if (pvecAvail) {

@@ -105,15 +105,18 @@ export async function POST(req: NextRequest) {
   const minSimilarity = parseInt((formData.get('minSimilarity') as string) || String(envDefaultSim), 10);
   const targetType = (formData.get('targetType') as string) || 'apenados';
 
-  // Inicia carregamento do cache em background (no-op se pgvector disponível e cache já carregado)
-  if (targetType === 'visitantes') {
-    warmVisitanteFaceCache();
-  } else if (targetType === 'servidores') {
-    warmServidorFaceCache();
-  } else if (targetType === 'all') {
-    warmFaceCache(); warmVisitanteFaceCache(); warmServidorFaceCache();
-  } else {
-    warmFaceCache();
+  // Inicia carregamento do cache em background apenas se pgvector NÃO estiver disponível
+  const pvecAvail = await pgvectorAvailable();
+  if (!pvecAvail) {
+    if (targetType === 'visitantes') {
+      warmVisitanteFaceCache();
+    } else if (targetType === 'servidores') {
+      warmServidorFaceCache();
+    } else if (targetType === 'all') {
+      warmFaceCache(); warmVisitanteFaceCache(); warmServidorFaceCache();
+    } else {
+      warmFaceCache();
+    }
   }
 
   if (!file) return NextResponse.json({ error: 'Nenhuma imagem enviada' }, { status: 400 });

@@ -1,3 +1,6 @@
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { existsSync, readFileSync, writeFileSync, renameSync } from 'fs';
 import { prisma } from './db';
 
 export interface ServidorFaceCache {
@@ -18,11 +21,63 @@ export interface CacheStatus {
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutos
 const BATCH_SIZE = 30_000;
 
+const META_PATH = join(tmpdir(), 'sigma-face-cache-servidores.meta.json');
+const BIN_PATH = join(tmpdir(), 'sigma-face-cache-servidores.bin');
+
+interface CacheMeta {
+  count: number;
+  lastUpdate: number;
+  ids: string[];
+}
+
 let cache: ServidorFaceCache | null = null;
 let loadingPromise: Promise<ServidorFaceCache> | null = null;
 let lastError: string | null = null;
 
 async function loadFromDB(): Promise<ServidorFaceCache> {
+  let dbCount = 0;
+  let dbLastUpdate = 0;
+
+  try {
+    const stats = await prisma.$queryRaw<[{ count: bigint; last_update: Date | null }]>`
+      SELECT
+        COUNT(*)::bigint AS count,
+        MAX("updatedAt") AS last_update
+      FROM sejus_servidores
+      WHERE "faceDescriptor" IS NOT NULL
+        AND "faceDescriptor" LIKE '[%'
+        AND "photoPath" IS NOT NULL
+    `;
+    dbCount = Number(stats[0]?.count ?? 0);
+    dbLastUpdate = stats[0]?.last_update ? stats[0].last_update.getTime() : 0;
+  } catch (err) {
+    console.error('[ARCFACE CACHE SERVIDORES] Erro ao consultar estatísticas do banco de dados:', err);
+  }
+
+  // Tenta carregar do cache binário local
+  if (dbCount > 0 && existsSync(META_PATH) && existsSync(BIN_PATH)) {
+    try {
+      const metaContent = readFileSync(META_PATH, 'utf8');
+      const meta: CacheMeta = JSON.parse(metaContent);
+
+      if (meta.count === dbCount && meta.lastUpdate === dbLastUpdate && meta.ids.length === dbCount) {
+        const binBuffer = readFileSync(BIN_PATH);
+        if (binBuffer.byteLength === dbCount * 512 * 4) {
+          const alignedBuffer = binBuffer.buffer.slice(
+            binBuffer.byteOffset,
+            binBuffer.byteOffset + binBuffer.byteLength
+          );
+          const vecs = new Float32Array(alignedBuffer);
+          console.log(`[ARCFACE CACHE SERVIDORES] Carregado com sucesso do cache binário em disco: ${dbCount} servidores.`);
+          return { ids: meta.ids, vecs, count: dbCount, loadedAt: Date.now() };
+        }
+      }
+    } catch (err) {
+      console.warn('[ARCFACE CACHE SERVIDORES] Falha ao ler cache local em disco, recarregando do banco:', err);
+    }
+  }
+
+  console.log(`[ARCFACE CACHE SERVIDORES] Inicializando carga do banco de dados para ${dbCount} servidores...`);
   const ids: string[] = [];
   // Pré-aloca para 10k embeddings; dobra se necessário
   let vecsBuffer = new Float32Array(10_000 * 512);
@@ -68,6 +123,27 @@ async function loadFromDB(): Promise<ServidorFaceCache> {
   }
 
   const vecs = count * 512 === vecsBuffer.length ? vecsBuffer : vecsBuffer.slice(0, count * 512);
+
+  // Grava o novo cache binário em disco
+  try {
+    const metaPayload: CacheMeta = {
+      count,
+      lastUpdate: dbLastUpdate,
+      ids,
+    };
+    const tempMetaPath = `${META_PATH}.tmp`;
+    const tempBinPath = `${BIN_PATH}.tmp`;
+
+    writeFileSync(tempMetaPath, JSON.stringify(metaPayload), 'utf8');
+    writeFileSync(tempBinPath, Buffer.from(vecs.buffer, vecs.byteOffset, vecs.byteLength));
+
+    renameSync(tempMetaPath, META_PATH);
+    renameSync(tempBinPath, BIN_PATH);
+    console.log(`[ARCFACE CACHE SERVIDORES] Salvo novo cache local em disco com ${count} servidores.`);
+  } catch (err) {
+    console.error('[ARCFACE CACHE SERVIDORES] Erro ao gravar cache local em disco:', err);
+  }
+
   return { ids, vecs, count, loadedAt: Date.now() };
 }
 

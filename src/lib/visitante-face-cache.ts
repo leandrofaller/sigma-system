@@ -1,3 +1,6 @@
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { existsSync, readFileSync, writeFileSync, renameSync } from 'fs';
 import { prisma } from './db';
 
 export interface VisitanteFaceCache {
@@ -18,11 +21,59 @@ export interface CacheStatus {
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutos
 const BATCH_SIZE = 30_000;
 
+const META_PATH = join(tmpdir(), 'sigma-face-cache-visitantes.meta.json');
+const BIN_PATH = join(tmpdir(), 'sigma-face-cache-visitantes.bin');
+
+interface CacheMeta {
+  count: number;
+  ids: string[];
+}
+
 let cache: VisitanteFaceCache | null = null;
 let loadingPromise: Promise<VisitanteFaceCache> | null = null;
 let lastError: string | null = null;
 
 async function loadFromDB(): Promise<VisitanteFaceCache> {
+  let dbCount = 0;
+
+  try {
+    const stats = await prisma.$queryRaw<[{ count: bigint }]>`
+      SELECT
+        COUNT(*)::bigint AS count
+      FROM sipe_visitantes
+      WHERE "faceDescriptor" IS NOT NULL
+        AND "faceDescriptor" LIKE '[%'
+        AND "photoPath" IS NOT NULL
+    `;
+    dbCount = Number(stats[0]?.count ?? 0);
+  } catch (err) {
+    console.error('[ARCFACE CACHE VISITANTES] Erro ao consultar estatísticas do banco de dados:', err);
+  }
+
+  // Tenta carregar do cache binário local
+  if (dbCount > 0 && existsSync(META_PATH) && existsSync(BIN_PATH)) {
+    try {
+      const metaContent = readFileSync(META_PATH, 'utf8');
+      const meta: CacheMeta = JSON.parse(metaContent);
+
+      if (meta.count === dbCount && meta.ids.length === dbCount) {
+        const binBuffer = readFileSync(BIN_PATH);
+        if (binBuffer.byteLength === dbCount * 512 * 4) {
+          const alignedBuffer = binBuffer.buffer.slice(
+            binBuffer.byteOffset,
+            binBuffer.byteOffset + binBuffer.byteLength
+          );
+          const vecs = new Float32Array(alignedBuffer);
+          console.log(`[ARCFACE CACHE VISITANTES] Carregado com sucesso do cache binário em disco: ${dbCount} visitantes.`);
+          return { ids: meta.ids, vecs, count: dbCount, loadedAt: Date.now() };
+        }
+      }
+    } catch (err) {
+      console.warn('[ARCFACE CACHE VISITANTES] Falha ao ler cache local em disco, recarregando do banco:', err);
+    }
+  }
+
+  console.log(`[ARCFACE CACHE VISITANTES] Inicializando carga do banco de dados para ${dbCount} visitantes...`);
   const ids: string[] = [];
   // Pré-aloca para 50k embeddings; dobra se necessário
   let vecsBuffer = new Float32Array(50_000 * 512);
@@ -68,6 +119,26 @@ async function loadFromDB(): Promise<VisitanteFaceCache> {
   }
 
   const vecs = count * 512 === vecsBuffer.length ? vecsBuffer : vecsBuffer.slice(0, count * 512);
+
+  // Grava o novo cache binário em disco
+  try {
+    const metaPayload: CacheMeta = {
+      count,
+      ids,
+    };
+    const tempMetaPath = `${META_PATH}.tmp`;
+    const tempBinPath = `${BIN_PATH}.tmp`;
+
+    writeFileSync(tempMetaPath, JSON.stringify(metaPayload), 'utf8');
+    writeFileSync(tempBinPath, Buffer.from(vecs.buffer, vecs.byteOffset, vecs.byteLength));
+
+    renameSync(tempMetaPath, META_PATH);
+    renameSync(tempBinPath, BIN_PATH);
+    console.log(`[ARCFACE CACHE VISITANTES] Salvo novo cache local em disco com ${count} visitantes.`);
+  } catch (err) {
+    console.error('[ARCFACE CACHE VISITANTES] Erro ao gravar cache local em disco:', err);
+  }
+
   return { ids, vecs, count, loadedAt: Date.now() };
 }
 
