@@ -57,11 +57,14 @@ def compute_liveness(img, face):
         return None
 
 def main():
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "Uso: python arcface_analyze.py <imagem>"}))
-        sys.exit(1)
+    import argparse
+    parser = argparse.ArgumentParser(description="Detecta rostos e extrai embeddings ArcFace.")
+    parser.add_argument("image_path", help="Caminho para o arquivo de imagem.")
+    parser.add_argument("--model", default="buffalo_l", choices=["buffalo_l", "antelopev2"], help="Modelo do InsightFace.")
+    args = parser.parse_args()
 
-    image_path = sys.argv[1]
+    image_path = args.image_path
+    model_name = args.model
 
     if not os.path.isfile(image_path):
         print(json.dumps({"error": f"Arquivo nao encontrado: {image_path}"}))
@@ -94,7 +97,7 @@ def main():
                     providers = ["CPUExecutionProvider"]
 
             app = FaceAnalysis(
-                name="buffalo_l",
+                name=model_name,
                 providers=providers,
             )
             app.prepare(ctx_id=0, det_size=(640, 640))

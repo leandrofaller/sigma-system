@@ -15,22 +15,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // threshold is sent as 0-100 integer (e.g. 72), stored as 0-1 decimal
   const threshold = Math.max(0.4, Math.min(0.99, parseFloat(searchParams.get('threshold') || '72') / 100));
   const topN = Math.min(50, Math.max(1, parseInt(searchParams.get('topN') || '20', 10)));
+  const model = (searchParams.get('model') || 'buffalo') as 'buffalo' | 'antelope';
 
   // Get query embedding from DB
   const record = await prisma.apenado.findUnique({
     where: { id },
-    select: { faceDescriptor: true, name: true },
+    select: { faceDescriptor: true, faceDescriptorAdvanced: true, name: true },
   });
 
   if (!record) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 });
 
-  if (!record.faceDescriptor || record.faceDescriptor === 'NONE') {
+  const descField = model === 'antelope' ? record.faceDescriptorAdvanced : record.faceDescriptor;
+
+  if (!descField || descField === 'NONE') {
     return NextResponse.json({ similar: [], reason: 'no-face', indexed: 0 });
   }
 
   let queryVec: Float32Array;
   try {
-    const arr: number[] = JSON.parse(record.faceDescriptor);
+    const arr: number[] = JSON.parse(descField);
     if (!Array.isArray(arr) || arr.length !== DIM) throw new Error('invalid');
     queryVec = new Float32Array(arr);
   } catch {
@@ -41,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const pvecAvail = await pgvectorAvailable();
 
   if (pvecAvail) {
-    const hits = await searchByVector(Array.from(queryVec), threshold, topN, id);
+    const hits = await searchByVector(Array.from(queryVec), threshold, topN, id, model);
     if (hits.length === 0) return NextResponse.json({ similar: [], indexed: 0, backend: 'pgvector' });
 
     const matchIds = hits.map((h) => h.id);
@@ -58,8 +61,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
-    const [{ c }] = await prisma.$queryRaw<[{ c: bigint }]>`
-      SELECT COUNT(*) AS c FROM apenados WHERE "faceVector" IS NOT NULL
+    const vectorCol = model === 'antelope' ? 'faceVectorAdvanced' : 'faceVector';
+    const [{ c }] = await prisma.$queryRawUnsafe<[{ c: bigint }]>`
+      SELECT COUNT(*) AS c FROM apenados WHERE "${vectorCol}" IS NOT NULL
     `;
     return NextResponse.json({ similar, indexed: Number(c), backend: 'pgvector' });
   }

@@ -304,6 +304,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const [minSimilarity, setMinSimilarity] = useState(30);
   const [faceDisplayHeight, setFaceDisplayHeight] = useState(380);
+  const [model, setModel] = useState<'buffalo' | 'antelope'>('buffalo');
 
   // Sem Rosto
   const [noFaceType] = useState<'classic'>('classic');
@@ -438,6 +439,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
       form.append('topN', '20');
       form.append('minSimilarity', String(minSim));
       form.append('targetType', targetType);
+      form.append('model', model);
 
       const res = await fetch('/api/apenados/face/search', { method: 'POST', body: form });
 
@@ -472,7 +474,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     } finally {
       clearTimeout(slowTimer);
     }
-  }, [targetType]);
+  }, [targetType, model]);
 
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return;
@@ -717,6 +719,32 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                 >
                   <Users className="w-3 h-3 shrink-0" />
                   <span>Servidores</span>
+                </button>
+              </div>
+
+              {/* Seletor de Modelo de Reconhecimento Facial (Buffalo vs Antelopev2) */}
+              <div className="flex justify-center gap-1 mb-4 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-full max-w-[480px] mx-auto border border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setModel('buffalo')}
+                  className={`flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs font-bold rounded-lg transition-all ${
+                    model === 'buffalo'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  <span>Buffalo (Padrão)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModel('antelope')}
+                  className={`flex-1 flex items-center justify-center gap-1 py-1 px-2 text-xs font-bold rounded-lg transition-all ${
+                    model === 'antelope'
+                      ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                      : 'text-subtle hover:text-body'
+                  }`}
+                >
+                  <span>Antelopev2 (Alta Precisão)</span>
                 </button>
               </div>
 

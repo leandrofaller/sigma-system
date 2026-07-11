@@ -60,6 +60,7 @@ def main():
     ids = data.get("ids", [])
     uploads_dir = data.get("uploads_dir", "")
     photo_paths = data.get("photo_paths", {})
+    model_name = data.get("model", "buffalo_l")
 
     if not ids:
         print(json.dumps({"done": True, "processed": 0}))
@@ -70,7 +71,7 @@ def main():
         sys.exit(1)
 
     try:
-        app = create_face_app()
+        app = create_face_app(name=model_name)
     except BaseException as e:
         print(json.dumps({
             "error": f"Erro ao importar no {sys.executable}: {type(e).__name__}: {e}",

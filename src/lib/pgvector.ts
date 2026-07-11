@@ -70,36 +70,64 @@ export async function getPgVectorStats(): Promise<{
 export async function initPgVector(): Promise<{ ok: boolean; error?: string }> {
   try {
     await prisma.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS vector`);
+    
+    // Inicializa colunas clássicas (Buffalo)
     await prisma.$executeRawUnsafe(
       `ALTER TABLE apenados ADD COLUMN IF NOT EXISTS "faceVector" vector(512)`,
     );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE sipe_visitantes ADD COLUMN IF NOT EXISTS "faceVector" vector(512)`,
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE sejus_servidores ADD COLUMN IF NOT EXISTS "faceVector" vector(512)`,
+    );
+
+    // Inicializa colunas avançadas (Antelopev2)
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE apenados ADD COLUMN IF NOT EXISTS "faceVectorAdvanced" vector(512)`,
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE sipe_visitantes ADD COLUMN IF NOT EXISTS "faceVectorAdvanced" vector(512)`,
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE sejus_servidores ADD COLUMN IF NOT EXISTS "faceVectorAdvanced" vector(512)`,
+    );
+
+    // Cria índices HNSW para Buffalo
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS apenados_face_hnsw_idx
       ON apenados USING hnsw ("faceVector" vector_cosine_ops)
       WITH (m = 32, ef_construction = 128)
     `);
-
-    // Inicializa suporte para visitantes
-    await prisma.$executeRawUnsafe(
-      `ALTER TABLE sipe_visitantes ADD COLUMN IF NOT EXISTS "faceVector" vector(512)`,
-    );
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS visitantes_face_hnsw_idx
       ON sipe_visitantes USING hnsw ("faceVector" vector_cosine_ops)
       WITH (m = 32, ef_construction = 128)
     `);
-
-    // Inicializa suporte para servidores
-    await prisma.$executeRawUnsafe(
-      `ALTER TABLE sejus_servidores ADD COLUMN IF NOT EXISTS "faceVector" vector(512)`,
-    );
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS servidores_face_hnsw_idx
       ON sejus_servidores USING hnsw ("faceVector" vector_cosine_ops)
       WITH (m = 32, ef_construction = 128)
     `);
 
-    // Cria função de trigger para sincronização automática de faceDescriptor -> faceVector em tempo real
+    // Cria índices HNSW para Antelope
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS apenados_face_advanced_hnsw_idx
+      ON apenados USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
+      WITH (m = 32, ef_construction = 128)
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS visitantes_face_advanced_hnsw_idx
+      ON sipe_visitantes USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
+      WITH (m = 32, ef_construction = 128)
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS servidores_face_advanced_hnsw_idx
+      ON sejus_servidores USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
+      WITH (m = 32, ef_construction = 128)
+    `);
+
+    // Cria função de trigger para sincronização clássica (Buffalo)
     await prisma.$executeRawUnsafe(`
       CREATE OR REPLACE FUNCTION sync_face_descriptor_to_vector()
       RETURNS TRIGGER AS $$
@@ -120,26 +148,65 @@ export async function initPgVector(): Promise<{ ok: boolean; error?: string }> {
       $$ LANGUAGE plpgsql;
     `);
 
-    // Registra os triggers de forma idempotente para as tabelas apenados, servidores e visitantes
+    // Cria função de trigger para sincronização avançada (Antelopev2)
+    await prisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION sync_face_descriptor_advanced_to_vector()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW."faceDescriptorAdvanced" IS NOT NULL AND NEW."faceDescriptorAdvanced" LIKE '[%' THEN
+          BEGIN
+            NEW."faceVectorAdvanced" := ARRAY(
+              SELECT json_array_elements_text(NEW."faceDescriptorAdvanced"::json)::double precision
+            )::double precision[]::vector(512);
+          EXCEPTION WHEN OTHERS THEN
+            NEW."faceVectorAdvanced" := NULL;
+          END;
+        ELSE
+          NEW."faceVectorAdvanced" := NULL;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    // Registra triggers clássicos
     await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS trigger_sync_apenados_vector ON apenados');
     await prisma.$executeRawUnsafe(`
       CREATE TRIGGER trigger_sync_apenados_vector
       BEFORE INSERT OR UPDATE OF "faceDescriptor" ON apenados
       FOR EACH ROW EXECUTE FUNCTION sync_face_descriptor_to_vector()
     `);
-
     await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS trigger_sync_servidores_vector ON sejus_servidores');
     await prisma.$executeRawUnsafe(`
       CREATE TRIGGER trigger_sync_servidores_vector
       BEFORE INSERT OR UPDATE OF "faceDescriptor" ON sejus_servidores
       FOR EACH ROW EXECUTE FUNCTION sync_face_descriptor_to_vector()
     `);
-
     await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS trigger_sync_visitantes_vector ON sipe_visitantes');
     await prisma.$executeRawUnsafe(`
       CREATE TRIGGER trigger_sync_visitantes_vector
       BEFORE INSERT OR UPDATE OF "faceDescriptor" ON sipe_visitantes
       FOR EACH ROW EXECUTE FUNCTION sync_face_descriptor_to_vector()
+    `);
+
+    // Registra triggers avançados
+    await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS trigger_sync_apenados_advanced_vector ON apenados');
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER trigger_sync_apenados_advanced_vector
+      BEFORE INSERT OR UPDATE OF "faceDescriptorAdvanced" ON apenados
+      FOR EACH ROW EXECUTE FUNCTION sync_face_descriptor_advanced_to_vector()
+    `);
+    await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS trigger_sync_servidores_advanced_vector ON sejus_servidores');
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER trigger_sync_servidores_advanced_vector
+      BEFORE INSERT OR UPDATE OF "faceDescriptorAdvanced" ON sejus_servidores
+      FOR EACH ROW EXECUTE FUNCTION sync_face_descriptor_advanced_to_vector()
+    `);
+    await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS trigger_sync_visitantes_advanced_vector ON sipe_visitantes');
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER trigger_sync_visitantes_advanced_vector
+      BEFORE INSERT OR UPDATE OF "faceDescriptorAdvanced" ON sipe_visitantes
+      FOR EACH ROW EXECUTE FUNCTION sync_face_descriptor_advanced_to_vector()
     `);
 
     _available = true;
@@ -215,6 +282,28 @@ export async function upsertVector(id: string, embedding: number[]): Promise<voi
   } catch {}
 }
 
+/** Remove o faceVectorAdvanced de um apenado. */
+export async function clearVectorAdvanced(id: string): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE apenados SET "faceVectorAdvanced" = NULL WHERE id = $1`,
+      id,
+    );
+  } catch {}
+}
+
+/** Salva um embedding como faceVectorAdvanced para um apenado. */
+export async function upsertVectorAdvanced(id: string, embedding: number[]): Promise<void> {
+  const vec = `[${embedding.join(',')}]`;
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE apenados SET "faceVectorAdvanced" = $1::vector WHERE id = $2`,
+      vec,
+      id,
+    );
+  } catch {}
+}
+
 export interface VectorMatch {
   id: string;
   similarity: number; // 0–1 (coseno)
@@ -234,27 +323,27 @@ export async function searchByVector(
   threshold: number,
   topN: number,
   excludeId?: string,
+  model: 'buffalo' | 'antelope' = 'buffalo',
 ): Promise<VectorMatch[]> {
   const vec = `[${embedding.join(',')}]`;
   const maxDist = 1 - threshold; // distância coseno = 1 − similaridade
+  const vectorCol = model === 'antelope' ? 'faceVectorAdvanced' : 'faceVector';
 
   try {
-    // SET LOCAL hnsw.ef_search = 100: aumenta candidatos avaliados pelo índice HNSW
-    // de 40 (padrão) para 100 → ~10-20% mais recall em buscas próximas do threshold.
-    // SET LOCAL é scoped à transação — seguro com connection pooling.
+    // SET LOCAL ef_search aumenta candidatos avaliados pelo índice HNSW para melhor recall.
     let rows: Array<{ id: string; sim: number }>;
 
     if (excludeId) {
       rows = await prisma.$transaction(async (tx) => {
         await tx.$executeRawUnsafe('SET LOCAL hnsw.ef_search = 100');
         return tx.$queryRawUnsafe<Array<{ id: string; sim: number }>>(
-          `SELECT id, (1 - ("faceVector" <=> $1::vector)) AS sim
+          `SELECT id, (1 - ("${vectorCol}" <=> $1::vector)) AS sim
            FROM apenados
-           WHERE "faceVector" IS NOT NULL
+           WHERE "${vectorCol}" IS NOT NULL
              AND "photoPath" IS NOT NULL
              AND id != $2
-             AND ("faceVector" <=> $1::vector) <= $3
-           ORDER BY "faceVector" <=> $1::vector ASC
+             AND ("${vectorCol}" <=> $1::vector) <= $3
+           ORDER BY "${vectorCol}" <=> $1::vector ASC
            LIMIT $4`,
           vec,
           excludeId,
@@ -266,12 +355,12 @@ export async function searchByVector(
       rows = await prisma.$transaction(async (tx) => {
         await tx.$executeRawUnsafe('SET LOCAL hnsw.ef_search = 100');
         return tx.$queryRawUnsafe<Array<{ id: string; sim: number }>>(
-          `SELECT id, (1 - ("faceVector" <=> $1::vector)) AS sim
+          `SELECT id, (1 - ("${vectorCol}" <=> $1::vector)) AS sim
            FROM apenados
-           WHERE "faceVector" IS NOT NULL
+           WHERE "${vectorCol}" IS NOT NULL
              AND "photoPath" IS NOT NULL
-             AND ("faceVector" <=> $1::vector) <= $2
-           ORDER BY "faceVector" <=> $1::vector ASC
+             AND ("${vectorCol}" <=> $1::vector) <= $2
+           ORDER BY "${vectorCol}" <=> $1::vector ASC
            LIMIT $3`,
           vec,
           maxDist,
@@ -308,6 +397,28 @@ export async function clearVisitanteVector(id: string): Promise<void> {
   } catch {}
 }
 
+/** Remove o faceVectorAdvanced de um visitante. */
+export async function clearVisitanteVectorAdvanced(id: string): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE sipe_visitantes SET "faceVectorAdvanced" = NULL WHERE id = $1`,
+      id,
+    );
+  } catch {}
+}
+
+/** Salva um embedding como faceVectorAdvanced para um visitante. */
+export async function upsertVisitanteVectorAdvanced(id: string, embedding: number[]): Promise<void> {
+  const vec = `[${embedding.join(',')}]`;
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE sipe_visitantes SET "faceVectorAdvanced" = $1::vector WHERE id = $2`,
+      vec,
+      id,
+    );
+  } catch {}
+}
+
 /**
  * Busca visitantes com faceVector mais próximo ao embedding fornecido.
  */
@@ -315,20 +426,22 @@ export async function searchByVectorForVisitantes(
   embedding: number[],
   threshold: number,
   topN: number,
+  model: 'buffalo' | 'antelope' = 'buffalo',
 ): Promise<VectorMatch[]> {
   const vec = `[${embedding.join(',')}]`;
   const maxDist = 1 - threshold;
+  const vectorCol = model === 'antelope' ? 'faceVectorAdvanced' : 'faceVector';
 
   try {
     const rows = await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('SET LOCAL hnsw.ef_search = 100');
       return tx.$queryRawUnsafe<Array<{ id: string; sim: number }>>(
-        `SELECT id, (1 - ("faceVector" <=> $1::vector)) AS sim
+        `SELECT id, (1 - ("${vectorCol}" <=> $1::vector)) AS sim
          FROM sipe_visitantes
-         WHERE "faceVector" IS NOT NULL
+         WHERE "${vectorCol}" IS NOT NULL
            AND "photoPath" IS NOT NULL
-           AND ("faceVector" <=> $1::vector) <= $2
-         ORDER BY "faceVector" <=> $1::vector ASC
+           AND ("${vectorCol}" <=> $1::vector) <= $2
+         ORDER BY "${vectorCol}" <=> $1::vector ASC
          LIMIT $3`,
         vec,
         maxDist,
@@ -403,6 +516,28 @@ export async function clearServidorVector(id: string): Promise<void> {
   } catch {}
 }
 
+/** Remove o faceVectorAdvanced de um servidor. */
+export async function clearServidorVectorAdvanced(id: string): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE sejus_servidores SET "faceVectorAdvanced" = NULL WHERE id = $1`,
+      id,
+    );
+  } catch {}
+}
+
+/** Salva um embedding como faceVectorAdvanced para um servidor. */
+export async function upsertServidorVectorAdvanced(id: string, embedding: number[]): Promise<void> {
+  const vec = `[${embedding.join(',')}]`;
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE sejus_servidores SET "faceVectorAdvanced" = $1::vector WHERE id = $2`,
+      vec,
+      id,
+    );
+  } catch {}
+}
+
 /**
  * Busca servidores com faceVector mais próximo ao embedding fornecido.
  */
@@ -410,20 +545,22 @@ export async function searchByVectorForServidores(
   embedding: number[],
   threshold: number,
   topN: number,
+  model: 'buffalo' | 'antelope' = 'buffalo',
 ): Promise<VectorMatch[]> {
   const vec = `[${embedding.join(',')}]`;
   const maxDist = 1 - threshold;
+  const vectorCol = model === 'antelope' ? 'faceVectorAdvanced' : 'faceVector';
 
   try {
     const rows = await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('SET LOCAL hnsw.ef_search = 100');
       return tx.$queryRawUnsafe<Array<{ id: string; sim: number }>>(
-        `SELECT id, (1 - ("faceVector" <=> $1::vector)) AS sim
+        `SELECT id, (1 - ("${vectorCol}" <=> $1::vector)) AS sim
          FROM sejus_servidores
-         WHERE "faceVector" IS NOT NULL
+         WHERE "${vectorCol}" IS NOT NULL
            AND "photoPath" IS NOT NULL
-           AND ("faceVector" <=> $1::vector) <= $2
-         ORDER BY "faceVector" <=> $1::vector ASC
+           AND ("${vectorCol}" <=> $1::vector) <= $2
+         ORDER BY "${vectorCol}" <=> $1::vector ASC
          LIMIT $3`,
         vec,
         maxDist,
@@ -463,6 +600,123 @@ export async function populateServidoresVectorsFromDescriptors(batchSize = 500):
         const vec = row.faceDescriptor.trim();
         await prisma.$executeRawUnsafe(
           `UPDATE sejus_servidores SET "faceVector" = $1::vector WHERE id = $2`,
+          vec,
+          row.id,
+        );
+        total++;
+      } catch {}
+    }
+
+    lastId = rows[rows.length - 1].id;
+  }
+
+  return total;
+}
+
+/**
+ * Popula faceVectorAdvanced a partir do faceDescriptorAdvanced existente (Antelope) para apenados.
+ */
+export async function populateAntelopeVectorsFromDescriptors(batchSize = 500): Promise<number> {
+  let total = 0;
+  let lastId = '';
+
+  while (true) {
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: string; faceDescriptorAdvanced: string }>>(
+      `SELECT id, "faceDescriptorAdvanced" FROM apenados
+       WHERE "faceDescriptorAdvanced" LIKE '[%'
+         AND "faceVectorAdvanced" IS NULL
+         AND id > $1
+       ORDER BY id ASC
+       LIMIT $2`,
+      lastId,
+      batchSize,
+    );
+
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      try {
+        const vec = row.faceDescriptorAdvanced.trim();
+        await prisma.$executeRawUnsafe(
+          `UPDATE apenados SET "faceVectorAdvanced" = $1::vector WHERE id = $2`,
+          vec,
+          row.id,
+        );
+        total++;
+      } catch {}
+    }
+
+    lastId = rows[rows.length - 1].id;
+  }
+
+  return total;
+}
+
+/**
+ * Popula faceVectorAdvanced a partir do faceDescriptorAdvanced existente (Antelope) para visitantes.
+ */
+export async function populateVisitantesAntelopeVectorsFromDescriptors(batchSize = 500): Promise<number> {
+  let total = 0;
+  let lastId = '';
+
+  while (true) {
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: string; faceDescriptorAdvanced: string }>>(
+      `SELECT id, "faceDescriptorAdvanced" FROM sipe_visitantes
+       WHERE "faceDescriptorAdvanced" LIKE '[%'
+         AND "faceVectorAdvanced" IS NULL
+         AND id > $1
+       ORDER BY id ASC
+       LIMIT $2`,
+      lastId,
+      batchSize,
+    );
+
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      try {
+        const vec = row.faceDescriptorAdvanced.trim();
+        await prisma.$executeRawUnsafe(
+          `UPDATE sipe_visitantes SET "faceVectorAdvanced" = $1::vector WHERE id = $2`,
+          vec,
+          row.id,
+        );
+        total++;
+      } catch {}
+    }
+
+    lastId = rows[rows.length - 1].id;
+  }
+
+  return total;
+}
+
+/**
+ * Popula faceVectorAdvanced a partir do faceDescriptorAdvanced existente (Antelope) para servidores.
+ */
+export async function populateServidoresAntelopeVectorsFromDescriptors(batchSize = 500): Promise<number> {
+  let total = 0;
+  let lastId = '';
+
+  while (true) {
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: string; faceDescriptorAdvanced: string }>>(
+      `SELECT id, "faceDescriptorAdvanced" FROM sejus_servidores
+       WHERE "faceDescriptorAdvanced" LIKE '[%'
+         AND "faceVectorAdvanced" IS NULL
+         AND id > $1
+       ORDER BY id ASC
+       LIMIT $2`,
+      lastId,
+      batchSize,
+    );
+
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      try {
+        const vec = row.faceDescriptorAdvanced.trim();
+        await prisma.$executeRawUnsafe(
+          `UPDATE sejus_servidores SET "faceVectorAdvanced" = $1::vector WHERE id = $2`,
           vec,
           row.id,
         );

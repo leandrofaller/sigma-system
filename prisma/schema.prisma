@@ -817,6 +817,8 @@ model SipeVisitante {
   detScore           Float?
   photoQuality       Float?
   faceVector         Unsupported("vector(512)")?
+  faceDescriptorAdvanced String?  @db.Text
+  faceVectorAdvanced Unsupported("vector(512)")?
 
   vinculos SipeVinculoVisitante[]
   entradas SipeVisitanteEntrada[]
@@ -964,6 +966,9 @@ model SejusServidor {
   faceDescriptor     String?  @db.Text
   detScore           Float?
   photoQuality       Float?
+  faceVector         Unsupported("vector(512)")?
+  faceDescriptorAdvanced String?  @db.Text
+  faceVectorAdvanced Unsupported("vector(512)")?
 
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

@@ -29,13 +29,14 @@ interface AnalyzeResult {
   error?: string;
 }
 
-function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
+function runAnalyze(imagePath: string, model: 'buffalo' | 'antelope' = 'buffalo'): Promise<AnalyzeResult> {
   return new Promise((resolve, reject) => {
     const scriptPath = join(process.cwd(), 'scripts', 'arcface_analyze.py');
     const envPython = process.env.ARCFACE_PYTHON;
     const candidates = envPython ? [envPython, 'python3', 'python', 'py'] : ['python3', 'python', 'py'];
     let idx = 0;
     const errors: string[] = [];
+    const modelArg = model === 'antelope' ? 'antelopev2' : 'buffalo_l';
 
     function tryNext() {
       if (idx >= candidates.length) {
@@ -53,7 +54,7 @@ function runAnalyze(imagePath: string): Promise<AnalyzeResult> {
         PYTHONWARNINGS: 'ignore',
         TQDM_DISABLE: '1',
       };
-      const proc = spawn(cmd, ['-u', scriptPath, imagePath], { env });
+      const proc = spawn(cmd, ['-u', scriptPath, imagePath, '--model', modelArg], { env });
       let stdout = '';
       let stderr = '';
 
@@ -104,6 +105,7 @@ export async function POST(req: NextRequest) {
   const topN = Math.min(50, Math.max(1, parseInt((formData.get('topN') as string) || '20', 10)));
   const minSimilarity = parseInt((formData.get('minSimilarity') as string) || String(envDefaultSim), 10);
   const targetType = (formData.get('targetType') as string) || 'apenados';
+  const model = ((formData.get('model') as string) || 'buffalo') as 'buffalo' | 'antelope';
 
   // Inicia carregamento do cache em background apenas se pgvector NÃO estiver disponível
   const pvecAvail = await pgvectorAvailable();
@@ -131,7 +133,7 @@ export async function POST(req: NextRequest) {
 
     // Checa pgvector e roda análise em paralelo
     const [analysis, pvecAvail] = await Promise.all([
-      runAnalyze(tmpPath),
+      runAnalyze(tmpPath, model),
       pgvectorAvailable(),
     ]);
 
@@ -158,7 +160,7 @@ export async function POST(req: NextRequest) {
         const allMatchIds = new Set<string>();
         const facesWithHits = await Promise.all(
           analysis.faces.map(async (face) => {
-            const hits = await searchByVectorForServidores(face.embedding, minSim01, topN);
+            const hits = await searchByVectorForServidores(face.embedding, minSim01, topN, model);
             hits.forEach((h) => allMatchIds.add(h.id));
             return { face, hits };
           }),
@@ -205,7 +207,8 @@ export async function POST(req: NextRequest) {
             .filter(Boolean),
         }));
 
-        const countQuery = await prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM sejus_servidores WHERE "faceVector" IS NOT NULL`;
+        const vectorCol = model === 'antelope' ? 'faceVectorAdvanced' : 'faceVector';
+        const countQuery = await prisma.$queryRawUnsafe<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM sejus_servidores WHERE "${vectorCol}" IS NOT NULL`;
         return NextResponse.json({
           faces: facesResult,
           imageWidth: analysis.imageWidth,
@@ -293,7 +296,7 @@ export async function POST(req: NextRequest) {
         const allMatchIds = new Set<string>();
         const facesWithHits = await Promise.all(
           analysis.faces.map(async (face) => {
-            const hits = await searchByVectorForVisitantes(face.embedding, minSim01, topN);
+            const hits = await searchByVectorForVisitantes(face.embedding, minSim01, topN, model);
             hits.forEach((h) => allMatchIds.add(h.id));
             return { face, hits };
           }),
@@ -347,7 +350,8 @@ export async function POST(req: NextRequest) {
             .filter(Boolean),
         }));
 
-        const countQuery = await prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM sipe_visitantes WHERE "faceVector" IS NOT NULL`;
+        const vectorCol = model === 'antelope' ? 'faceVectorAdvanced' : 'faceVector';
+        const countQuery = await prisma.$queryRawUnsafe<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM sipe_visitantes WHERE "${vectorCol}" IS NOT NULL`;
         return NextResponse.json({
           faces: facesResult,
           imageWidth: analysis.imageWidth,
@@ -444,9 +448,9 @@ export async function POST(req: NextRequest) {
         facesResult = await Promise.all(
           analysis.faces.map(async (face) => {
             const [hitsApenados, hitsVisitantes, hitsServidores] = await Promise.all([
-              searchByVector(face.embedding, minSim01, topN),
-              searchByVectorForVisitantes(face.embedding, minSim01, topN),
-              searchByVectorForServidores(face.embedding, minSim01, topN),
+              searchByVector(face.embedding, minSim01, topN, undefined, model),
+              searchByVectorForVisitantes(face.embedding, minSim01, topN, model),
+              searchByVectorForServidores(face.embedding, minSim01, topN, model),
             ]);
 
             const apenadoIds = hitsApenados.map((h) => h.id);
@@ -610,7 +614,7 @@ export async function POST(req: NextRequest) {
       const allMatchIds = new Set<string>();
       const facesWithHits = await Promise.all(
         analysis.faces.map(async (face) => {
-          const hits = await searchByVector(face.embedding, minSim01, topN);
+          const hits = await searchByVector(face.embedding, minSim01, topN, undefined, model);
           hits.forEach((h) => allMatchIds.add(h.id));
           return { face, hits };
         }),
@@ -639,7 +643,8 @@ export async function POST(req: NextRequest) {
           .filter(Boolean),
       }));
 
-      const apenadosCountQuery = await prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM apenados WHERE "faceVector" IS NOT NULL`;
+      const vectorCol = model === 'antelope' ? 'faceVectorAdvanced' : 'faceVector';
+      const apenadosCountQuery = await prisma.$queryRawUnsafe<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM apenados WHERE "${vectorCol}" IS NOT NULL`;
       return NextResponse.json({
         faces: facesResult,
         imageWidth: analysis.imageWidth,

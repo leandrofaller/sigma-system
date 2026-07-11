@@ -82,7 +82,7 @@ def apply_gamma(img, gamma: float = 1.4):
     return cv2.LUT(img, table)
 
 
-def create_face_app():
+def create_face_app(name: str = "buffalo_l"):
     """Inicializa FaceAnalysis com providers do ambiente."""
     import io as _io
     import sys
@@ -103,7 +103,7 @@ def create_face_app():
         else:
             providers = ["CPUExecutionProvider"]
 
-        app = FaceAnalysis(name="buffalo_l", providers=providers)
+        app = FaceAnalysis(name=name, providers=providers)
         app.prepare(ctx_id=0, det_size=(640, 640))
         return app
     finally:
