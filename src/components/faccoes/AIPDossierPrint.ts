@@ -478,7 +478,7 @@ export async function printAIPDossier(
                 .join('')}
             </div>
             `
-            : '<div style="font-size: 8.5pt; color: #64748b; padding: 6px 10px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 4px;">Nenhum visitante cadastrado ou importado para este apenado.</div>'
+            : '<div style="font-size: 8.5pt; color: #64748b; padding: 6px 10px; border: 1px dashed #cbd5e1; background: #f8fafc; border-radius: 4px;">Nenhum visitante cadastrado para este apenado.</div>'
         }
       </div>
     `,
@@ -988,11 +988,11 @@ export async function printAIPDossier(
       <tr>
         <td>
           <div class="info-label">Grau de Relevância</div>
-          <div class="info-value">${apenado.facaoRelevancia || 'MEMBRO'}</div>
+          <div class="info-value">${(apenado.facaoRealNome?.trim() || apenado.faccao?.trim()) ? (apenado.facaoRelevancia || 'MEMBRO') : 'SEM REGISTRO'}</div>
         </td>
         <td>
           <div class="info-label">Nível de Confiança</div>
-          <div class="info-value" style="text-transform: uppercase;">${apenado.facaoNivel || 'SUSPEITA'}</div>
+          <div class="info-value" style="text-transform: uppercase;">${(apenado.facaoRealNome?.trim() || apenado.faccao?.trim()) ? (apenado.facaoNivel || 'SUSPEITA') : 'SEM REGISTRO'}</div>
         </td>
       </tr>
     </table>
