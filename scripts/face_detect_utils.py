@@ -103,7 +103,8 @@ def create_face_app(name: str = "buffalo_l"):
         else:
             providers = ["CPUExecutionProvider"]
 
-        app = FaceAnalysis(name=name, providers=providers)
+        insightface_home = os.getenv('INSIGHTFACE_HOME', '/opt/arcface-models')
+        app = FaceAnalysis(name=name, root=insightface_home, providers=providers)
         app.prepare(ctx_id=0, det_size=(640, 640))
         return app
     finally:
