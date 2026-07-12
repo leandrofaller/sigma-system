@@ -33,6 +33,7 @@ services:
     image: pgvector/pgvector:pg16
     container_name: sigma_db
     restart: unless-stopped
+    shm_size: '512mb'
     environment:
       - TZ=America/Porto_Velho
       - POSTGRES_USER=sigma_user
