@@ -72,11 +72,12 @@ COPY --from=python_builder /opt/arcface-venv /opt/arcface-venv
 RUN mkdir -p /opt/arcface-models && chown 1001:1001 /opt/arcface-models
 
 
-# Pre-baixa o modelo buffalo_l do InsightFace (~326 MB) antes da cópia do código-fonte para aproveitar o cache do Docker
+# Pre-baixa os modelos buffalo_l e antelopev2 (~700 MB) antes da cópia do código-fonte para aproveitar o cache do Docker
 COPY scripts/download_model.py /tmp/download_model.py
-# RUN HOME=/tmp MPLCONFIGDIR=/tmp/.matplotlib MPLBACKEND=Agg ARCFACE_PROVIDERS=CPUExecutionProvider \
-#     gosu nextjs /opt/arcface-venv/bin/python3 -u /tmp/download_model.py || \
-#     echo "AVISO: modelo sera baixado na primeira requisicao"
+RUN HOME=/tmp MPLCONFIGDIR=/tmp/.matplotlib MPLBACKEND=Agg ARCFACE_PROVIDERS=CPUExecutionProvider \
+    /opt/arcface-venv/bin/python3 -u /tmp/download_model.py && \
+    chown -R 1001:1001 /opt/arcface-models && \
+    chmod -R 755 /opt/arcface-models
 RUN rm -f /tmp/download_model.py
 
 ENV ARCFACE_PYTHON=/opt/arcface-venv/bin/python3
