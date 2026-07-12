@@ -1,7 +1,7 @@
 import { prisma } from './db';
 import { runIndexBatch } from './arcface-batch';
 import * as path from 'path';
-import { upsertServidorVector } from './pgvector';
+import { upsertServidorVector, upsertServidorVectorAdvanced } from './pgvector';
 import { invalidateServidorFaceCache } from './servidor-face-cache';
 
 const BATCH_SIZE = 100;
@@ -33,6 +33,7 @@ let state: ServidorJobState = {
 };
 
 let stopFlag = false;
+let activeModel: 'buffalo' | 'antelope' = 'buffalo';
 
 export function getServidorJobState(): ServidorJobState {
   return state;
@@ -42,12 +43,13 @@ export function stopServidorJob(): void {
   stopFlag = true;
 }
 
-export function startServidorJob(): void {
+export function startServidorJob(model: 'buffalo' | 'antelope' = 'buffalo'): void {
   if (state.isRunning) return;
   state.isRunning = true;
   state.timedOut = false;
   state.error = '';
   stopFlag = false;
+  activeModel = model;
 
   runLoop().catch((err) => {
     state.error = err?.message ?? 'Erro desconhecido';
@@ -59,24 +61,44 @@ async function runLoop(): Promise<void> {
   const baseDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
   const servidoresDir = path.join(baseDir, 'servidores');
 
-  // Limpa embeddings órfãos: registros sem foto mas com faceDescriptor (foto foi deletada).
-  await prisma.sejusServidor.updateMany({
-    where: { photoPath: null, faceDescriptor: { not: null } },
-    data: { faceDescriptor: null, detScore: null },
-  });
+  const isAntelope = activeModel === 'antelope';
 
-  // Reseta registros com null bytes no faceDescriptor (forçam re-indexação limpa).
-  await prisma.$executeRaw`
-    UPDATE sejus_servidores
-    SET "faceDescriptor" = NULL
-    WHERE "faceDescriptor" IS NOT NULL
-      AND strpos(encode("faceDescriptor"::bytea, 'hex'), '00') > 0
-  `;
+  // Limpa embeddings órfãos: registros sem foto mas com faceDescriptor (foto foi deletada).
+  if (isAntelope) {
+    await prisma.sejusServidor.updateMany({
+      where: { photoPath: null, faceDescriptorAdvanced: { not: null } },
+      data: { faceDescriptorAdvanced: null, detScore: null },
+    });
+  } else {
+    await prisma.sejusServidor.updateMany({
+      where: { photoPath: null, faceDescriptor: { not: null } },
+      data: { faceDescriptor: null, detScore: null },
+    });
+  }
+
+  // Reseta registros com null bytes no faceDescriptor correspondente (forçam re-indexação limpa).
+  if (isAntelope) {
+    await prisma.$executeRaw`
+      UPDATE sejus_servidores
+      SET "faceDescriptorAdvanced" = NULL
+      WHERE "faceDescriptorAdvanced" IS NOT NULL
+        AND strpos(encode("faceDescriptorAdvanced"::bytea, 'hex'), '00') > 0
+    `;
+  } else {
+    await prisma.$executeRaw`
+      UPDATE sejus_servidores
+      SET "faceDescriptor" = NULL
+      WHERE "faceDescriptor" IS NOT NULL
+        AND strpos(encode("faceDescriptor"::bytea, 'hex'), '00') > 0
+    `;
+  }
 
   // Conta total de fotos e já processadas para mostrar progresso real
   const [totalWithPhoto, alreadyProcessed] = await Promise.all([
     prisma.sejusServidor.count({ where: { photoPath: { not: null } } }),
-    prisma.sejusServidor.count({ where: { photoPath: { not: null }, faceDescriptor: { not: null } } }),
+    isAntelope
+      ? prisma.sejusServidor.count({ where: { photoPath: { not: null }, faceDescriptorAdvanced: { not: null } } })
+      : prisma.sejusServidor.count({ where: { photoPath: { not: null }, faceDescriptor: { not: null } } }),
   ]);
 
   const startTime = Date.now();
@@ -101,7 +123,10 @@ async function runLoop(): Promise<void> {
     }
 
     const records = await prisma.sejusServidor.findMany({
-      where: { photoPath: { not: null }, faceDescriptor: null },
+      where: {
+        photoPath: { not: null },
+        ...(isAntelope ? { faceDescriptorAdvanced: null } : { faceDescriptor: null }),
+      },
       select: { id: true, photoPath: true },
       take: BATCH_SIZE,
       orderBy: { createdAt: 'asc' },
@@ -121,7 +146,7 @@ async function runLoop(): Promise<void> {
       }
     }
 
-    const results = await runIndexBatch(ids, servidoresDir, photoPaths);
+    const results = await runIndexBatch(ids, servidoresDir, photoPaths, activeModel);
 
     const updates: Promise<any>[] = [];
     for (const r of results) {
@@ -129,33 +154,58 @@ async function runLoop(): Promise<void> {
       if (!r.id) continue;
 
       if (r.embedding && Array.isArray(r.embedding) && r.embedding.length === 512) {
-        updates.push(
-          prisma.sejusServidor.update({
-            where: { id: r.id },
-            data: {
-              faceDescriptor: JSON.stringify(r.embedding).replace(/\x00/g, ''),
-              detScore: r.det_score ?? null,
-            },
-          })
-        );
-        updates.push(upsertServidorVector(r.id, r.embedding));
+        if (isAntelope) {
+          updates.push(
+            prisma.sejusServidor.update({
+              where: { id: r.id },
+              data: {
+                faceDescriptorAdvanced: JSON.stringify(r.embedding).replace(/\x00/g, ''),
+                detScore: r.det_score ?? null,
+              },
+            })
+          );
+          updates.push(upsertServidorVectorAdvanced(r.id, r.embedding));
+        } else {
+          updates.push(
+            prisma.sejusServidor.update({
+              where: { id: r.id },
+              data: {
+                faceDescriptor: JSON.stringify(r.embedding).replace(/\x00/g, ''),
+                detScore: r.det_score ?? null,
+              },
+            })
+          );
+          updates.push(upsertServidorVector(r.id, r.embedding));
+        }
         faces++;
       } else if (r.no_face || r.no_photo) {
-        updates.push(
-          prisma.sejusServidor.update({
-            where: { id: r.id },
-            data: {
-              faceDescriptor: FACE_NONE,
-              detScore: null,
-            },
-          })
-        );
-        updates.push(
-          prisma.$executeRawUnsafe(
-            `UPDATE sejus_servidores SET "faceVector" = NULL WHERE id = $1`,
-            r.id
-          ).catch(() => {})
-        );
+        if (isAntelope) {
+          updates.push(
+            prisma.sejusServidor.update({
+              where: { id: r.id },
+              data: { faceDescriptorAdvanced: FACE_NONE, detScore: null },
+            })
+          );
+          updates.push(
+            prisma.$executeRawUnsafe(
+              `UPDATE sejus_servidores SET "faceVectorAdvanced" = NULL WHERE id = $1`,
+              r.id
+            ).catch(() => {})
+          );
+        } else {
+          updates.push(
+            prisma.sejusServidor.update({
+              where: { id: r.id },
+              data: { faceDescriptor: FACE_NONE, detScore: null },
+            })
+          );
+          updates.push(
+            prisma.$executeRawUnsafe(
+              `UPDATE sejus_servidores SET "faceVector" = NULL WHERE id = $1`,
+              r.id
+            ).catch(() => {})
+          );
+        }
         skipped++;
       } else {
         errors++;

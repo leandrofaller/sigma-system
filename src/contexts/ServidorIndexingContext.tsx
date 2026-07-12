@@ -8,7 +8,7 @@ interface ServidorIndexingContextValue {
   timedOut: boolean;
   progress: ServidorJobProgress;
   indexError: string;
-  startIndexing: () => Promise<void>;
+  startIndexing: (model?: 'buffalo' | 'antelope') => Promise<void>;
   stopIndexing: () => void;
 }
 
@@ -53,9 +53,13 @@ export function ServidorIndexingProvider({ children }: { children: ReactNode }) 
     return () => clearInterval(interval);
   }, [isIndexing, poll]);
 
-  const startIndexing = useCallback(async () => {
+  const startIndexing = useCallback(async (model: 'buffalo' | 'antelope' = 'buffalo') => {
     try {
-      const res = await fetch('/api/servidores/face/job', { method: 'POST' });
+      const res = await fetch('/api/servidores/face/job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model }),
+      });
       if (!res.ok) {
         const data = await res.json();
         setIndexError(data.error || 'Erro ao iniciar indexação');

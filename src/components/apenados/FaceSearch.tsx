@@ -342,6 +342,9 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
 
   const [visitanteIndexStatus, setVisitanteIndexStatus] = useState<IndexStatus | null>(null);
   const [showVisitanteClearConfirm, setShowVisitanteClearConfirm] = useState(false);
+  const [visitanteIndexModelType, setVisitanteIndexModelType] = useState<'buffalo' | 'antelope'>('buffalo');
+  const [visitanteAntelopeIndexStatus, setVisitanteAntelopeIndexStatus] = useState<IndexStatus | null>(null);
+  const [showVisitanteAntelopeClearConfirm, setShowVisitanteAntelopeClearConfirm] = useState(false);
 
   // Indexação de Servidores
   const {
@@ -354,6 +357,9 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
 
   const [servidorIndexStatus, setServidorIndexStatus] = useState<IndexStatus | null>(null);
   const [showServidorClearConfirm, setShowServidorClearConfirm] = useState(false);
+  const [servidorIndexModelType, setServidorIndexModelType] = useState<'buffalo' | 'antelope'>('buffalo');
+  const [servidorAntelopeIndexStatus, setServidorAntelopeIndexStatus] = useState<IndexStatus | null>(null);
+  const [showServidorAntelopeClearConfirm, setShowServidorAntelopeClearConfirm] = useState(false);
 
   const [indexSubTab, setIndexSubTab] = useState<'apenados' | 'visitantes' | 'servidores'>('apenados');
 
@@ -399,24 +405,34 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     try { setAntelopeIndexStatus(await (await fetch('/api/apenados/face/status-antelope')).json()); } catch {}
   };
 
+  const fetchVisitanteAntelopeStatus = async () => {
+    try { setVisitanteAntelopeIndexStatus(await (await fetch('/api/visitantes/face/status-antelope')).json()); } catch {}
+  };
+
+  const fetchServidorAntelopeStatus = async () => {
+    try { setServidorAntelopeIndexStatus(await (await fetch('/api/servidores/face/status-antelope')).json()); } catch {}
+  };
+
   useEffect(() => {
     fetchStatus();
     fetchVisitanteStatus();
     fetchServidorStatus();
     fetchAntelopeStatus();
+    fetchVisitanteAntelopeStatus();
+    fetchServidorAntelopeStatus();
   }, []);
 
   // Atualiza contadores quando a indexação terminar
   useEffect(() => { if (!isIndexing) fetchStatus(); }, [isIndexing]);
   useEffect(() => { if (!isAntelopeIndexing) fetchAntelopeStatus(); }, [isAntelopeIndexing]);
-  useEffect(() => { if (!isVisitanteIndexing) fetchVisitanteStatus(); }, [isVisitanteIndexing]);
-  useEffect(() => { if (!isServidorIndexing) fetchServidorStatus(); }, [isServidorIndexing]);
+  useEffect(() => { if (!isVisitanteIndexing) { fetchVisitanteStatus(); fetchVisitanteAntelopeStatus(); } }, [isVisitanteIndexing]);
+  useEffect(() => { if (!isServidorIndexing) { fetchServidorStatus(); fetchServidorAntelopeStatus(); } }, [isServidorIndexing]);
 
   // Atualiza contadores físicos em tempo real no painel durante a indexação ativa
   useEffect(() => { if (isIndexing) fetchStatus(); }, [indexProgress.current, isIndexing]);
   useEffect(() => { if (isAntelopeIndexing) fetchAntelopeStatus(); }, [antelopeIndexProgress.current, isAntelopeIndexing]);
-  useEffect(() => { if (isVisitanteIndexing) fetchVisitanteStatus(); }, [visitanteIndexProgress.current, isVisitanteIndexing]);
-  useEffect(() => { if (isServidorIndexing) fetchServidorStatus(); }, [servidorIndexProgress.current, isServidorIndexing]);
+  useEffect(() => { if (isVisitanteIndexing) { fetchVisitanteStatus(); fetchVisitanteAntelopeStatus(); } }, [visitanteIndexProgress.current, isVisitanteIndexing]);
+  useEffect(() => { if (isServidorIndexing) { fetchServidorStatus(); fetchServidorAntelopeStatus(); } }, [servidorIndexProgress.current, isServidorIndexing]);
 
   // Pooling para acompanhar o carregamento inicial do cache de embeddings na memória
   useEffect(() => {
@@ -563,6 +579,26 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
       if (res.ok) fetchAntelopeStatus();
       else setErrorMsg(data.error || 'Erro ao limpar índice do Antelopev2');
     } catch { setErrorMsg('Erro ao limpar índice do Antelopev2'); }
+  };
+
+  const clearVisitanteAntelopeIndex = async () => {
+    setShowVisitanteAntelopeClearConfirm(false);
+    try {
+      const res = await fetch('/api/visitantes/face/clear-antelope', { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) fetchVisitanteAntelopeStatus();
+      else setErrorMsg(data.error || 'Erro ao limpar índice Antelopev2 de visitantes');
+    } catch { setErrorMsg('Erro ao limpar índice Antelopev2 de visitantes'); }
+  };
+
+  const clearServidorAntelopeIndex = async () => {
+    setShowServidorAntelopeClearConfirm(false);
+    try {
+      const res = await fetch('/api/servidores/face/clear-antelope', { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) fetchServidorAntelopeStatus();
+      else setErrorMsg(data.error || 'Erro ao limpar índice Antelopev2 de servidores');
+    } catch { setErrorMsg('Erro ao limpar índice Antelopev2 de servidores'); }
   };
 
   const handleReindex = async (targetId?: string) => {
@@ -1298,222 +1334,507 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                     </>
                   )}
                 </>
-              ) : (
+              ) : indexSubTab === 'visitantes' ? (
                 <>
-                  {/* Contadores Visitantes */}
-                  {visitanteIndexStatus && (
-                    <div className="grid grid-cols-4 gap-3">
-                      {[
-                        { label: 'Com foto', value: visitanteIndexStatus.withPhoto, color: 'text-indigo-600' },
-                        { label: 'Indexadas', value: visitanteIndexStatus.indexed, color: 'text-green-600 dark:text-green-400' },
-                        { label: 'Sem rosto', value: visitanteIndexStatus.noFace ?? 0, color: 'text-gray-500 dark:text-gray-400' },
-                        { label: 'Pendentes', value: visitanteIndexStatus.remaining, color: visitanteIndexStatus.remaining > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400' },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} className="card p-4 text-center">
-                          <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString('pt-BR')}</p>
-                          <p className="text-xs text-subtle mt-1">{label}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {visitanteIndexError && (
-                    <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-400">
-                      {visitanteIndexError}
-                    </div>
-                  )}
-
-                  {/* Progresso Visitantes */}
-                  {(isVisitanteIndexing || visitanteIndexProgress.total > 0) && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold text-title">
-                          {visitanteIndexProgress.current.toLocaleString('pt-BR')} / {visitanteIndexProgress.total.toLocaleString('pt-BR')}
-                        </div>
-                        {isVisitanteIndexing && visitanteIndexProgress.current > 0 && (
-                          <div className="text-xs text-subtle">
-                            {(() => {
-                              const elapsed = (Date.now() - visitanteIndexProgress.startTime) / 1000;
-                              const rate = visitanteIndexProgress.current / elapsed;
-                              const remSecs = (visitanteIndexProgress.total - visitanteIndexProgress.current) / rate;
-                              return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(remSecs)}`;
-                            })()}
-                          </div>
-                        )}
-                      </div>
-                      <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-indigo-500 to-indigo-700 transition-all duration-300 rounded-full"
-                          style={{ width: visitanteIndexProgress.total > 0 ? `${(visitanteIndexProgress.current / visitanteIndexProgress.total) * 100}%` : '0%' }}
-                        />
-                      </div>
-                      <div className="flex gap-4 text-xs text-subtle">
-                        <span className="text-green-600 dark:text-green-400 font-medium">
-                          {visitanteIndexProgress.faces.toLocaleString('pt-BR')} rostos detectados
-                        </span>
-                        <span>{visitanteIndexProgress.skipped.toLocaleString('pt-BR')} sem rosto</span>
-                        {visitanteIndexProgress.errors > 0 && (
-                          <span className="text-red-500">{visitanteIndexProgress.errors.toLocaleString('pt-BR')} erros</span>
-                        )}
-                      </div>
-                      {!isVisitanteIndexing && visitanteIndexProgress.current >= visitanteIndexProgress.total && visitanteIndexProgress.total > 0 && (
-                        <p className="text-sm text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5">
-                          <CheckCircle className="w-4 h-4" /> Indexação de visitantes concluída!
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Info Visitantes */}
-                  <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm space-y-1">
-                    <p className="font-semibold text-blue-800 dark:text-blue-300">Como funciona:</p>
-                    <ul className="list-disc pl-4 space-y-1 text-xs text-blue-700 dark:text-blue-400">
-                      <li>Processa em lote a base de fotos de visitantes de forma otimizada.</li>
-                      <li>Extrai e gera a biometria facial clássica ArcFace de 512 dimensões.</li>
-                      <li>Atualiza a busca inteligente de visitantes no módulo de reconhecimento.</li>
-                      <li>Pode ser pausado a qualquer momento sem perda de progresso.</li>
-                    </ul>
+                  {/* Seletor de Motor — Visitantes */}
+                  <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[280px] border border-gray-200 dark:border-gray-700 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setVisitanteIndexModelType('buffalo')}
+                      className={`flex-1 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                        visitanteIndexModelType === 'buffalo'
+                          ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-white shadow-sm'
+                          : 'text-subtle hover:text-body'
+                      }`}
+                    >
+                      Motor Buffalo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVisitanteIndexModelType('antelope')}
+                      className={`flex-1 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                        visitanteIndexModelType === 'antelope'
+                          ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-white shadow-sm'
+                          : 'text-subtle hover:text-body'
+                      }`}
+                    >
+                      Motor Antelopev2
+                    </button>
                   </div>
 
-                  <div className="flex gap-3 flex-wrap">
-                    {!isVisitanteIndexing ? (
-                      <>
-                        <button
-                          onClick={startVisitanteIndexing}
-                          disabled={(visitanteIndexStatus?.remaining ?? 1) === 0}
-                          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
-                        >
-                          <Database className="w-4 h-4" />
-                          {(visitanteIndexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação completa'}
-                        </button>
-                        <button onClick={fetchVisitanteStatus}
-                          className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 px-4 py-2.5 rounded-xl transition-colors">
-                          <RefreshCw className="w-4 h-4" /> Atualizar
-                        </button>
-                        {isSuperAdmin && (
+                  {visitanteIndexModelType === 'buffalo' ? (
+                    <>
+                      {/* Contadores Visitantes Buffalo */}
+                      {visitanteIndexStatus && (
+                        <div className="grid grid-cols-4 gap-3">
+                          {[
+                            { label: 'Com foto', value: visitanteIndexStatus.withPhoto, color: 'text-indigo-600' },
+                            { label: 'Indexadas', value: visitanteIndexStatus.indexed, color: 'text-green-600 dark:text-green-400' },
+                            { label: 'Sem rosto', value: visitanteIndexStatus.noFace ?? 0, color: 'text-gray-500 dark:text-gray-400' },
+                            { label: 'Pendentes', value: visitanteIndexStatus.remaining, color: visitanteIndexStatus.remaining > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400' },
+                          ].map(({ label, value, color }) => (
+                            <div key={label} className="card p-4 text-center">
+                              <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString('pt-BR')}</p>
+                              <p className="text-xs text-subtle mt-1">{label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {visitanteIndexError && (
+                        <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-400">
+                          {visitanteIndexError}
+                        </div>
+                      )}
+
+                      {/* Progresso Visitantes Buffalo */}
+                      {(isVisitanteIndexing || visitanteIndexProgress.total > 0) && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold text-title">
+                              {visitanteIndexProgress.current.toLocaleString('pt-BR')} / {visitanteIndexProgress.total.toLocaleString('pt-BR')}
+                            </div>
+                            {isVisitanteIndexing && visitanteIndexProgress.current > 0 && (
+                              <div className="text-xs text-subtle">
+                                {(() => {
+                                  const elapsed = (Date.now() - visitanteIndexProgress.startTime) / 1000;
+                                  const rate = visitanteIndexProgress.current / elapsed;
+                                  const remSecs = (visitanteIndexProgress.total - visitanteIndexProgress.current) / rate;
+                                  return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(remSecs)}`;
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-indigo-500 to-indigo-700 transition-all duration-300 rounded-full"
+                              style={{ width: visitanteIndexProgress.total > 0 ? `${(visitanteIndexProgress.current / visitanteIndexProgress.total) * 100}%` : '0%' }}
+                            />
+                          </div>
+                          <div className="flex gap-4 text-xs text-subtle">
+                            <span className="text-green-600 dark:text-green-400 font-medium">
+                              {visitanteIndexProgress.faces.toLocaleString('pt-BR')} rostos detectados
+                            </span>
+                            <span>{visitanteIndexProgress.skipped.toLocaleString('pt-BR')} sem rosto</span>
+                            {visitanteIndexProgress.errors > 0 && (
+                              <span className="text-red-500">{visitanteIndexProgress.errors.toLocaleString('pt-BR')} erros</span>
+                            )}
+                          </div>
+                          {!isVisitanteIndexing && visitanteIndexProgress.current >= visitanteIndexProgress.total && visitanteIndexProgress.total > 0 && (
+                            <p className="text-sm text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5">
+                              <CheckCircle className="w-4 h-4" /> Indexação de visitantes concluída!
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Info Visitantes Buffalo */}
+                      <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm space-y-1">
+                        <p className="font-semibold text-blue-800 dark:text-blue-300">Como funciona:</p>
+                        <ul className="list-disc pl-4 space-y-1 text-xs text-blue-700 dark:text-blue-400">
+                          <li>Processa em lote a base de fotos de visitantes de forma otimizada.</li>
+                          <li>Extrai e gera a biometria facial clássica ArcFace de 512 dimensões.</li>
+                          <li>Atualiza a busca inteligente de visitantes no módulo de reconhecimento.</li>
+                          <li>Pode ser pausado a qualquer momento sem perda de progresso.</li>
+                        </ul>
+                      </div>
+
+                      <div className="flex gap-3 flex-wrap">
+                        {!isVisitanteIndexing ? (
+                          <>
+                            <button
+                              onClick={() => startVisitanteIndexing('buffalo')}
+                              disabled={(visitanteIndexStatus?.remaining ?? 1) === 0}
+                              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+                            >
+                              <Database className="w-4 h-4" />
+                              {(visitanteIndexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação completa'}
+                            </button>
+                            <button onClick={fetchVisitanteStatus}
+                              className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 px-4 py-2.5 rounded-xl transition-colors">
+                              <RefreshCw className="w-4 h-4" /> Atualizar
+                            </button>
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => setShowVisitanteClearConfirm(true)}
+                                className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Limpar índice
+                              </button>
+                            )}
+                          </>
+                        ) : (
                           <button
-                            onClick={() => setShowVisitanteClearConfirm(true)}
-                            className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                            onClick={stopVisitanteIndexing}
+                            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
                           >
-                            <Trash2 className="w-4 h-4" /> Limpar índice
+                            <X className="w-4 h-4" /> Parar indexação
                           </button>
                         )}
-                      </>
-                    ) : (
-                      <button
-                        onClick={stopVisitanteIndexing}
-                        className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
-                      >
-                        <X className="w-4 h-4" /> Parar indexação
-                      </button>
-                    )}
-                  </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Contadores Visitantes Antelopev2 */}
+                      {visitanteAntelopeIndexStatus && (
+                        <div className="grid grid-cols-4 gap-3">
+                          {[
+                            { label: 'Com foto', value: visitanteAntelopeIndexStatus.withPhoto, color: 'text-indigo-600' },
+                            { label: 'Indexadas (Antelope)', value: visitanteAntelopeIndexStatus.indexed, color: 'text-green-600 dark:text-green-400' },
+                            { label: 'Sem rosto', value: visitanteAntelopeIndexStatus.noFace ?? 0, color: 'text-gray-500 dark:text-gray-400' },
+                            { label: 'Pendentes', value: visitanteAntelopeIndexStatus.remaining, color: visitanteAntelopeIndexStatus.remaining > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400' },
+                          ].map(({ label, value, color }) => (
+                            <div key={label} className="card p-4 text-center">
+                              <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString('pt-BR')}</p>
+                              <p className="text-xs text-subtle mt-1">{label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {visitanteIndexError && (
+                        <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-400">
+                          {visitanteIndexError}
+                        </div>
+                      )}
+
+                      {/* Progresso Visitantes Antelopev2 */}
+                      {(isVisitanteIndexing || visitanteIndexProgress.total > 0) && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold text-title">
+                              {visitanteIndexProgress.current.toLocaleString('pt-BR')} / {visitanteIndexProgress.total.toLocaleString('pt-BR')}
+                            </div>
+                            {isVisitanteIndexing && visitanteIndexProgress.current > 0 && (
+                              <div className="text-xs text-subtle">
+                                {(() => {
+                                  const elapsed = (Date.now() - visitanteIndexProgress.startTime) / 1000;
+                                  const rate = visitanteIndexProgress.current / elapsed;
+                                  const remSecs = (visitanteIndexProgress.total - visitanteIndexProgress.current) / rate;
+                                  return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(remSecs)}`;
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-indigo-500 to-indigo-700 transition-all duration-300 rounded-full"
+                              style={{ width: visitanteIndexProgress.total > 0 ? `${(visitanteIndexProgress.current / visitanteIndexProgress.total) * 100}%` : '0%' }}
+                            />
+                          </div>
+                          <div className="flex gap-4 text-xs text-subtle">
+                            <span className="text-green-600 dark:text-green-400 font-medium">
+                              {visitanteIndexProgress.faces.toLocaleString('pt-BR')} rostos detectados
+                            </span>
+                            <span>{visitanteIndexProgress.skipped.toLocaleString('pt-BR')} sem rosto</span>
+                            {visitanteIndexProgress.errors > 0 && (
+                              <span className="text-red-500">{visitanteIndexProgress.errors.toLocaleString('pt-BR')} erros</span>
+                            )}
+                          </div>
+                          {!isVisitanteIndexing && visitanteIndexProgress.current >= visitanteIndexProgress.total && visitanteIndexProgress.total > 0 && (
+                            <p className="text-sm text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5">
+                              <CheckCircle className="w-4 h-4" /> Indexação Antelopev2 de visitantes concluída!
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Info Visitantes Antelopev2 */}
+                      <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm space-y-1">
+                        <p className="font-semibold text-blue-800 dark:text-blue-300">Como funciona o Antelopev2:</p>
+                        <ul className="list-disc pl-4 space-y-1 text-xs text-blue-700 dark:text-blue-400">
+                          <li>Processamento de alta precisão usando o modelo avançado Antelopev2.</li>
+                          <li>Armazenado na coluna avançada do banco de dados (faceDescriptorAdvanced).</li>
+                          <li>Busca vetorial direta no pgvector sem consumo de RAM.</li>
+                          <li>Evita retrabalho salvando o progresso de forma incremental.</li>
+                        </ul>
+                      </div>
+
+                      <div className="flex gap-3 flex-wrap">
+                        {!isVisitanteIndexing ? (
+                          <>
+                            <button
+                              onClick={() => startVisitanteIndexing('antelope')}
+                              disabled={(visitanteAntelopeIndexStatus?.remaining ?? 1) === 0}
+                              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+                            >
+                              <Database className="w-4 h-4" />
+                              {(visitanteAntelopeIndexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação Antelopev2'}
+                            </button>
+                            <button onClick={fetchVisitanteAntelopeStatus}
+                              className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 px-4 py-2.5 rounded-xl transition-colors">
+                              <RefreshCw className="w-4 h-4" /> Atualizar
+                            </button>
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => setShowVisitanteAntelopeClearConfirm(true)}
+                                className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Limpar índice Antelopev2
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <button
+                            onClick={stopVisitanteIndexing}
+                            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                          >
+                            <X className="w-4 h-4" /> Parar indexação
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </>
-              )}
+              ) : null}
 
               {/* ── Sub-tab: Servidores ─────────────────────────────────── */}
               {indexSubTab === 'servidores' && (
                 <>
-                  <div className="border border-gray-100 dark:border-gray-800 rounded-xl p-4 space-y-3">
-                    <h4 className="text-xs font-bold text-title flex items-center gap-2 mb-2">
-                      <Users className="w-4 h-4 text-teal-500" /> Servidores SEJUS — Indexação ArcFace
-                    </h4>
-
-                    {servidorIndexStatus && (
-                      <div className="grid grid-cols-4 gap-3 text-center text-xs">
-                        {[
-                          { label: 'Com Foto', value: servidorIndexStatus.withPhoto },
-                          { label: 'Indexadas', value: servidorIndexStatus.indexed },
-                          { label: 'Sem Rosto', value: servidorIndexStatus.noFace },
-                          { label: 'Pendentes', value: servidorIndexStatus.remaining },
-                        ].map((s) => (
-                          <div key={s.label} className="rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 p-2.5">
-                            <p className="text-subtle font-medium">{s.label}</p>
-                            <p className="text-lg font-black text-title mt-0.5">{s.value?.toLocaleString('pt-BR') ?? '—'}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {isServidorIndexing && (
-                      <>
-                        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-teal-500 transition-all"
-                            style={{ width: `${servidorIndexProgress.total ? Math.round((servidorIndexProgress.current / servidorIndexProgress.total) * 100) : 0}%` }}
-                          />
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                          <div>
-                            <p className="text-subtle">Progresso</p>
-                            <p className="font-bold text-title">{servidorIndexProgress.current} / {servidorIndexProgress.total}</p>
-                          </div>
-                          <div>
-                            <p className="text-subtle">Rostos</p>
-                            <p className="font-bold text-green-600 dark:text-green-400">{servidorIndexProgress.faces}</p>
-                          </div>
-                          <div>
-                            <p className="text-subtle">Erros</p>
-                            <p className="font-bold text-red-500">{servidorIndexProgress.errors}</p>
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {servidorIndexError && (
-                      <div className="flex items-center gap-2 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                        <AlertTriangle className="w-4 h-4 flex-shrink-0" /> {servidorIndexError}
-                      </div>
-                    )}
+                  {/* Seletor de Motor — Servidores */}
+                  <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[280px] border border-gray-200 dark:border-gray-700 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setServidorIndexModelType('buffalo')}
+                      className={`flex-1 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                        servidorIndexModelType === 'buffalo'
+                          ? 'bg-white dark:bg-gray-700 text-teal-600 dark:text-white shadow-sm'
+                          : 'text-subtle hover:text-body'
+                      }`}
+                    >
+                      Motor Buffalo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setServidorIndexModelType('antelope')}
+                      className={`flex-1 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                        servidorIndexModelType === 'antelope'
+                          ? 'bg-white dark:bg-gray-700 text-teal-600 dark:text-white shadow-sm'
+                          : 'text-subtle hover:text-body'
+                      }`}
+                    >
+                      Motor Antelopev2
+                    </button>
                   </div>
 
-                  {showServidorClearConfirm && (
-                    <div className="border-2 border-red-300 dark:border-red-800 rounded-xl p-4 bg-red-50/60 dark:bg-red-900/20 flex items-center gap-4">
-                      <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0" />
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-red-700 dark:text-red-400">Limpar TODO o índice de servidores?</p>
-                        <p className="text-xs text-red-600/80 dark:text-red-400/70">Será necessário reindexar todos os servidores.</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={clearServidorIndex} className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Confirmar</button>
-                        <button onClick={() => setShowServidorClearConfirm(false)} className="text-sm text-subtle hover:text-body px-3 py-2 transition-colors">Cancelar</button>
-                      </div>
-                    </div>
-                  )}
+                  {servidorIndexModelType === 'buffalo' ? (
+                    <>
+                      <div className="border border-gray-100 dark:border-gray-800 rounded-xl p-4 space-y-3">
+                        <h4 className="text-xs font-bold text-title flex items-center gap-2 mb-2">
+                          <Users className="w-4 h-4 text-teal-500" /> Servidores SEJUS — Indexação ArcFace (Buffalo)
+                        </h4>
 
-                  <div className="flex gap-3 flex-wrap">
-                    {!isServidorIndexing ? (
-                      <>
-                        <button
-                          onClick={startServidorIndexing}
-                          disabled={(servidorIndexStatus?.remaining ?? 1) === 0}
-                          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
-                        >
-                          <Database className="w-4 h-4" />
-                          {(servidorIndexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação completa'}
-                        </button>
-                        <button onClick={fetchServidorStatus}
-                          className="flex items-center gap-2 text-sm font-medium text-teal-600 hover:text-teal-700 border border-teal-200 dark:border-teal-800 hover:bg-teal-50 dark:hover:bg-teal-900/20 px-4 py-2.5 rounded-xl transition-colors">
-                          <RefreshCw className="w-4 h-4" /> Atualizar
-                        </button>
-                        {isSuperAdmin && (
+                        {servidorIndexStatus && (
+                          <div className="grid grid-cols-4 gap-3 text-center text-xs">
+                            {[
+                              { label: 'Com Foto', value: servidorIndexStatus.withPhoto },
+                              { label: 'Indexadas', value: servidorIndexStatus.indexed },
+                              { label: 'Sem Rosto', value: servidorIndexStatus.noFace },
+                              { label: 'Pendentes', value: servidorIndexStatus.remaining },
+                            ].map((s) => (
+                              <div key={s.label} className="rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 p-2.5">
+                                <p className="text-subtle font-medium">{s.label}</p>
+                                <p className="text-lg font-black text-title mt-0.5">{s.value?.toLocaleString('pt-BR') ?? '—'}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {isServidorIndexing && (
+                          <>
+                            <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-teal-500 transition-all"
+                                style={{ width: `${servidorIndexProgress.total ? Math.round((servidorIndexProgress.current / servidorIndexProgress.total) * 100) : 0}%` }}
+                              />
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                              <div>
+                                <p className="text-subtle">Progresso</p>
+                                <p className="font-bold text-title">{servidorIndexProgress.current} / {servidorIndexProgress.total}</p>
+                              </div>
+                              <div>
+                                <p className="text-subtle">Rostos</p>
+                                <p className="font-bold text-green-600 dark:text-green-400">{servidorIndexProgress.faces}</p>
+                              </div>
+                              <div>
+                                <p className="text-subtle">Erros</p>
+                                <p className="font-bold text-red-500">{servidorIndexProgress.errors}</p>
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        {servidorIndexError && (
+                          <div className="flex items-center gap-2 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                            <AlertTriangle className="w-4 h-4 flex-shrink-0" /> {servidorIndexError}
+                          </div>
+                        )}
+                      </div>
+
+                      {showServidorClearConfirm && (
+                        <div className="border-2 border-red-300 dark:border-red-800 rounded-xl p-4 bg-red-50/60 dark:bg-red-900/20 flex items-center gap-4">
+                          <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-bold text-red-700 dark:text-red-400">Limpar TODO o índice de servidores?</p>
+                            <p className="text-xs text-red-600/80 dark:text-red-400/70">Será necessário reindexar todos os servidores.</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={clearServidorIndex} className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Confirmar</button>
+                            <button onClick={() => setShowServidorClearConfirm(false)} className="text-sm text-subtle hover:text-body px-3 py-2 transition-colors">Cancelar</button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3 flex-wrap">
+                        {!isServidorIndexing ? (
+                          <>
+                            <button
+                              onClick={() => startServidorIndexing('buffalo')}
+                              disabled={(servidorIndexStatus?.remaining ?? 1) === 0}
+                              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+                            >
+                              <Database className="w-4 h-4" />
+                              {(servidorIndexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação completa'}
+                            </button>
+                            <button onClick={fetchServidorStatus}
+                              className="flex items-center gap-2 text-sm font-medium text-teal-600 hover:text-teal-700 border border-teal-200 dark:border-teal-800 hover:bg-teal-50 dark:hover:bg-teal-900/20 px-4 py-2.5 rounded-xl transition-colors">
+                              <RefreshCw className="w-4 h-4" /> Atualizar
+                            </button>
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => setShowServidorClearConfirm(true)}
+                                className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Limpar índice
+                              </button>
+                            )}
+                          </>
+                        ) : (
                           <button
-                            onClick={() => setShowServidorClearConfirm(true)}
-                            className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                            onClick={stopServidorIndexing}
+                            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
                           >
-                            <Trash2 className="w-4 h-4" /> Limpar índice
+                            <X className="w-4 h-4" /> Parar indexação
                           </button>
                         )}
-                      </>
-                    ) : (
-                      <button
-                        onClick={stopServidorIndexing}
-                        className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
-                      >
-                        <X className="w-4 h-4" /> Parar indexação
-                      </button>
-                    )}
-                  </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="border border-gray-100 dark:border-gray-800 rounded-xl p-4 space-y-3">
+                        <h4 className="text-xs font-bold text-title flex items-center gap-2 mb-2">
+                          <Users className="w-4 h-4 text-teal-500" /> Servidores SEJUS — Indexação Antelopev2
+                        </h4>
+
+                        {servidorAntelopeIndexStatus && (
+                          <div className="grid grid-cols-4 gap-3 text-center text-xs">
+                            {[
+                              { label: 'Com Foto', value: servidorAntelopeIndexStatus.withPhoto },
+                              { label: 'Indexadas (Antelope)', value: servidorAntelopeIndexStatus.indexed },
+                              { label: 'Sem Rosto', value: servidorAntelopeIndexStatus.noFace },
+                              { label: 'Pendentes', value: servidorAntelopeIndexStatus.remaining },
+                            ].map((s) => (
+                              <div key={s.label} className="rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 p-2.5">
+                                <p className="text-subtle font-medium">{s.label}</p>
+                                <p className="text-lg font-black text-title mt-0.5">{s.value?.toLocaleString('pt-BR') ?? '—'}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {isServidorIndexing && (
+                          <>
+                            <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-teal-500 transition-all"
+                                style={{ width: `${servidorIndexProgress.total ? Math.round((servidorIndexProgress.current / servidorIndexProgress.total) * 100) : 0}%` }}
+                              />
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                              <div>
+                                <p className="text-subtle">Progresso</p>
+                                <p className="font-bold text-title">{servidorIndexProgress.current} / {servidorIndexProgress.total}</p>
+                              </div>
+                              <div>
+                                <p className="text-subtle">Rostos</p>
+                                <p className="font-bold text-green-600 dark:text-green-400">{servidorIndexProgress.faces}</p>
+                              </div>
+                              <div>
+                                <p className="text-subtle">Erros</p>
+                                <p className="font-bold text-red-500">{servidorIndexProgress.errors}</p>
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        {servidorIndexError && (
+                          <div className="flex items-center gap-2 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                            <AlertTriangle className="w-4 h-4 flex-shrink-0" /> {servidorIndexError}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Info Servidores Antelopev2 */}
+                      <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm space-y-1">
+                        <p className="font-semibold text-blue-800 dark:text-blue-300">Como funciona o Antelopev2:</p>
+                        <ul className="list-disc pl-4 space-y-1 text-xs text-blue-700 dark:text-blue-400">
+                          <li>Processamento de alta precisão usando o modelo avançado Antelopev2.</li>
+                          <li>Armazenado na coluna avançada do banco de dados (faceDescriptorAdvanced).</li>
+                          <li>Busca vetorial direta no pgvector sem consumo de RAM.</li>
+                          <li>Evita retrabalho salvando o progresso de forma incremental.</li>
+                        </ul>
+                      </div>
+
+                      {showServidorAntelopeClearConfirm && (
+                        <div className="border-2 border-red-300 dark:border-red-800 rounded-xl p-4 bg-red-50/60 dark:bg-red-900/20 flex items-center gap-4">
+                          <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-bold text-red-700 dark:text-red-400">Limpar TODO o índice Antelopev2 de servidores?</p>
+                            <p className="text-xs text-red-600/80 dark:text-red-400/70">Será necessário reindexar todos os servidores com Antelopev2.</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={clearServidorAntelopeIndex} className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Confirmar</button>
+                            <button onClick={() => setShowServidorAntelopeClearConfirm(false)} className="text-sm text-subtle hover:text-body px-3 py-2 transition-colors">Cancelar</button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3 flex-wrap">
+                        {!isServidorIndexing ? (
+                          <>
+                            <button
+                              onClick={() => startServidorIndexing('antelope')}
+                              disabled={(servidorAntelopeIndexStatus?.remaining ?? 1) === 0}
+                              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+                            >
+                              <Database className="w-4 h-4" />
+                              {(servidorAntelopeIndexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação Antelopev2'}
+                            </button>
+                            <button onClick={fetchServidorAntelopeStatus}
+                              className="flex items-center gap-2 text-sm font-medium text-teal-600 hover:text-teal-700 border border-teal-200 dark:border-teal-800 hover:bg-teal-50 dark:hover:bg-teal-900/20 px-4 py-2.5 rounded-xl transition-colors">
+                              <RefreshCw className="w-4 h-4" /> Atualizar
+                            </button>
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => setShowServidorAntelopeClearConfirm(true)}
+                                className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Limpar índice Antelopev2
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <button
+                            onClick={stopServidorIndexing}
+                            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                          >
+                            <X className="w-4 h-4" /> Parar indexação
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
