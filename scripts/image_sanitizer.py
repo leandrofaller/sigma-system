@@ -124,7 +124,8 @@ def main():
             else:
                 providers = ["CPUExecutionProvider"]
 
-        app = FaceAnalysis(name="buffalo_l", providers=providers)
+        insightface_home = os.getenv('INSIGHTFACE_HOME', os.path.expanduser('~/.insightface'))
+        app = FaceAnalysis(name="buffalo_l", root=insightface_home, providers=providers)
         app.prepare(ctx_id=0, det_size=(640, 640))
     finally:
         sys.stdout = _real_stdout

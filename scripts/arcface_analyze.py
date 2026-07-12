@@ -96,8 +96,10 @@ def main():
                 else:
                     providers = ["CPUExecutionProvider"]
 
+            insightface_home = os.getenv('INSIGHTFACE_HOME', os.path.expanduser('~/.insightface'))
             app = FaceAnalysis(
                 name=model_name,
+                root=insightface_home,
                 providers=providers,
             )
             app.prepare(ctx_id=0, det_size=(640, 640))
