@@ -412,6 +412,12 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   useEffect(() => { if (!isVisitanteIndexing) fetchVisitanteStatus(); }, [isVisitanteIndexing]);
   useEffect(() => { if (!isServidorIndexing) fetchServidorStatus(); }, [isServidorIndexing]);
 
+  // Atualiza contadores físicos em tempo real no painel durante a indexação ativa
+  useEffect(() => { if (isIndexing) fetchStatus(); }, [indexProgress.current, isIndexing]);
+  useEffect(() => { if (isAntelopeIndexing) fetchAntelopeStatus(); }, [antelopeIndexProgress.current, isAntelopeIndexing]);
+  useEffect(() => { if (isVisitanteIndexing) fetchVisitanteStatus(); }, [visitanteIndexProgress.current, isVisitanteIndexing]);
+  useEffect(() => { if (isServidorIndexing) fetchServidorStatus(); }, [servidorIndexProgress.current, isServidorIndexing]);
+
   // Pooling para acompanhar o carregamento inicial do cache de embeddings na memória
   useEffect(() => {
     const isApenadosLoading = indexStatus?.cacheStatus?.loading ?? false;
