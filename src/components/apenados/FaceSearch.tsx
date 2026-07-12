@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useIndexing } from '@/contexts/IndexingContext';
+import { useAntelopeIndexing } from '@/contexts/AntelopeIndexingContext';
 import { useVisitanteIndexing } from '@/contexts/VisitanteIndexingContext';
 import { useServidorIndexing } from '@/contexts/ServidorIndexingContext';
 import {
@@ -318,6 +319,18 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const { isIndexing, progress: indexProgress, indexError, startIndexing, stopIndexing } = useIndexing();
 
+  // Index Antelopev2 (Advanced)
+  const [antelopeIndexStatus, setAntelopeIndexStatus] = useState<IndexStatus | null>(null);
+  const [indexModelType, setIndexModelType] = useState<'buffalo' | 'antelope'>('buffalo');
+  const [showAntelopeClearConfirm, setShowAntelopeClearConfirm] = useState(false);
+  const {
+    isIndexing: isAntelopeIndexing,
+    progress: antelopeIndexProgress,
+    indexError: antelopeIndexError,
+    startIndexing: startAntelopeIndexing,
+    stopIndexing: stopAntelopeIndexing
+  } = useAntelopeIndexing();
+
   // Indexação de Visitantes
   const {
     isIndexing: isVisitanteIndexing,
@@ -382,14 +395,20 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     try { setServidorIndexStatus(await (await fetch('/api/servidores/face/status')).json()); } catch {}
   };
 
+  const fetchAntelopeStatus = async () => {
+    try { setAntelopeIndexStatus(await (await fetch('/api/apenados/face/status-antelope')).json()); } catch {}
+  };
+
   useEffect(() => {
     fetchStatus();
     fetchVisitanteStatus();
     fetchServidorStatus();
+    fetchAntelopeStatus();
   }, []);
 
   // Atualiza contadores quando a indexação terminar
   useEffect(() => { if (!isIndexing) fetchStatus(); }, [isIndexing]);
+  useEffect(() => { if (!isAntelopeIndexing) fetchAntelopeStatus(); }, [isAntelopeIndexing]);
   useEffect(() => { if (!isVisitanteIndexing) fetchVisitanteStatus(); }, [isVisitanteIndexing]);
   useEffect(() => { if (!isServidorIndexing) fetchServidorStatus(); }, [isServidorIndexing]);
 
@@ -530,6 +549,16 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     } catch { setErrorMsg('Erro ao limpar índice de servidores'); }
   };
 
+  const clearAntelopeIndex = async () => {
+    setShowAntelopeClearConfirm(false);
+    try {
+      const res = await fetch('/api/apenados/face/clear-antelope', { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) fetchAntelopeStatus();
+      else setErrorMsg(data.error || 'Erro ao limpar índice do Antelopev2');
+    } catch { setErrorMsg('Erro ao limpar índice do Antelopev2'); }
+  };
+
   const handleReindex = async (targetId?: string) => {
     try {
       const body: any = { type: noFaceType };
@@ -603,6 +632,14 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
 
   const etaSeconds = (() => {
     const { current, total, startTime } = indexProgress;
+    if (!startTime || !current) return Infinity;
+    const elapsed = (Date.now() - startTime) / 1000;
+    const rate = current / elapsed;
+    return (total - current) / rate;
+  })();
+
+  const antelopeEtaSeconds = (() => {
+    const { current, total, startTime } = antelopeIndexProgress;
     if (!startTime || !current) return Infinity;
     const elapsed = (Date.now() - startTime) / 1000;
     const rate = current / elapsed;
@@ -1006,114 +1043,254 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
 
               {indexSubTab === 'apenados' ? (
                 <>
-                  {/* Contadores Apenados */}
-                  {indexStatus && (
-                    <div className="grid grid-cols-4 gap-3">
-                      {[
-                        { label: 'Com foto', value: indexStatus.withPhoto, color: 'text-sigma-600' },
-                        { label: 'Indexadas', value: indexStatus.indexed, color: 'text-green-600 dark:text-green-400' },
-                        { label: 'Sem rosto', value: indexStatus.noFace ?? 0, color: 'text-gray-500 dark:text-gray-400' },
-                        { label: 'Pendentes', value: indexStatus.remaining, color: indexStatus.remaining > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400' },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} className="card p-4 text-center">
-                          <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString('pt-BR')}</p>
-                          <p className="text-xs text-subtle mt-1">{label}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {indexError && (
-                    <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-400">
-                      {indexError}
-                    </div>
-                  )}
-
-                  {/* Progresso Apenados */}
-                  {(isIndexing || indexProgress.total > 0) && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold text-title">
-                          {indexProgress.current.toLocaleString('pt-BR')} / {indexProgress.total.toLocaleString('pt-BR')}
-                        </div>
-                        {isIndexing && indexProgress.current > 0 && (
-                          <div className="text-xs text-subtle">
-                            {(() => {
-                              const elapsed = (Date.now() - indexProgress.startTime) / 1000;
-                              const rate = indexProgress.current / elapsed;
-                              return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(etaSeconds)}`;
-                            })()}
-                          </div>
-                        )}
-                      </div>
-                      <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-sigma-500 to-sigma-700 transition-all duration-300 rounded-full"
-                          style={{ width: indexProgress.total > 0 ? `${(indexProgress.current / indexProgress.total) * 100}%` : '0%' }}
-                        />
-                      </div>
-                      <div className="flex gap-4 text-xs text-subtle">
-                        <span className="text-green-600 dark:text-green-400 font-medium">
-                          {indexProgress.faces.toLocaleString('pt-BR')} rostos detectados
-                        </span>
-                        <span>{indexProgress.skipped.toLocaleString('pt-BR')} sem rosto</span>
-                        {indexProgress.errors > 0 && (
-                          <span className="text-red-500">{indexProgress.errors.toLocaleString('pt-BR')} erros</span>
-                        )}
-                      </div>
-                      {!isIndexing && indexProgress.current >= indexProgress.total && indexProgress.total > 0 && (
-                        <p className="text-sm text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5">
-                          <CheckCircle className="w-4 h-4" /> Indexação de apenados concluída!
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Info Apenados */}
-                  <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm space-y-1">
-                    <p className="font-semibold text-blue-800 dark:text-blue-300">Como funciona:</p>
-                    <ul className="list-disc pl-4 space-y-1 text-xs text-blue-700 dark:text-blue-400">
-                      <li>O servidor processa cada foto usando InsightFace buffalo_l (ArcFace 512 dims).</li>
-                      <li>Lotes de {BATCH_SIZE} fotos por requisição — o modelo Python carrega uma vez por lote.</li>
-                      <li>Fotos sem rosto detectável são ignoradas e não reprocessadas.</li>
-                      <li>Pode ser interrompido e retomado a qualquer momento.</li>
-                      <li>Requer: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">pip install insightface onnxruntime opencv-python</code></li>
-                    </ul>
+                  {/* Seletor de Motor */}
+                  <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl max-w-[280px] border border-gray-200 dark:border-gray-700 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setIndexModelType('buffalo')}
+                      className={`flex-1 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                        indexModelType === 'buffalo'
+                          ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                          : 'text-subtle hover:text-body'
+                      }`}
+                    >
+                      Motor Buffalo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIndexModelType('antelope')}
+                      className={`flex-1 py-1 px-3 text-xs font-bold rounded-lg transition-all ${
+                        indexModelType === 'antelope'
+                          ? 'bg-white dark:bg-gray-700 text-sigma-600 dark:text-white shadow-sm'
+                          : 'text-subtle hover:text-body'
+                      }`}
+                    >
+                      Motor Antelopev2
+                    </button>
                   </div>
 
-                  <div className="flex gap-3 flex-wrap">
-                    {!isIndexing ? (
-                      <>
-                        <button
-                          onClick={startIndexing}
-                          disabled={(indexStatus?.remaining ?? 1) === 0}
-                          className="flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
-                        >
-                          <Database className="w-4 h-4" />
-                          {(indexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação completa'}
-                        </button>
-                        <button onClick={fetchStatus}
-                          className="flex items-center gap-2 text-sm font-medium text-sigma-600 hover:text-sigma-700 border border-sigma-200 dark:border-sigma-800 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 px-4 py-2.5 rounded-xl transition-colors">
-                          <RefreshCw className="w-4 h-4" /> Atualizar
-                        </button>
-                        {isSuperAdmin && (
+                  {indexModelType === 'buffalo' ? (
+                    <>
+                      {/* Contadores Apenados */}
+                      {indexStatus && (
+                        <div className="grid grid-cols-4 gap-3">
+                          {[
+                            { label: 'Com foto', value: indexStatus.withPhoto, color: 'text-sigma-600' },
+                            { label: 'Indexadas', value: indexStatus.indexed, color: 'text-green-600 dark:text-green-400' },
+                            { label: 'Sem rosto', value: indexStatus.noFace ?? 0, color: 'text-gray-500 dark:text-gray-400' },
+                            { label: 'Pendentes', value: indexStatus.remaining, color: indexStatus.remaining > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400' },
+                          ].map(({ label, value, color }) => (
+                            <div key={label} className="card p-4 text-center">
+                              <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString('pt-BR')}</p>
+                              <p className="text-xs text-subtle mt-1">{label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {indexError && (
+                        <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-400">
+                          {indexError}
+                        </div>
+                      )}
+
+                      {/* Progresso Apenados */}
+                      {(isIndexing || indexProgress.total > 0) && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold text-title">
+                              {indexProgress.current.toLocaleString('pt-BR')} / {indexProgress.total.toLocaleString('pt-BR')}
+                            </div>
+                            {isIndexing && indexProgress.current > 0 && (
+                              <div className="text-xs text-subtle">
+                                {(() => {
+                                  const elapsed = (Date.now() - indexProgress.startTime) / 1000;
+                                  const rate = indexProgress.current / elapsed;
+                                  return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(etaSeconds)}`;
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-sigma-500 to-sigma-700 transition-all duration-300 rounded-full"
+                              style={{ width: indexProgress.total > 0 ? `${(indexProgress.current / indexProgress.total) * 100}%` : '0%' }}
+                            />
+                          </div>
+                          <div className="flex gap-4 text-xs text-subtle">
+                            <span className="text-green-600 dark:text-green-400 font-medium">
+                              {indexProgress.faces.toLocaleString('pt-BR')} rostos detectados
+                            </span>
+                            <span>{indexProgress.skipped.toLocaleString('pt-BR')} sem rosto</span>
+                            {indexProgress.errors > 0 && (
+                              <span className="text-red-500">{indexProgress.errors.toLocaleString('pt-BR')} erros</span>
+                            )}
+                          </div>
+                          {!isIndexing && indexProgress.current >= indexProgress.total && indexProgress.total > 0 && (
+                            <p className="text-sm text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5">
+                              <CheckCircle className="w-4 h-4" /> Indexação de apenados concluída!
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Info Apenados */}
+                      <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm space-y-1">
+                        <p className="font-semibold text-blue-800 dark:text-blue-300">Como funciona:</p>
+                        <ul className="list-disc pl-4 space-y-1 text-xs text-blue-700 dark:text-blue-400">
+                          <li>O servidor processa cada foto usando InsightFace buffalo_l (ArcFace 512 dims).</li>
+                          <li>Lotes de {BATCH_SIZE} fotos por requisição — o modelo Python carrega uma vez por lote.</li>
+                          <li>Fotos sem rosto detectável são ignoradas e não reprocessadas.</li>
+                          <li>Pode ser interrompido e retomado a qualquer momento.</li>
+                          <li>Requer: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">pip install insightface onnxruntime opencv-python</code></li>
+                        </ul>
+                      </div>
+
+                      <div className="flex gap-3 flex-wrap">
+                        {!isIndexing ? (
+                          <>
+                            <button
+                              onClick={startIndexing}
+                              disabled={(indexStatus?.remaining ?? 1) === 0}
+                              className="flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+                            >
+                              <Database className="w-4 h-4" />
+                              {(indexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação completa'}
+                            </button>
+                            <button onClick={fetchStatus}
+                              className="flex items-center gap-2 text-sm font-medium text-sigma-600 hover:text-sigma-700 border border-sigma-200 dark:border-sigma-800 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 px-4 py-2.5 rounded-xl transition-colors">
+                              <RefreshCw className="w-4 h-4" /> Atualizar
+                            </button>
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => setShowClearConfirm(true)}
+                                className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Limpar índice
+                              </button>
+                            )}
+                          </>
+                        ) : (
                           <button
-                            onClick={() => setShowClearConfirm(true)}
-                            className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                            onClick={stopIndexing}
+                            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
                           >
-                            <Trash2 className="w-4 h-4" /> Limpar índice
+                            <X className="w-4 h-4" /> Parar indexação
                           </button>
                         )}
-                      </>
-                    ) : (
-                      <button
-                        onClick={stopIndexing}
-                        className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
-                      >
-                        <X className="w-4 h-4" /> Parar indexação
-                      </button>
-                    )}
-                  </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Contadores Apenados Antelope */}
+                      {antelopeIndexStatus && (
+                        <div className="grid grid-cols-4 gap-3">
+                          {[
+                            { label: 'Com foto', value: antelopeIndexStatus.withPhoto, color: 'text-sigma-600' },
+                            { label: 'Indexadas (Antelope)', value: antelopeIndexStatus.indexed, color: 'text-green-600 dark:text-green-400' },
+                            { label: 'Sem rosto (Antelope)', value: antelopeIndexStatus.noFace ?? 0, color: 'text-gray-500 dark:text-gray-400' },
+                            { label: 'Pendentes', value: antelopeIndexStatus.remaining, color: antelopeIndexStatus.remaining > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400' },
+                          ].map(({ label, value, color }) => (
+                            <div key={label} className="card p-4 text-center">
+                              <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString('pt-BR')}</p>
+                              <p className="text-xs text-subtle mt-1">{label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {antelopeIndexError && (
+                        <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-400">
+                          {antelopeIndexError}
+                        </div>
+                      )}
+
+                      {/* Progresso Antelope */}
+                      {(isAntelopeIndexing || antelopeIndexProgress.total > 0) && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold text-title">
+                              {antelopeIndexProgress.current.toLocaleString('pt-BR')} / {antelopeIndexProgress.total.toLocaleString('pt-BR')}
+                            </div>
+                            {isAntelopeIndexing && antelopeIndexProgress.current > 0 && (
+                              <div className="text-xs text-subtle">
+                                {(() => {
+                                  const elapsed = (Date.now() - antelopeIndexProgress.startTime) / 1000;
+                                  const rate = antelopeIndexProgress.current / elapsed;
+                                  return `${rate.toFixed(1)} fotos/s · ETA ${fmtTime(antelopeEtaSeconds)}`;
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-sigma-500 to-sigma-700 transition-all duration-300 rounded-full"
+                              style={{ width: antelopeIndexProgress.total > 0 ? `${(antelopeIndexProgress.current / antelopeIndexProgress.total) * 100}%` : '0%' }}
+                            />
+                          </div>
+                          <div className="flex gap-4 text-xs text-subtle">
+                            <span className="text-green-600 dark:text-green-400 font-medium">
+                              {antelopeIndexProgress.faces.toLocaleString('pt-BR')} rostos detectados
+                            </span>
+                            <span>{antelopeIndexProgress.skipped.toLocaleString('pt-BR')} sem rosto</span>
+                            {antelopeIndexProgress.errors > 0 && (
+                              <span className="text-red-500">{antelopeIndexProgress.errors.toLocaleString('pt-BR')} erros</span>
+                            )}
+                          </div>
+                          {!isAntelopeIndexing && antelopeIndexProgress.current >= antelopeIndexProgress.total && antelopeIndexProgress.total > 0 && (
+                            <p className="text-sm text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5">
+                              <CheckCircle className="w-4 h-4" /> Indexação Antelopev2 concluída!
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Info Antelope */}
+                      <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 text-sm space-y-1">
+                        <p className="font-semibold text-blue-800 dark:text-blue-300">Como funciona o Antelopev2:</p>
+                        <ul className="list-disc pl-4 space-y-1 text-xs text-blue-700 dark:text-blue-400">
+                          <li>Processamento de alta precisão em lote usando o modelo avançado Antelopev2.</li>
+                          <li>Processado em lote no backend e armazenado na coluna avançada do banco de dados.</li>
+                          <li>Não consome memória RAM do servidor para busca de similaridade (usa busca vetorial direta no pgvector).</li>
+                          <li>Evita retrabalho salvando o progresso de forma incremental.</li>
+                        </ul>
+                      </div>
+
+                      <div className="flex gap-3 flex-wrap">
+                        {!isAntelopeIndexing ? (
+                          <>
+                            <button
+                              onClick={startAntelopeIndexing}
+                              disabled={(antelopeIndexStatus?.remaining ?? 1) === 0}
+                              className="flex items-center gap-2 bg-sigma-600 hover:bg-sigma-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
+                            >
+                              <Database className="w-4 h-4" />
+                              {(antelopeIndexStatus?.remaining ?? 1) === 0 ? 'Tudo indexado' : 'Iniciar indexação Antelopev2'}
+                            </button>
+                            <button onClick={fetchAntelopeStatus}
+                              className="flex items-center gap-2 text-sm font-medium text-sigma-600 hover:text-sigma-700 border border-sigma-200 dark:border-sigma-800 hover:bg-sigma-50 dark:hover:bg-sigma-900/20 px-4 py-2.5 rounded-xl transition-colors">
+                              <RefreshCw className="w-4 h-4" /> Atualizar
+                            </button>
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => setShowAntelopeClearConfirm(true)}
+                                className="flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2.5 rounded-xl transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Limpar índice Antelopev2
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <button
+                            onClick={stopAntelopeIndexing}
+                            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                          >
+                            <X className="w-4 h-4" /> Parar indexação
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </>
               ) : (
                 <>
@@ -1537,6 +1714,32 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
               <button onClick={clearIndex}
                 className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors">
                 Limpar índice
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm clear Antelope modal */}
+      {showAntelopeClearConfirm && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-red-200 dark:border-red-800 p-6 max-w-sm w-full space-y-4">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0" />
+              <p className="font-bold text-title">Limpar índice Antelopev2?</p>
+            </div>
+            <p className="text-sm text-subtle">
+              Todos os embeddings avançados do Antelopev2 serão removidos do banco de dados.
+              A indexação avançada precisará ser refeita do zero.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowAntelopeClearConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-subtle hover:text-body border border-gray-200 dark:border-gray-700 rounded-xl transition-colors">
+                Cancelar
+              </button>
+              <button onClick={clearAntelopeIndex}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors">
+                Limpar índice Antelopev2
               </button>
             </div>
           </div>

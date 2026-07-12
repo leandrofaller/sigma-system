@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
         }));
 
         const vectorCol = model === 'antelope' ? 'faceVectorAdvanced' : 'faceVector';
-        const countQuery = await prisma.$queryRawUnsafe<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM sejus_servidores WHERE "${vectorCol}" IS NOT NULL`;
+        const countQuery = await prisma.$queryRawUnsafe<[{ c: bigint }]>(`SELECT COUNT(*) AS c FROM sejus_servidores WHERE "${vectorCol}" IS NOT NULL`);
         return NextResponse.json({
           faces: facesResult,
           imageWidth: analysis.imageWidth,
@@ -351,7 +351,7 @@ export async function POST(req: NextRequest) {
         }));
 
         const vectorCol = model === 'antelope' ? 'faceVectorAdvanced' : 'faceVector';
-        const countQuery = await prisma.$queryRawUnsafe<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM sipe_visitantes WHERE "${vectorCol}" IS NOT NULL`;
+        const countQuery = await prisma.$queryRawUnsafe<[{ c: bigint }]>(`SELECT COUNT(*) AS c FROM sipe_visitantes WHERE "${vectorCol}" IS NOT NULL`);
         return NextResponse.json({
           faces: facesResult,
           imageWidth: analysis.imageWidth,
@@ -644,7 +644,7 @@ export async function POST(req: NextRequest) {
       }));
 
       const vectorCol = model === 'antelope' ? 'faceVectorAdvanced' : 'faceVector';
-      const apenadosCountQuery = await prisma.$queryRawUnsafe<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM apenados WHERE "${vectorCol}" IS NOT NULL`;
+      const apenadosCountQuery = await prisma.$queryRawUnsafe<[{ c: bigint }]>(`SELECT COUNT(*) AS c FROM apenados WHERE "${vectorCol}" IS NOT NULL`);
       return NextResponse.json({
         faces: facesResult,
         imageWidth: analysis.imageWidth,

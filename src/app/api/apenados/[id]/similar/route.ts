@@ -62,9 +62,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     const vectorCol = model === 'antelope' ? 'faceVectorAdvanced' : 'faceVector';
-    const [{ c }] = await prisma.$queryRawUnsafe<[{ c: bigint }]>`
-      SELECT COUNT(*) AS c FROM apenados WHERE "${vectorCol}" IS NOT NULL
-    `;
+    const [{ c }] = await prisma.$queryRawUnsafe<[{ c: bigint }]>(
+      `SELECT COUNT(*) AS c FROM apenados WHERE "${vectorCol}" IS NOT NULL`
+    );
     return NextResponse.json({ similar, indexed: Number(c), backend: 'pgvector' });
   }
 

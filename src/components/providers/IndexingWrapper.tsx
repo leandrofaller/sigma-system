@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react';
 import { IndexingProvider } from '@/contexts/IndexingContext';
 import { VisitanteIndexingProvider } from '@/contexts/VisitanteIndexingContext';
 import { ServidorIndexingProvider } from '@/contexts/ServidorIndexingContext';
+import { AntelopeIndexingProvider } from '@/contexts/AntelopeIndexingContext';
 import { IndexingStatusFloat } from '@/components/apenados/IndexingStatusFloat';
 import { VisitanteIndexingStatusFloat } from '@/components/visitantes/VisitanteIndexingStatusFloat';
 import { ServidorIndexingStatusFloat } from '@/components/servidores/ServidorIndexingStatusFloat';
@@ -17,14 +18,16 @@ export function IndexingWrapper({ children }: { children: ReactNode }) {
     <IndexingProvider>
       <VisitanteIndexingProvider>
         <ServidorIndexingProvider>
-          {children}
-          {isSuperAdmin && (
-            <>
-              <IndexingStatusFloat />
-              <VisitanteIndexingStatusFloat />
-              <ServidorIndexingStatusFloat />
-            </>
-          )}
+          <AntelopeIndexingProvider>
+            {children}
+            {isSuperAdmin && (
+              <>
+                <IndexingStatusFloat />
+                <VisitanteIndexingStatusFloat />
+                <ServidorIndexingStatusFloat />
+              </>
+            )}
+          </AntelopeIndexingProvider>
         </ServidorIndexingProvider>
       </VisitanteIndexingProvider>
     </IndexingProvider>
