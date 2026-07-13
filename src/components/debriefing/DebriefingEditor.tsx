@@ -73,7 +73,7 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
         .catch(() => {
           setForm((prev) => ({
             ...prev,
-            number: `DEBRIEFING Nº 001/${new Date().getFullYear()}/AIP/SEJUS/RO`,
+            number: '00001',
           }));
         });
     }
@@ -130,7 +130,8 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
             <label className="block text-xs font-medium text-subtle mb-1.5">Número</label>
             <input value={form.number} onChange={(e) => update('number', e.target.value)}
               placeholder="Aguardando geração automática..."
-              className={`${inputCls} font-mono`} />
+              disabled={userRole === 'OPERATOR'}
+              className={`${inputCls} font-mono bg-gray-50 dark:bg-gray-800 disabled:opacity-75`} />
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Data do Debriefing</label>

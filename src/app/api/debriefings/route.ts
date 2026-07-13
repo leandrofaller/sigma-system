@@ -26,26 +26,46 @@ export async function POST(req: NextRequest) {
   const user = session.user as any;
   const body = await req.json();
 
-  const debriefing = await prisma.debriefing.create({
-    data: {
-      number: body.number,
-      date: new Date(body.date),
-      missionDate: body.missionDate ? new Date(body.missionDate) : null,
-      missionEndDate: body.missionEndDate ? new Date(body.missionEndDate) : null,
-      missionCode: body.missionCode || null,
-      operationType: body.operationType || null,
-      operatives: body.operatives || null,
-      handler: body.handler || null,
-      location: body.location || null,
-      subject: body.subject,
-      diffusion: body.diffusion,
-      content: body.content,
-      classification: body.classification || 'RESERVADO',
-      status: body.status || 'DRAFT',
-      authorId: user.id,
-      groupId: body.groupId || user.groupId,
-    },
-    include: { author: true, group: true },
+  const debriefing = await prisma.$transaction(async (tx) => {
+    const counterCfg = await tx.systemConfig.findUnique({
+      where: { key: 'debriefing_counter' }
+    });
+    const current = (counterCfg?.value as any) || { next: 1 };
+    const nextNum = current.next || 1;
+    const formattedNumber = String(nextNum).padStart(5, '0');
+
+    if (counterCfg) {
+      await tx.systemConfig.update({
+        where: { id: counterCfg.id },
+        data: { value: { next: nextNum + 1 } }
+      });
+    } else {
+      await tx.systemConfig.create({
+        data: { key: 'debriefing_counter', value: { next: nextNum + 1 } }
+      });
+    }
+
+    return tx.debriefing.create({
+      data: {
+        number: formattedNumber,
+        date: new Date(body.date),
+        missionDate: body.missionDate ? new Date(body.missionDate) : null,
+        missionEndDate: body.missionEndDate ? new Date(body.missionEndDate) : null,
+        missionCode: body.missionCode || null,
+        operationType: body.operationType || null,
+        operatives: body.operatives || null,
+        handler: body.handler || null,
+        location: body.location || null,
+        subject: body.subject,
+        diffusion: body.diffusion,
+        content: body.content,
+        classification: body.classification || 'RESERVADO',
+        status: body.status || 'DRAFT',
+        authorId: user.id,
+        groupId: body.groupId || user.groupId,
+      },
+      include: { author: true, group: true },
+    });
   });
 
   await createAuditLog({

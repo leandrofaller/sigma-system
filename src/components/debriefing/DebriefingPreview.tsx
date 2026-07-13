@@ -217,7 +217,15 @@ export function DebriefingPreview({ form }: Props) {
 
         {/* Campos de identificação */}
         <div style={{ marginBottom: '14px' }}>
-          <p style={fieldRow}><strong><u>{form.number || 'DEBRIEFING Nº___/20__/AIP/SEJUS/RO'}</u></strong></p>
+          <p style={fieldRow}>
+            <strong>
+              <u>
+                {form.number 
+                  ? (form.number.startsWith('DEBRIEFING') ? form.number : `DEBRIEFING Nº ${form.number}`) 
+                  : 'DEBRIEFING Nº___/20__/AIP/SEJUS/RO'}
+              </u>
+            </strong>
+          </p>
           <p style={fieldRow}><strong>Data do Debriefing:</strong>&nbsp;{form.date ? formatDate(form.date) : '__/__/____'}</p>
           {form.missionDate && (
             <p style={fieldRow}><strong>Data inicial da Missão:</strong>&nbsp;{formatDate(form.missionDate)}</p>
