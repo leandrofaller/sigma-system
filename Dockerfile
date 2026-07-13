@@ -74,7 +74,7 @@ RUN mkdir -p /opt/arcface-models && chown 1001:1001 /opt/arcface-models
 
 # Pre-baixa os modelos buffalo_l e antelopev2 (~700 MB) antes da cópia do código-fonte para aproveitar o cache do Docker
 COPY scripts/download_model.py /tmp/download_model.py
-RUN HOME=/tmp MPLCONFIGDIR=/tmp/.matplotlib MPLBACKEND=Agg ARCFACE_PROVIDERS=CPUExecutionProvider \
+RUN INSIGHTFACE_HOME=/opt/arcface-models HOME=/tmp MPLCONFIGDIR=/tmp/.matplotlib MPLBACKEND=Agg ARCFACE_PROVIDERS=CPUExecutionProvider \
     /opt/arcface-venv/bin/python3 -u /tmp/download_model.py && \
     chown -R 1001:1001 /opt/arcface-models && \
     chmod -R 755 /opt/arcface-models
