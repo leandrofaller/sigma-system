@@ -42,6 +42,7 @@ export default async function MissoesPage() {
       include: {
         user: { select: { name: true, avatar: true } },
         group: { select: { id: true, name: true, color: true } },
+        debriefing: { select: { id: true, number: true } },
       },
       orderBy: { startDate: 'desc' },
       take: 30,
@@ -52,6 +53,7 @@ export default async function MissoesPage() {
       include: {
         user: { select: { name: true, avatar: true } },
         group: { select: { name: true, color: true } },
+        debriefing: { select: { id: true, number: true } },
       },
       orderBy: { startDate: 'asc' },
     });

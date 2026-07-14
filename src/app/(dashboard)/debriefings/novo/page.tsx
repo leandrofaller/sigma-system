@@ -10,10 +10,36 @@ async function getGroups(role: string, groupId?: string) {
   return prisma.group.findMany({ where: { id: groupId } });
 }
 
-export default async function NovoDebriefingPage() {
+export default async function NovoDebriefingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ missionId?: string }>;
+}) {
   const session = await auth();
   const user = session!.user as any;
   const groups = await getGroups(user.role, user.groupId);
+  const { missionId } = await searchParams;
+
+  let prefilledData: any = null;
+
+  if (missionId) {
+    const mission = await prisma.mission.findUnique({
+      where: { id: missionId },
+    });
+
+    if (mission) {
+      prefilledData = {
+        missionId: mission.id,
+        missionDate: mission.startDate,
+        missionEndDate: mission.endedAt || mission.endDate || null,
+        missionCode: mission.placa ? `PLACA-${mission.placa}` : '',
+        location: mission.destination,
+        subject: `DEBRIEFING REFERENTE À MISSÃO: ${mission.title.toUpperCase()}`,
+        operatives: mission.participants.join(', '),
+        groupId: mission.groupId || '',
+      };
+    }
+  }
 
   return (
     <div className="animate-fade-in">
@@ -28,6 +54,7 @@ export default async function NovoDebriefingPage() {
         userId={user.id}
         userRole={user.role}
         defaultGroupId={user.groupId}
+        initialData={prefilledData}
       />
     </div>
   );

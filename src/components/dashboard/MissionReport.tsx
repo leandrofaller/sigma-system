@@ -25,6 +25,7 @@ interface Mission {
   participants: string[];
   startKm?: number | null;
   endKm?: number | null;
+  debriefing?: { id: string; number: string } | null;
 }
 
 interface Props {
@@ -264,6 +265,7 @@ export function MissionReport({ missions, groups, users, isAdmin, currentUserId 
                 {isAdmin && <th className="text-left text-xs font-semibold text-subtle px-4 py-3">Responsável</th>}
                 <th className="text-left text-xs font-semibold text-subtle px-4 py-3">Grupo</th>
                 <th className="text-left text-xs font-semibold text-subtle px-4 py-3">Status</th>
+                <th className="text-left text-xs font-semibold text-subtle px-4 py-3">Debriefing</th>
                 <th className="text-right text-xs font-semibold text-subtle px-4 py-3">KM</th>
                 <th className="text-left text-xs font-semibold text-subtle px-4 py-3">Participantes</th>
               </tr>
@@ -271,7 +273,7 @@ export function MissionReport({ missions, groups, users, isAdmin, currentUserId 
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 8 : 7} className="px-4 py-12 text-center text-sm text-subtle">
+                  <td colSpan={isAdmin ? 9 : 8} className="px-4 py-12 text-center text-sm text-subtle">
                     Nenhuma viagem encontrada com os filtros aplicados.
                   </td>
                 </tr>
@@ -302,6 +304,50 @@ export function MissionReport({ missions, groups, users, isAdmin, currentUserId 
                       ) : <span className="text-subtle">—</span>}
                     </td>
                     <td className="px-4 py-3">{statusBadge(m.status)}</td>
+                    <td className="px-4 py-3">
+                      {m.status === 'COMPLETED' ? (
+                        m.debriefing ? (
+                          <Link
+                            href={`/debriefings/${m.debriefing.id}`}
+                            className="inline-flex items-center gap-1 text-xs text-sigma-600 dark:text-sigma-400 font-semibold hover:underline"
+                          >
+                            Ver ({m.debriefing.number})
+                          </Link>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400 px-2 py-0.5 rounded-full font-bold">
+                              Pendente
+                            </span>
+                            {(() => {
+                              const userNormalizedName = currentUserId ? users.find(u => u.id === currentUserId)?.name?.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+                              const userParts = userNormalizedName ? userNormalizedName.split(' ').filter(Boolean) : [];
+                              const isPart = userNormalizedName && m.participants.some((p: string) => {
+                                const pNormalized = p.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                                const pParts = pNormalized.split(' ').filter(Boolean);
+                                if (userNormalizedName.includes(pNormalized) || pNormalized.includes(userNormalizedName)) return true;
+                                const ignoreWords = ['DE', 'DA', 'DO', 'DOS', 'DAS', 'E', 'O', 'A'];
+                                const userMeaningfulParts = userParts.filter(w => !ignoreWords.includes(w));
+                                const pMeaningfulParts = pParts.filter(w => !ignoreWords.includes(w));
+                                return pMeaningfulParts.some(pw => userMeaningfulParts.includes(pw));
+                              });
+                              if (isAdmin || isPart) {
+                                return (
+                                  <Link
+                                    href={`/debriefings/novo?missionId=${m.id}`}
+                                    className="text-[10px] text-gray-500 hover:text-sigma-600 underline font-semibold"
+                                  >
+                                    Registrar
+                                  </Link>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
+                        )
+                      ) : (
+                        <span className="text-subtle">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-xs text-right font-mono whitespace-nowrap">
                       {km != null ? (
                         <span className="font-bold text-sigma-600 dark:text-sigma-400">{km.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} km</span>

@@ -63,6 +63,7 @@ export function DebriefingEditor({ groups, userId, userRole, defaultGroupId, ini
       conclusions: initialData?.content?.conclusions || '',
       recommendations: initialData?.content?.recommendations || '',
     },
+    missionId: initialData?.missionId || null,
   });
 
   useEffect(() => {

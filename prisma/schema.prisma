@@ -408,6 +408,9 @@ model Debriefing {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
+  missionId     String?        @unique
+  mission       Mission?       @relation(fields: [missionId], references: [id], onDelete: SetNull)
+
   @@index([groupId])
   @@index([authorId])
   @@index([status])
@@ -436,6 +439,7 @@ model Mission {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  debriefing  Debriefing?
   boardLists  BoardList[]
 
   @@index([userId])

@@ -38,6 +38,7 @@ interface Mission {
   placa?: string | null;
   startKm?: number;
   endKm?: number;
+  debriefing?: { id: string; number: string } | null;
 }
 
 function todayLocalDate() {
@@ -564,6 +565,35 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                       <span>Finalizada em: <span className="font-medium">
                         {format(new Date(viewingMission.endedAt), "dd/MM 'às' HH:mm", { locale: ptBR })}
                       </span></span>
+                    </div>
+                  )}
+                  {viewingMission.status === 'COMPLETED' && (
+                    <div className="flex items-center gap-3 text-sm text-body">
+                      <div className="w-4 h-4 text-sigma-500 flex items-center justify-center font-bold text-[10px]">📄</div>
+                      <span>Debriefing:&nbsp;
+                        {viewingMission.debriefing ? (
+                          <Link
+                            href={`/debriefings/${viewingMission.debriefing.id}`}
+                            className="text-sigma-600 hover:underline font-bold"
+                          >
+                            Registrado (Nº {viewingMission.debriefing.number})
+                          </Link>
+                        ) : (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-xs font-bold text-red-600 bg-red-50 dark:bg-red-950/20 dark:text-red-400 px-2 py-0.5 rounded-lg border border-red-200 dark:border-red-900/30">
+                              Pendente
+                            </span>
+                            {canUserActionMission(viewingMission) && (
+                              <Link
+                                href={`/debriefings/novo?missionId=${viewingMission.id}`}
+                                className="text-xs text-sigma-600 hover:underline font-semibold"
+                              >
+                                Registrar agora →
+                              </Link>
+                            )}
+                          </span>
+                        )}
+                      </span>
                     </div>
                   )}
                   {viewingMission.placa && (

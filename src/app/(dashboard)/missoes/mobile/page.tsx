@@ -13,6 +13,7 @@ export default async function MissoesMobilePage() {
       where: { userId: user.id },
       include: {
         group: { select: { id: true, name: true, color: true } },
+        debriefing: { select: { id: true, number: true } },
       },
       orderBy: { startDate: 'desc' },
       take: 30,
@@ -39,6 +40,7 @@ export default async function MissoesMobilePage() {
         id: user.id,
         name: user.name,
         groupId: user.groupId,
+        role: user.role,
       }}
     />
   );

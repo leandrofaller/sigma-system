@@ -50,9 +50,9 @@ export async function PATCH(
       const pParts = pNormalized.split(' ').filter(Boolean);
       if (userNormalizedName.includes(pNormalized) || pNormalized.includes(userNormalizedName)) return true;
       const ignoreWords = ['DE', 'DA', 'DO', 'DOS', 'DAS', 'E', 'O', 'A'];
-      const userMeaningfulParts = userParts.filter(w => !ignoreWords.includes(w));
-      const pMeaningfulParts = pParts.filter(w => !ignoreWords.includes(w));
-      return pMeaningfulParts.some(pw => userMeaningfulParts.includes(pw));
+      const userMeaningfulParts = userParts.filter((w: string) => !ignoreWords.includes(w));
+      const pMeaningfulParts = pParts.filter((w: string) => !ignoreWords.includes(w));
+      return pMeaningfulParts.some((pw: string) => userMeaningfulParts.includes(pw));
     });
 
     const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
@@ -164,6 +164,7 @@ export async function PATCH(
       include: {
         user: { select: { name: true } },
         group: { select: { name: true } },
+        debriefing: { select: { id: true, number: true } },
       },
     });
 

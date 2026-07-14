@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
       include: {
         user: { select: { name: true, avatar: true } },
         group: { select: { name: true, color: true } },
+        debriefing: { select: { id: true, number: true } },
       },
       orderBy: { startDate: 'asc' },
     });

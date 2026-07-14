@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
         status: body.status || 'DRAFT',
         authorId: user.id,
         groupId: body.groupId || user.groupId,
+        missionId: body.missionId || null,
       },
       include: { author: true, group: true },
     });

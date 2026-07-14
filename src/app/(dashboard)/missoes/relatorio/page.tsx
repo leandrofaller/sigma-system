@@ -15,6 +15,7 @@ export default async function MissoesRelatorioPage() {
       include: {
         user: { select: { id: true, name: true, avatar: true } },
         group: { select: { id: true, name: true, color: true } },
+        debriefing: { select: { id: true, number: true } },
       },
       orderBy: { startDate: 'desc' },
     }),
