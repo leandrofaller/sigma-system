@@ -270,9 +270,9 @@ export function RelatorioForcaTarefaEditor({ groups, userId, userName, userRole,
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
             <label className={labelCls}>Número do Relatório</label>
-            <input value={form.number} onChange={(e) => update('number', e.target.value)}
+            <input value={form.number} readOnly
               placeholder="Aguardando geração automática..."
-              className={`${inputCls} font-mono bg-gray-50/50 dark:bg-gray-800/20`} />
+              className={`${inputCls} font-mono bg-gray-100 dark:bg-gray-800/40 text-subtle cursor-not-allowed`} />
           </div>
           <div>
             <label className={labelCls}>Servidor</label>

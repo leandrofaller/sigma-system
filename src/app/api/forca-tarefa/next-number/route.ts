@@ -6,24 +6,12 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-  const formatted = await prisma.$transaction(async (tx) => {
-    const year = new Date().getFullYear();
-
-    const counterCfg = await tx.systemConfig.findUnique({ where: { key: 'relatorio_forca_tarefa_counter' } });
-    const current = (counterCfg?.value as any) || { next: 1, year };
-    const next = current.year === year ? (current.next || 1) : 1;
-
-    await tx.systemConfig.upsert({
-      where: { key: 'relatorio_forca_tarefa_counter' },
-      update: { value: { next: next + 1, year } },
-      create: { key: 'relatorio_forca_tarefa_counter', value: { next: next + 1, year } },
-    });
-
-    const suffixCfg = await tx.systemConfig.findUnique({ where: { key: 'relint_suffix' } });
-    const suffix = (suffixCfg?.value as any)?.suffix || 'AIP/SEJUS/RO';
-
-    return `RFT Nº ${String(next).padStart(3, '0')}/${year}/${suffix}`;
+  const counterCfg = await prisma.systemConfig.findUnique({
+    where: { key: 'forca_tarefa_counter' }
   });
+  const current = (counterCfg?.value as any) || { next: 1 };
+  const next = current.next || 1;
+  const formatted = String(next).padStart(5, '0');
 
   return NextResponse.json({ number: formatted });
 }
