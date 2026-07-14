@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
     });
     const current = (counterCfg?.value as any) || { next: 1 };
     const nextNum = current.next || 1;
-    const formattedNumber = String(nextNum).padStart(5, '0');
+    const year = new Date().getFullYear();
+    const formattedNumber = `RFT Nº ${String(nextNum).padStart(5, '0')}/${year}/AIP/SEJUS/RO`;
 
     if (counterCfg) {
       await tx.systemConfig.update({
