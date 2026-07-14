@@ -9,7 +9,8 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
-  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Map, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert, List, Paintbrush, Archive, Briefcase
+  ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Map, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert, List, Paintbrush, Archive, Briefcase,
+  Target, Check, Loader2
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -104,6 +105,8 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0, sidebarOr
   const [chatChannels, setChatChannels] = useState<ChatChannel[]>([]);
   const [isMobileDashboard, setIsMobileDashboard] = useState(false);
   const [ordemPendente, setOrdemPendente] = useState(0);
+  const [latestOrdem, setLatestOrdem] = useState<{ id: string; numero: string; titulo: string } | null>(null);
+  const [givingCiencia, setGivingCiencia] = useState(false);
   const prevCountRef = useRef(0);
   const prevOrdemRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -220,6 +223,57 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0, sidebarOr
     } catch { return false; }
   }, []);
 
+  // Toca o som de sucesso ao dar ciência
+  const playSuccessSound = useCallback(() => {
+    try {
+      const ctx = audioCtxRef.current;
+      if (!ctx || ctx.state !== 'running') return;
+      const notes = [659.25, 880.00]; // E5, A5
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const t = ctx.currentTime + i * 0.08;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.2, t + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        osc.start(t);
+        osc.stop(t + 0.22);
+      });
+    } catch {}
+  }, []);
+
+  // Handler para ciência imediata pelo banner mobile
+  const handleDarCiencia = async (ordemId: string) => {
+    setGivingCiencia(true);
+    try {
+      const res = await fetch(`/api/aip/ordens-missao/${ordemId}/ciencia`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        playSuccessSound();
+        // Recarrega contagem de ordens pendentes
+        const nextRes = await fetch('/api/aip/ordens-missao/pendentes-ciencia');
+        if (nextRes.ok) {
+          const { count, latest } = await nextRes.json() as { count: number; latest: { id: string; numero: string; titulo: string } | null };
+          setOrdemPendente(count);
+          setLatestOrdem(latest);
+          prevOrdemRef.current = count;
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || 'Erro ao registrar ciência.');
+      }
+    } catch {
+      alert('Erro de conexão ao registrar ciência.');
+    } finally {
+      setGivingCiencia(false);
+    }
+  };
+
   // Na primeira interação do usuário: cria/retoma o AudioContext e toca qualquer som pendente
   useEffect(() => {
     const activate = async () => {
@@ -250,7 +304,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0, sidebarOr
       try {
         const res = await fetch('/api/aip/ordens-missao/pendentes-ciencia');
         if (!res.ok) return;
-        const { count, latest } = await res.json() as { count: number; latest: { numero: string; titulo: string } | null };
+        const { count, latest } = await res.json() as { count: number; latest: { id: string; numero: string; titulo: string } | null };
 
         if (count > prevOrdemRef.current) {
           // Tenta tocar imediatamente; se o contexto ainda não foi ativado, fica pendente
@@ -266,6 +320,7 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0, sidebarOr
         }
         prevOrdemRef.current = count;
         setOrdemPendente(count);
+        setLatestOrdem(latest);
       } catch {}
     }
 
@@ -273,6 +328,20 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0, sidebarOr
     const id = setInterval(pollOrdens, 30_000);
     return () => clearInterval(id);
   }, [playOrdemSoundNow]);
+
+  // Repete som se houver ordem pendente de ciência para o operador (mobile/desktop alert)
+  useEffect(() => {
+    if (ordemPendente === 0 || !latestOrdem) return;
+
+    // Toca som ao iniciar
+    playOrdemSoundNow();
+
+    const intervalId = setInterval(() => {
+      playOrdemSoundNow();
+    }, 15_000);
+
+    return () => clearInterval(intervalId);
+  }, [ordemPendente, latestOrdem, playOrdemSoundNow]);
 
   const filteredNav = navItems.map((item) => {
     if (item.href === '/chat' && chatUnreadCount > 0)
@@ -625,6 +694,64 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0, sidebarOr
         {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
       </button>
     </motion.aside>
+
+    {/* Banner de Notificação de Ordem de Missão Mobile/Desktop de Fácil Aceite */}
+    <AnimatePresence>
+      {ordemPendente > 0 && latestOrdem && (
+        <motion.div
+          initial={{ opacity: 0, y: 50, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.95 }}
+          className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[420px] bg-gradient-to-br from-slate-900 to-slate-950 border border-amber-500/40 text-white rounded-3xl p-5 shadow-2xl z-50 flex flex-col gap-4"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 flex-shrink-0 animate-pulse">
+                <Target className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-amber-400 tracking-wide">🎯 ORDEM DE MISSÃO ATIVA</h4>
+                <p className="text-[11px] text-slate-400 font-medium">Ciência obrigatória requerida</p>
+              </div>
+            </div>
+            <span className="text-[10px] bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+              Pendente
+            </span>
+          </div>
+
+          <div className="bg-slate-800/40 border border-slate-800 p-3 rounded-2xl">
+            <p className="text-xs font-mono font-bold text-slate-200">{latestOrdem.numero}</p>
+            <p className="text-xs text-slate-300 mt-1 font-medium line-clamp-2">{latestOrdem.titulo}</p>
+          </div>
+
+          <div className="flex items-center gap-2 mt-1">
+            <button
+              onClick={() => handleDarCiencia(latestOrdem.id)}
+              disabled={givingCiencia}
+              className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-slate-800 disabled:to-slate-800 text-white rounded-2xl py-3 px-4 text-xs font-bold shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {givingCiencia ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>REGISTRANDO...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>DAR CIÊNCIA (ACEITAR)</span>
+                </>
+              )}
+            </button>
+            <Link
+              href="/ordens-missao"
+              className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-semibold transition-colors active:scale-95 text-center whitespace-nowrap cursor-pointer border border-slate-700/50"
+            >
+              VER MAIS
+            </Link>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
     </>
   );
 }

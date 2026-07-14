@@ -24,7 +24,7 @@ export async function GET(_req: NextRequest) {
       ? await prisma.ordemMissaoParticipante.findFirst({
           where: { userId, cienciaEm: null, ordem: { status: 'ATIVA' } },
           orderBy: { createdAt: 'desc' },
-          select: { ordem: { select: { numero: true, titulo: true } } },
+          select: { ordem: { select: { id: true, numero: true, titulo: true } } },
         })
       : null
 
