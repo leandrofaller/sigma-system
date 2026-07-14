@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
   });
   const current = (counterCfg?.value as any) || { next: 1 };
   const next = current.next || 1;
-  const formatted = String(next).padStart(5, '0');
+  const year = new Date().getFullYear();
+  const formatted = `DEBRIEFING Nº ${String(next).padStart(5, '0')}/${year}/AIP/SEJUS/RO`;
 
   return NextResponse.json({ number: formatted });
 }

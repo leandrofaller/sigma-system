@@ -9,9 +9,12 @@ export async function POST(req: NextRequest) {
   const counterCfg = await prisma.systemConfig.findUnique({
     where: { key: 'relint_counter' }
   });
+  const body = await req.json().catch(() => ({}));
+  const type = body.type || 'RELINT';
   const current = (counterCfg?.value as any) || { next: 1 };
   const next = current.next || 1;
-  const formatted = String(next).padStart(5, '0');
+  const year = new Date().getFullYear();
+  const formatted = `${type} Nº ${String(next).padStart(5, '0')}/${year}/AIP/SEJUS/RO`;
 
   return NextResponse.json({ number: formatted });
 }

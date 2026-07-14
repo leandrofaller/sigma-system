@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
     });
     const current = (counterCfg?.value as any) || { next: 1 };
     const nextNum = current.next || 1;
-    const formattedNumber = String(nextNum).padStart(5, '0');
+    const docType = body.number && body.number.startsWith('PEDIDO DE BUSCA') ? 'PEDIDO DE BUSCA' : 'RELINT';
+    const year = new Date().getFullYear();
+    const formattedNumber = `${docType} Nº ${String(nextNum).padStart(5, '0')}/${year}/AIP/SEJUS/RO`;
 
     if (counterCfg) {
       await tx.systemConfig.update({
