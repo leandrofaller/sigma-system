@@ -274,6 +274,11 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
   const { data: session } = useSession()
   const [showPrintConfig, setShowPrintConfig] = useState(false)
   const [gerandoDossie, setGerandoDossie] = useState(false)
+  const [showDossierRequestModal, setShowDossierRequestModal] = useState(false)
+  const [dossierJustification, setDossierJustification] = useState('')
+  const [dossierRequestStatus, setDossierRequestStatus] = useState<'PENDING' | 'REJECTED' | 'NONE' | null>(null)
+  const [dossierRequestReason, setDossierRequestReason] = useState<string | null>(null)
+  const [checkingDossierPermission, setCheckingDossierPermission] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -338,8 +343,61 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
     }
   }
 
-  const handleGerarDossie = () => {
-    setShowPrintConfig(true)
+  const handleGerarDossie = async () => {
+    setCheckingDossierPermission(true)
+    try {
+      const res = await fetch(`/api/aip/dossier/check/${apenado.id}`)
+      if (!res.ok) throw new Error('Falha ao verificar autorização')
+      const data = await res.json()
+      
+      if (data.authorized) {
+        setShowPrintConfig(true)
+      } else {
+        setDossierRequestStatus(data.status)
+        if (data.request) {
+          setDossierRequestReason(data.request.reason)
+        }
+        setShowDossierRequestModal(true)
+      }
+    } catch (err: any) {
+      console.error(err)
+      toast.error('Erro ao verificar autorização do dossiê.')
+    } finally {
+      setCheckingDossierPermission(false)
+    }
+  }
+
+  const handleSendDossierRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!dossierJustification.trim()) {
+      toast.error('Informe a justificativa/motivo do acesso.')
+      return
+    }
+
+    const toastId = toast.loading('Enviando solicitação de acesso...')
+    try {
+      const res = await fetch('/api/aip/dossier/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apenadoId: apenado.id,
+          reason: dossierJustification,
+        }),
+      })
+
+      if (!res.ok) {
+        const errData = await res.json()
+        throw new Error(errData.error || 'Erro na requisição')
+      }
+
+      toast.success('Solicitação de dossiê enviada para aprovação dos administradores!', { id: toastId })
+      setDossierRequestStatus('PENDING')
+      setDossierRequestReason(dossierJustification)
+      setDossierJustification('')
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || 'Erro ao enviar solicitação.', { id: toastId })
+    }
   }
 
   useEffect(() => {
@@ -678,11 +736,11 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
                 <>
                   <button
                     onClick={handleGerarDossie}
-                    disabled={gerandoDossie}
+                    disabled={gerandoDossie || checkingDossierPermission}
                     className="p-2 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg text-purple-600 dark:text-purple-400 disabled:opacity-50"
                     title="Gerar Dossiê (Ficha de Qualificação)"
                   >
-                    {gerandoDossie ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                    {gerandoDossie || checkingDossierPermission ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                   </button>
                   <button
                     onClick={handleSincronizarSipe}
@@ -1407,6 +1465,14 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
                 watermark: layout?.watermark
               }
               await printAIPDossier(apenado, session?.user?.email || session?.user?.name, userRole, printLayout)
+              
+              // Gravar log de auditoria do download
+              await fetch('/api/aip/dossier/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apenadoId: apenado.id })
+              })
+
               toast.success('Dossiê enviado para impressão com sucesso!', { id: toastId })
             } catch (err: any) {
               console.error(err)
@@ -1416,6 +1482,98 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
             }
           }}
         />
+      )}
+
+      {showDossierRequestModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            onClick={() => setShowDossierRequestModal(false)}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          />
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md shadow-2xl relative z-10 p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-base font-bold text-title flex items-center gap-2">
+                🔒 Controle de Acesso ao Dossiê
+              </h3>
+              <button
+                onClick={() => setShowDossierRequestModal(false)}
+                className="text-subtle hover:text-body transition-colors font-bold text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {dossierRequestStatus === 'PENDING' ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-2xl flex gap-3">
+                  <div className="text-amber-500 font-bold">⚠️</div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-amber-800 dark:text-amber-400">Solicitação Pendente</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      Sua solicitação de acesso para gerar a Ficha de Qualificação deste apenado está aguardando a aprovação de um Administrador.
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-subtle tracking-wider">Justificativa enviada:</span>
+                  <div className="p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-150 dark:border-gray-800 rounded-xl text-xs text-body italic">
+                    &ldquo;{dossierRequestReason}&rdquo;
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowDossierRequestModal(false)}
+                  className="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-body font-bold py-2.5 rounded-2xl text-xs transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSendDossierRequest} className="space-y-4">
+                {dossierRequestStatus === 'REJECTED' && (
+                  <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-2xl flex gap-3">
+                    <div className="text-red-500 font-bold">✕</div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-red-800 dark:text-red-400">Solicitação Rejeitada</p>
+                      <p className="text-xs text-red-700 dark:text-red-300">
+                        Sua solicitação anterior foi rejeitada. Você pode enviar uma nova justificativa para avaliação caso seja necessário.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <p className="text-xs text-body leading-relaxed">
+                    A geração de dossiês requer autorização dos administradores. Por favor, forneça uma justificativa/motivo do acesso para solicitar a liberação da Ficha de Qualificação do apenado <strong className="text-sigma-600 dark:text-sigma-400">{apenado.nome}</strong>.
+                  </p>
+                  <textarea
+                    required
+                    rows={4}
+                    value={dossierJustification}
+                    onChange={(e) => setDossierJustification(e.target.value)}
+                    placeholder="Ex: Diligência operacional externa solicitada via Ofício X..."
+                    className="w-full input-base px-3 py-2 text-xs"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-sigma-600 hover:bg-sigma-700 text-white font-bold py-2.5 rounded-2xl text-xs transition-all active:scale-95 shadow-md shadow-sigma-600/10"
+                  >
+                    Solicitar Acesso
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDossierRequestModal(false)}
+                    className="flex-1 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-body font-bold py-2.5 rounded-2xl text-xs transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

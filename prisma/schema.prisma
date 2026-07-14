@@ -119,6 +119,8 @@ model User {
   boardComments    BoardComment[]
   devices          UserDevice[]
   aipApenadoAnexos AIPApenadoAnexo[]
+  requestedDossiers DossierRequest[] @relation("DossierRequester")
+  approvedDossiers DossierRequest[] @relation("DossierApprover")
   maintenanceAvisos SystemMaintenance[]
   relatoriosForcaTarefa RelatorioForcaTarefa[]
 
@@ -1088,6 +1090,7 @@ model AIPApenado {
   fotoVisitantes AIPFotoVisitante[]
   anexos AIPApenadoAnexo[]
   mapaVinculos MapaFaccaoVinculo[]
+  dossierRequests DossierRequest[]
 
   @@index([sipeId])
   @@index([unidade])
@@ -1690,4 +1693,23 @@ model ArquivoFile {
   @@index([groupId])
   @@index([folderId])
   @@map("arquivo_files")
+}
+
+model DossierRequest {
+  id            String         @id @default(cuid())
+  apenadoId     String
+  apenado       AIPApenado     @relation(fields: [apenadoId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User           @relation("DossierRequester", fields: [userId], references: [id], onDelete: Cascade)
+  status        String         @default("PENDING") // PENDING, APPROVED, REJECTED
+  reason        String         @db.Text
+  approvedById  String?
+  approvedBy    User?          @relation("DossierApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([apenadoId])
+  @@index([status])
+  @@map("dossier_requests")
 }

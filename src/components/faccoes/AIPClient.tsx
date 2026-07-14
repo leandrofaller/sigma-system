@@ -8,9 +8,10 @@ import { AIPFaccoesPanel } from './AIPFaccoesPanel'
 import { AIPAdvogadosPanel } from './AIPAdvogadosPanel'
 import { AIPVisitantesPanel } from './AIPVisitantesPanel'
 import { AIPVinculosPanel } from './AIPVinculosPanel'
-import { Brain, BarChart2, Users, Shield, Briefcase, Camera, Link2, Map } from 'lucide-react'
+import { Brain, BarChart2, Users, Shield, Briefcase, Camera, Link2, Map, ShieldCheck } from 'lucide-react'
 import { MapaFaccoesClient, type PendingMapaLink } from '@/components/mapa-faccoes/MapaFaccoesClient'
 import type { AIPApenado } from './AIPanel'
+import { AIPDossierRequestsPanel } from './AIPDossierRequestsPanel'
 
 interface AIPClientProps {
   userRole: string
@@ -110,6 +111,12 @@ export function AIPClient({ userRole }: AIPClientProps) {
                 <Map className="w-4 h-4" />
                 Mapa de Facções
               </TabsTrigger>
+              {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
+                <TabsTrigger value="solicitacoes" className={triggerClass}>
+                  <ShieldCheck className="w-4 h-4" />
+                  Aprovações
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -156,6 +163,12 @@ export function AIPClient({ userRole }: AIPClientProps) {
               onMapaLinked={handleMapaLinked}
             />
           </TabsContent>
+
+          {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
+            <TabsContent value="solicitacoes" className="flex-1 min-h-0 mt-0 overflow-y-auto">
+              <AIPDossierRequestsPanel />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>
