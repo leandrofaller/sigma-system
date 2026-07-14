@@ -27,20 +27,40 @@ export async function POST(req: NextRequest) {
   const user = session.user as any;
   const body = await req.json();
 
-  const relint = await prisma.relint.create({
-    data: {
-      number: body.number || generateRelintNumber('RELINT'),
-      date: new Date(body.date),
-      subject: body.subject,
-      diffusion: body.diffusion,
-      content: body.content,
-      classification: body.classification || 'RESERVADO',
-      status: body.status || 'DRAFT',
-      authorId: user.id,
-      groupId: body.groupId || user.groupId,
-      templateId: body.templateId,
-    },
-    include: { author: true, group: true },
+  const relint = await prisma.$transaction(async (tx) => {
+    const counterCfg = await tx.systemConfig.findUnique({
+      where: { key: 'relint_counter' }
+    });
+    const current = (counterCfg?.value as any) || { next: 1 };
+    const nextNum = current.next || 1;
+    const formattedNumber = String(nextNum).padStart(5, '0');
+
+    if (counterCfg) {
+      await tx.systemConfig.update({
+        where: { id: counterCfg.id },
+        data: { value: { next: nextNum + 1 } }
+      });
+    } else {
+      await tx.systemConfig.create({
+        data: { key: 'relint_counter', value: { next: nextNum + 1 } }
+      });
+    }
+
+    return tx.relint.create({
+      data: {
+        number: formattedNumber,
+        date: new Date(body.date),
+        subject: body.subject,
+        diffusion: body.diffusion,
+        content: body.content,
+        classification: body.classification || 'RESERVADO',
+        status: body.status || 'DRAFT',
+        authorId: user.id,
+        groupId: body.groupId || user.groupId,
+        templateId: body.templateId,
+      },
+      include: { author: true, group: true },
+    });
   });
 
   await createAuditLog({

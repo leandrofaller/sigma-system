@@ -90,10 +90,6 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
 
   const handleDocTypeChange = useCallback((type: DocType) => {
     setDocType(type);
-    setForm((prev) => ({
-      ...prev,
-      number: prev.number.includes(' Nº ') ? swapPrefix(prev.number, type) : prev.number,
-    }));
   }, []);
 
   const updateContent = useCallback((field: string, value: string) => {
@@ -153,9 +149,9 @@ export function RelintEditor({ templates, groups, userId, userRole, defaultGroup
               ))}
             </div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Número</label>
-            <input value={form.number} onChange={(e) => update('number', e.target.value)}
+            <input value={form.number} readOnly
               placeholder="Aguardando geração automática..."
-              className={`${inputCls} font-mono`} />
+              className={`${inputCls} font-mono bg-gray-100 dark:bg-gray-800/40 text-subtle cursor-not-allowed`} />
           </div>
           <div>
             <label className="block text-xs font-medium text-subtle mb-1.5">Data</label>
