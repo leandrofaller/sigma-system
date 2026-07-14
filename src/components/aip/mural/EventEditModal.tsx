@@ -167,15 +167,18 @@ export function EventEditModal({
       }
 
       // 3. Fazer upload dos novos arquivos
-      for (const arquivo of novosArquivos) {
+      if (novosArquivos.length > 0) {
         const formData = new FormData()
-        formData.append('file', arquivo)
+        for (const arquivo of novosArquivos) {
+          formData.append('file', arquivo)
+        }
         const upRes = await fetch(`/api/events/${evento.id}/attachments`, {
           method: 'POST',
           body: formData,
         })
         if (!upRes.ok) {
-          console.warn(`Falha ao fazer upload de ${arquivo.name}`)
+          const data = await upRes.json().catch(() => ({}))
+          throw new Error(data.error || 'Erro ao fazer upload dos novos anexos')
         }
       }
 

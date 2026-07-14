@@ -49,7 +49,7 @@ export function generateS3Key(
   nomeOriginal: string
 ): string {
   const hash = createHash('sha256')
-    .update(`${eventId}-${nomeOriginal}-${Date.now()}`)
+    .update(`${eventId}-${nomeOriginal}-${Date.now()}-${Math.random()}`)
     .digest('hex')
     .slice(0, 12)
 

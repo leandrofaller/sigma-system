@@ -84,18 +84,19 @@ export function EventModal({ isOpen, onClose, onEventCreated, initialDate }: Eve
 
       // 2. Upload de arquivos (se houver)
       if (arquivos.length > 0) {
+        const formData = new FormData()
         for (const arquivo of arquivos) {
-          const formData = new FormData()
           formData.append('file', arquivo)
+        }
 
-          const uploadRes = await fetch(`/api/events/${evento.id}/attachments`, {
-            method: 'POST',
-            body: formData,
-          })
+        const uploadRes = await fetch(`/api/events/${evento.id}/attachments`, {
+          method: 'POST',
+          body: formData,
+        })
 
-          if (!uploadRes.ok) {
-            console.warn(`Erro ao fazer upload de ${arquivo.name}`)
-          }
+        if (!uploadRes.ok) {
+          const data = await uploadRes.json().catch(() => ({}))
+          throw new Error(data.error || 'Erro ao fazer upload de um ou mais anexos')
         }
       }
 

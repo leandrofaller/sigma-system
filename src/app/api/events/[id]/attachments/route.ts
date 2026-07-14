@@ -65,9 +65,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { id } = await params
     const user = session.user as any
     const formData = await req.formData()
-    const file = formData.get('file') as File
+    const files = formData.getAll('file') as File[]
 
-    if (!file) {
+    if (files.length === 0) {
       return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
     }
 
@@ -80,89 +80,98 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Evento não encontrado' }, { status: 404 })
     }
 
-    // Converter File para Buffer
-    let buffer = Buffer.from(await file.arrayBuffer())
-    let contentType = file.type || 'application/octet-stream'
-    let fileName = file.name
+    const anexosCriados = []
 
-    // Converter imagens para WebP automaticamente
-    if (contentType.startsWith('image/') && contentType !== 'image/webp') {
-      try {
-        buffer = (await sharp(buffer)
-          .webp({ quality: 85 })
-          .toBuffer()) as Buffer<ArrayBuffer>
-        contentType = 'image/webp'
-        // Trocar extensão pelo .webp no nome
-        fileName = fileName.replace(/\.[^/.]+$/, '') + '.webp'
-        console.log(`[S3] 🖼️ Imagem convertida para WebP: ${fileName}`)
-      } catch (sharpErr) {
-        // Se falhar a conversão, continua com o arquivo original
-        console.warn('[S3] Falha ao converter para WebP, usando original:', sharpErr)
-        buffer = Buffer.from(await file.arrayBuffer())
-        contentType = file.type
-        fileName = file.name
+    for (const file of files) {
+      // Converter File para Buffer
+      let buffer = Buffer.from(await file.arrayBuffer())
+      let contentType = file.type || 'application/octet-stream'
+      let fileName = file.name
+
+      // Converter imagens para WebP automaticamente
+      if (contentType.startsWith('image/') && contentType !== 'image/webp') {
+        try {
+          buffer = (await sharp(buffer)
+            .webp({ quality: 85 })
+            .toBuffer()) as Buffer<ArrayBuffer>
+          contentType = 'image/webp'
+          // Trocar extensão pelo .webp no nome
+          fileName = fileName.replace(/\.[^/.]+$/, '') + '.webp'
+          console.log(`[S3] 🖼️ Imagem convertida para WebP: ${fileName}`)
+        } catch (sharpErr) {
+          // Se falhar a conversão, continua com o arquivo original
+          console.warn('[S3] Falha ao converter para WebP, usando original:', sharpErr)
+          buffer = Buffer.from(await file.arrayBuffer())
+          contentType = file.type
+          fileName = file.name
+        }
       }
-    }
 
-    // Validar arquivo (usa contentType/fileName já convertidos)
-    const validacao = validateFile(buffer, contentType, fileName)
-    if (!validacao.valid) {
-      return NextResponse.json(
-        { error: validacao.error },
-        { status: 400 }
-      )
-    }
+      // Validar arquivo (usa contentType/fileName já convertidos)
+      const validacao = validateFile(buffer, contentType, fileName)
+      if (!validacao.valid) {
+        return NextResponse.json(
+          { error: `${file.name}: ${validacao.error}` },
+          { status: 400 }
+        )
+      }
 
-    // Gerar chave S3 e fazer upload (usa fileName convertido)
-    const s3Key = generateS3Key(id, fileName)
-    const { url } = await uploadToS3(s3Key, buffer, contentType)
+      // Gerar chave S3 e fazer upload (usa fileName convertido)
+      const s3Key = generateS3Key(id, fileName)
+      const { url } = await uploadToS3(s3Key, buffer, contentType)
 
-    // Determinar tipo de anexo
-    let tipo = 'outro'
-    if (contentType.startsWith('image/')) {
-      tipo = 'foto'
-    } else if (contentType === 'application/pdf') {
-      tipo = 'pdf'
-    } else if (
-      contentType.includes('word') ||
-      contentType.includes('document')
-    ) {
-      tipo = 'documento'
-    }
+      // Determinar tipo de anexo
+      let tipo = 'outro'
+      if (contentType.startsWith('image/')) {
+        tipo = 'foto'
+      } else if (contentType === 'application/pdf') {
+        tipo = 'pdf'
+      } else if (
+        contentType.includes('word') ||
+        contentType.includes('document')
+      ) {
+        tipo = 'documento'
+      }
 
-    // Salvar registro no banco
-    const anexo = await prisma.eventAttachment.create({
-      data: {
-        eventId: id,
-        nomeOriginal: fileName,  // nome com .webp se foi convertida
-        nomeS3: s3Key,
-        tipo,
-        tipoMime: contentType,
-        tamanho: buffer.length,
-        urlS3: url,
-        uploadedBy: user.id,
-      },
-      include: {
-        uploadedByUser: {
-          select: { id: true, name: true, avatar: true },
+      // Salvar registro no banco
+      const anexo = await prisma.eventAttachment.create({
+        data: {
+          eventId: id,
+          nomeOriginal: fileName,  // nome com .webp se foi convertida
+          nomeS3: s3Key,
+          tipo,
+          tipoMime: contentType,
+          tamanho: buffer.length,
+          urlS3: url,
+          uploadedBy: user.id,
         },
-      },
-    })
+        include: {
+          uploadedByUser: {
+            select: { id: true, name: true, avatar: true },
+          },
+        },
+      })
 
-    // Auditoria
-    await createAuditLog({
-      userId: user.id,
-      action: AUDIT_ACTIONS.UPLOAD_EVENT_ATTACHMENT,
-      details: {
-        eventoId: id,
-        anexoId: anexo.id,
-        nomeArquivo: file.name,
-        tamanho: buffer.length,
-      },
-      request: req,
-    })
+      // Auditoria
+      await createAuditLog({
+        userId: user.id,
+        action: AUDIT_ACTIONS.UPLOAD_EVENT_ATTACHMENT,
+        details: {
+          eventoId: id,
+          anexoId: anexo.id,
+          nomeArquivo: file.name,
+          tamanho: buffer.length,
+        },
+        request: req,
+      })
 
-    return NextResponse.json(anexo, { status: 201 })
+      anexosCriados.push(anexo)
+    }
+
+    if (anexosCriados.length === 1) {
+      return NextResponse.json(anexosCriados[0], { status: 201 })
+    }
+    return NextResponse.json(anexosCriados, { status: 201 })
   } catch (err) {
     console.error('[Attachments POST] Erro:', err)
     return NextResponse.json(
