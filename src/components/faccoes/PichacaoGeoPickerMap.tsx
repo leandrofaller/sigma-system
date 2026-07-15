@@ -4,14 +4,25 @@ import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { UNIDADE_SATELLITE_TILE } from '@/lib/leaflet-unidade-map';
 
-// Corrigir os ícones padrão do Leaflet no Next.js
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+let pichacaoIcon: L.DivIcon | null = null;
+
+function createPichacaoMarkerIcon(): L.DivIcon {
+  if (!pichacaoIcon) {
+    pichacaoIcon = L.divIcon({
+      className: 'pichacao-map-marker-icon',
+      html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="30" height="45" role="img" aria-label="Pichação">
+        <path fill="#9333ea" stroke="#581c87" stroke-width="1.2" d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24C24 5.37 18.63 0 12 0z"/>
+        <circle cx="12" cy="12" r="4.5" fill="#ffffff"/>
+      </svg>`,
+      iconSize: [30, 45],
+      iconAnchor: [15, 45],
+      popupAnchor: [0, -42],
+    });
+  }
+  return pichacaoIcon!;
+}
 
 // Porto Velho / Rondônia como centro padrão
 const DEFAULT_CENTER: [number, number] = [-8.7612, -63.9039];
@@ -74,14 +85,15 @@ export default function PichacaoGeoPickerMap({
         scrollWheelZoom={true}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={UNIDADE_SATELLITE_TILE.attribution}
+          url={UNIDADE_SATELLITE_TILE.url}
         />
         <ClickHandler onPick={onPick} />
         <FlyTo lat={latitude} lng={longitude} />
         {latitude != null && longitude != null && (
           <Marker
             position={[latitude, longitude]}
+            icon={createPichacaoMarkerIcon()}
             draggable={true}
             eventHandlers={eventHandlers}
             ref={markerRef}
