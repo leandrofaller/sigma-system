@@ -3461,6 +3461,56 @@ async function scrapeApenadoFicha(
         console.error(`[AIP] Erro ao sincronizar ${sipeId}:`, err.message)
       })
       console.log(`[AIP] ✅ Apenado #${sipeId} updated in AIP (unidade="${aipSyncData.unidade}")`)
+
+      // Sincronizar todos os visitantes daquele apenado a partir do banco local do SIPE
+      try {
+        const visitantesLocal = await prisma.sipeVinculoVisitante.findMany({
+          where: { apenadoId: apenado.id },
+          include: { visitante: true }
+        })
+
+        for (const vinculo of visitantesLocal) {
+          if (vinculo.visitante) {
+            await prisma.aIPFotoVisitante.upsert({
+              where: {
+                apenadoId_visitanteId: {
+                  apenadoId: apenadoEmAIP.id,
+                  visitanteId: vinculo.visitante.id
+                }
+              },
+              create: {
+                apenadoId: apenadoEmAIP.id,
+                visitanteId: vinculo.visitante.id,
+                nomeVisitante: vinculo.visitante.nome,
+                cpfVisitante: vinculo.visitante.cpf,
+                parentescoVisitante: vinculo.visitante.parentesco || '',
+                ativoVisitante: vinculo.ativo,
+                photoPath: vinculo.visitante.photoPath,
+                descricao: 'Importado do SIPE (Sincronização Local)'
+              },
+              update: {
+                nomeVisitante: vinculo.visitante.nome,
+                cpfVisitante: vinculo.visitante.cpf,
+                parentescoVisitante: vinculo.visitante.parentesco || '',
+                ativoVisitante: vinculo.ativo,
+                photoPath: vinculo.visitante.photoPath,
+                atualizadoEm: new Date()
+              }
+            })
+          }
+        }
+
+        // Remover do AIPFotoVisitante os visitantes que não estão mais vinculados no SIPE
+        const visitanteIdsLocal = visitantesLocal.map(v => v.visitanteId)
+        await prisma.aIPFotoVisitante.deleteMany({
+          where: {
+            apenadoId: apenadoEmAIP.id,
+            visitanteId: { notIn: visitanteIdsLocal }
+          }
+        })
+      } catch (visitorSyncErr: any) {
+        console.error(`[AIP] Erro ao sincronizar visitantes locais para apenado #${sipeId}:`, visitorSyncErr.message)
+      }
     }
   } catch (err) {
     console.error(`[AIP] Erro na sincronização AIP:`, err)
@@ -8235,6 +8285,56 @@ export async function scrapeApenadoFichaFast(
         console.error(`[AIP] Erro ao sincronizar ${sipeId}:`, err.message)
       })
       console.log(`[AIP] ✅ Apenado #${sipeId} updated in AIP (unidade="${aipSyncData.unidade}")`)
+
+      // Sincronizar todos os visitantes daquele apenado a partir do banco local do SIPE
+      try {
+        const visitantesLocal = await prisma.sipeVinculoVisitante.findMany({
+          where: { apenadoId: apenado.id },
+          include: { visitante: true }
+        })
+
+        for (const vinculo of visitantesLocal) {
+          if (vinculo.visitante) {
+            await prisma.aIPFotoVisitante.upsert({
+              where: {
+                apenadoId_visitanteId: {
+                  apenadoId: apenadoEmAIP.id,
+                  visitanteId: vinculo.visitante.id
+                }
+              },
+              create: {
+                apenadoId: apenadoEmAIP.id,
+                visitanteId: vinculo.visitante.id,
+                nomeVisitante: vinculo.visitante.nome,
+                cpfVisitante: vinculo.visitante.cpf,
+                parentescoVisitante: vinculo.visitante.parentesco || '',
+                ativoVisitante: vinculo.ativo,
+                photoPath: vinculo.visitante.photoPath,
+                descricao: 'Importado do SIPE (Sincronização Local)'
+              },
+              update: {
+                nomeVisitante: vinculo.visitante.nome,
+                cpfVisitante: vinculo.visitante.cpf,
+                parentescoVisitante: vinculo.visitante.parentesco || '',
+                ativoVisitante: vinculo.ativo,
+                photoPath: vinculo.visitante.photoPath,
+                atualizadoEm: new Date()
+              }
+            })
+          }
+        }
+
+        // Remover do AIPFotoVisitante os visitantes que não estão mais vinculados no SIPE
+        const visitanteIdsLocal = visitantesLocal.map(v => v.visitanteId)
+        await prisma.aIPFotoVisitante.deleteMany({
+          where: {
+            apenadoId: apenadoEmAIP.id,
+            visitanteId: { notIn: visitanteIdsLocal }
+          }
+        })
+      } catch (visitorSyncErr: any) {
+        console.error(`[AIP] Erro ao sincronizar visitantes locais para apenado #${sipeId}:`, visitorSyncErr.message)
+      }
     }
   } catch (err) {
     console.error(`[AIP] Erro na sincronização AIP:`, err)
