@@ -127,6 +127,73 @@ export async function uploadAnexoS3(
   }
 }
 
+export async function uploadSuporteS3(
+  file: File,
+  ticketId: string
+): Promise<{ urlS3: string; chaveS3: string; tamanho: number; tipoMime: string }> {
+  console.log('[S3] Iniciando upload de suporte:', {
+    bucket: process.env.AWS_BUCKET_NAME,
+    file: file.name,
+    ticketId,
+  })
+
+  if (!process.env.AWS_BUCKET_NAME) {
+    throw new Error('AWS_BUCKET_NAME não está definido')
+  }
+
+  const s3Client = createS3Client()
+  const buffer = await file.arrayBuffer()
+  const hash = generateHash(file.name + Date.now())
+
+  let compactadoBuffer = Buffer.from(buffer)
+  let tipoMimeProcessado = file.type
+
+  // Apenas compactar imagens
+  if (file.type.startsWith('image/')) {
+    try {
+      const imagem = sharp(Buffer.from(buffer))
+      const tempBuf = await imagem
+        .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 85 })
+        .toBuffer()
+      compactadoBuffer = Buffer.from(tempBuf)
+      tipoMimeProcessado = 'image/webp'
+    } catch (erro) {
+      console.error('Erro ao compactar imagem do suporte:', erro)
+    }
+  }
+
+  const extensao = getExtensao(tipoMimeProcessado)
+  const chaveS3 = `suporte-anexos/${ticketId}/${hash}-${Date.now()}${extensao}`
+
+  const safeOriginalName = file.name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, '_')
+
+  const comando = new PutObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME!,
+    Key: chaveS3,
+    Body: compactadoBuffer,
+    ContentType: tipoMimeProcessado,
+    Metadata: {
+      'original-name': safeOriginalName,
+      'ticket-id': ticketId,
+    },
+  })
+
+  await s3Client.send(comando)
+
+  const urlS3 = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${chaveS3}`
+
+  return {
+    urlS3,
+    chaveS3,
+    tamanho: compactadoBuffer.length,
+    tipoMime: tipoMimeProcessado,
+  }
+}
+
 export async function getAnexoPresignedUrl(chaveS3: string, nomeOriginal?: string): Promise<string> {
   const s3Client = createS3Client()
   const command = new GetObjectCommand({
@@ -182,6 +249,14 @@ function getExtensao(tipoMime: string): string {
     'application/vnd.ms-excel': '.xls',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
     'text/plain': '.txt',
+    'audio/webm': '.webm',
+    'audio/ogg': '.ogg',
+    'audio/mp4': '.m4a',
+    'audio/wav': '.wav',
+    'audio/mpeg': '.mp3',
+    'video/webm': '.webm',
+    'video/mp4': '.mp4',
+    'video/ogg': '.ogv',
   }
   return extensoes[tipoMime] || '.bin'
 }

@@ -123,6 +123,7 @@ model User {
   approvedDossiers DossierRequest[] @relation("DossierApprover")
   maintenanceAvisos SystemMaintenance[]
   relatoriosForcaTarefa RelatorioForcaTarefa[]
+  supportTickets   SupportTicket[]
 
   // Mural de Eventos
   eventsCreated OccurrenceEvent[] @relation("EventsCreatedBy")
@@ -1712,4 +1713,34 @@ model DossierRequest {
   @@index([apenadoId])
   @@index([status])
   @@map("dossier_requests")
+}
+
+model SupportTicket {
+  id          String              @id @default(cuid())
+  assunto     String
+  categoria   String              // "DUVIDA" | "PROBLEMA" | "SUGESTAO" | "OUTRO"
+  descricao   String              @db.Text
+  status      String              @default("ABERTO") // "ABERTO" | "EM_ATENDIMENTO" | "RESOLVIDO" | "FECHADO"
+  prioridade  String              @default("MEDIA")  // "BAIXA" | "MEDIA" | "ALTA" | "URGENTE"
+  usuarioId   String
+  usuario     User                @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  attachments SupportAttachment[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@map("support_tickets")
+}
+
+model SupportAttachment {
+  id           String        @id @default(cuid())
+  ticketId     String
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  nomeOriginal String
+  tipoMime     String
+  urlS3        String
+  chaveS3      String
+  tamanho      Int
+  createdAt    DateTime      @default(now())
+
+  @@map("support_attachments")
 }

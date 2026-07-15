@@ -10,7 +10,7 @@ import {
   LayoutDashboard, FileText, Inbox, MessageSquare, Sparkles,
   Users, Settings, ClipboardList, ChevronLeft,
   ChevronRight, Package, LogOut, FolderOpen, UserCircle, MapPin, Map, Database, BookOpen, Calendar, Menu, X, Trello, Smartphone, UserCheck, Monitor, Shield, Brain, AlertCircle, CalendarDays, Building2, ShieldAlert, List, Paintbrush, Archive, Briefcase,
-  Target, Check, Loader2
+  Target, Check, Loader2, LifeBuoy
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import type { SessionUser } from '@/types';
@@ -28,7 +28,7 @@ export interface NavItem {
 export const iconMap: Record<string, React.ComponentType<any>> = {
   LayoutDashboard, FileText, Inbox, BookOpen, ClipboardList, Calendar, CalendarDays,
   Trello, MessageSquare, Sparkles, UserCheck, Shield, Database, Smartphone, Brain, Building2,
-  Users, FolderOpen, Monitor, MapPin, Map, AlertCircle, Settings, ShieldAlert, List, Paintbrush, Archive, Briefcase
+  Users, FolderOpen, Monitor, MapPin, Map, AlertCircle, Settings, ShieldAlert, List, Paintbrush, Archive, Briefcase, LifeBuoy
 };
 
 export const defaultNavItems: NavItem[] = [
@@ -55,6 +55,7 @@ export const defaultNavItems: NavItem[] = [
   { label: 'Pichações e Simbologias', href: '/pichacoes', iconName: 'Paintbrush', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Ordens de Missão', href: '/ordens-missao', iconName: 'ClipboardList', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
   { label: 'Unidades Prisionais', href: '/unidades-prisionais', iconName: 'Building2', roles: ['SUPER_ADMIN'] },
+  { label: 'Suporte', href: '/suporte', iconName: 'LifeBuoy', roles: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'] },
 ];
 
 export const defaultAdminItems: NavItem[] = [
