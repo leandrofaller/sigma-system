@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AIPDashboard } from './AIPDashboard'
 import { AIPanel } from './AIPanel'
@@ -25,6 +25,27 @@ export function AIPClient({ userRole }: AIPClientProps) {
   const [highlightAipApenadoId, setHighlightAipApenadoId] = useState<string | null>(null)
   const [pendingMapaLink, setPendingMapaLink] = useState<PendingMapaLink | null>(null)
   const [mapaRefreshKey, setMapaRefreshKey] = useState(0)
+
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
+
+  useEffect(() => {
+    const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN'
+    if (!isAdmin) return
+
+    const fetchPending = async () => {
+      try {
+        const res = await fetch('/api/aip/dossier/request/pending-count')
+        if (res.ok) {
+          const { count } = await res.json()
+          setPendingRequestsCount(count)
+        }
+      } catch {}
+    }
+
+    fetchPending()
+    const id = setInterval(fetchPending, 30_000)
+    return () => clearInterval(id)
+  }, [userRole])
 
   const handleViewVinculos = (sipeId: number) => {
     setPreselectedSipeId(sipeId)
@@ -114,7 +135,12 @@ export function AIPClient({ userRole }: AIPClientProps) {
               {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
                 <TabsTrigger value="solicitacoes" className={triggerClass}>
                   <ShieldCheck className="w-4 h-4" />
-                  Aprovações
+                  <span>Aprovações</span>
+                  {pendingRequestsCount > 0 && (
+                    <span className="ml-1 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold animate-pulse">
+                      {pendingRequestsCount}
+                    </span>
+                  )}
                 </TabsTrigger>
               )}
             </TabsList>

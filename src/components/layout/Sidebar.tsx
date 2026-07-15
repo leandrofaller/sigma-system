@@ -107,10 +107,14 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0, sidebarOr
   const [ordemPendente, setOrdemPendente] = useState(0);
   const [latestOrdem, setLatestOrdem] = useState<{ id: string; numero: string; titulo: string } | null>(null);
   const [givingCiencia, setGivingCiencia] = useState(false);
+  const [dossierPendente, setDossierPendente] = useState(0);
+  const [latestDossierRequest, setLatestDossierRequest] = useState<any>(null);
   const prevCountRef = useRef(0);
   const prevOrdemRef = useRef(0);
+  const prevDossierRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const pendingOrdemSoundRef = useRef(false);
+  const pendingDossierSoundRef = useRef(false);
   const pathname = usePathname();
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
@@ -284,8 +288,9 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0, sidebarOr
         if (audioCtxRef.current.state === 'suspended') {
           await audioCtxRef.current.resume();
         }
-        if (pendingOrdemSoundRef.current) {
+        if (pendingOrdemSoundRef.current || pendingDossierSoundRef.current) {
           pendingOrdemSoundRef.current = false;
+          pendingDossierSoundRef.current = false;
           playOrdemSoundNow();
         }
       } catch {}
@@ -329,6 +334,52 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0, sidebarOr
     return () => clearInterval(id);
   }, [playOrdemSoundNow]);
 
+  // Polling de Solicitações de Dossiê pendentes (apenas SUPER_ADMIN e ADMIN)
+  useEffect(() => {
+    const isUserAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+    if (!isUserAdmin) return;
+
+    async function pollDossiers() {
+      try {
+        const res = await fetch('/api/aip/dossier/request/pending-count');
+        if (!res.ok) return;
+        const { count, latest } = await res.json() as { count: number; latest: any };
+
+        if (count > prevDossierRef.current) {
+          const played = playOrdemSoundNow();
+          if (!played) pendingDossierSoundRef.current = true;
+
+          if (Notification.permission === 'granted' && document.hidden && latest) {
+            new Notification('🔒 Solicitação de Dossiê', {
+              body: `${latest.user?.name} solicitou acesso ao dossiê de ${latest.apenado?.nome}.\nAcesse Aprovações para avaliar.`,
+              icon: '/logos/badge-aip.png',
+            });
+          }
+        }
+        prevDossierRef.current = count;
+        setDossierPendente(count);
+        setLatestDossierRequest(latest);
+      } catch {}
+    }
+
+    pollDossiers();
+    const id = setInterval(pollDossiers, 30_000);
+    return () => clearInterval(id);
+  }, [user?.role, playOrdemSoundNow]);
+
+  // Repete som se houver solicitação de dossiê pendente (apenas para admin)
+  useEffect(() => {
+    if (dossierPendente === 0 || !latestDossierRequest) return;
+
+    playOrdemSoundNow();
+
+    const intervalId = setInterval(() => {
+      playOrdemSoundNow();
+    }, 15_000);
+
+    return () => clearInterval(intervalId);
+  }, [dossierPendente, latestDossierRequest, playOrdemSoundNow]);
+
   // Repete som se houver ordem pendente de ciência para o operador (mobile/desktop alert)
   useEffect(() => {
     if (ordemPendente === 0 || !latestOrdem) return;
@@ -348,6 +399,8 @@ export function Sidebar({ user, logoSize = 36, pendingDeviceCount = 0, sidebarOr
       return { ...item, badge: chatUnreadCount, badgePulse: true };
     if (item.href === '/ordens-missao' && ordemPendente > 0)
       return { ...item, badge: ordemPendente, badgePulse: true };
+    if (item.href === '/aip' && dossierPendente > 0)
+      return { ...item, badge: dossierPendente, badgePulse: true };
     return item;
   });
 
