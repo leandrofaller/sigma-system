@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Circle, CircleMarker, Popup, useMap, LayerGroup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { UNIDADE_SATELLITE_TILE } from '@/lib/leaflet-unidade-map';
 import {
   groupPichacoesByFaccao,
   detectTerritoryConflicts,
@@ -165,8 +166,8 @@ export default function PichacoesTerritoryMap({
         scrollWheelZoom={true}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={UNIDADE_SATELLITE_TILE.attribution}
+          url={UNIDADE_SATELLITE_TILE.url}
         />
         <MapController center={center} zoom={zoom} />
         {/* Auto fit to current events - this is the main improvement for "default distance" problem */}

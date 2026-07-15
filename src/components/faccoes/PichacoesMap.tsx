@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { UNIDADE_SATELLITE_TILE } from '@/lib/leaflet-unidade-map';
 
 // Corrigir os ícones padrão do Leaflet no Next.js
 // @ts-ignore
@@ -33,6 +34,7 @@ interface PichacoesMapProps {
   onSelect: (pichacao: any) => void;
   center?: [number, number];
   zoom?: number;
+  focusedPichacaoId?: string;
 }
 
 function MapController({ center, zoom }: { center: [number, number]; zoom: number }) {
@@ -40,6 +42,18 @@ function MapController({ center, zoom }: { center: [number, number]; zoom: numbe
   useEffect(() => {
     map.setView(center, zoom, { animate: true });
   }, [center, zoom, map]);
+  return null;
+}
+
+function FocusedController({ focusedId, pichacoes }: { focusedId?: string; pichacoes: PichacaoData[] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!focusedId) return;
+    const item = pichacoes.find(p => p.id === focusedId);
+    if (item && item.latitude !== null && item.longitude !== null) {
+      map.setView([item.latitude, item.longitude], 17, { animate: true });
+    }
+  }, [focusedId, pichacoes, map]);
   return null;
 }
 
@@ -68,7 +82,7 @@ function DataBoundsController({ points }: { points: Array<{ latitude: number; lo
   return null;
 }
 
-export default function PichacoesMap({ pichacoes, onSelect, center = [-10.9, -62.8], zoom = 7 }: PichacoesMapProps) {
+export default function PichacoesMap({ pichacoes, onSelect, center = [-10.9, -62.8], zoom = 7, focusedPichacaoId }: PichacoesMapProps) {
   // Filtra as pichações que possuem coordenadas válidas
   const validPichacoes = pichacoes.filter(
     (p) => p.latitude !== null && p.longitude !== null
@@ -85,13 +99,14 @@ export default function PichacoesMap({ pichacoes, onSelect, center = [-10.9, -62
         scrollWheelZoom={true}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={UNIDADE_SATELLITE_TILE.attribution}
+          url={UNIDADE_SATELLITE_TILE.url}
         />
         
         <MapController center={center} zoom={zoom} />
-        {/* Auto-fit to current data - greatly improves default visualization experience */}
-        <DataBoundsController points={fitPoints} />
+        <FocusedController focusedId={focusedPichacaoId} pichacoes={validPichacoes} />
+        {/* Auto-fit to current data - only if we are not focused on a specific pichação */}
+        {!focusedPichacaoId && <DataBoundsController points={fitPoints} />}
 
         {validPichacoes.map((p) => {
           const faccaoColor = p.faccao?.cor || '#6b7280'; // cinza se não houver facção

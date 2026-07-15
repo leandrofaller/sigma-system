@@ -105,6 +105,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
   const [faccoes, setFaccoes] = useState<FaccaoOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'GRID' | 'MAP' | 'TERRITORY'>('GRID');
+  const [focusedPichacaoId, setFocusedPichacaoId] = useState<string | null>(null);
 
   // Territory / Heatmap visualization controls (only used in TERRITORY mode)
   const [influenceRadius, setInfluenceRadius] = useState(450); // meters - smaller default for better urban readability
@@ -553,7 +554,10 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
           {/* View Mode Toggle */}
           <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200/50 dark:border-gray-700/50">
             <button
-              onClick={() => setViewMode('GRID')}
+              onClick={() => {
+                setFocusedPichacaoId(null);
+                setViewMode('GRID');
+              }}
               className={`p-2 rounded-lg transition-all ${
                 viewMode === 'GRID'
                   ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm'
@@ -564,7 +568,10 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
               <Grid className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setViewMode('MAP')}
+              onClick={() => {
+                setFocusedPichacaoId(null);
+                setViewMode('MAP');
+              }}
               className={`p-2 rounded-lg transition-all ${
                 viewMode === 'MAP'
                   ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm'
@@ -575,7 +582,10 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
               <Map className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setViewMode('TERRITORY')}
+              onClick={() => {
+                setFocusedPichacaoId(null);
+                setViewMode('TERRITORY');
+              }}
               className={`p-2 rounded-lg transition-all ${
                 viewMode === 'TERRITORY'
                   ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm'
@@ -655,6 +665,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
             <PichacoesMap
               pichacoes={filtered}
               onSelect={openView}
+              focusedPichacaoId={focusedPichacaoId || undefined}
             />
           </div>
         ) : viewMode === 'TERRITORY' ? (
@@ -965,10 +976,24 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                       <h3 className="font-bold text-gray-900 dark:text-white text-sm uppercase tracking-wide truncate">
                         {p.municipio}
                       </h3>
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 truncate flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-                        {p.endereco}
-                      </p>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate flex items-center gap-1 flex-1">
+                          <MapPin className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                          {p.endereco}
+                        </p>
+                        {p.latitude !== null && p.longitude !== null && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFocusedPichacaoId(p.id);
+                              setViewMode('MAP');
+                            }}
+                            className="text-[10px] text-purple-600 dark:text-purple-400 font-bold hover:underline shrink-0 ml-2"
+                          >
+                            Ver no Mapa
+                          </button>
+                        )}
+                      </div>
                       {p.descricao && (
                         <p className="text-xs text-gray-600 dark:text-gray-300 mt-2.5 line-clamp-2 leading-relaxed italic bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-100 dark:border-gray-800">
                           "{p.descricao}"
