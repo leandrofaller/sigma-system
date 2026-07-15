@@ -1397,7 +1397,10 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
       {zoomedPhotoUrl && (
         <div
           className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md cursor-zoom-out p-4"
-          onClick={() => setZoomedPhotoUrl(null)}
+          onClick={(e) => {
+            e.stopPropagation()
+            setZoomedPhotoUrl(null)
+          }}
         >
           <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
             <img
@@ -1426,7 +1429,10 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
       {zoomedAnexoUrl && (
         <div
           className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md cursor-zoom-out p-4"
-          onClick={() => setZoomedAnexoUrl(null)}
+          onClick={(e) => {
+            e.stopPropagation()
+            setZoomedAnexoUrl(null)
+          }}
         >
           <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
             <img
@@ -1485,7 +1491,10 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
       )}
 
       {showDossierRequestModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div 
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div
             onClick={() => setShowDossierRequestModal(false)}
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -1915,7 +1924,7 @@ function AIFichaLayoutModal({ layout, onClose, onSave, submitLabel = 'Salvar Lay
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onClose(); }}>
       <div 
         className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col animate-in fade-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
