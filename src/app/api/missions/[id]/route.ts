@@ -130,7 +130,7 @@ export async function PATCH(
       // Só permite editar campos do agendamento se ainda está PLANNED,
       // com exceção de endNote e startKm (editável após início para correção).
       if (mission.status !== 'PLANNED') {
-        const allowedAfterStart = ['endNote', 'startKm', 'placa'];
+        const allowedAfterStart = ['endNote', 'startKm', 'placa', 'debriefingNumber'];
         const attempted = Object.keys(body).filter(k => !allowedAfterStart.includes(k));
         if (attempted.length > 0) {
           return NextResponse.json({
@@ -158,14 +158,98 @@ export async function PATCH(
       }
     }
 
-    const updated = await prisma.mission.update({
-      where: { id },
-      data,
-      include: {
-        user: { select: { name: true } },
-        group: { select: { name: true } },
-        debriefing: { select: { id: true, number: true } },
-      },
+    // Armazena informações do debriefing a associar/desassociar
+    let debriefingIdToUpdate: string | null = null;
+    let removeDebriefingAssociation = false;
+
+    if (body.debriefingNumber !== undefined) {
+      if (body.debriefingNumber && body.debriefingNumber.trim() !== '') {
+        const inputClean = body.debriefingNumber.trim();
+        let debriefing = await prisma.debriefing.findFirst({
+          where: {
+            number: {
+              equals: inputClean,
+              mode: 'insensitive'
+            }
+          }
+        });
+
+        if (!debriefing && /^\d+$/.test(inputClean)) {
+          const padded = inputClean.padStart(5, '0');
+          debriefing = await prisma.debriefing.findFirst({
+            where: {
+              number: {
+                contains: `Nº ${padded}/`,
+                mode: 'insensitive'
+              }
+            }
+          });
+        }
+
+        if (!debriefing) {
+          debriefing = await prisma.debriefing.findFirst({
+            where: {
+              number: {
+                contains: inputClean,
+                mode: 'insensitive'
+              }
+            }
+          });
+        }
+
+        if (!debriefing) {
+          return NextResponse.json({ error: 'Debriefing não encontrado com o número informado' }, { status: 404 });
+        }
+
+        if (debriefing.missionId && debriefing.missionId !== id) {
+          const otherMission = await prisma.mission.findUnique({
+            where: { id: debriefing.missionId },
+            select: { title: true }
+          });
+          return NextResponse.json({
+            error: `O Debriefing Nº ${debriefing.number} já está relacionado à missão "${otherMission?.title || 'desconhecida'}"`
+          }, { status: 400 });
+        }
+
+        debriefingIdToUpdate = debriefing.id;
+      } else {
+        removeDebriefingAssociation = true;
+      }
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (debriefingIdToUpdate) {
+        // Desassociar debriefings antigos dessa missão
+        await tx.debriefing.updateMany({
+          where: { missionId: id },
+          data: { missionId: null }
+        });
+        // Desassociar esse debriefing de missões anteriores (já validamos, mas garante a integridade)
+        await tx.debriefing.updateMany({
+          where: { id: debriefingIdToUpdate },
+          data: { missionId: null }
+        });
+        // Associar o debriefing novo
+        await tx.debriefing.update({
+          where: { id: debriefingIdToUpdate },
+          data: { missionId: id }
+        });
+      } else if (removeDebriefingAssociation) {
+        await tx.debriefing.updateMany({
+          where: { missionId: id },
+          data: { missionId: null }
+        });
+      }
+
+      return tx.mission.update({
+        where: { id },
+        data,
+        include: {
+          user: { select: { name: true } },
+          group: { select: { name: true } },
+          debriefing: { select: { id: true, number: true } },
+        },
+      });
     });
 
     await createAuditLog({

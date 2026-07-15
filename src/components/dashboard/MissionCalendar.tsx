@@ -122,6 +122,13 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
   // Edição inline do KM inicial pós-início
   const [editingStartKm, setEditingStartKm] = useState<{ open: boolean; value: string }>({ open: false, value: '' });
 
+  // Associação de Debriefing existente
+  const [associateDebriefing, setAssociateDebriefing] = useState<{ open: boolean; missionId: string; debriefingNumber: string }>({
+    open: false,
+    missionId: '',
+    debriefingNumber: ''
+  });
+
   const [municipioSearch, setMunicipioSearch] = useState('');
 
   // Form state — agendamento NÃO pede KM nem hora; só data
@@ -322,6 +329,34 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
       endKm: parsedEndKm,
       endNote: endInput.note || null,
     });
+  };
+
+  const handleAssociateDebriefing = async () => {
+    if (!associateDebriefing.debriefingNumber.trim()) {
+      toast.error('Informe o número do Debriefing');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/missions/${associateDebriefing.missionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ debriefingNumber: associateDebriefing.debriefingNumber.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMissions(ms => ms.map(m => m.id === data.id ? data : m));
+        setViewingMission(data);
+        setAssociateDebriefing({ open: false, missionId: '', debriefingNumber: '' });
+        toast.success('Debriefing associado com sucesso!');
+      } else {
+        toast.error(data.error || 'Erro ao associar debriefing');
+      }
+    } catch {
+      toast.error('Erro de conexão ao associar debriefing');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteMission = async () => {
@@ -584,12 +619,12 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                               Pendente
                             </span>
                             {canUserActionMission(viewingMission) && (
-                              <Link
-                                href={`/debriefings/novo?missionId=${viewingMission.id}`}
+                              <button
+                                onClick={() => setAssociateDebriefing({ open: true, missionId: viewingMission.id, debriefingNumber: '' })}
                                 className="text-xs text-sigma-600 hover:underline font-semibold"
                               >
                                 Registrar agora →
-                              </Link>
+                              </button>
                             )}
                           </span>
                         )}
@@ -685,6 +720,35 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                   <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl">
                     <p className="text-[10px] font-bold text-subtle uppercase tracking-wider mb-2">Descrição</p>
                     <p className="text-sm text-body leading-relaxed">{viewingMission.description}</p>
+                  </div>
+                )}
+
+                {/* INPUT ASSOCIAÇÃO DE DEBRIEFING */}
+                {associateDebriefing.open && (
+                  <div className="bg-sigma-50 dark:bg-sigma-900/20 p-4 rounded-2xl border border-sigma-100 dark:border-sigma-900/30 space-y-3">
+                    <p className="text-xs font-bold text-sigma-700 dark:text-sigma-300">
+                      Informe o número do Debriefing para relacionar a esta missão.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Ex: 00012 ou número completo"
+                        autoFocus
+                        value={associateDebriefing.debriefingNumber}
+                        onChange={e => setAssociateDebriefing({ ...associateDebriefing, debriefingNumber: e.target.value })}
+                        onKeyDown={e => { if (e.key === 'Enter') handleAssociateDebriefing(); }}
+                        className="flex-1 input-base px-4 py-2 text-sm"
+                      />
+                      <button onClick={handleAssociateDebriefing} disabled={loading}
+                        className="bg-sigma-600 hover:bg-sigma-700 text-white px-4 py-2 rounded-xl font-bold text-xs disabled:opacity-50 flex items-center gap-1.5">
+                        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                        Relacionar
+                      </button>
+                      <button onClick={() => setAssociateDebriefing({ open: false, missionId: '', debriefingNumber: '' })}
+                        className="bg-gray-200 dark:bg-gray-800 text-body px-3 py-2 rounded-xl text-xs">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -805,7 +869,7 @@ export function MissionCalendar({ initialMissions, currentUser, groups }: Props)
                 )}
 
                 {/* BOTÕES DE AÇÃO PRINCIPAIS — escondidos quando algum input está aberto */}
-                {!startInput.open && !endInput.open && !confirmCancel && !confirmDeleteMission && (
+                {!startInput.open && !endInput.open && !confirmCancel && !confirmDeleteMission && !associateDebriefing.open && (
                   <div className="flex gap-3 pt-2">
                     {viewingMission.status === 'PLANNED' && (() => {
                       const reachable = isScheduledDateReached(viewingMission.startDate);
