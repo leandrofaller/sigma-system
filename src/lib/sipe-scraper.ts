@@ -3927,7 +3927,8 @@ async function scrapeVisitantes(
         ativo: boolean
       }> = []
 
-      tabelas.forEach((table, tableIdx) => {
+      let realTableIdx = 0
+      tabelas.forEach((table) => {
         const rows = Array.from(table.querySelectorAll('tbody tr'))
         if (rows.length === 0) return
 
@@ -3938,8 +3939,8 @@ async function scrapeVisitantes(
         const cpfIdx = headers.findIndex(h => h.includes('CPF'))
         const parenIdx = headers.findIndex(h => h.includes('PARENTESCO') || h.includes('VÍNCULO') || h.includes('VINCULO') || h.includes('GRAU'))
         
-        // A primeira tabela (índice 0) é de ativos, a segunda (índice 1) é de históricos/inativos
-        const isTableAtivo = tableIdx === 0
+        // A primeira tabela real com registros de visitantes (índice 0) é de ativos, a segunda (índice 1) é de inativos
+        const isTableAtivo = realTableIdx === 0
 
         for (const row of rows) {
           const cells = Array.from(row.querySelectorAll('td'))
@@ -3993,6 +3994,7 @@ async function scrapeVisitantes(
             ativo: isTableAtivo
           })
         }
+        realTableIdx++
       })
       return list
     })
@@ -7381,7 +7383,8 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
     ativo: boolean
   }> = []
 
-  tabelas.each((tableIdx, table) => {
+  let realTableIdx = 0
+  tabelas.each((_, table) => {
     const rows = $(table).find('tr').filter((_, el) => $(el).find('td').length > 0)
     if (rows.length === 0) return
 
@@ -7393,7 +7396,7 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
     const nomeIdx = headers.findIndex(h => h.includes('NOME') || h.includes('VISITANTE') || h.includes('CREDENCIADO'))
     const cpfIdx = headers.findIndex(h => h.includes('CPF'))
     const parenIdx = headers.findIndex(h => h.includes('PARENTESCO') || h.includes('VÍNCULO') || h.includes('VINCULO') || h.includes('GRAU'))
-    const isTableAtivo = tableIdx === 0
+    const isTableAtivo = realTableIdx === 0
 
     rows.each((_, row) => {
       const cells = $(row).find('td')
@@ -7445,6 +7448,7 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
         ativo: isTableAtivo
       })
     })
+    realTableIdx++
   })
 
   const visitorDetailsPromises = list.map(async (v) => {
