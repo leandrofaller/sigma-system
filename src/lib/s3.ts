@@ -97,13 +97,20 @@ export async function uploadAnexoS3(
   const extensao = getExtensao(tipoMimeProcessado)
   const chaveS3 = `aip-anexos/${apenadoId}/${hash}-${Date.now()}${extensao}`
 
+  // 🛡️ Higieniza o nome original para conter apenas caracteres US-ASCII válidos no metadado do S3
+  // Isso evita o erro SignatureDoesNotMatch quando o arquivo possui acentos ou caracteres especiais
+  const safeOriginalName = file.name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, '_')
+
   const comando = new PutObjectCommand({
     Bucket: process.env.AWS_BUCKET_NAME!,
     Key: chaveS3,
     Body: compactadoBuffer,
     ContentType: tipoMimeProcessado,
     Metadata: {
-      'original-name': file.name,
+      'original-name': safeOriginalName,
       'apenado-id': apenadoId,
     },
   })
