@@ -3386,89 +3386,84 @@ async function scrapeApenadoFicha(
 
   // ============ SINCRONIZAÇÃO COM AIP ============
   // Se existe registro em AIP para este apenado, atualizar campos SIPE
-  // Se não existe, CRIAR um novo registro
   // Campos de inteligência NÃO são sobrescritos
-  if (!isUnidadesJob) {
-    try {
-      const aipSyncData = {
-      // ============ DADOS PESSOAIS ============
-      nome: apenado.nome,
-      nomeOutro: apenado.nomeOutro,
-      cpf: apenado.cpf,
-      rg: apenado.rg,
-      rgOrgao: apenado.rgOrgao,
-      dataNascimento: apenado.dataNascimento,
-      sexo: apenado.sexo,
-      etnia: apenado.etnia,
-      naturalidade: apenado.naturalidade,
-      nacionalidade: apenado.nacionalidade,
-      pais: apenado.pais,
-      orientacaoSexual: apenado.orientacaoSexual,
-      tipoSanguineo: apenado.tipoSanguineo,
-      grauInstrucao: apenado.grauInstrucao,
-      religiao: apenado.religiao,
-      estadoCivil: apenado.estadoCivil,
-      qtdFilhos: apenado.qtdFilhos,
-      nomeMae: apenado.nomeMae,
-      nomePai: apenado.nomePai,
-      telefone: apenado.telefone,
-      rji: apenado.rji,
-
-      // ============ DADOS PRISIONAIS ============
-      unidade: apenado.unidade,
-      cela: apenado.cela,
-      regime: apenado.regime,
-      motivoUltimaMovimentacao: apenado.motivoUltimaMovimentacao,
-      situacao: apenado.situacao,
-      dataEntrada: apenado.dataEntrada,
-      dataPrisao: apenado.dataPrisao,
-      tempoPena: apenado.tempoPena,
-      faccao: apenado.faccao?.nome || null,
-      monitorado: apenado.monitorado,
-      intramuro: apenado.intramuro,
-      presoOriundo: apenado.presoOriundo,
-      oficioEntrada: apenado.oficioEntrada,
-      celeAtual: apenado.celeAtual,
-      ultimaMovimentacao: apenado.ultimaMovimentacao,
-
-      // ============ ENDEREÇO RESIDENCIAL ============
-      logradouro: apenado.logradouro,
-      numero: apenado.numero,
-      complemento: apenado.complemento,
-      bairro: apenado.bairro,
-      cidade: apenado.cidade,
-      uf: apenado.uf,
-      cep: apenado.cep,
-
-      // ============ FOTOS ============
-      photoPath: apenado.photoPath,
-
-      // ============ METADATA ============
-      ultimaSincAt: new Date(),
-      // Restaura o vínculo FK caso tenha sido desfeito por deleção prévia do SIPE
-      sipeApenadoId: sipeId,
-    }
-
+  try {
     const apenadoEmAIP = await prisma.aIPApenado.findUnique({
       where: { sipeId }
     })
 
     if (apenadoEmAIP) {
+      const aipSyncData = {
+        // ============ DADOS PESSOAIS ============
+        nome: apenado.nome,
+        nomeOutro: apenado.nomeOutro,
+        cpf: apenado.cpf,
+        rg: apenado.rg,
+        rgOrgao: apenado.rgOrgao,
+        dataNascimento: apenado.dataNascimento,
+        sexo: apenado.sexo,
+        etnia: apenado.etnia,
+        naturalidade: apenado.naturalidade,
+        nacionalidade: apenado.nacionalidade,
+        pais: apenado.pais,
+        orientacaoSexual: apenado.orientacaoSexual,
+        tipoSanguineo: apenado.tipoSanguineo,
+        grauInstrucao: apenado.grauInstrucao,
+        religiao: apenado.religiao,
+        estadoCivil: apenado.estadoCivil,
+        nomeConjuge: apenado.nomeConjuge,
+        qtdFilhos: apenado.qtdFilhos,
+        nomeMae: apenado.nomeMae,
+        nomePai: apenado.nomePai,
+        telefone: apenado.telefone,
+        rji: apenado.rji,
+
+        // ============ DADOS PRISIONAIS ============
+        unidade: apenado.unidade,
+        cela: apenado.cela,
+        regime: apenado.regime,
+        motivoUltimaMovimentacao: apenado.motivoUltimaMovimentacao,
+        situacao: apenado.situacao,
+        dataEntrada: apenado.dataEntrada,
+        dataPrisao: apenado.dataPrisao,
+        tempoPena: apenado.tempoPena,
+        faccao: apenado.faccao?.nome || null,
+        monitorado: apenado.monitorado,
+        intramuro: apenado.intramuro,
+        presoOriundo: apenado.presoOriundo,
+        oficioEntrada: apenado.oficioEntrada,
+        celeAtual: apenado.celeAtual,
+        ultimaMovimentacao: apenado.ultimaMovimentacao,
+
+        // ============ ENDEREÇO RESIDENCIAL ============
+        logradouro: apenado.logradouro,
+        numero: apenado.numero,
+        complemento: apenado.complemento,
+        bairro: apenado.bairro,
+        cidade: apenado.cidade,
+        uf: apenado.uf,
+        cep: apenado.cep,
+
+        // ============ FOTOS ============
+        photoPath: apenado.photoPath,
+
+        // ============ METADATA ============
+        ultimaSincAt: new Date(),
+        // Restaura o vínculo FK caso tenha sido desfeito por deleção prévia do SIPE
+        sipeApenadoId: sipeId,
+      }
+
       // Atualizar apenas se já foi cadastrado manualmente em AIP
-      // Nunca cria novos registros automaticamente - apenas o usuário via "Cadastrar em AIP" pode fazer isso
       await prisma.aIPApenado.update({
         where: { id: apenadoEmAIP.id },
         data: aipSyncData
       }).catch((err) => {
         console.error(`[AIP] Erro ao sincronizar ${sipeId}:`, err.message)
       })
-      console.log(`[AIP] ✅ Apenado #${sipeId} atualizado em AIP (unidade="${aipSyncData.unidade}")`)
+      console.log(`[AIP] ✅ Apenado #${sipeId} updated in AIP (unidade="${aipSyncData.unidade}")`)
     }
-    // REMOVIDO: Criação automática de registros em AIP durante scraping
-    // Apenas usuários podem cadastrar apenados em AIP manualmente via botão "Cadastrar em AIP"
   } catch (err) {
     console.error(`[AIP] Erro na sincronização AIP:`, err)
-  }
   }
 
   // Salva as fotos complementares encontradas na ficha de edição
@@ -4128,6 +4123,50 @@ async function scrapeVisitantes(
           ativo: v.ativo
         }
       })
+
+      // Sincroniza visitante com o AIP se o apenado correspondente estiver no AIP
+      try {
+        const apenadoImp = await prisma.sipeApenadoImportado.findUnique({
+          where: { id: apenadoId },
+          select: { sipeId: true }
+        })
+        if (apenadoImp) {
+          const apenadoEmAIP = await prisma.aIPApenado.findUnique({
+            where: { sipeId: apenadoImp.sipeId }
+          })
+          if (apenadoEmAIP) {
+            await prisma.aIPFotoVisitante.upsert({
+              where: {
+                apenadoId_visitanteId: {
+                  apenadoId: apenadoEmAIP.id,
+                  visitanteId: vis.id
+                }
+              },
+              create: {
+                apenadoId: apenadoEmAIP.id,
+                visitanteId: vis.id,
+                nomeVisitante: vis.nome,
+                cpfVisitante: vis.cpf,
+                parentescoVisitante: vis.parentesco || '',
+                ativoVisitante: v.ativo,
+                photoPath: vis.photoPath,
+                descricao: 'Sincronizado do SIPE'
+              },
+              update: {
+                nomeVisitante: vis.nome,
+                cpfVisitante: vis.cpf,
+                parentescoVisitante: vis.parentesco || '',
+                ativoVisitante: v.ativo,
+                photoPath: vis.photoPath,
+                atualizadoEm: new Date()
+              }
+            })
+            console.log(`[AIP] ✅ Visitante "${vis.nome}" sincronizado para apenado #${apenadoImp.sipeId} no AIP`)
+          }
+        }
+      } catch (aipVisitanteErr: any) {
+        console.error(`[AIP] Erro ao sincronizar visitante ${vis.nome} no AIP:`, aipVisitanteErr.message)
+      }
     }
   } catch (err) {
     console.error(`Erro ao sincronizar visitantes na URL ${url}:`, err)
@@ -7498,6 +7537,50 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
         ativo: v.ativo
       }
     })
+
+    // Sincroniza visitante com o AIP se o apenado correspondente estiver no AIP
+    try {
+      const apenadoImp = await prisma.sipeApenadoImportado.findUnique({
+        where: { id: apenadoId },
+        select: { sipeId: true }
+      })
+      if (apenadoImp) {
+        const apenadoEmAIP = await prisma.aIPApenado.findUnique({
+          where: { sipeId: apenadoImp.sipeId }
+        })
+        if (apenadoEmAIP) {
+          await prisma.aIPFotoVisitante.upsert({
+            where: {
+              apenadoId_visitanteId: {
+                apenadoId: apenadoEmAIP.id,
+                visitanteId: vis.id
+              }
+            },
+            create: {
+              apenadoId: apenadoEmAIP.id,
+              visitanteId: vis.id,
+              nomeVisitante: vis.nome,
+              cpfVisitante: vis.cpf,
+              parentescoVisitante: vis.parentesco || '',
+              ativoVisitante: v.ativo,
+              photoPath: vis.photoPath,
+              descricao: 'Sincronizado do SIPE'
+            },
+            update: {
+              nomeVisitante: vis.nome,
+              cpfVisitante: vis.cpf,
+              parentescoVisitante: vis.parentesco || '',
+              ativoVisitante: v.ativo,
+              photoPath: vis.photoPath,
+              atualizadoEm: new Date()
+            }
+          })
+          console.log(`[AIP] ✅ Visitante "${vis.nome}" sincronizado para apenado #${apenadoImp.sipeId} no AIP`)
+        }
+      }
+    } catch (aipVisitanteErr: any) {
+      console.error(`[AIP] Erro ao sincronizar visitante ${vis.nome} no AIP:`, aipVisitanteErr.message)
+    }
   })
 
   await Promise.all(visitorDetailsPromises)
@@ -8090,73 +8173,71 @@ export async function scrapeApenadoFichaFast(
     include: { faccao: true }
   })
 
-  if (!isUnidadesJob) {
-    try {
-      const aipSyncData = {
-      nome: apenado.nome,
-      nomeOutro: apenado.nomeOutro,
-      cpf: apenado.cpf,
-      rg: apenado.rg,
-      rgOrgao: apenado.rgOrgao,
-      dataNascimento: apenado.dataNascimento,
-      sexo: apenado.sexo,
-      etnia: apenado.etnia,
-      naturalidade: apenado.naturalidade,
-      nacionalidade: apenado.nacionalidade,
-      pais: apenado.pais,
-      orientacaoSexual: apenado.orientacaoSexual,
-      tipoSanguineo: apenado.tipoSanguineo,
-      grauInstrucao: apenado.grauInstrucao,
-      religiao: apenado.religiao,
-      estadoCivil: apenado.estadoCivil,
-      nomeConjuge: apenado.nomeConjuge,
-      qtdFilhos: apenado.qtdFilhos,
-      nomeMae: apenado.nomeMae,
-      nomePai: apenado.nomePai,
-      telefone: apenado.telefone,
-      rji: apenado.rji,
-      unidade: apenado.unidade,
-      cela: apenado.cela,
-      regime: apenado.regime,
-      motivoUltimaMovimentacao: apenado.motivoUltimaMovimentacao,
-      situacao: apenado.situacao,
-      dataEntrada: apenado.dataEntrada,
-      dataPrisao: apenado.dataPrisao,
-      tempoPena: apenado.tempoPena,
-      faccao: apenado.faccao?.nome || null,
-      monitorado: apenado.monitorado,
-      intramuro: apenado.intramuro,
-      presoOriundo: apenado.presoOriundo,
-      oficioEntrada: apenado.oficioEntrada,
-      logradouro: apenado.logradouro,
-      numero: apenado.numero,
-      complemento: apenado.complemento,
-      bairro: apenado.bairro,
-      cidade: apenado.cidade,
-      uf: apenado.uf,
-      cep: apenado.cep,
-      photoPath: apenado.photoPath,
-      ultimaSincAt: new Date(),
-      // Restaura o vínculo FK caso tenha sido desfeito por deleção prévia do SIPE
-      sipeApenadoId: sipeId,
-    }
-
+  try {
     const apenadoEmAIP = await prisma.aIPApenado.findUnique({
       where: { sipeId }
     })
 
     if (apenadoEmAIP) {
+      const aipSyncData = {
+        nome: apenado.nome,
+        nomeOutro: apenado.nomeOutro,
+        cpf: apenado.cpf,
+        rg: apenado.rg,
+        rgOrgao: apenado.rgOrgao,
+        dataNascimento: apenado.dataNascimento,
+        sexo: apenado.sexo,
+        etnia: apenado.etnia,
+        naturalidade: apenado.naturalidade,
+        nacionalidade: apenado.nacionalidade,
+        pais: apenado.pais,
+        orientacaoSexual: apenado.orientacaoSexual,
+        tipoSanguineo: apenado.tipoSanguineo,
+        grauInstrucao: apenado.grauInstrucao,
+        religiao: apenado.religiao,
+        estadoCivil: apenado.estadoCivil,
+        nomeConjuge: apenado.nomeConjuge,
+        qtdFilhos: apenado.qtdFilhos,
+        nomeMae: apenado.nomeMae,
+        nomePai: apenado.nomePai,
+        telefone: apenado.telefone,
+        rji: apenado.rji,
+        unidade: apenado.unidade,
+        cela: apenado.cela,
+        regime: apenado.regime,
+        motivoUltimaMovimentacao: apenado.motivoUltimaMovimentacao,
+        situacao: apenado.situacao,
+        dataEntrada: apenado.dataEntrada,
+        dataPrisao: apenado.dataPrisao,
+        tempoPena: apenado.tempoPena,
+        faccao: apenado.faccao?.nome || null,
+        monitorado: apenado.monitorado,
+        intramuro: apenado.intramuro,
+        presoOriundo: apenado.presoOriundo,
+        oficioEntrada: apenado.oficioEntrada,
+        logradouro: apenado.logradouro,
+        numero: apenado.numero,
+        complemento: apenado.complemento,
+        bairro: apenado.bairro,
+        cidade: apenado.cidade,
+        uf: apenado.uf,
+        cep: apenado.cep,
+        photoPath: apenado.photoPath,
+        ultimaSincAt: new Date(),
+        // Restaura o vínculo FK caso tenha sido desfeito por deleção prévia do SIPE
+        sipeApenadoId: sipeId,
+      }
+
       await prisma.aIPApenado.update({
         where: { id: apenadoEmAIP.id },
         data: aipSyncData
       }).catch((err) => {
         console.error(`[AIP] Erro ao sincronizar ${sipeId}:`, err.message)
       })
-      console.log(`[AIP] ✅ Apenado #${sipeId} atualizado em AIP (unidade="${aipSyncData.unidade}")`)
+      console.log(`[AIP] ✅ Apenado #${sipeId} updated in AIP (unidade="${aipSyncData.unidade}")`)
     }
   } catch (err) {
     console.error(`[AIP] Erro na sincronização AIP:`, err)
-  }
   }
 
   const $ = cheerio.load(editHtml)
