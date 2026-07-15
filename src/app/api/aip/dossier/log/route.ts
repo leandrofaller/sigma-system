@@ -37,6 +37,12 @@ export async function POST(request: NextRequest) {
       if (!activeApproval) {
         return NextResponse.json({ error: 'Acesso negado. Ação não autorizada pelos administradores.' }, { status: 403 });
       }
+
+      // Consumir a autorização marcando-a como USED
+      await prisma.dossierRequest.update({
+        where: { id: activeApproval.id },
+        data: { status: 'USED' },
+      });
     }
 
     const apenado = await prisma.aIPApenado.findUnique({
