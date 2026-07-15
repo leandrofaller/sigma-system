@@ -450,6 +450,11 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
   const [zoomedAnexoUrl, setZoomedAnexoUrl] = useState<string | null>(null)
   const [zoomedAnexoNome, setZoomedAnexoNome] = useState<string>('')
 
+  // Estados para fluxo de comentários pré-upload
+  const [anexoSelecionado, setAnexoSelecionado] = useState<File | null>(null)
+  const [comentarioAnexo, setComentarioAnexo] = useState('')
+  const [showModalComentario, setShowModalComentario] = useState(false)
+
   // Carregar anexos quando apenado é selecionado
   useEffect(() => {
     if (apenado?.id) {
@@ -480,25 +485,42 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
     }
   }
 
-  async function handleAnexoUpload(e: React.ChangeEvent<HTMLInputElement>, apenadoId: string) {
+  function handleAnexoSelecionado(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
 
+    setAnexoSelecionado(file)
+    setComentarioAnexo('')
+    setShowModalComentario(true)
+    
+    // Reseta o input para que o usuário possa selecionar o mesmo arquivo novamente
+    e.target.value = ''
+  }
+
+  async function executarUploadAnexo() {
+    if (!anexoSelecionado) return
+
+    setShowModalComentario(false)
     setUploadandoAnexo(true)
+    const toastId = toast.loading('Enviando anexo de inteligência...')
     try {
       const formData = new FormData()
-      formData.append('file', file)
-      formData.append('tipoCompactacao', file.type.startsWith('image/') ? 'imagem' : 'documento')
+      formData.append('file', anexoSelecionado)
+      formData.append('tipoCompactacao', anexoSelecionado.type.startsWith('image/') ? 'imagem' : 'documento')
+      if (comentarioAnexo.trim()) {
+        formData.append('descricao', comentarioAnexo.trim())
+      }
 
       console.log('📤 Iniciando upload:', {
-        fileName: file.name,
-        size: file.size,
-        type: file.type,
-        apenadoId,
-        endpoint: `/api/aip/apenados/${apenadoId}/anexos`,
+        fileName: anexoSelecionado.name,
+        size: anexoSelecionado.size,
+        type: anexoSelecionado.type,
+        apenadoId: apenado.id,
+        descricao: comentarioAnexo,
+        endpoint: `/api/aip/apenados/${apenado.id}/anexos`,
       })
 
-      const res = await fetch(`/api/aip/apenados/${apenadoId}/anexos`, {
+      const res = await fetch(`/api/aip/apenados/${apenado.id}/anexos`, {
         method: 'POST',
         body: formData,
       })
@@ -517,14 +539,14 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
       const data = await res.json()
       console.log('✅ Arquivo enviado:', data)
       setAnexos([data.anexo, ...anexos])
-      toast.success('Arquivo enviado com sucesso')
-      // Reset input
-      e.target.value = ''
+      toast.success('Arquivo enviado com sucesso', { id: toastId })
     } catch (err: any) {
       console.error('💥 Erro ao fazer upload:', err)
-      toast.error(`Erro ao enviar arquivo: ${err?.message || 'desconhecido'}`)
+      toast.error(`Erro ao enviar arquivo: ${err?.message || 'desconhecido'}`, { id: toastId })
     } finally {
       setUploadandoAnexo(false)
+      setAnexoSelecionado(null)
+      setComentarioAnexo('')
     }
   }
 
@@ -1175,7 +1197,7 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
                               <span className="text-sm text-gray-600 dark:text-gray-400">Clique para anexar arquivo ou imagem</span>
                               <input
                                 type="file"
-                                onChange={e => handleAnexoUpload(e, apenado.id)}
+                                onChange={handleAnexoSelecionado}
                                 disabled={uploadandoAnexo}
                                 className="hidden"
                               />
@@ -1363,6 +1385,63 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
                 >
                   {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                   Deletar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Comentário do Anexo */}
+        {showModalComentario && anexoSelecionado && (
+          <div className="fixed inset-0 z-[51] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => { setShowModalComentario(false); setAnexoSelecionado(null); }}>
+            <div
+              className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md p-6 border border-gray-200 dark:border-gray-800"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+                  <Paperclip className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Comentário do Anexo</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Adicione uma descrição sobre o arquivo anexado</p>
+                </div>
+              </div>
+
+              {/* Informações do Arquivo */}
+              <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-100 dark:border-gray-700/50 flex flex-col gap-1 text-xs">
+                <span className="font-semibold text-gray-700 dark:text-gray-300 truncate">{anexoSelecionado.name}</span>
+                <span className="text-gray-500">Tamanho: {(anexoSelecionado.size / 1024).toFixed(0)} KB</span>
+              </div>
+
+              {/* Campo do Comentário */}
+              <div className="mb-6">
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
+                  Comentário / Descrição
+                </label>
+                <textarea
+                  value={comentarioAnexo}
+                  onChange={e => setComentarioAnexo(e.target.value)}
+                  placeholder="Escreva um comentário explicativo sobre o arquivo..."
+                  rows={3}
+                  className="w-full text-sm p-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 placeholder-gray-400 dark:placeholder-gray-500 text-gray-900 dark:text-white resize-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowModalComentario(false); setAnexoSelecionado(null); }}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={executarUploadAnexo}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 flex items-center justify-center gap-2 shadow-md shadow-purple-600/10"
+                >
+                  Confirmar e Enviar
                 </button>
               </div>
             </div>
