@@ -23,6 +23,7 @@ export async function GET(
       where: { id },
       include: {
         emitidoPor: { select: { id: true, name: true, role: true, avatar: true } },
+        concluidoPor: { select: { id: true, name: true, role: true, avatar: true } },
         participantes: {
           include: { user: { select: { id: true, name: true, role: true, avatar: true } } },
           orderBy: { createdAt: 'asc' },
@@ -98,6 +99,7 @@ export async function PATCH(
       },
       include: {
         emitidoPor: { select: { id: true, name: true, role: true, avatar: true } },
+        concluidoPor: { select: { id: true, name: true, role: true, avatar: true } },
         participantes: {
           include: { user: { select: { id: true, name: true, role: true, avatar: true } } },
           orderBy: { createdAt: 'asc' },

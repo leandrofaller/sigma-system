@@ -828,6 +828,7 @@ function ViewerModal({
   
   const [showConcluirModal, setShowConcluirModal] = useState(false)
   const [relatorio, setRelatorio] = useState('')
+  const [responsavelId, setResponsavelId] = useState('')
   const [anexos, setAnexos] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [concluindo, setConcluindo] = useState(false)
@@ -869,6 +870,10 @@ function ViewerModal({
       alert('O relatório de conclusão é obrigatório.')
       return
     }
+    if (!responsavelId) {
+      alert('Selecione o responsável pela conclusão.')
+      return
+    }
 
     setConcluindo(true)
     try {
@@ -878,6 +883,7 @@ function ViewerModal({
         body: JSON.stringify({
           relatorioConclusao: relatorio,
           arquivosConclusao: anexos,
+          concluidoPorId: responsavelId,
         }),
       })
 
@@ -887,6 +893,7 @@ function ViewerModal({
         setShowConcluirModal(false)
         setRelatorio('')
         setAnexos([])
+        setResponsavelId('')
       } else {
         const data = await res.json()
         alert(data.error || 'Erro ao concluir ordem de missão.')
@@ -1130,6 +1137,25 @@ function ViewerModal({
             <div className="flex-1 overflow-y-auto space-y-4 pr-1">
               <div>
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">
+                  Responsável pela Conclusão *
+                </label>
+                <select
+                  required
+                  value={responsavelId}
+                  onChange={(e) => setResponsavelId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400"
+                >
+                  <option value="">Selecione o responsável...</option>
+                  {ordem.participantes.map((p) => (
+                    <option key={p.userId} value={p.userId}>
+                      {p.user.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">
                   Relatório de Cumprimento e Imprevistos *
                 </label>
                 <textarea
@@ -1214,7 +1240,7 @@ function ViewerModal({
               </button>
               <button
                 onClick={handleConcluir}
-                disabled={concluindo || uploading || !relatorio.trim()}
+                disabled={concluindo || uploading || !relatorio.trim() || !responsavelId}
                 className="flex-1 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl transition-colors flex items-center justify-center gap-2"
               >
                 {concluindo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}

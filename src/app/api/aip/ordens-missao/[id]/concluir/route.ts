@@ -40,10 +40,14 @@ export async function PATCH(
 
     // 3. Recebe os dados do corpo da requisição
     const body = await req.json();
-    const { relatorioConclusao, arquivosConclusao } = body;
+    const { relatorioConclusao, arquivosConclusao, concluidoPorId } = body;
 
     if (!relatorioConclusao || relatorioConclusao.trim() === '') {
       return NextResponse.json({ error: 'O relatório de conclusão/imprevistos é obrigatório' }, { status: 400 });
+    }
+
+    if (!concluidoPorId) {
+      return NextResponse.json({ error: 'O responsável pela conclusão é obrigatório' }, { status: 400 });
     }
 
     // 4. Atualiza a ordem de missão para concluída
@@ -51,7 +55,7 @@ export async function PATCH(
       where: { id: ordemId },
       data: {
         status: 'CONCLUIDA',
-        concluidoPorId: userId,
+        concluidoPorId: concluidoPorId,
         concluidoEm: new Date(),
         relatorioConclusao: relatorioConclusao.trim(),
         arquivosConclusao: Array.isArray(arquivosConclusao) ? arquivosConclusao : []
