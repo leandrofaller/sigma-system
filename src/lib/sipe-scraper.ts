@@ -8770,7 +8770,10 @@ function setupAutoSyncScheduler() {
       const autoSyncConfig = await prisma.systemConfig.findUnique({
         where: { key: 'sipe_auto_sync_unidades' }
       })
-      const isEnabled = (autoSyncConfig?.value as any)?.enabled === true
+      const configVal = autoSyncConfig?.value as any
+      const isEnabled = configVal?.enabled === true
+      const scrapingTipo = configVal?.tipo ?? 'UNIDADES'
+      const scrapingEngine = configVal?.engine ?? 'python-sdk'
 
       if (!isEnabled) return
 
@@ -8779,9 +8782,9 @@ function setupAutoSyncScheduler() {
       })
       const intervalHours = parseInt((intervalHoursConfig?.value as any)?.hours ?? '24') || 24
 
-      // 2. Busca o último job do tipo 'UNIDADES' que foi concluído com sucesso
+      // 2. Busca o último job do tipo configurado que foi concluído com sucesso
       const ultimoJobCompleto = await prisma.sipeSyncJob.findFirst({
-        where: { tipo: 'UNIDADES', status: 'COMPLETED' },
+        where: { tipo: scrapingTipo, status: 'COMPLETED' },
         orderBy: { finalizadoEm: 'desc' }
       })
 
@@ -8799,40 +8802,37 @@ function setupAutoSyncScheduler() {
           return
         }
 
-        console.log('[AUTO-SYNC] Iniciando sincronização automática de unidades prisionais...')
+        console.log(`[AUTO-SYNC] Iniciando sincronização automática de unidades prisionais (${scrapingTipo})...`)
         
+        let labelUnidades = 'TODAS AS UNIDADES'
+        if (scrapingTipo === 'UNIDADES_FAST') {
+          labelUnidades = 'TODAS AS UNIDADES (RÁPIDA)'
+        } else if (scrapingTipo === 'UNIDADES_INCREMENTAL_FAST') {
+          labelUnidades = 'TODAS AS UNIDADES (INCREMENTAL RÁPIDA)'
+        }
+
         // Cria o job de sincronização automática
         const job = await prisma.sipeSyncJob.create({
           data: {
-            tipo: 'UNIDADES',
-            unidade: 'SYSTEM',
-            unidadeNome: 'AUTOMÁTICO (SISTEMA)',
+            tipo: scrapingTipo,
+            unidade: 'ALL',
+            unidadeNome: `${labelUnidades} (SISTEMA)`,
             status: 'RUNNING',
             iniciadoEm: new Date(),
             criadoPor: 'SYSTEM'
           }
         })
 
-        scrapeUnidadesPrisionais(job.id)
-          .then(async () => {
-            console.log('[AUTO-SYNC] ✅ Sincronização automática concluída com sucesso')
-            await prisma.sipeSyncJob.update({
-              where: { id: job.id },
-              data: { status: 'COMPLETED', finalizadoEm: new Date() }
+        // Executa a sincronização baseada no engine
+        if (scrapingEngine === 'firecrawl') {
+          const { runScrapeFirecrawl } = await import('./firecrawl-scraper')
+          runScrapeFirecrawl(job.id, 'ALL')
+            .catch((err) => {
+              console.error(`[AUTO-SYNC] [FIRECRAWL] ❌ Erro no scraping: ${err}`)
             })
-          })
-          .catch(async (err) => {
-            const errMsg = err?.message ?? String(err)
-            console.error('[AUTO-SYNC] ❌ Sincronização automática falhou:', errMsg)
-            await prisma.sipeSyncJob.update({
-              where: { id: job.id },
-              data: {
-                status: 'FAILED',
-                finalizadoEm: new Date(),
-                log: errMsg
-              }
-            })
-          })
+        } else {
+          startSipeSync(job.id, 'ALL', scrapingEngine)
+        }
       }
     } catch (err) {
       console.error('[AUTO-SYNC] Erro no scheduler:', err)
@@ -8844,12 +8844,10 @@ function setupAutoSyncScheduler() {
   autoSyncTimeout = setInterval(checkAndRunAutoSync, INTERVAL_CHECK)
 }
 
-// DESATIVADO: Auto-sync scheduler foi removido
-// Razão: Usuários devem ter controle total sobre quando a sincronização ocorre
-// Sincronizações automáticas eram criando apenados em AIP sem autorização manual
-// if (typeof window === 'undefined') {
-//   setupAutoSyncScheduler()
-// }
+// ATIVADO: Auto-sync scheduler foi reativado para executar de forma controlada
+if (typeof window === 'undefined') {
+  setupAutoSyncScheduler()
+}
 
 // ── Sincronização Isolada para Unidades Prisionais ──────────────────────────
 

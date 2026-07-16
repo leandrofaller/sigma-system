@@ -375,7 +375,12 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
         <SectionCard icon={RefreshCw} title="Sincronização Automática com SIPE">
           <Toggle checked={(configs.sipe_auto_sync_unidades as any)?.enabled === true}
             label="Sincronização automática de unidades prisionais"
-            onChange={(v: boolean) => update('sipe_auto_sync_unidades', { enabled: v })} />
+            onChange={(v: boolean) => update('sipe_auto_sync_unidades', { 
+              ...configs.sipe_auto_sync_unidades,
+              enabled: v,
+              tipo: (configs.sipe_auto_sync_unidades as any)?.tipo || 'UNIDADES_FAST',
+              engine: (configs.sipe_auto_sync_unidades as any)?.engine || 'python-sdk'
+            })} />
           <Field label="Intervalo de Sincronização de Unidades">
             <Select value={(configs.sipe_sync_unidades_interval_hours as any)?.hours || '24'}
               onChange={(e: any) => update('sipe_sync_unidades_interval_hours', { hours: e.target.value })}>
@@ -386,6 +391,32 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
               <option value="168">A cada 7 dias (semanal)</option>
             </Select>
           </Field>
+          {(configs.sipe_auto_sync_unidades as any)?.enabled === true && (
+            <>
+              <Field label="Tipo de Scraping Automático">
+                <Select value={(configs.sipe_auto_sync_unidades as any)?.tipo || 'UNIDADES_FAST'}
+                  onChange={(e: any) => update('sipe_auto_sync_unidades', {
+                    ...configs.sipe_auto_sync_unidades,
+                    tipo: e.target.value
+                  })}>
+                  <option value="UNIDADES">Sincronizar Unidades (Padrão/Completo)</option>
+                  <option value="UNIDADES_FAST">Sincronizar Unidades (Rápida)</option>
+                  <option value="UNIDADES_INCREMENTAL_FAST">Sincronizar Unidades (Incremental Fast)</option>
+                </Select>
+              </Field>
+              <Field label="Engine de Scraping Automático">
+                <Select value={(configs.sipe_auto_sync_unidades as any)?.engine || 'python-sdk'}
+                  onChange={(e: any) => update('sipe_auto_sync_unidades', {
+                    ...configs.sipe_auto_sync_unidades,
+                    engine: e.target.value
+                  })}>
+                  <option value="python-sdk">🐍 SDK Python</option>
+                  <option value="playwright">🎭 Playwright</option>
+                  <option value="firecrawl">🔥 Firecrawl</option>
+                </Select>
+              </Field>
+            </>
+          )}
         </SectionCard>
 
         <SectionCard icon={MapPin} title="Monitoramento & Segurança">
