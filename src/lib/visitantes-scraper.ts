@@ -573,11 +573,11 @@ export function startVisitantesSync(jobId: string): void {
                       visitanteId: visitante.id,
                     },
                   },
-                  update: { ativo: true },
+                  update: {}, // Preserva o status ativo/inativo definido pela ficha do apenado
                   create: {
                     apenadoId: apenadoLocal.id,
                     visitanteId: visitante.id,
-                    ativo: true,
+                    ativo: false, // Cria como inativo por padrão, o scrape do apenado atualizará se ativo no SIPE
                   },
                 });
               }

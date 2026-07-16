@@ -4139,11 +4139,10 @@ async function scrapeVisitantes(
       return list
     })
 
-    if (visitantes.length === 0) {
-      return
-    }
+    const activeVisitanteIds: string[] = []
 
-    for (const v of visitantes) {
+    if (visitantes.length > 0) {
+      for (const v of visitantes) {
       const normalizedCpf = normalizeCPF(v.cpf)
       v.cpf = normalizedCpf
       let photoPath: string | null = null
@@ -4334,6 +4333,8 @@ async function scrapeVisitantes(
         }
       })
 
+      activeVisitanteIds.push(vis.id)
+
       // Sincroniza visitante com o AIP se o apenado correspondente estiver no AIP
       try {
         const apenadoImp = await prisma.sipeApenadoImportado.findUnique({
@@ -4378,9 +4379,41 @@ async function scrapeVisitantes(
         console.error(`[AIP] Erro ao sincronizar visitante ${vis.nome} no AIP:`, aipVisitanteErr.message)
       }
     }
-  } catch (err) {
-    console.error(`Erro ao sincronizar visitantes na URL ${url}:`, err)
   }
+
+  // Limpa vínculos obsoletos do SIPE
+  await prisma.sipeVinculoVisitante.deleteMany({
+    where: {
+      apenadoId,
+      visitanteId: { notIn: activeVisitanteIds }
+    }
+  })
+
+  // Limpa do AIPFotoVisitante os visitantes que não estão mais vinculados no SIPE
+  try {
+    const apenadoImp = await prisma.sipeApenadoImportado.findUnique({
+      where: { id: apenadoId },
+      select: { sipeId: true }
+    })
+    if (apenadoImp) {
+      const apenadoEmAIP = await prisma.aIPApenado.findUnique({
+        where: { sipeId: apenadoImp.sipeId }
+      })
+      if (apenadoEmAIP) {
+        await prisma.aIPFotoVisitante.deleteMany({
+          where: {
+            apenadoId: apenadoEmAIP.id,
+            visitanteId: { notIn: activeVisitanteIds }
+          }
+        })
+      }
+    }
+  } catch (aipCleanErr: any) {
+    console.error(`[AIP] Erro ao limpar visitantes obsoletos no AIP (Playwright):`, aipCleanErr.message)
+  }
+} catch (err) {
+  console.error(`Erro ao sincronizar visitantes na URL ${url}:`, err)
+}
 }
 
 function hashCodeLocal(str: string) {
@@ -7351,9 +7384,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
             visitanteId: vis.id,
             ativo: isAtivo
           },
-          update: {
-            ativo: isAtivo
-          }
+          update: {} // Preserva o status ativo definido pela página de visitas
         })
       }
 
