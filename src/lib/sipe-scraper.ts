@@ -245,6 +245,8 @@ declare global {
   var __sipeCurrentEngine: SipeEngine
   // eslint-disable-next-line no-var
   var __sipeFallbackUnidade: string | null
+  // eslint-disable-next-line no-var
+  var __sipeVisitantesOfficialProcessed: boolean | undefined
 }
 
 // Initialize once per process; no-op on hot-reloads
@@ -252,6 +254,7 @@ if (globalThis.__sipeState === undefined) globalThis.__sipeState = null
 if (globalThis.__sipeStopFlag === undefined) globalThis.__sipeStopFlag = false
 if (globalThis.__sipeCurrentEngine === undefined) globalThis.__sipeCurrentEngine = DEFAULT_SIPE_ENGINE
 if (globalThis.__sipeFallbackUnidade === undefined) globalThis.__sipeFallbackUnidade = SIPE_UNIDADE
+if (globalThis.__sipeVisitantesOfficialProcessed === undefined) globalThis.__sipeVisitantesOfficialProcessed = false
 
 function setCurrentSipeEngine(engine: SipeEngine, fallbackUnidade?: string | null): void {
   globalThis.__sipeCurrentEngine = engine
@@ -2760,6 +2763,7 @@ async function scrapeApenadoFicha(
   unidadeNome?: string | null,
   useSearch = false
 ): Promise<void> {
+  globalThis.__sipeVisitantesOfficialProcessed = false
   if (isPythonSdkEngine()) {
     try {
       await scrapeApenadoFichaFast(sipeId, unidadeNome, useSearch)
@@ -4028,6 +4032,7 @@ async function scrapeVisitantes(
   sipeId: number,
   apenadoId: string
 ): Promise<void> {
+  globalThis.__sipeVisitantesOfficialProcessed = true
   const url = `${SIPE_URL}/autorizacoes/${sipeId}/mostrar`
 
   try {
@@ -7278,7 +7283,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     const t = $(elem).text().toUpperCase()
     return t.includes('VISITANTES CADASTRADAS') || t.includes('VISITANTES CADASTRADOS')
   })
-  if (titleVis.length) {
+  if (titleVis.length && globalThis.__sipeVisitantesOfficialProcessed !== true) {
     let next = titleVis.next()
     while (next.length && next.hasClass('line')) {
       const line = next
@@ -7570,6 +7575,7 @@ async function parseAndSaveDocumentosCheerio(html: string, apenadoId: string, ap
 }
 
 async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): Promise<void> {
+  globalThis.__sipeVisitantesOfficialProcessed = true
   const $ = cheerio.load(html)
   // Remover menus, cabeçalhos, barras laterais e elementos de layout comuns
   $('header, nav, .main-header, .navbar, .main-sidebar, aside, .sidebar, .user-panel, .dropdown-menu, #navbar, .header, footer, .footer, #footer, #sidebar').remove()
@@ -8040,6 +8046,7 @@ async function scrapeApenadoFichaFastLocked(
   unidadeNome?: string | null,
   useSearch = false
 ): Promise<void> {
+  globalThis.__sipeVisitantesOfficialProcessed = false
   // Configura a unidade da sessão para o proxy se informada e resolvida
   if (unidadeNome) {
     if (unidadeNome.includes(' — ')) {
