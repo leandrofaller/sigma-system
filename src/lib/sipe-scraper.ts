@@ -7583,11 +7583,6 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
   const tabelas = $('table')
   if (!tabelas.length) return
 
-  // Limpa vínculos antigos locais para este apenado
-  await prisma.sipeVinculoVisitante.deleteMany({
-    where: { apenadoId }
-  })
-
   const list: Array<{
     visitaId: string | null
     nome: string
@@ -7663,6 +7658,28 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
       })
     })
     realTableIdx++
+  })
+
+  await persistVisitantesListCheerio(list, apenadoId)
+}
+
+// Processa uma lista já extraída de visitantes (de qualquer fonte: tabelas de
+// /autorizacoes/mostrar ou seção "VISITANTES CADASTRADAS" da Ficha Geral),
+// persistindo visitantes, vínculos e sincronizando com o AIP.
+async function persistVisitantesListCheerio(
+  list: Array<{
+    visitaId: string | null
+    nome: string
+    cpf: string | null
+    parentesco: string | null
+    photoSrc: string | null
+    ativo: boolean
+  }>,
+  apenadoId: string
+): Promise<void> {
+  // Limpa vínculos antigos locais para este apenado (serão recriados a partir da fonte atual)
+  await prisma.sipeVinculoVisitante.deleteMany({
+    where: { apenadoId }
   })
 
   const visitorDetailsPromises = list.map(async (v) => {
@@ -7886,6 +7903,77 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
   } catch (err: any) {
     console.error(`[AIP] Erro ao limpar visitantes obsoletos no AIP:`, err.message)
   }
+}
+
+// Fonte AUTORITATIVA de visitantes: seção "VISITANTES CADASTRADAS" da Ficha Geral.
+// Cada visitante é um bloco `.line` com campos rotulados (.input > label + input),
+// trazendo CPF, Grau Parentesco e Situação (Ativo/Cancelado) corretos por pessoa.
+// Isso evita a contaminação entre homônimos que ocorre ao usar /autorizacoes/mostrar.
+async function parseAndSaveVisitantesFichaGeralCheerio(html: string, apenadoId: string): Promise<boolean> {
+  const $ = cheerio.load(html)
+
+  const titleVis = $('div.title').filter((_, elem) => {
+    const t = $(elem).text().toUpperCase()
+    return t.includes('VISITANTES CADASTRADAS') || t.includes('VISITANTES CADASTRADOS')
+  })
+  if (!titleVis.length) return false
+
+  // Marca que a fonte oficial já foi processada, para o bloco inline de
+  // parseAndSaveFichaGeralCheerio não reprocessar os mesmos visitantes.
+  globalThis.__sipeVisitantesOfficialProcessed = true
+
+  const list: Array<{
+    visitaId: string | null
+    nome: string
+    cpf: string | null
+    parentesco: string | null
+    photoSrc: string | null
+    ativo: boolean
+  }> = []
+
+  let next = titleVis.next()
+  while (next.length && next.hasClass('line')) {
+    const line = next
+    const photoSrc = line.find('img').attr('src') || null
+    const fields: Record<string, string> = {}
+
+    line.find('.input').each((_, inputElem) => {
+      const label = $(inputElem).find('label').text().trim().toUpperCase()
+      const value = $(inputElem).find('input').val()?.toString().trim() || $(inputElem).find('input').attr('value')?.trim() || ''
+      if (label) {
+        fields[label] = value
+      }
+    })
+
+    const labelNome = Object.keys(fields).find(k => k.includes('NOME')) || 'NOME DA VISITANTE'
+    const labelParentesco = Object.keys(fields).find(k => k.includes('PARENTESCO') || k.includes('VINCULO')) || 'GRAU PARENTESCO'
+    const labelSituacao = Object.keys(fields).find(k => k.includes('SITUAÇÃO') || k.includes('SITUACAO')) || 'SITUAÇÃO'
+
+    const nomeVis = (fields[labelNome] || '').trim().toUpperCase()
+    const cpf = normalizeCPF(fields['CPF'] || '')
+    const parentesco = (fields[labelParentesco] || '').trim()
+    const situacao = (fields[labelSituacao] || '').trim().toUpperCase()
+
+    if (nomeVis && nomeVis.length > 2) {
+      // Situação "Ativo" (ou vazia) => vínculo ativo; "Cancelado"/outras => inativo.
+      const ativo = situacao === 'ATIVO' || situacao === ''
+      list.push({
+        visitaId: null,
+        nome: nomeVis,
+        cpf,
+        parentesco: parentesco || null,
+        photoSrc: photoSrc && !photoSrc.includes('Undefined offset') && !photoSrc.includes('loading.gif') ? photoSrc : null,
+        ativo
+      })
+    }
+
+    next = next.next()
+  }
+
+  if (list.length === 0) return false
+
+  await persistVisitantesListCheerio(list, apenadoId)
+  return true
 }
 
 async function parseAndSaveAdvogadosCheerio(html: string, apenadoId: string): Promise<boolean> {
@@ -8707,8 +8795,14 @@ async function scrapeApenadoFichaFastLocked(
   // Executa os dados estruturados independentes em paralelo
   await Promise.all(independentPromises)
 
-  // Salva visitantes e advogados de forma sequencial para evitar Race Conditions
-  if (visitantesData?.html) {
+  // Salva visitantes e advogados de forma sequencial para evitar Race Conditions.
+  // Fonte AUTORITATIVA: seção "VISITANTES CADASTRADAS" da Ficha Geral (CPF/Situação corretos por pessoa).
+  // Só cai para /autorizacoes/mostrar quando a Ficha Geral não trouxer essa seção (evita homônimos fantasmas).
+  let visitantesOficiaisProcessados = false
+  if (fichaGeralData?.html) {
+    visitantesOficiaisProcessados = await parseAndSaveVisitantesFichaGeralCheerio(fichaGeralData.html, apenado.id)
+  }
+  if (!visitantesOficiaisProcessados && visitantesData?.html) {
     await parseAndSaveVisitantesCheerio(visitantesData.html, apenado.id)
   }
   
