@@ -7177,14 +7177,19 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
           }
         }
 
-        let adv = await prisma.sipeAdvogado.findFirst({
-          where: {
-            OR: [
-              { nome: nomeAdv },
-              oab ? { oab } : null
-            ].filter(Boolean) as any
+        let adv = null
+        if (oab) {
+          adv = await prisma.sipeAdvogado.findFirst({ where: { oab } })
+          if (!adv) {
+            adv = await prisma.sipeAdvogado.findFirst({
+              where: { nome: nomeAdv, oab: null }
+            })
           }
-        })
+        } else {
+          adv = await prisma.sipeAdvogado.findFirst({
+            where: { nome: nomeAdv, oab: null }
+          })
+        }
 
         const upsertData = {
           nome: nomeAdv,
