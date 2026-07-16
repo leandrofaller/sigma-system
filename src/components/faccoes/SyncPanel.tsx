@@ -648,6 +648,16 @@ export function SyncPanel() {
           </button>
 
           <button
+            onClick={() => startSync('UNIDADES_INCREMENTAL_FAST')}
+            disabled={isActive || loading}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-400 text-white rounded-lg text-sm font-medium transition-all shadow-sm hover:shadow"
+            title="Sincronização incremental inteligente com paralelismo de logins, verificação rápida de cela/status e desduplicação de fotos do SIPE."
+          >
+            <Zap className="w-4 h-4 text-yellow-300 animate-pulse" />
+            Sincronizar Unidades (Incremental Fast)
+          </button>
+
+          <button
             onClick={() => startSync('EXTRAMUROS')}
             disabled={isActive || loading}
             title="Atualiza apenados com situações: Em Liberdade, Solto, Fuga, Prisão Domiciliar, etc."

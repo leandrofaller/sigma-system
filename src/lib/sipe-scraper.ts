@@ -668,7 +668,7 @@ export function startSipeSync(jobId: string, unidadeId: string, engine: SipeEngi
 
     if (job.tipo === 'UNIDADES') {
       await runScrapeTodasUnidades(jobId, false)
-    } else if (job.tipo === 'UNIDADES_FAST') {
+    } else if (job.tipo === 'UNIDADES_FAST' || job.tipo === 'UNIDADES_INCREMENTAL_FAST') {
       await runScrapeTodasUnidades(jobId, true)
     } else {
       await runScrape(jobId, unidadeId)
@@ -1279,6 +1279,47 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
         try {
           checkpoint.currentApenadosIds = await coletarIdsApenados(page, u.id, jobId, u.nome)
           u.totalApenados = checkpoint.currentApenadosIds.length
+
+          // --- FILTRAGEM INCREMENTAL (Sugestão 1) ---
+          if (job.tipo === 'UNIDADES_INCREMENTAL_FAST') {
+            log(jobId, `🔍 [INCREMENTAL] Comparando dados de listagem para ${checkpoint.currentApenadosIds.length} apenados no banco local...`)
+            let puladosCount = 0
+
+            const apenadosExistentes = await prisma.sipeApenadoImportado.findMany({
+              where: { sipeId: { in: checkpoint.currentApenadosIds } },
+              select: { sipeId: true, cela: true, situacao: true }
+            })
+
+            const apenadosMap = new Map(apenadosExistentes.map(a => [a.sipeId, a]))
+            const idsFiltrados: number[] = []
+
+            for (const sipeId of checkpoint.currentApenadosIds) {
+              const localApenado = apenadosMap.get(sipeId)
+              const cacheData = listagemInfoCache.get(sipeId)
+
+              if (localApenado && cacheData && localApenado.cela === cacheData.cela && localApenado.situacao === cacheData.situacao) {
+                puladosCount++
+                
+                // Atualiza em lote a data de sincronização no banco de dados local
+                await prisma.sipeApenadoImportado.update({
+                  where: { sipeId },
+                  data: {
+                    ultimaSyncAt: new Date(),
+                    unidade: u.nome
+                  }
+                }).catch(() => {})
+
+                if (globalThis.__sipeState) {
+                  globalThis.__sipeState.processado++
+                }
+              } else {
+                idsFiltrados.push(sipeId)
+              }
+            }
+
+            log(jobId, `⚡ [INCREMENTAL] ${puladosCount} apenados inalterados foram pulados. Fila de sync profunda: ${idsFiltrados.length} apenados.`)
+            checkpoint.currentApenadosIds = idsFiltrados
+          }
           
           const totalEstimado = (globalThis.__sipeState?.processado ?? 0) + checkpoint.currentApenadosIds.length
           await dbProgress(jobId, {
@@ -4156,6 +4197,7 @@ async function scrapeVisitantes(
               v.cpf = visitorDetails.cpf
             }
             if (visitorDetails.photoSrc) {
+              v.photoSrc = visitorDetails.photoSrc
               photoSrc = visitorDetails.photoSrc
             }
           }
@@ -4165,29 +4207,35 @@ async function scrapeVisitantes(
         }
       }
 
+      let vis = null
+      if (v.cpf) {
+        vis = await prisma.sipeVisitante.findFirst({ where: { cpf: v.cpf } })
+      }
+      if (!vis) {
+        vis = await prisma.sipeVisitante.findFirst({ where: { nome: v.nome } })
+      }
+
+      if (vis && vis.photoPath) {
+        photoPath = vis.photoPath
+      }
+
       if (photoSrc) {
         try {
-          const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
-          const absoluteUrl = new URL(cleanPhotoSrc, page.url()).href
-          let base64Data = await page.evaluate(async (url) => {
-            try {
-              const res = await fetch(url)
-              if (!res.ok) return null
-              const blob = await res.blob()
-              return new Promise<string>((resolve) => {
-                const reader = new FileReader()
-                reader.onloadend = () => resolve(reader.result as string)
-                reader.readAsDataURL(blob)
-              })
-            } catch {
-              return null
-            }
-          }, absoluteUrl)
+          const fileKey = v.cpf || Math.abs(hashCodeLocal(v.nome))
+          const filename = `visitante-${fileKey}.webp`
+          const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
+          const visitDir = join(baseDir, 'visitantes')
+          const localPath = join(visitDir, filename)
 
-          // Fallback: se falhou ao obter a foto original limpa (ex: 404), tenta com a URL original (com proteção/marca d'água)
-          if (!base64Data && cleanPhotoSrc !== photoSrc) {
-            const absoluteUrlFallback = new URL(photoSrc, page.url()).href
-            base64Data = await page.evaluate(async (url) => {
+          const cachedUrlMatches = vis?.photoUrl === photoSrc
+          const fileExists = existsSync(localPath)
+
+          if (cachedUrlMatches && fileExists) {
+            photoPath = `uploads/visitantes/${filename}`
+          } else {
+            const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
+            const absoluteUrl = new URL(cleanPhotoSrc, page.url()).href
+            let base64Data = await page.evaluate(async (url: string) => {
               try {
                 const res = await fetch(url)
                 if (!res.ok) return null
@@ -4200,48 +4248,53 @@ async function scrapeVisitantes(
               } catch {
                 return null
               }
-            }, absoluteUrlFallback)
-          }
+            }, absoluteUrl)
 
-          if (base64Data) {
-            const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
-            const imageBuffer = Buffer.from(base64Content, 'base64')
+            if (!base64Data && cleanPhotoSrc !== photoSrc) {
+              const absoluteUrlFallback = new URL(photoSrc, page.url()).href
+              base64Data = await page.evaluate(async (url: string) => {
+                try {
+                  const res = await fetch(url)
+                  if (!res.ok) return null
+                  const blob = await res.blob()
+                  return new Promise<string>((resolve) => {
+                    const reader = new FileReader()
+                    reader.onloadend = () => resolve(reader.result as string)
+                    reader.readAsDataURL(blob)
+                  })
+                } catch {
+                  return null
+                }
+              }, absoluteUrlFallback)
+            }
 
-            const webpBuffer = await sharp(imageBuffer)
-              .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
-              .webp({ quality: 85 })
-              .toBuffer()
+            if (base64Data) {
+              const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
+              const imageBuffer = Buffer.from(base64Content, 'base64')
 
-            const { mkdir, writeFile } = await import('fs/promises')
-            const baseDir = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
-            const visitDir = join(baseDir, 'visitantes')
-            await mkdir(visitDir, { recursive: true })
+              const webpBuffer = await sharp(imageBuffer)
+                .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
+                .webp({ quality: 85 })
+                .toBuffer()
 
-            const fileKey = v.cpf || Math.abs(hashCodeLocal(v.nome))
-            const filename = `visitante-${fileKey}.webp`
-            const localPath = join(visitDir, filename)
+              const { mkdir, writeFile } = await import('fs/promises')
+              await mkdir(visitDir, { recursive: true })
 
-            await writeFile(localPath, webpBuffer)
-            photoPath = `uploads/visitantes/${filename}`
+              await writeFile(localPath, webpBuffer)
+              photoPath = `uploads/visitantes/${filename}`
+            }
           }
         } catch (imgErr) {
           console.error(`Falha ao baixar foto do visitante ${v.nome}:`, imgErr)
         }
       }
 
-      let vis = null
-      if (v.cpf) {
-        vis = await prisma.sipeVisitante.findFirst({ where: { cpf: v.cpf } })
-      }
-      if (!vis) {
-        vis = await prisma.sipeVisitante.findFirst({ where: { nome: v.nome } })
-      }
-
       const upsertData = {
         nome: v.nome,
         cpf: v.cpf || null,
-        parentesco: v.parentesco,
-        ...(photoPath ? { photoPath } : {})
+        parentesco: v.parentesco || null,
+        photoPath: photoPath || null,
+        photoUrl: photoSrc || null,
       }
 
       if (vis) {
@@ -8078,7 +8131,12 @@ export async function scrapeApenadoFichaFast(
     faccaoId = faccao?.id ?? null
   }
 
-  let photoPath: string | null = null
+  const existingApenado = await prisma.sipeApenadoImportado.findUnique({
+    where: { sipeId },
+    select: { situacao: true, cela: true, unidade: true, photoPath: true, photoUrl: true }
+  })
+
+  let photoPath: string | null = existingApenado?.photoPath ?? null
   let fotoAtualizada = false
   let photoSrc = imagesInfo.mainSrc
   if (photoSrc && isPlaceholderPhoto(photoSrc)) {
@@ -8093,15 +8151,25 @@ export async function scrapeApenadoFichaFast(
   })
 
   if (photoSrc) {
-    const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
-    const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
-    let proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
-    if (!proxyPhoto && cleanPhotoSrc !== photoSrc) {
-      const fallbackPathRelative = photoSrc.replace(SIPE_URL, '')
-      proxyPhoto = await fetchSipeViaProxy(fallbackPathRelative)
-    }
+    const filename = `sipe-${sipeId}.webp`
+    const dir = getApenadosDir()
+    const localPath = join(dir, filename)
 
-    if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
+    const cachedUrlMatches = existingApenado?.photoUrl === photoSrc
+    const fileExists = existsSync(localPath)
+
+    if (cachedUrlMatches && fileExists) {
+      photoPath = `uploads/apenados/${filename}`
+    } else {
+      const cleanPhotoSrc = photoSrc.replace(/_fotoUsuario/i, '')
+      const photoPathRelative = cleanPhotoSrc.replace(SIPE_URL, '')
+      let proxyPhoto = await fetchSipeViaProxy(photoPathRelative)
+      if (!proxyPhoto && cleanPhotoSrc !== photoSrc) {
+        const fallbackPathRelative = photoSrc.replace(SIPE_URL, '')
+        proxyPhoto = await fetchSipeViaProxy(fallbackPathRelative)
+      }
+
+      if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
       const base64Data = proxyPhoto.data
       if (base64Data) {
         const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
@@ -8138,12 +8206,9 @@ export async function scrapeApenadoFichaFast(
       }
     }
   }
+}
 
-  // Busca o apenado existente no banco local para preservar dados da listagem (como situação e cela) caso o cache esteja vazio
-  const existingApenado = await prisma.sipeApenadoImportado.findUnique({
-    where: { sipeId },
-    select: { situacao: true, cela: true, unidade: true }
-  })
+  // Utiliza a busca de existingApenado já realizada no topo da função para preservar dados
 
   let cela = listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null
   let situacao = listagemInfoCache.get(sipeId)?.situacao ?? existingApenado?.situacao ?? dados.situacao ?? null
@@ -8301,6 +8366,7 @@ export async function scrapeApenadoFichaFast(
     oficioEntrada: dados.oficioEntrada,
     faccaoId,
     photoPath,
+    photoUrl: photoSrc || null,
     unidade: resolvedUnidade,
     cela: cela || undefined,
     apenadoLocalId: localApenado?.id || null,
@@ -8314,6 +8380,7 @@ export async function scrapeApenadoFichaFast(
       Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
     ),
     nomeConjuge: dados.nomeConjuge,
+    photoUrl: photoSrc || undefined,
   }
 
   const apenado = await prisma.sipeApenadoImportado.upsert({

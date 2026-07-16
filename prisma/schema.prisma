@@ -673,6 +673,7 @@ model SipeApenadoImportado {
   apenadoLocalId String?
   apenado        Apenado? @relation(fields: [apenadoLocalId], references: [id], onDelete: SetNull)
   photoPath      String?
+  photoUrl       String?
 
   nome             String
   nomeOutro        String?
@@ -799,6 +800,7 @@ model SipeVisitante {
   cpf                String?
   parentesco         String?
   photoPath          String?
+  photoUrl           String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

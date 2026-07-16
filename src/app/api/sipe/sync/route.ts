@@ -231,6 +231,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
+  // ── Unidades-only sync (Incremental Fast Mode) ──
+  if (tipo === 'UNIDADES_INCREMENTAL_FAST') {
+    const job = await prisma.sipeSyncJob.create({
+      data: {
+        tipo: 'UNIDADES_INCREMENTAL_FAST',
+        unidade: 'ALL',
+        unidadeNome: 'TODAS AS UNIDADES (INCREMENTAL RÁPIDA)',
+        status: 'RUNNING',
+        iniciadoEm: new Date(),
+        criadoPor: session.user.id,
+      },
+    })
+
+    startSipeSyncWithEngine(job.id, 'ALL', engine)
+    return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
+  }
+
   // ── Advogados-only sync ──
   if (tipo === 'ADVOGADOS') {
     const job = await prisma.sipeSyncJob.create({
