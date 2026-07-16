@@ -47,17 +47,20 @@ def parse_cookie_header(cookie_header: Optional[str]) -> dict:
                 cookies[k.strip()] = v.strip()
     return cookies
 
-_global_client: Optional[SIPEClient] = None
+_global_clients: Dict[str, SIPEClient] = {}
 
-def get_client(cookie_header: Optional[str] = None, unidade_header: Optional[str] = None, perfil_header: Optional[str] = None) -> SIPEClient:
+def get_client(
+    cookie_header: Optional[str] = None,
+    unidade_header: Optional[str] = None,
+    perfil_header: Optional[str] = None,
+    cpf_header: Optional[str] = None,
+    senha_header: Optional[str] = None
+) -> SIPEClient:
     """
     Retorna uma instância configurada de SIPEClient.
-    Se cookies forem passados no cabeçalho Cookie da API, eles têm precedência e
-    uma nova instância é criada temporariamente para a requisição.
-    Caso contrário, a instância global compartilhada é reutilizada (evitando logins desnecessários).
+    Se cookies forem passados no cabeçalho Cookie da API, eles têm precedência.
+    Caso contrário, mantém e reutiliza instâncias de SIPEClient cacheadas por CPF (suporte a múltiplos logins).
     """
-    global _global_client
-    
     # Se a requisição contiver cookies no cabeçalho Cookie
     req_cookies = parse_cookie_header(cookie_header)
     if req_cookies:
@@ -70,17 +73,26 @@ def get_client(cookie_header: Optional[str] = None, unidade_header: Optional[str
             client.selecionar_unidade(unidade_header)
         return client
         
-    # Reutiliza o cliente global se não foram fornecidos cookies explícitos na chamada
-    if _global_client is None:
-        _global_client = SIPEClient(base_url=base_url)
-        logger.info("Criada nova instância singleton global de SIPEClient.")
+    # Determina qual CPF e Senha usar (header ou variáveis .env padrão)
+    cpf = (cpf_header or "").strip() or os.getenv("SIPE_CPF")
+    senha = (senha_header or "").strip() or os.getenv("SIPE_SENHA")
+
+    if not cpf:
+        raise SIPEAuthError("CPF não fornecido para login do SIPE.")
+
+    # Reutiliza o cliente correspondente ao CPF específico
+    if cpf not in _global_clients:
+        _global_clients[cpf] = SIPEClient(base_url=base_url, cpf=cpf, senha=senha)
+        logger.info(f"Criada nova instância global de SIPEClient para o CPF: {cpf}")
             
+    client = _global_clients[cpf]
+
     if perfil_header or unidade_header:
-        p = perfil_header or _global_client.perfil
-        u = unidade_header or _global_client.unidade
-        _global_client.selecionar_perfil_e_unidade(p, u)
+        p = perfil_header or client.perfil
+        u = unidade_header or client.unidade
+        client.selecionar_perfil_e_unidade(p, u)
         
-    return _global_client
+    return client
 
 def _serialize_proxy_response(response, path: str) -> Dict[str, Any]:
     content_type = response.headers.get("content-type", "")
@@ -190,13 +202,15 @@ def sipe_proxy(
     path: str = Query(..., description="Caminho relativo da rota do SIPE a ser requisitado"),
     cookie: Optional[str] = Header(None, alias="Cookie"),
     unidade: Optional[str] = Header(None, alias="X-Sipe-Unidade"),
-    perfil: Optional[str] = Header(None, alias="X-Sipe-Perfil")
+    perfil: Optional[str] = Header(None, alias="X-Sipe-Perfil"),
+    cpf: Optional[str] = Header(None, alias="X-Sipe-CPF"),
+    senha: Optional[str] = Header(None, alias="X-Sipe-Senha")
 ):
     """
     Proxy de requisição GET ao SIPE real para contornar o WAF (F5 BIG-IP).
     Retorna JSON com o HTML ou a imagem convertida em base64.
     """
-    client = get_client(cookie, unidade, perfil)
+    client = get_client(cookie, unidade, perfil, cpf, senha)
     try:
         response = client._request("GET", path)
         return _serialize_proxy_response(response, path)
@@ -216,7 +230,9 @@ def sipe_proxy_write(
     payload: Dict[str, Any] = Body(...),
     cookie: Optional[str] = Header(None, alias="Cookie"),
     unidade: Optional[str] = Header(None, alias="X-Sipe-Unidade"),
-    perfil: Optional[str] = Header(None, alias="X-Sipe-Perfil")
+    perfil: Optional[str] = Header(None, alias="X-Sipe-Perfil"),
+    cpf: Optional[str] = Header(None, alias="X-Sipe-CPF"),
+    senha: Optional[str] = Header(None, alias="X-Sipe-Senha")
 ):
     """
     Proxy genérico GET/POST ao SIPE real para o modo SDK-first.
@@ -230,7 +246,7 @@ def sipe_proxy_write(
     if method not in {"GET", "POST"}:
         raise HTTPException(status_code=400, detail="Método não suportado. Use GET ou POST.")
 
-    client = get_client(cookie, unidade, perfil)
+    client = get_client(cookie, unidade, perfil, cpf, senha)
 
     try:
         req_kwargs: Dict[str, Any] = {}

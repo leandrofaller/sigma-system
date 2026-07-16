@@ -78,6 +78,9 @@ import { join } from 'path'
 import { getApenadosDir } from './storage'
 import { createHash } from 'crypto'
 import { capsolverService } from './capsolver-service'
+import { AsyncLocalStorage } from 'async_hooks'
+
+export const sipeAuthStorage = new AsyncLocalStorage<{ cpf: string; senha: string }>()
 
 // ── Config ────────────────────────────────────────────────────
 const SIPE_URL = 'https://sipe.sejus.ro.gov.br'
@@ -160,11 +163,17 @@ export async function requestSipeViaProxy(options: {
       ? `${SIPE_PYTHON_API_URL}/sipe/proxy?path=${encodeURIComponent(cleanPath)}`
       : `${SIPE_PYTHON_API_URL}/sipe/proxy`
 
+    const credentials = sipeAuthStorage.getStore()
+
     // Cabeçalhos da requisição Next.js → proxy Python: sempre application/json
     // (options.headers é para o SIPE via proxy, não para o proxy em si)
     const proxyHeaders: Record<string, string> = {
       'Accept': 'application/json',
       'X-Sipe-Unidade': globalThis.__sipeFallbackUnidade || SIPE_UNIDADE,
+      ...(credentials ? {
+        'X-Sipe-CPF': credentials.cpf,
+        'X-Sipe-Senha': credentials.senha
+      } : {}),
       ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
     }
 
@@ -1306,65 +1315,62 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
       let checkpointBatchCount = 0; // 🔧 OTIMIZAÇÃO: Batched checkpoints
       let pageRenewCount = 0; // 🔧 OTIMIZAÇÃO: Page renewal
 
-      for (const sipeId of apenadosIds) {
-        if (globalThis.__sipeStopFlag) {
-          await dbProgress(jobId, {
-            status: 'INTERRUPTED',
-            finalizadoEm: new Date(),
-            log: 'Sincronização de unidades interrompida pelo usuário',
-          })
-          refreshMemory(jobId, { status: 'INTERRUPTED' })
-          return
-        }
+      // Login A (do .env) e Login B (passado pelo usuário)
+      const loginA = { cpf: SIPE_CPF, senha: SIPE_SENHA }
+      const loginB = { cpf: '77032055249', senha: 'ZHW5pmq3njh1bdb-vyr' }
 
-        // 🔧 OTIMIZAÇÃO: Renovar page instance a cada 25 apenados para evitar memory leak (apenas se não for SDK Python)
-        if (!isPythonSdkEngine() && pageRenewCount % 25 === 0 && pageRenewCount > 0) {
-          try {
-            log(jobId, `🔄 Renovando page instance após ${pageRenewCount} apenados...`);
-            await page.close().catch(() => {});
-            page = await context.newPage();
-            await setupFastPageIfNeeded(page, fast);
-            await login(page, u.id);
-            log(jobId, `✅ Page renovada com sucesso`);
-          } catch (renewErr) {
-            log(jobId, `⚠️ Erro ao renovar page: ${renewErr}. Continuando...`);
-          }
-        }
-        pageRenewCount++;
-
-        try {
-          // 📍 OTIMIZAÇÃO: Logging detalhado para rastrear progresso
-          const currentIdx = apenadosIds.indexOf(sipeId) + 1;
-          const progressMsg = `[${currentIdx}/${apenadosIds.length}] Scraping apenado SIPE ID #${sipeId} na unidade "${u.nome}"...`;
-
-          // Log apenas a cada 10 apenados para não poluir o banco
-          if (currentIdx % 10 === 0 || currentIdx === 1 || currentIdx === apenadosIds.length) {
-            log(jobId, progressMsg);
+      if (fast && isPythonSdkEngine()) {
+        // --- MODO ACELERADO COM 2 LOGINS (SDK PYTHON + CONCORRÊNCIA EM LOTE DE 2) ---
+        log(jobId, `🚀 Iniciando processamento acelerado (SDK + 2 Logins Paralelos) de ${apenadosIds.length} apenados...`)
+        
+        while (apenadosIds.length > 0) {
+          if (globalThis.__sipeStopFlag) {
+            await dbProgress(jobId, {
+              status: 'INTERRUPTED',
+              finalizadoEm: new Date(),
+              log: 'Sincronização de unidades interrompida pelo usuário',
+            })
+            refreshMemory(jobId, { status: 'INTERRUPTED' })
+            return
           }
 
-          await withRetry(async () => {
-            try {
-              const apenadoCache = listagemInfoCache.get(sipeId)
-              const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? u.nome
-              await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome)
-            } catch (err: any) {
-              if (err?.message === 'SESSAO_EXPIRADA') {
-                log(jobId, `Sessão expirada. Re-autenticando para unidade "${u.nome}"...`)
-                await login(page, u.id)
+          const batch = apenadosIds.splice(0, 2)
+          
+          await Promise.all([
+            batch[0] ? sipeAuthStorage.run(loginA, async () => {
+              const sipeId = batch[0]
+              try {
                 const apenadoCache = listagemInfoCache.get(sipeId)
                 const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? u.nome
                 await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome)
-              } else {
-                throw err
+                lastProcessedId = sipeId
+              } catch (err) {
+                console.error(`Erro no worker A para o apenado #${sipeId}:`, err)
+                if (globalThis.__sipeState) globalThis.__sipeState.erros++
+                log(jobId, `Erro apenado #${sipeId} na unidade "${u.nome}" (Worker A): ${err}`)
               }
-            }
-          })
+            }) : Promise.resolve(),
 
-          lastProcessedId = sipeId
-          checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
-          
+            batch[1] ? sipeAuthStorage.run(loginB, async () => {
+              const sipeId = batch[1]
+              try {
+                const apenadoCache = listagemInfoCache.get(sipeId)
+                const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? u.nome
+                await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome)
+                lastProcessedId = sipeId
+              } catch (err) {
+                console.error(`Erro no worker B para o apenado #${sipeId}:`, err)
+                if (globalThis.__sipeState) globalThis.__sipeState.erros++
+                log(jobId, `Erro apenado #${sipeId} na unidade "${u.nome}" (Worker B): ${err}`)
+              }
+            }) : Promise.resolve(),
+          ])
+
+          // Limpa do checkpoint local apenas os IDs processados com sucesso ou erro neste lote
+          checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => !batch.includes(id))
+
           if (globalThis.__sipeState) {
-            globalThis.__sipeState.processado++
+            globalThis.__sipeState.processado += batch.length
             if (globalThis.__sipeState.total > 0) {
               globalThis.__sipeState.pct = Math.round(
                 (globalThis.__sipeState.processado / globalThis.__sipeState.total) * 100
@@ -1372,42 +1378,132 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
             }
           }
 
-          // 🔧 OTIMIZAÇÃO: Salvar checkpoint apenas a cada 10 apenados processados (evita JSON grande)
-          checkpointBatchCount++;
-          if (checkpointBatchCount % 10 === 0 || checkpoint.currentApenadosIds.length === 1) {
+          checkpointBatchCount += batch.length
+          const lastIdInBatch = batch[batch.length - 1]
+
+          if (checkpointBatchCount % 10 === 0 || apenadosIds.length === 0) {
             await dbProgress(jobId, {
               processado: globalThis.__sipeState?.processado ?? 0,
-              ultimoIdProcessado: sipeId,
+              erros: globalThis.__sipeState?.erros ?? 0,
+              ultimoIdProcessado: lastIdInBatch,
               idsColetados: JSON.stringify(checkpoint),
             })
           } else {
-            // Update rápido sem checkpoint JSON
             await dbProgress(jobId, {
               processado: globalThis.__sipeState?.processado ?? 0,
-              ultimoIdProcessado: sipeId,
+              erros: globalThis.__sipeState?.erros ?? 0,
+              ultimoIdProcessado: lastIdInBatch,
             })
           }
 
-          // 🔧 OTIMIZAÇÃO: Delay maior para governos servidores lentos (2-5s), menor no modo fast, e mínimo no modo SDK
-          const currentDelay = isPythonSdkEngine() ? 50 : (fast ? (500 + Math.random() * 500) : (2000 + Math.random() * 3000))
-          await new Promise(r => setTimeout(r, currentDelay))
-        } catch (err) {
-          const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
-          if (globalThis.__sipeState) {
-            globalThis.__sipeState.erros = errosCount
+          // Delay extremamente curto no SDK concorrente
+          await new Promise(r => setTimeout(r, 20))
+        }
+      } else {
+        // --- MODO CLÁSSICO SEQUENCIAL ---
+        for (const sipeId of apenadosIds) {
+          if (globalThis.__sipeStopFlag) {
+            await dbProgress(jobId, {
+              status: 'INTERRUPTED',
+              finalizadoEm: new Date(),
+              log: 'Sincronização de unidades interrompida pelo usuário',
+            })
+            refreshMemory(jobId, { status: 'INTERRUPTED' })
+            return
           }
-          const msg = `Erro apenado #${sipeId} na unidade "${u.nome}" (após 3 tentativas): ${err}`
-          if (globalThis.__sipeState) {
-            globalThis.__sipeState.ultimoLog = msg
+
+          // 🔧 OTIMIZAÇÃO: Renovar page instance a cada 25 apenados para evitar memory leak (apenas se não for SDK Python)
+          if (!isPythonSdkEngine() && pageRenewCount % 25 === 0 && pageRenewCount > 0) {
+            try {
+              log(jobId, `🔄 Renovando page instance após ${pageRenewCount} apenados...`);
+              await page.close().catch(() => {});
+              page = await context.newPage();
+              await setupFastPageIfNeeded(page, fast);
+              await login(page, u.id);
+              log(jobId, `✅ Page renovada com sucesso`);
+            } catch (renewErr) {
+              log(jobId, `⚠️ Erro ao renovar page: ${renewErr}. Continuando...`);
+            }
           }
-          
-          checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
-          
-          await dbProgress(jobId, {
-            erros: errosCount,
-            log: msg,
-            idsColetados: JSON.stringify(checkpoint),
-          })
+          pageRenewCount++;
+
+          try {
+            // 📍 OTIMIZAÇÃO: Logging detalhado para rastrear progresso
+            const currentIdx = apenadosIds.indexOf(sipeId) + 1;
+            const progressMsg = `[${currentIdx}/${apenadosIds.length}] Scraping apenado SIPE ID #${sipeId} na unidade "${u.nome}"...`;
+
+            // Log apenas a cada 10 apenados para não poluir o banco
+            if (currentIdx % 10 === 0 || currentIdx === 1 || currentIdx === apenadosIds.length) {
+              log(jobId, progressMsg);
+            }
+
+            await withRetry(async () => {
+              try {
+                const apenadoCache = listagemInfoCache.get(sipeId)
+                const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? u.nome
+                await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome)
+              } catch (err: any) {
+                if (err?.message === 'SESSAO_EXPIRADA') {
+                  log(jobId, `Sessão expirada. Re-autenticando para unidade "${u.nome}"...`)
+                  await login(page, u.id)
+                  const apenadoCache = listagemInfoCache.get(sipeId)
+                  const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? u.nome
+                  await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome)
+                } else {
+                  throw err
+                }
+              }
+            })
+
+            lastProcessedId = sipeId
+            checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
+            
+            if (globalThis.__sipeState) {
+              globalThis.__sipeState.processado++
+              if (globalThis.__sipeState.total > 0) {
+                globalThis.__sipeState.pct = Math.round(
+                  (globalThis.__sipeState.processado / globalThis.__sipeState.total) * 100
+                )
+              }
+            }
+
+            // 🔧 OTIMIZAÇÃO: Salvar checkpoint apenas a cada 10 apenados processados (evita JSON grande)
+            checkpointBatchCount++;
+            if (checkpointBatchCount % 10 === 0 || checkpoint.currentApenadosIds.length === 1) {
+              await dbProgress(jobId, {
+                processado: globalThis.__sipeState?.processado ?? 0,
+                ultimoIdProcessado: sipeId,
+                idsColetados: JSON.stringify(checkpoint),
+              })
+            } else {
+              // Update rápido sem checkpoint JSON
+              await dbProgress(jobId, {
+                processado: globalThis.__sipeState?.processado ?? 0,
+                ultimoIdProcessado: sipeId,
+              })
+            }
+
+            // 🔧 OTIMIZAÇÃO: Delay maior para governos servidores lentos (2-5s), menor no modo fast, e mínimo no modo SDK
+            const currentDelay = isPythonSdkEngine() ? 50 : (fast ? (500 + Math.random() * 500) : (2000 + Math.random() * 3000))
+            await new Promise(r => setTimeout(r, currentDelay))
+          } catch (err) {
+            const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
+            if (globalThis.__sipeState) {
+              globalThis.__sipeState.erros = errosCount
+            }
+            const msg = `Erro apenado #${sipeId} na unidade "${u.nome}" (após 3 tentativas): ${err}`
+            if (globalThis.__sipeState) {
+              globalThis.__sipeState.ultimoLog = msg
+            }
+            
+            checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
+            
+            await dbProgress(jobId, {
+              erros: errosCount,
+              log: msg,
+              idsColetados: JSON.stringify(checkpoint),
+            })
+          }
         }
       }
 
