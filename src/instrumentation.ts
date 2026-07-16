@@ -2,6 +2,7 @@
  * Next.js Instrumentation Hook — roda uma vez no boot do servidor.
  * Inicializa pgvector (extensão, coluna faceVector, índice HNSW) e
  * migra embeddings existentes (faceDescriptor → faceVector) automaticamente.
+ * Também dispara a remediação dos visitantes homônimos em background.
  *
  * Docs: https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
  */
@@ -40,6 +41,19 @@ export async function register() {
     } catch (err) {
       // Nunca deixa o boot falhar — pgvector é opcional
       console.warn('[pgvector] Erro no boot, fallback em memória ativo:', err);
+    }
+
+    try {
+      // Corrige em background os apenados que ficaram com visitantes homônimos
+      // errados gravados pelo scraper antigo. Não bloqueia o boot e não faz
+      // requisição alguma quando a base já está limpa.
+      const { startVisitantesHomonimosRemediation } = await import(
+        '@/lib/visitantes-homonimos-remediation'
+      );
+      startVisitantesHomonimosRemediation();
+    } catch (err) {
+      // Nunca deixa o boot falhar — a remediação é auxiliar
+      console.warn('[REMEDIACAO VISITANTES] Erro ao agendar remediação no boot:', err);
     }
   }
 }
