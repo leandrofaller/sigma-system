@@ -4210,9 +4210,15 @@ async function scrapeVisitantes(
       let vis = null
       if (v.cpf) {
         vis = await prisma.sipeVisitante.findFirst({ where: { cpf: v.cpf } })
-      }
-      if (!vis) {
-        vis = await prisma.sipeVisitante.findFirst({ where: { nome: v.nome } })
+        if (!vis) {
+          vis = await prisma.sipeVisitante.findFirst({
+            where: { nome: v.nome, cpf: null }
+          })
+        }
+      } else {
+        vis = await prisma.sipeVisitante.findFirst({
+          where: { nome: v.nome, cpf: null }
+        })
       }
 
       if (vis && vis.photoPath) {
@@ -7295,9 +7301,15 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
         let vis = null
         if (cpf) {
           vis = await prisma.sipeVisitante.findFirst({ where: { cpf } })
-        }
-        if (!vis) {
-          vis = await prisma.sipeVisitante.findFirst({ where: { nome: nomeVis } })
+          if (!vis) {
+            vis = await prisma.sipeVisitante.findFirst({
+              where: { nome: nomeVis, cpf: null }
+            })
+          }
+        } else {
+          vis = await prisma.sipeVisitante.findFirst({
+            where: { nome: nomeVis, cpf: null }
+          })
         }
 
         const upsertData = {
@@ -7701,9 +7713,15 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
     let vis = null
     if (cpf) {
       vis = await prisma.sipeVisitante.findFirst({ where: { cpf } })
-    }
-    if (!vis) {
-      vis = await prisma.sipeVisitante.findFirst({ where: { nome: v.nome } })
+      if (!vis) {
+        vis = await prisma.sipeVisitante.findFirst({
+          where: { nome: v.nome, cpf: null }
+        })
+      }
+    } else {
+      vis = await prisma.sipeVisitante.findFirst({
+        where: { nome: v.nome, cpf: null }
+      })
     }
 
     const upsertData = {
