@@ -79,6 +79,9 @@ import { getApenadosDir } from './storage'
 import { createHash } from 'crypto'
 import { capsolverService } from './capsolver-service'
 import { AsyncLocalStorage } from 'async_hooks'
+import AsyncLock from 'async-lock'
+
+const sipeLock = new AsyncLock({ timeout: 60000 })
 
 export const sipeAuthStorage = new AsyncLocalStorage<{ cpf: string; senha: string }>()
 
@@ -7537,8 +7540,16 @@ async function parseAndSaveDocumentosCheerio(html: string, apenadoId: string, ap
 
 async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): Promise<void> {
   const $ = cheerio.load(html)
+  // Remover menus, cabeçalhos, barras laterais e elementos de layout comuns
+  $('header, nav, .main-header, .navbar, .main-sidebar, aside, .sidebar, .user-panel, .dropdown-menu, #navbar, .header, footer, .footer, #footer, #sidebar').remove()
+
   const tabelas = $('table')
   if (!tabelas.length) return
+
+  // Limpa vínculos antigos locais para este apenado
+  await prisma.sipeVinculoVisitante.deleteMany({
+    where: { apenadoId }
+  })
 
   const list: Array<{
     visitaId: string | null
@@ -7810,10 +7821,41 @@ async function parseAndSaveVisitantesCheerio(html: string, apenadoId: string): P
   })
 
   await Promise.all(visitorDetailsPromises)
+
+  // Limpar do AIPFotoVisitante os visitantes que não estão mais vinculados no SIPE
+  try {
+    const apenadoImp = await prisma.sipeApenadoImportado.findUnique({
+      where: { id: apenadoId },
+      select: { sipeId: true }
+    })
+    if (apenadoImp) {
+      const apenadoEmAIP = await prisma.aIPApenado.findUnique({
+        where: { sipeId: apenadoImp.sipeId }
+      })
+      if (apenadoEmAIP) {
+        const currentLocalLinks = await prisma.sipeVinculoVisitante.findMany({
+          where: { apenadoId },
+          select: { visitanteId: true }
+        })
+        const visitanteIds = currentLocalLinks.map(l => l.visitanteId)
+        await prisma.aIPFotoVisitante.deleteMany({
+          where: {
+            apenadoId: apenadoEmAIP.id,
+            visitanteId: { notIn: visitanteIds }
+          }
+        })
+      }
+    }
+  } catch (err: any) {
+    console.error(`[AIP] Erro ao limpar visitantes obsoletos no AIP:`, err.message)
+  }
 }
 
 async function parseAndSaveAdvogadosCheerio(html: string, apenadoId: string): Promise<boolean> {
   const $ = cheerio.load(html)
+  // Remover menus, cabeçalhos, barras laterais e elementos de layout comuns
+  $('header, nav, .main-header, .navbar, .main-sidebar, aside, .sidebar, .user-panel, .dropdown-menu, #navbar, .header, footer, .footer, #footer, #sidebar').remove()
+
   const linksAdvogados: Array<{ href: string; text: string }> = []
   
   $('a').each((_, a) => {
@@ -7828,6 +7870,11 @@ async function parseAndSaveAdvogadosCheerio(html: string, apenadoId: string): Pr
   if (linksAdvogados.length === 0) {
     return false
   }
+
+  // Como encontramos advogados válidos na página, limpa os antigos locais para esta ficha
+  await prisma.sipeVinculoAdvogado.deleteMany({
+    where: { apenadoId }
+  })
 
   for (const item of linksAdvogados) {
     const match = item.href.match(/\/advogados\/(\d+)/) || item.href.match(/\/advogado\/(\d+)/)
@@ -7948,6 +7995,16 @@ async function saveAndLinkComplementaryPhotoCheerio(
 }
 
 export async function scrapeApenadoFichaFast(
+  sipeId: number,
+  unidadeNome?: string | null,
+  useSearch = false
+): Promise<void> {
+  return sipeLock.acquire('sipe-session', async () => {
+    await scrapeApenadoFichaFastLocked(sipeId, unidadeNome, useSearch)
+  })
+}
+
+async function scrapeApenadoFichaFastLocked(
   sipeId: number,
   unidadeNome?: string | null,
   useSearch = false
@@ -8629,6 +8686,13 @@ export async function scrapeApenadoFichaFast(
   }
   if (!salvouAdv && credenciadosData?.html) {
     salvouAdv = await parseAndSaveAdvogadosCheerio(credenciadosData.html, apenado.id)
+  }
+
+  // Se nenhum advogado foi extraído das páginas específicas, limpa todos os vínculos anteriores locais
+  if (!salvouAdv) {
+    await prisma.sipeVinculoAdvogado.deleteMany({
+      where: { apenadoId: apenado.id }
+    })
   }
 
   // Por último, executa a Ficha Geral consolidada (evitando duplicar advogados e visitantes criados acima)
