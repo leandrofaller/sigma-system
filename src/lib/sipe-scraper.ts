@@ -8844,8 +8844,14 @@ function setupAutoSyncScheduler() {
   autoSyncTimeout = setInterval(checkAndRunAutoSync, INTERVAL_CHECK)
 }
 
-// ATIVADO: Auto-sync scheduler foi reativado para executar de forma controlada
-if (typeof window === 'undefined') {
+// ATIVADO: Auto-sync scheduler foi reativado para executar de forma controlada.
+// Proteção de Build: Evita inicializar o scheduler em tempo de compilação (Next.js build)
+// ou se o banco de dados não estiver configurado no ambiente.
+if (
+  typeof window === 'undefined' &&
+  process.env.DATABASE_URL &&
+  process.env.NEXT_PHASE !== 'phase-production-build'
+) {
   setupAutoSyncScheduler()
 }
 
