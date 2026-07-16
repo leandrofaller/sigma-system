@@ -558,13 +558,27 @@ export function startVisitantesSync(jobId: string): void {
               data: entradasToCreate,
             });
 
-            // Associa o vínculo com os apenados locais por aproximação de nome
+            // Associa o vínculo com os apenados locais pelo nome do apenado visitado.
+            // O histórico de entradas só traz o NOME do apenado, sem o SIPE ID. Como existem
+            // centenas de apenados homônimos, vincular pelo nome quando há mais de um
+            // candidato escolheria um arbitrariamente e criaria um vínculo falso (visitante
+            // aparecendo na ficha de quem ele nunca visitou). Por isso só vinculamos quando
+            // o nome é inequívoco — na dúvida, não vincula.
             const uniqueNomeApenados = [...new Set(entradasToCreate.map((e) => e.nomeApenado).filter(Boolean))];
             for (const nomeAp of uniqueNomeApenados) {
-              const apenadoLocal = await prisma.sipeApenadoImportado.findFirst({
+              const candidatos = await prisma.sipeApenadoImportado.findMany({
                 where: { nome: { equals: nomeAp, mode: 'insensitive' } },
+                select: { id: true },
               });
 
+              if (candidatos.length > 1) {
+                console.warn(
+                  `[VISITANTES SCRAPER] Nome de apenado ambíguo ("${nomeAp}": ${candidatos.length} homônimos) — vínculo com o visitante "${nome}" não criado para evitar associação incorreta.`
+                );
+                continue;
+              }
+
+              const apenadoLocal = candidatos[0];
               if (apenadoLocal) {
                 await prisma.sipeVinculoVisitante.upsert({
                   where: {

@@ -4027,12 +4027,58 @@ async function scrapeProcessos(
   }
 }
 
+// Busca o HTML da Ficha Geral consolidada, que contém a seção oficial
+// "VISITANTES CADASTRADAS" (fonte autoritativa de visitantes do apenado).
+// Retorna null se o proxy não estiver disponível ou o CSRF não for obtido.
+async function fetchFichaGeralHtmlViaProxy(sipeId: number): Promise<string | null> {
+  try {
+    await fetchSipeViaProxy(`/apenados/${sipeId}/selecionarOpcao`).catch(() => {})
+    const editData = await fetchSipeViaProxy(`/apenados/${sipeId}/editar`)
+    if (!editData || editData.is_binary || !editData.html) return null
+
+    const $ = cheerio.load(editData.html)
+    const csrfToken =
+      $('meta[name="csrf-token"]').attr('content') ||
+      $('input[name="_token"]').attr('value') ||
+      $('input[name="_token"]').val()?.toString() ||
+      editData.html.match(/CSRF_TOKEN\s*=\s*['"]([^'"]+)['"]/i)?.[1]
+    if (!csrfToken) return null
+
+    // Reativa o apenado na sessão do Laravel imediatamente antes do POST
+    await fetchSipeViaProxy(`/apenados/${sipeId}/selecionarOpcao`).catch(() => {})
+    const ficha = await requestSipeViaProxy({
+      path: '/relatorios/fichaGeral',
+      method: 'POST',
+      form: {
+        _token: csrfToken,
+        apenado_id: String(sipeId),
+        'listar[]': ['DP', 'M', 'A', 'V']
+      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+    if (!ficha || ficha.is_binary || !ficha.html) return null
+    return ficha.html
+  } catch {
+    return null
+  }
+}
+
 async function scrapeVisitantes(
   page: Page,
   sipeId: number,
   apenadoId: string
 ): Promise<void> {
   globalThis.__sipeVisitantesOfficialProcessed = true
+
+  // Fonte AUTORITATIVA: seção "VISITANTES CADASTRADAS" da Ficha Geral (CPF e
+  // Situação corretos por pessoa). Evita os homônimos fantasmas que a página
+  // /autorizacoes/mostrar produz. Só cai para ela se a Ficha Geral não vier.
+  const fichaGeralHtml = await fetchFichaGeralHtmlViaProxy(sipeId)
+  if (fichaGeralHtml) {
+    const ok = await parseAndSaveVisitantesFichaGeralCheerio(fichaGeralHtml, apenadoId).catch(() => false)
+    if (ok) return
+  }
+
   const url = `${SIPE_URL}/autorizacoes/${sipeId}/mostrar`
 
   try {
