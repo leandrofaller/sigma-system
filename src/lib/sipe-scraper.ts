@@ -8018,6 +8018,10 @@ async function parseAndSaveVisitantesFichaGeralCheerio(html: string, apenadoId: 
 
   if (list.length === 0) return false
 
+  console.log(
+    `[VISITANTES] ✅ Fonte: Ficha Geral (oficial) — ${list.length} visitante(s), ` +
+      `${list.filter(v => v.ativo).length} ativo(s)`
+  )
   await persistVisitantesListCheerio(list, apenadoId)
   return true
 }
@@ -8849,6 +8853,10 @@ async function scrapeApenadoFichaFastLocked(
     visitantesOficiaisProcessados = await parseAndSaveVisitantesFichaGeralCheerio(fichaGeralData.html, apenado.id)
   }
   if (!visitantesOficiaisProcessados && visitantesData?.html) {
+    console.warn(
+      `[VISITANTES] ⚠️ Ficha Geral sem a seção "VISITANTES CADASTRADAS" para #${sipeId} — ` +
+        `usando /autorizacoes/mostrar (fallback; CPF/status menos confiáveis)`
+    )
     await parseAndSaveVisitantesCheerio(visitantesData.html, apenado.id)
   }
   
