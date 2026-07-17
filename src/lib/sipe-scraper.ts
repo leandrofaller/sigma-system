@@ -7739,7 +7739,13 @@ async function persistVisitantesListCheerio(
     where: { apenadoId }
   })
 
-  const visitorDetailsPromises = list.map(async (v) => {
+  // Sequencial, e não list.map + Promise.all. Cada visitante dispara ~6 queries
+  // (buscar, gravar, upsert do vínculo, upsert no AIP). Em paralelo, um apenado com
+  // 8 visitantes lançava ~48 queries simultâneas contra um pool de 5 conexões
+  // (Prisma abre num_cpus*2+1; a VPS tem 2 vCPU) e estourava o pool — derrubando o
+  // próprio sync e, junto, as requisições da aplicação. Alguns segundos a mais por
+  // apenado valem mais do que saturar o banco.
+  for (const v of list) {
     let photoSrc = v.photoSrc
     let cpf = v.cpf
 
@@ -7929,9 +7935,7 @@ async function persistVisitantesListCheerio(
     } catch (aipVisitanteErr: any) {
       console.error(`[AIP] Erro ao sincronizar visitante ${vis.nome} no AIP:`, aipVisitanteErr.message)
     }
-  })
-
-  await Promise.all(visitorDetailsPromises)
+  }
 
   // Limpar do AIPFotoVisitante os visitantes que não estão mais vinculados no SIPE
   try {
