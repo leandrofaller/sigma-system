@@ -640,7 +640,10 @@ function refreshMemory(_jobId: string, patch: Partial<SipeSyncProgress>) {
  * Start a new sync job or resume an interrupted one.
  * Runs entirely in background — returns immediately.
  */
-export function startSipeSync(jobId: string, unidadeId: string, engine: SipeEngine = 'playwright'): void {
+// Default python-sdk, e não 'playwright': o engine Playwright não tem mais Chromium
+// (ver createMockProxy), então cair nele faz o sync rodar contra um mock e terminar
+// sem trazer dado nenhum, sem erro. Quem quiser o caminho morto precisa pedir.
+export function startSipeSync(jobId: string, unidadeId: string, engine: SipeEngine = 'python-sdk'): void {
   if (globalThis.__sipeState?.status === 'RUNNING') return
 
   setCurrentSipeEngine(engine, unidadeId)
@@ -693,7 +696,7 @@ export function startSipeSync(jobId: string, unidadeId: string, engine: SipeEngi
 }
 
 /** Resume an INTERRUPTED job without re-collecting IDs */
-export function resumeSipeSync(jobId: string, unidadeId: string, engine: SipeEngine = 'playwright'): void {
+export function resumeSipeSync(jobId: string, unidadeId: string, engine: SipeEngine = 'python-sdk'): void {
   startSipeSync(jobId, unidadeId, engine) // startSipeSync detects existing IDs in DB
 }
 
@@ -9132,7 +9135,14 @@ function setupAutoSyncScheduler() {
       const configVal = autoSyncConfig?.value as any
       const isEnabled = configVal?.enabled === true
       const scrapingTipo = configVal?.tipo ?? 'UNIDADES'
-      const scrapingEngine = configVal?.engine ?? 'python-sdk'
+      // 'playwright' ficou gravado no banco enquanto o painel ainda o oferecia. O
+      // engine perdeu o Chromium e hoje roda contra createMockProxy: o sync noturno
+      // terminaria "com sucesso" sem trazer nada. Coage para o engine real.
+      const engineSalvo = configVal?.engine ?? 'python-sdk'
+      const scrapingEngine: SipeEngine = engineSalvo === 'playwright' ? 'python-sdk' : engineSalvo
+      if (engineSalvo === 'playwright') {
+        console.warn('[AUTO-SYNC] Config tem engine "playwright", que não é mais funcional — usando python-sdk.')
+      }
 
       if (!isEnabled) return
 

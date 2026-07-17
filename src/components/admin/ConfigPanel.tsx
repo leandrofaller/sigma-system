@@ -411,7 +411,6 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
                     engine: e.target.value
                   })}>
                   <option value="python-sdk">🐍 SDK Python</option>
-                  <option value="playwright">🎭 Playwright</option>
                   <option value="firecrawl">🔥 Firecrawl</option>
                 </Select>
               </Field>

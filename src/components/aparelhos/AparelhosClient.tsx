@@ -32,6 +32,8 @@ interface Aparelho {
   responsavelRecebimento?: string | null
   loteGrupo?: string | null
   fotos?: { urlS3: string; chaveS3: string; nomeOriginal: string }[] | null
+  editavel: boolean
+  statusEdicao: 'NORMAL' | 'SOLICITADA' | 'LIBERADA' | 'EDITADA'
 }
 
 interface Pagination {
