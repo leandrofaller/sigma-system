@@ -7530,6 +7530,14 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
 
   if (dpUpdate.cela) {
     console.log(`[FICHA GERAL] 📍 Cela/unidade da Ficha Geral (fonte oficial): cela=${dpUpdate.cela} unidade=${dpUpdate.unidade ?? '(não informada)'}`)
+  } else {
+    // Diagnóstico: sem o campo Cela aqui, a cela continua vindo do palpite do
+    // histórico de /mudarcela, que é ambíguo. Lista os labels realmente
+    // disponíveis para sabermos onde a seção "INFORMAÇÃO PRISIONAL" está.
+    console.warn(
+      `[FICHA GERAL] ⚠️ Campo "Cela" ausente na Ficha Geral (a cela seguirá vindo do histórico de /mudarcela). ` +
+        `Labels disponíveis (${Object.keys(allFields).length}): ${Object.keys(allFields).join(' | ')}`
+    )
   }
 
   if (Object.keys(dpUpdate).length > 0) {
