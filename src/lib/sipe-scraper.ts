@@ -7483,13 +7483,11 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     regime:         pick('REGIME'),
     dataEntrada:    pick('DATA DE ENTRADA', 'DATA ENTRADA', 'ENTRADA', 'DT ENTRADA'),
     presoOriundo:   pick('PRESO ORIUNDO', 'ORIUNDO', 'PROCEDÊNCIA', 'PROCEDENCIA'),
-    // Cela/unidade atuais vêm da seção "INFORMAÇÃO PRISIONAL" da Ficha Geral, que
-    // as declara explicitamente. Deduzi-las do histórico de /mudarcela é inconfiável:
-    // a coluna de data não traz hora, então mudanças no mesmo dia ficam empatadas e
-    // sem como desempatar (ex.: #57240 tinha A/01→D/02 e D/02→A/01 na mesma data).
-    // Este parse roda por último no scraper, então prevalece sobre aquele palpite.
-    cela:           pick('CELA'),
-    unidade:        pick('NOME DA UNIDADE', 'UNIDADE PRISIONAL'),
+    // NÃO tente pegar cela/unidade aqui: a Ficha Geral montada com
+    // listar[]=DP,M,A,V não traz a seção "INFORMAÇÃO PRISIONAL" — os 30 labels
+    // disponíveis são só DADOS PESSOAIS, DOCUMENTOS, FILIAÇÃO e VISITANTES.
+    // A cela atual é aplicada por scrapeApenadoFichaFastLocked, a partir da
+    // coluna CELA da listagem de apenados.
   }
 
   // qtdFilhos precisa de conversão para Int
@@ -7528,17 +7526,6 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
 
   console.log(`[FICHA GERAL DP] apenadoId=${apenadoId} nomeMae="${dpData.nomeMae ?? 'NULL'}" campos encontrados:`, Object.keys(dpUpdate))
 
-  if (dpUpdate.cela) {
-    console.log(`[FICHA GERAL] 📍 Cela/unidade da Ficha Geral (fonte oficial): cela=${dpUpdate.cela} unidade=${dpUpdate.unidade ?? '(não informada)'}`)
-  } else {
-    // Diagnóstico: sem o campo Cela aqui, a cela continua vindo do palpite do
-    // histórico de /mudarcela, que é ambíguo. Lista os labels realmente
-    // disponíveis para sabermos onde a seção "INFORMAÇÃO PRISIONAL" está.
-    console.warn(
-      `[FICHA GERAL] ⚠️ Campo "Cela" ausente na Ficha Geral (a cela seguirá vindo do histórico de /mudarcela). ` +
-        `Labels disponíveis (${Object.keys(allFields).length}): ${Object.keys(allFields).join(' | ')}`
-    )
-  }
 
   if (Object.keys(dpUpdate).length > 0) {
     await prisma.sipeApenadoImportado.update({
@@ -8224,7 +8211,14 @@ async function scrapeApenadoFichaFastLocked(
   }
 
   let editHtml = ''
-  
+
+  // Cela lida da coluna CELA da listagem de apenados. É a única fonte direta que
+  // temos: a Ficha Geral (listar[]=DP,M,A,V) não traz a seção "INFORMAÇÃO
+  // PRISIONAL", e deduzir do histórico de /mudarcela é ambíguo (aquela página não
+  // informa a hora, então mudanças no mesmo dia empatam). Aplicada no fim do
+  // scrape para prevalecer sobre o palpite do histórico.
+  let celaDaListagem: string | null = null
+
   if (useSearch) {
     let searchTerm = String(sipeId)
     const localImport = await prisma.sipeApenadoImportado.findUnique({
@@ -8372,6 +8366,11 @@ async function scrapeApenadoFichaFastLocked(
         cela: listagemCela || cached?.cela || '',
         situacao: listagemSituacao || cached?.situacao || undefined
       })
+    }
+
+    // Só o que foi lido AGORA — nunca o cache, que pode ser de um scrape anterior.
+    if (listagemCela && listagemCela !== '-----') {
+      celaDaListagem = listagemCela
     }
     
     // 🔐 Garantia de ativação do apenado na sessão do Laravel do SIPE
@@ -8926,6 +8925,27 @@ async function scrapeApenadoFichaFastLocked(
       // Último recurso: re-parseia o próprio editHtml como fichaGeral
       console.log(`[SCRAPER FAST] /show e /dadosPessoais indisponíveis — extraindo DP do editHtml #${sipeId}`)
       await parseAndSaveFichaGeralCheerio(editHtml, apenado.id)
+    }
+  }
+
+  // Cela: a listagem de apenados informa a cela ATUAL diretamente, então ela vence
+  // o palpite de parseAndSaveMudarCelaCheerio, que infere a partir do histórico e
+  // erra quando há mais de uma mudança no mesmo dia (o #57240 tinha A/01 -> D/02 e
+  // D/02 -> A/01 na mesma data, sem hora para desempatar). Aplicada por último, de
+  // propósito, para prevalecer sobre os parses anteriores.
+  if (celaDaListagem) {
+    const atual = await prisma.sipeApenadoImportado.findUnique({
+      where: { id: apenado.id },
+      select: { cela: true }
+    })
+    if (atual?.cela !== celaDaListagem) {
+      await prisma.sipeApenadoImportado.update({
+        where: { id: apenado.id },
+        data: { cela: celaDaListagem }
+      })
+      console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} corrigida pela listagem do SIPE: ${atual?.cela ?? '(vazia)'} -> ${celaDaListagem}`)
+    } else {
+      console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} confirmada pela listagem do SIPE: ${celaDaListagem}`)
     }
   }
 
