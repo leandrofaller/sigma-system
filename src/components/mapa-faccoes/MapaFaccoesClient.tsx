@@ -739,7 +739,9 @@ export function MapaFaccoesClient({
               <span className="text-white font-semibold">PCC</span>
               <span className="text-gray-400">(listrado no mapa)</span>
             </p>
-            <p className="mt-0.5 text-gray-400">Divisão = CV e PCC no mesmo município</p>
+            <p className="flex items-center gap-1.5 mt-0.5"><span className="inline-block w-3 h-3 rounded-sm bg-[#7c3aed]" /> TCP</p>
+            <p className="mt-0.5 text-gray-400">Outras facções: cor própria</p>
+            <p className="mt-0.5 text-gray-400">Divisão = facções no mesmo município (proporcional)</p>
             <p className={`mt-1.5 ${pendingMapaLink ? 'text-amber-300 font-bold' : 'text-amber-400'}`}>
               {pendingMapaLink ? 'Modo vínculo: clique no município' : 'Clique no município para cadastrar'}
             </p>
@@ -805,11 +807,15 @@ export function MapaFaccoesClient({
                           cor={selectedStat.faccaoCor}
                           estiloMapa={selectedStat.estiloMapa}
                         />
-                        {selectedStat.estiloMapa?.tipo === 'split' && selectedStat.faccaoSecundaria && (
-                          <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-gray-800 text-gray-200">
-                            + {selectedStat.faccaoSecundaria} ({selectedStat.estiloMapa.pccCount} PCC / {selectedStat.estiloMapa.cvCount} CV)
+                        {(selectedStat.estiloMapa?.bandas ?? []).slice(1).map((b) => (
+                          <span
+                            key={b.label}
+                            className="text-xs px-2 py-0.5 rounded-full font-bold"
+                            style={{ backgroundColor: `${b.cor}22`, color: b.striped ? '#e5e7eb' : b.cor }}
+                          >
+                            + {b.label}: {b.count}
                           </span>
-                        )}
+                        ))}
                       </div>
                     )}
                   </div>

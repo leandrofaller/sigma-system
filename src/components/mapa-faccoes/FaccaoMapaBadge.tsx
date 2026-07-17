@@ -13,8 +13,10 @@ export function PccStripeSwatch({ className = 'w-3 h-3' }: { className?: string 
   )
 }
 
-function isPccLabel(label: string, estiloMapa?: FaccaoEstiloMapa): boolean {
-  if (estiloMapa?.predominanteGrupo === 'PCC') return true
+// Decide PCC pelo PR\u00d3PRIO r\u00f3tulo do badge \u2014 nunca pelo predominante do munic\u00edpio.
+// Antes, num munic\u00edpio predominantemente PCC, o badge de um TCP herdava o visual do
+// PCC (preto/listrado). O badge representa UMA fac\u00e7\u00e3o; quem manda \u00e9 o r\u00f3tulo dela.
+function isPccLabel(label: string): boolean {
   const key = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
   return key.includes('PCC') || key.includes('PRIMEIRO COMANDO')
 }
@@ -35,8 +37,8 @@ export function FaccaoMapaBadge({
   showStripeHint,
 }: FaccaoMapaBadgeProps) {
   const textSize = size === 'xs' ? 'text-xs' : 'text-sm'
-  const isPcc = isPccLabel(label, estiloMapa)
-  const stripeHint = showStripeHint ?? estiloMapa?.tipo === 'striped'
+  const isPcc = isPccLabel(label)
+  const stripeHint = showStripeHint ?? isPcc
 
   if (isPcc) {
     return (

@@ -25,6 +25,19 @@ export type FaccaoGrupoMapa = 'CV' | 'PCC'
 
 export type FaccaoEstiloMapaTipo = 'solid' | 'striped' | 'split'
 
+/** Uma facção do município, já com cor e participação — base do desenho por facção. */
+export interface FaccaoBanda {
+  /** Rótulo canônico exibível (ex.: "Comando Vermelho", "PCC", "TCP"). */
+  label: string
+  grupo: FaccaoGrupoMapa | 'OUTRO'
+  cor: string
+  /** PCC é desenhado com listras preto/branco em vez de cor sólida. */
+  striped: boolean
+  count: number
+  /** Participação 0–1 no total de faccionados do município. */
+  ratio: number
+}
+
 export interface FaccaoEstiloMapa {
   tipo: FaccaoEstiloMapaTipo
   predominanteGrupo: FaccaoGrupoMapa | 'OUTRO'
@@ -32,10 +45,27 @@ export interface FaccaoEstiloMapa {
   predominanteCor: string
   secundariaGrupo?: FaccaoGrupoMapa
   secundariaLabel?: string
-  /** Fração 0–1 da área do grupo predominante (somente split CV+PCC). */
+  /** Fração 0–1 da área do grupo predominante. */
   ratioPredominante?: number
   cvCount: number
   pccCount: number
+  /** Todas as facções do município, ordenadas desc por contagem. Fonte do desenho. */
+  bandas: FaccaoBanda[]
+}
+
+/** Agrupa um rótulo livre (facaoRealNome/faccao) numa facção canônica p/ o mapa. */
+function canonicalFaccao(nome: string): {
+  chave: string
+  label: string
+  grupo: FaccaoGrupoMapa | 'OUTRO'
+} {
+  const grupo = normalizeFaccaoGrupo(nome)
+  if (grupo === 'CV') return { chave: 'CV', label: 'Comando Vermelho', grupo: 'CV' }
+  if (grupo === 'PCC') return { chave: 'PCC', label: 'PCC', grupo: 'PCC' }
+  // Demais facções (TCP, Primeiro Comando do Panda, Comando Classe A, …): cada uma
+  // é sua própria banda, agrupada pela chave normalizada para não fragmentar por
+  // acento/caixa. NUNCA são absorvidas por CV/PCC.
+  return { chave: normalizeFaccaoKey(nome), label: nome.trim() || 'Não identificado', grupo: 'OUTRO' }
 }
 
 function normalizeFaccaoKey(nome: string): string {
@@ -85,61 +115,65 @@ export function contarCvPcc(faccoes: Record<string, number>): { cv: number; pcc:
 export function computeEstiloMapa(faccoes: Record<string, number>): FaccaoEstiloMapa {
   const { cv, pcc } = contarCvPcc(faccoes)
 
-  if (cv > 0 && pcc > 0) {
-    const total = cv + pcc
-    const cvPred = cv >= pcc
-    const pred = cvPred ? cv : pcc
-    return {
-      tipo: 'split',
-      predominanteGrupo: cvPred ? 'CV' : 'PCC',
-      predominanteLabel: cvPred ? 'Comando Vermelho' : 'PCC',
-      predominanteCor: cvPred ? COR_CV : COR_PCC_BADGE,
-      secundariaGrupo: cvPred ? 'PCC' : 'CV',
-      secundariaLabel: cvPred ? 'PCC' : 'Comando Vermelho',
-      ratioPredominante: pred / total,
-      cvCount: cv,
-      pccCount: pcc,
+  // 1) Consolida os rótulos livres em bandas canônicas (CV, PCC, TCP, …), somando
+  //    contagens de variações do mesmo grupo. Cada facção não-CV/PCC vira a própria
+  //    banda com a própria cor — nunca é absorvida.
+  const acc = new Map<string, FaccaoBanda>()
+  let total = 0
+  for (const [nome, qtd] of Object.entries(faccoes)) {
+    if (!qtd || qtd <= 0) continue
+    total += qtd
+    const { chave, label, grupo } = canonicalFaccao(nome)
+    const existente = acc.get(chave)
+    if (existente) {
+      existente.count += qtd
+    } else {
+      acc.set(chave, {
+        label,
+        grupo,
+        cor: grupo === 'CV' ? COR_CV : grupo === 'PCC' ? COR_PCC_BADGE : faccaoCor(label),
+        striped: grupo === 'PCC',
+        count: qtd,
+        ratio: 0,
+      })
     }
   }
 
-  if (pcc > 0) {
-    return {
-      tipo: 'striped',
-      predominanteGrupo: 'PCC',
-      predominanteLabel: 'PCC',
-      predominanteCor: COR_PCC_BADGE,
-      cvCount: cv,
-      pccCount: pcc,
-    }
-  }
+  const bandas = Array.from(acc.values()).sort((a, b) => b.count - a.count)
+  for (const b of bandas) b.ratio = total > 0 ? b.count / total : 0
 
-  if (cv > 0) {
+  if (bandas.length === 0) {
     return {
       tipo: 'solid',
-      predominanteGrupo: 'CV',
-      predominanteLabel: 'Comando Vermelho',
-      predominanteCor: COR_CV,
+      predominanteGrupo: 'OUTRO',
+      predominanteLabel: 'Não identificado',
+      predominanteCor: faccaoCor('Não identificado'),
       cvCount: cv,
       pccCount: pcc,
+      bandas,
     }
   }
 
-  let max = 0
-  let pred = 'Não identificado'
-  for (const [f, c] of Object.entries(faccoes)) {
-    if (c > max) {
-      max = c
-      pred = f
-    }
-  }
+  // 2) O predominante é a MAIOR banda entre TODAS as facções (não só CV×PCC).
+  //    Assim, 12 TCP + 4 PCC passa a ser TCP predominante, não mais "PCC listrado".
+  const pred = bandas[0]
+  const secundaria = bandas[1]
+
+  // 3) tipo: 1 facção → sólido (ou listrado se PCC); 2+ → divisão proporcional.
+  const tipo: FaccaoEstiloMapaTipo =
+    bandas.length >= 2 ? 'split' : pred.grupo === 'PCC' ? 'striped' : 'solid'
 
   return {
-    tipo: 'solid',
-    predominanteGrupo: 'OUTRO',
-    predominanteLabel: pred,
-    predominanteCor: faccaoCor(pred),
+    tipo,
+    predominanteGrupo: pred.grupo,
+    predominanteLabel: pred.label,
+    predominanteCor: pred.cor,
+    secundariaGrupo: secundaria && secundaria.grupo !== 'OUTRO' ? secundaria.grupo : undefined,
+    secundariaLabel: secundaria?.label,
+    ratioPredominante: pred.ratio,
     cvCount: cv,
     pccCount: pcc,
+    bandas,
   }
 }
 

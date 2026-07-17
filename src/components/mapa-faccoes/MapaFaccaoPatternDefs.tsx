@@ -1,9 +1,13 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { COR_CV, type FaccaoEstiloMapa } from '@/lib/mapa-faccoes'
+import { type FaccaoBanda, type FaccaoEstiloMapa } from '@/lib/mapa-faccoes'
 import { MAPA_PCC_STRIPES_ID } from '@/lib/mapa-faccoes-patterns'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
+
+/** Máximo de faixas distintas no polígono; o resto vira uma faixa "Outras" cinza. */
+const MAX_FAIXAS = 4
+const COR_OUTRAS = '#6b7280'
 
 function PccStripesInRect({ x, width }: { x: number; width: number }) {
   const step = 6
@@ -17,29 +21,43 @@ function PccStripesInRect({ x, width }: { x: number; width: number }) {
   return <>{stripes}</>
 }
 
+/** Reduz as bandas a no máx. MAX_FAIXAS faixas, somando as menores em "Outras". */
+function faixasDoPadrao(bandas: FaccaoBanda[]): Array<{ cor: string; striped: boolean; ratio: number }> {
+  if (bandas.length <= MAX_FAIXAS) {
+    return bandas.map((b) => ({ cor: b.cor, striped: b.striped, ratio: b.ratio }))
+  }
+  const principais = bandas.slice(0, MAX_FAIXAS - 1)
+  const resto = bandas.slice(MAX_FAIXAS - 1)
+  const ratioResto = resto.reduce((s, b) => s + b.ratio, 0)
+  return [
+    ...principais.map((b) => ({ cor: b.cor, striped: b.striped, ratio: b.ratio })),
+    { cor: COR_OUTRAS, striped: false, ratio: ratioResto },
+  ]
+}
+
 function SplitPatternDef({ ibge, estilo }: { ibge: number; estilo: FaccaoEstiloMapa }) {
-  const pct = Math.round(Math.min(92, Math.max(8, (estilo.ratioPredominante ?? 0.5) * 100)))
-  const rest = 100 - pct
-  const predIsCv = estilo.predominanteGrupo === 'CV'
+  const faixas = faixasDoPadrao(estilo.bandas ?? [])
+  const somaRatio = faixas.reduce((s, f) => s + f.ratio, 0) || 1
+
+  // Larguras proporcionais somando 100; a última faixa recebe o resto p/ fechar sem gap.
+  let x = 0
+  const rects: ReactNode[] = []
+  faixas.forEach((f, i) => {
+    const width = i === faixas.length - 1 ? Math.max(0, 100 - x) : Math.max(1, Math.round((f.ratio / somaRatio) * 100))
+    if (width <= 0) return
+    rects.push(
+      f.striped ? (
+        <PccStripesInRect key={`f${i}`} x={x} width={width} />
+      ) : (
+        <rect key={`f${i}`} x={x} y={0} width={width} height={100} fill={f.cor} />
+      )
+    )
+    x += width
+  })
 
   return (
-    <pattern
-      id={`mapa-split-${ibge}`}
-      width="100"
-      height="100"
-      patternUnits="userSpaceOnUse"
-    >
-      {predIsCv ? (
-        <>
-          <rect width={pct} height="100" fill={COR_CV} />
-          <PccStripesInRect x={pct} width={rest} />
-        </>
-      ) : (
-        <>
-          <PccStripesInRect x={0} width={pct} />
-          <rect x={pct} width={rest} height="100" fill={COR_CV} />
-        </>
-      )}
+    <pattern id={`mapa-split-${ibge}`} width="100" height="100" patternUnits="userSpaceOnUse">
+      {rects}
     </pattern>
   )
 }

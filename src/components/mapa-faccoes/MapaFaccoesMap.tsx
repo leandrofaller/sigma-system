@@ -77,34 +77,37 @@ function enrichGeoJson(raw: GeoJSON.FeatureCollection): GeoJSON.FeatureCollectio
   }
 }
 
+const STRIPE_SWATCH =
+  '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 2px,#f8fafc 2px,#f8fafc 4px);border:1px solid rgba(255,255,255,.3);vertical-align:middle"></span>'
+
+function dotSwatch(cor: string): string {
+  return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${cor};border:1px solid rgba(255,255,255,.25);vertical-align:middle"></span>`
+}
+
 function buildTooltip(stat: MunicipioMapStats | undefined, nome: string): string {
   if (!stat || stat.totalApenados <= 0) {
     return `<strong>${nome}</strong><br/><em>Sem registros</em>`
   }
 
   const estilo = stat.estiloMapa
-  if (estilo?.tipo === 'split') {
-    const pct = Math.round((estilo.ratioPredominante ?? 0.5) * 100)
-    return `<strong>${nome}</strong><br/>${stat.totalApenados} faccionado(s)<br/>
-      <span style="color:#dc2626">● CV: ${estilo.cvCount}</span> ·
-      <span style="display:inline-flex;align-items:center;gap:4px;color:#fff;background:#0a0a0a;padding:2px 6px;border-radius:4px;font-weight:700">
-        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 2px,#f8fafc 2px,#f8fafc 4px);border:1px solid rgba(255,255,255,.3)"></span>
-        PCC: ${estilo.pccCount}
-      </span><br/>
-      <em>Predominante: ${stat.faccaoPredominante} (${pct}%)</em>`
-  }
+  const bandas = estilo?.bandas ?? []
 
-  if (estilo?.tipo === 'striped') {
-    return `<strong>${nome}</strong><br/>${stat.totalApenados} faccionado(s)<br/>
-      <span style="display:inline-flex;align-items:center;gap:4px;color:#fff;background:#0a0a0a;padding:2px 8px;border-radius:4px;font-weight:700">
-        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 2px,#f8fafc 2px,#f8fafc 4px);border:1px solid rgba(255,255,255,.3)"></span>
-        PCC
-      </span>`
-  }
-
-  if (estilo?.predominanteGrupo === 'CV') {
-    return `<strong>${nome}</strong><br/>${stat.totalApenados} faccionado(s)<br/>
-      <span style="color:#dc2626">● Comando Vermelho</span>`
+  // Lista TODAS as facções com o próprio swatch/cor — nada fica escondido sob o
+  // predominante. PCC usa o swatch listrado; as demais, o ponto na cor da facção.
+  if (bandas.length > 0) {
+    const linhas = bandas
+      .map((b) => {
+        const swatch = b.striped ? STRIPE_SWATCH : dotSwatch(b.cor)
+        const cor = b.striped ? '#f8fafc' : b.cor
+        return `<span style="white-space:nowrap"><span style="margin-right:4px">${swatch}</span><span style="color:${cor}">${b.label}: ${b.count}</span></span>`
+      })
+      .join(' · ')
+    const pct = Math.round((estilo?.ratioPredominante ?? 0) * 100)
+    const predLine =
+      bandas.length > 1
+        ? `<br/><em>Predominante: ${estilo?.predominanteLabel} (${pct}%)</em>`
+        : ''
+    return `<strong>${nome}</strong><br/>${stat.totalApenados} faccionado(s)<br/>${linhas}${predLine}`
   }
 
   return `<strong>${nome}</strong><br/>${stat.totalApenados} faccionado(s)<br/>
@@ -127,7 +130,12 @@ export default function MapaFaccoesMap({
   const geoKey = useMemo(
     () =>
       `${selectedIbge ?? ''}-${highlightIbge ?? ''}-${maxApenados}-${municipios
-        .map((m) => `${m.ibge}:${m.estiloMapa?.tipo ?? ''}:${m.estiloMapa?.cvCount ?? 0}:${m.estiloMapa?.pccCount ?? 0}:${m.faccaoCor}`)
+        .map((m) => {
+          const bandas = (m.estiloMapa?.bandas ?? [])
+            .map((b) => `${b.label}:${b.count}`)
+            .join(',')
+          return `${m.ibge}:${m.estiloMapa?.tipo ?? ''}:${m.faccaoCor}:${bandas}`
+        })
         .join('|')}`,
     [selectedIbge, highlightIbge, maxApenados, municipios]
   )
