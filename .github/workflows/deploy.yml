@@ -10,25 +10,61 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      # Sem checkout: este workflow só dispara um webhook, não precisa do código.
+      # (Também elimina o aviso de deprecação do Node 20 no actions/checkout.)
 
-      - name: Deploy via Coolify Webhook
-        run: |
-          curl --request GET \
-            --url "${{ secrets.COOLIFY_WEBHOOK_URL }}" \
-            --header "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
-            --fail \
-            --silent \
-            --show-error
+      - name: Validar secrets
         env:
           COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          erro=0
 
-      - name: Notificar sucesso
-        if: success()
-        run: echo "Deploy iniciado com sucesso no Coolify!"
+          if [ -z "$COOLIFY_WEBHOOK_URL" ]; then
+            echo "::error::O secret COOLIFY_WEBHOOK_URL está vazio ou não existe. Sem ele o curl recebe uma URL vazia e falha com 'URL malformada' (exit 3)."
+            erro=1
+          elif ! printf '%s' "$COOLIFY_WEBHOOK_URL" | grep -qE '^https?://'; then
+            echo "::error::COOLIFY_WEBHOOK_URL não parece uma URL — precisa começar com https://"
+            erro=1
+          fi
 
-      - name: Notificar falha
-        if: failure()
-        run: echo "Falha ao acionar deploy no Coolify!"
+          if [ -z "$COOLIFY_TOKEN" ]; then
+            echo "::error::O secret COOLIFY_TOKEN está vazio ou não existe."
+            erro=1
+          fi
+
+          if [ "$erro" = "1" ]; then
+            echo "::error::Configure em Settings > Secrets and variables > Actions. A URL sai do Coolify (aplicação > Webhooks) e o token em Coolify > Keys & Tokens > API tokens."
+            exit 1
+          fi
+
+          echo "Secrets presentes."
+
+      - name: Disparar deploy no Coolify
+        env:
+          COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          corpo="$(mktemp)"
+
+          # Sem --fail: ele descarta o corpo do erro. Capturamos status e resposta
+          # para o log dizer exatamente o que o Coolify respondeu.
+          if ! codigo=$(curl --silent --show-error --location \
+                --max-time 30 \
+                --output "$corpo" --write-out '%{http_code}' \
+                --header "Authorization: Bearer $COOLIFY_TOKEN" \
+                "$COOLIFY_WEBHOOK_URL"); then
+            saida=$?
+            echo "::error::curl falhou (exit $saida). Comuns: 3=URL malformada, 6=host não resolvido, 7=conexão recusada, 28=timeout."
+            exit 1
+          fi
+
+          echo "HTTP $codigo"
+          echo "Resposta do Coolify: $(cat "$corpo")"
+
+          if [ "$codigo" -lt 200 ] || [ "$codigo" -ge 300 ]; then
+            echo "::error::Coolify respondeu HTTP $codigo — token inválido ou webhook de outra aplicação?"
+            exit 1
+          fi
+
+          echo "Deploy disparado com sucesso no Coolify."
