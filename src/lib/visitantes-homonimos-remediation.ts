@@ -25,12 +25,31 @@ import { scrapeApenadoFichaFast, resolveUnidadeIdByNome } from './sipe-scraper'
 
 const LOG = '[REMEDIACAO VISITANTES]'
 
-// Espera o boot assentar antes de começar a bater no SIPE.
-const BOOT_DELAY_MS = Number(process.env.VISITANTES_REMEDIATION_BOOT_DELAY_MS ?? 90_000)
-// Pausa entre apenados, para não sobrecarregar o SIPE/proxy.
-const DELAY_ENTRE_APENADOS_MS = Number(process.env.VISITANTES_REMEDIATION_DELAY_MS ?? 2_000)
-// Sessão do SIPE expirada faz tudo falhar em sequência — aborta e tenta no próximo boot.
+// Espera o boot assentar antes de começar. Precisa ser generoso: no boot o
+// pgvector migra dezenas de milhares de vetores e ocupa o pool de conexões.
+const BOOT_DELAY_MS = Number(process.env.VISITANTES_REMEDIATION_BOOT_DELAY_MS ?? 300_000)
+// Pausa entre apenados, para não sobrecarregar o SIPE nem o pool do Prisma.
+const DELAY_ENTRE_APENADOS_MS = Number(process.env.VISITANTES_REMEDIATION_DELAY_MS ?? 5_000)
+// Erros REAIS seguidos (não os transitórios de pool) — aborta e tenta no próximo boot.
 const MAX_FALHAS_CONSECUTIVAS = 5
+// Pool cheio é transitório: recua e tenta o mesmo apenado de novo.
+const MAX_TENTATIVAS_POOL = 5
+const BACKOFF_POOL_MS = 15_000
+
+/**
+ * Pool de conexões esgotado / indisponível. É transitório e NÃO significa que o
+ * SIPE caiu: acontece quando a app, o pgvector e esta remediação disputam as
+ * poucas conexões do Prisma (o default é num_cpus*2+1 — só 5 numa VPS de 2 vCPU).
+ * A remediação é trabalho de fundo e deve ceder a vez, nunca degradar o sistema.
+ */
+function isErroTransitorioDeBanco(err: any): boolean {
+  const msg = String(err?.message || err)
+  return (
+    err?.code === 'P2024' ||
+    msg.includes('connection pool') ||
+    msg.includes('Timed out fetching a new connection')
+  )
+}
 
 interface ApenadoAfetado {
   sipeId: number
@@ -156,26 +175,55 @@ async function run(): Promise<void> {
     status.processados = i + 1
     status.ultimo = `#${a.sipeId} ${a.nome}`
 
-    try {
-      await resyncApenado(a)
-      ok++
-      status.corrigidos = ok
-      falhasConsecutivas = 0
-      console.log(`${LOG} [${i + 1}/${afetados.length}] ✅ #${a.sipeId} ${a.nome}`)
-    } catch (err: any) {
-      falhas++
-      status.falhas = falhas
-      status.ultimoErro = err?.message || String(err)
-      falhasConsecutivas++
-      console.warn(`${LOG} [${i + 1}/${afetados.length}] ⚠️ #${a.sipeId} ${a.nome}: ${err?.message || err}`)
+    let tentativasPool = 0
+    let concluido = false
 
-      if (falhasConsecutivas >= MAX_FALHAS_CONSECUTIVAS) {
-        console.error(
-          `${LOG} ❌ ${MAX_FALHAS_CONSECUTIVAS} falhas seguidas — provável sessão do SIPE expirada ` +
-            `(verifique SIPE_COOKIE_LARAVEL_SESSION / SIPE_COOKIE_XSRF_TOKEN no .env, ou GET /sipe/diagnose). ` +
-            `Abortando; será retomado no próximo boot. Corrigidos nesta rodada: ${ok}.`
-        )
-        return
+    while (!concluido) {
+      try {
+        await resyncApenado(a)
+        ok++
+        status.corrigidos = ok
+        falhasConsecutivas = 0
+        concluido = true
+        console.log(`${LOG} [${i + 1}/${afetados.length}] ✅ #${a.sipeId} ${a.nome}`)
+      } catch (err: any) {
+        // Pool cheio não é erro do apenado nem do SIPE: é disputa por conexão.
+        // Recua e tenta de novo, sem contar como falha — assim a remediação cede
+        // a vez para a aplicação em vez de competir com ela.
+        if (isErroTransitorioDeBanco(err)) {
+          tentativasPool++
+          if (tentativasPool <= MAX_TENTATIVAS_POOL) {
+            const espera = BACKOFF_POOL_MS * tentativasPool
+            console.warn(
+              `${LOG} [${i + 1}/${afetados.length}] ⏳ Pool de conexões cheio — aguardando ${espera / 1000}s ` +
+                `(tentativa ${tentativasPool}/${MAX_TENTATIVAS_POOL}). Isto NÃO é erro do SIPE.`
+            )
+            await new Promise((r) => setTimeout(r, espera))
+            continue
+          }
+          console.warn(
+            `${LOG} ⏸️ Pool de conexões seguiu cheio após ${MAX_TENTATIVAS_POOL} tentativas — ` +
+              `o sistema está sob carga. Encerrando esta rodada para não competir com a aplicação; ` +
+              `retomará no próximo boot ou via POST /api/admin/remediacao-visitantes. Corrigidos: ${ok}.`
+          )
+          return
+        }
+
+        falhas++
+        status.falhas = falhas
+        status.ultimoErro = err?.message || String(err)
+        falhasConsecutivas++
+        concluido = true
+        console.warn(`${LOG} [${i + 1}/${afetados.length}] ⚠️ #${a.sipeId} ${a.nome}: ${err?.message || err}`)
+
+        if (falhasConsecutivas >= MAX_FALHAS_CONSECUTIVAS) {
+          console.error(
+            `${LOG} ❌ ${MAX_FALHAS_CONSECUTIVAS} falhas seguidas no SIPE — possível sessão expirada ` +
+              `(verifique com GET /sipe/diagnose). Abortando; será retomado no próximo boot. ` +
+              `Corrigidos nesta rodada: ${ok}.`
+          )
+          return
+        }
       }
     }
 
