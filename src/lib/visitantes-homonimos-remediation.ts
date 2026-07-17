@@ -20,7 +20,7 @@
  *
  * Desligar: VISITANTES_REMEDIATION=off
  */
-import { prisma } from './db'
+import { prisma, isErroTransitorioDeBanco } from './db'
 import { scrapeApenadoFichaFast, resolveUnidadeIdByNome } from './sipe-scraper'
 
 const LOG = '[REMEDIACAO VISITANTES]'
@@ -36,20 +36,6 @@ const MAX_FALHAS_CONSECUTIVAS = 5
 const MAX_TENTATIVAS_POOL = 5
 const BACKOFF_POOL_MS = 15_000
 
-/**
- * Pool de conexões esgotado / indisponível. É transitório e NÃO significa que o
- * SIPE caiu: acontece quando a app, o pgvector e esta remediação disputam as
- * poucas conexões do Prisma (o default é num_cpus*2+1 — só 5 numa VPS de 2 vCPU).
- * A remediação é trabalho de fundo e deve ceder a vez, nunca degradar o sistema.
- */
-function isErroTransitorioDeBanco(err: any): boolean {
-  const msg = String(err?.message || err)
-  return (
-    err?.code === 'P2024' ||
-    msg.includes('connection pool') ||
-    msg.includes('Timed out fetching a new connection')
-  )
-}
 
 interface ApenadoAfetado {
   sipeId: number

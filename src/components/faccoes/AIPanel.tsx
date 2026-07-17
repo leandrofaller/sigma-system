@@ -1690,6 +1690,85 @@ export function AIPanel({
 
   const LIMIT = 20
 
+  // ── Sincronização em massa com o SIPE (exclusiva do SUPER_ADMIN) ──────────
+  // O job roda no servidor; aqui só disparamos e acompanhamos. O polling só
+  // existe enquanto está rodando, para não gerar requisição à toa.
+  const isSuperAdmin = userRole === 'SUPER_ADMIN'
+  const [syncTodos, setSyncTodos] = useState<{
+    rodando: boolean
+    processados: number
+    total: number
+    sucesso: number
+    falhas: number
+    atual: string | null
+    mensagemFinal: string | null
+  } | null>(null)
+  const [iniciandoSync, setIniciandoSync] = useState(false)
+
+  const fetchSyncTodosStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/aip/apenados/sync-todos')
+      if (res.ok) setSyncTodos(await res.json())
+    } catch {}
+  }, [])
+
+  // Estado inicial: descobre se já há um job rodando (ex.: aberto noutra aba).
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    fetchSyncTodosStatus()
+  }, [isSuperAdmin, fetchSyncTodosStatus])
+
+  // Enquanto roda, acompanha; ao terminar, recarrega a lista com os dados novos.
+  useEffect(() => {
+    if (!isSuperAdmin || !syncTodos?.rodando) return
+    const id = setInterval(async () => {
+      const res = await fetch('/api/aip/apenados/sync-todos').catch(() => null)
+      if (!res?.ok) return
+      const novo = await res.json()
+      setSyncTodos(novo)
+      if (!novo.rodando) {
+        toast.success(novo.mensagemFinal || 'Sincronização concluída.')
+        fetchApenados(page, searchQuery)
+      }
+    }, 3000)
+    return () => clearInterval(id)
+  }, [isSuperAdmin, syncTodos?.rodando]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSincronizarTodos = async () => {
+    if (
+      !confirm(
+        `Sincronizar TODOS os apenados do AIP com o SIPE?\n\n` +
+          `Roda em segundo plano, um apenado por vez, e pode levar bastante tempo. ` +
+          `Você pode continuar usando o sistema normalmente e cancelar quando quiser.`
+      )
+    ) {
+      return
+    }
+    setIniciandoSync(true)
+    try {
+      const res = await fetch('/api/aip/apenados/sync-todos', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.motivo || data.error || 'Falha ao iniciar')
+      toast.success(data.mensagem)
+      await fetchSyncTodosStatus()
+    } catch (err: any) {
+      toast.error(err?.message || 'Não foi possível iniciar a sincronização')
+    } finally {
+      setIniciandoSync(false)
+    }
+  }
+
+  const handleCancelarSyncTodos = async () => {
+    try {
+      const res = await fetch('/api/aip/apenados/sync-todos', { method: 'DELETE' })
+      const data = await res.json()
+      toast.info(data.mensagem)
+      await fetchSyncTodosStatus()
+    } catch {
+      toast.error('Não foi possível cancelar')
+    }
+  }
+
   const fetchLayout = useCallback(async () => {
     try {
       const res = await fetch('/api/aip/layout')
@@ -1772,14 +1851,51 @@ export function AIPanel({
           <p className="text-sm text-gray-500 mt-1">{total} apenado{total !== 1 ? 's' : ''} registrado{total !== 1 ? 's' : ''}</p>
         </div>
 
-        {userRole === 'SUPER_ADMIN' && (
-          <button
-            onClick={() => setShowLayoutConfig(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-semibold rounded-lg border border-purple-200 dark:border-purple-900/50 transition-colors shadow-sm"
-          >
-            <Settings className="w-3.5 h-3.5" />
-            Configurar Ficha
-          </button>
+        {isSuperAdmin && (
+          <div className="flex items-center gap-2">
+            {syncTodos?.rodando ? (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded-lg border border-blue-200 dark:border-blue-900/50 shadow-sm">
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                <span className="tabular-nums">
+                  Sincronizando {syncTodos.processados}/{syncTodos.total}
+                </span>
+                {syncTodos.atual && (
+                  <span className="hidden lg:inline max-w-[220px] truncate text-blue-500/80 dark:text-blue-400/70 font-normal">
+                    {syncTodos.atual}
+                  </span>
+                )}
+                <button
+                  onClick={handleCancelarSyncTodos}
+                  className="ml-1 px-1.5 py-0.5 rounded border border-blue-300 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                  title="Cancelar sincronização"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleSincronizarTodos}
+                disabled={iniciandoSync}
+                title="Atualiza todos os apenados do AIP com os dados do SIPE. Roda em segundo plano."
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded-lg border border-blue-200 dark:border-blue-900/50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {iniciandoSync ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-3.5 h-3.5" />
+                )}
+                Sincronizar Todos com o SIPE
+              </button>
+            )}
+
+            <button
+              onClick={() => setShowLayoutConfig(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-semibold rounded-lg border border-purple-200 dark:border-purple-900/50 transition-colors shadow-sm"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              Configurar Ficha
+            </button>
+          </div>
         )}
       </div>
 
