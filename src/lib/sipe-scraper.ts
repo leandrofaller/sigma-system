@@ -8950,6 +8950,17 @@ async function scrapeApenadoFichaFastLocked(
   // erra quando há mais de uma mudança no mesmo dia (o #57240 tinha A/01 -> D/02 e
   // D/02 -> A/01 na mesma data, sem hora para desempatar). Aplicada por último, de
   // propósito, para prevalecer sobre os parses anteriores.
+  // useSearch=false (sync em massa por unidade, runScrapeTodasUnidades): a
+  // listagem da unidade já foi lida e cacheada em listagemInfoCache, com a mesma
+  // coluna CELA. Sem isto, o sync em massa ficava sem a correção e a cela
+  // continuava vindo do palpite do histórico.
+  if (!celaDaListagem) {
+    const celaCacheada = listagemInfoCache.get(sipeId)?.cela
+    if (celaCacheada && celaCacheada !== '-----') {
+      celaDaListagem = celaCacheada
+    }
+  }
+
   if (celaDaListagem) {
     const atual = await prisma.sipeApenadoImportado.findUnique({
       where: { id: apenado.id },
