@@ -9,6 +9,18 @@
 export async function register() {
   // Roda apenas no runtime Node.js (não no Edge runtime)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // IMPORTANTE: agendado ANTES do pgvector. Só registra um timer (não bloqueia),
+    // e assim não depende dos await do pgvector abaixo — se aquele bloco travar
+    // (criar o índice HNSW pega lock e pode demorar), a remediação ainda acontece.
+    try {
+      const { startVisitantesHomonimosRemediation } = await import(
+        '@/lib/visitantes-homonimos-remediation'
+      );
+      startVisitantesHomonimosRemediation();
+    } catch (err) {
+      console.warn('[REMEDIACAO VISITANTES] Erro ao agendar remediação no boot:', err);
+    }
+
     try {
       const {
         initPgVector,
@@ -41,19 +53,6 @@ export async function register() {
     } catch (err) {
       // Nunca deixa o boot falhar — pgvector é opcional
       console.warn('[pgvector] Erro no boot, fallback em memória ativo:', err);
-    }
-
-    try {
-      // Corrige em background os apenados que ficaram com visitantes homônimos
-      // errados gravados pelo scraper antigo. Não bloqueia o boot e não faz
-      // requisição alguma quando a base já está limpa.
-      const { startVisitantesHomonimosRemediation } = await import(
-        '@/lib/visitantes-homonimos-remediation'
-      );
-      startVisitantesHomonimosRemediation();
-    } catch (err) {
-      // Nunca deixa o boot falhar — a remediação é auxiliar
-      console.warn('[REMEDIACAO VISITANTES] Erro ao agendar remediação no boot:', err);
     }
   }
 }

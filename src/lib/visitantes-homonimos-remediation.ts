@@ -78,8 +78,62 @@ async function resyncApenado(a: ApenadoAfetado): Promise<void> {
   }
 }
 
+interface RemediacaoStatus {
+  rodando: boolean
+  iniciadoEm: string | null
+  total: number
+  processados: number
+  corrigidos: number
+  falhas: number
+  ultimo: string | null
+  finalizadoEm: string | null
+  ultimoErro: string | null
+}
+
+const status: RemediacaoStatus = {
+  rodando: false,
+  iniciadoEm: null,
+  total: 0,
+  processados: 0,
+  corrigidos: 0,
+  falhas: 0,
+  ultimo: null,
+  finalizadoEm: null,
+  ultimoErro: null,
+}
+
+/** Progresso da remediação — consultável pela rota /api/admin/remediacao-visitantes. */
+export function getRemediacaoStatus(): RemediacaoStatus {
+  return { ...status }
+}
+
+/**
+ * Executa a remediação. Exportada para poder ser disparada sob demanda pela
+ * rota administrativa, sem depender do hook de boot.
+ */
+export async function runRemediacaoVisitantes(): Promise<void> {
+  if (status.rodando) return
+  status.rodando = true
+  status.iniciadoEm = new Date().toISOString()
+  status.processados = 0
+  status.corrigidos = 0
+  status.falhas = 0
+  status.finalizadoEm = null
+  status.ultimoErro = null
+  try {
+    await run()
+  } catch (err: any) {
+    status.ultimoErro = err?.message || String(err)
+    console.error(`${LOG} ❌ Erro inesperado na remediação:`, status.ultimoErro)
+  } finally {
+    status.rodando = false
+    status.finalizadoEm = new Date().toISOString()
+  }
+}
+
 async function run(): Promise<void> {
   const afetados = await listarApenadosAfetados()
+  status.total = afetados.length
 
   if (afetados.length === 0) {
     console.log(`${LOG} ✓ Nenhum apenado com visitante homônimo duplicado. Nada a corrigir.`)
@@ -99,13 +153,19 @@ async function run(): Promise<void> {
       return
     }
 
+    status.processados = i + 1
+    status.ultimo = `#${a.sipeId} ${a.nome}`
+
     try {
       await resyncApenado(a)
       ok++
+      status.corrigidos = ok
       falhasConsecutivas = 0
       console.log(`${LOG} [${i + 1}/${afetados.length}] ✅ #${a.sipeId} ${a.nome}`)
     } catch (err: any) {
       falhas++
+      status.falhas = falhas
+      status.ultimoErro = err?.message || String(err)
       falhasConsecutivas++
       console.warn(`${LOG} [${i + 1}/${afetados.length}] ⚠️ #${a.sipeId} ${a.nome}: ${err?.message || err}`)
 
@@ -141,11 +201,10 @@ export function startVisitantesHomonimosRemediation(): void {
   if (globalThis.__visitantesRemediationStarted) return
   globalThis.__visitantesRemediationStarted = true
 
+  console.log(`${LOG} ⏱️ Remediação agendada para daqui a ${Math.round(BOOT_DELAY_MS / 1000)}s.`)
   setTimeout(() => {
-    run().catch((err) => {
-      console.error(`${LOG} ❌ Erro inesperado na remediação:`, err?.message || err)
-    })
-  }, BOOT_DELAY_MS).unref?.()
+    void runRemediacaoVisitantes()
+  }, BOOT_DELAY_MS)
 }
 
 declare global {
