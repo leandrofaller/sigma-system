@@ -8668,6 +8668,22 @@ async function scrapeApenadoFichaFastLocked(
     include: { faccao: true }
   })
 
+  const apenadoIdParaAIP = apenado.id
+
+  // O AIPApenado mantém CÓPIAS dos campos do apenado (cela, regime, nomeMae...),
+  // não lê o SipeApenadoImportado. Por isso precisa ser sincronizado DEPOIS dos
+  // parsers — rodando antes, como fazia, ele copiava o estado anterior ao scrape
+  // e a aba AIP ficava um sync atrasada em relação à aba SIAIP. Definido aqui,
+  // invocado no fim de scrapeApenadoFichaFastLocked.
+  const sincronizarAIP = async () => {
+    // Relê do banco: o objeto do upsert acima está defasado a esta altura —
+    // mudarcela, Ficha Geral e a correção de cela gravam depois dele.
+    const apenado = await prisma.sipeApenadoImportado.findUnique({
+      where: { id: apenadoIdParaAIP },
+      include: { faccao: true }
+    })
+    if (!apenado) return
+
   try {
     const apenadoEmAIP = await prisma.aIPApenado.findUnique({
       where: { sipeId }
@@ -8783,6 +8799,7 @@ async function scrapeApenadoFichaFastLocked(
     }
   } catch (err) {
     console.error(`[AIP] Erro na sincronização AIP:`, err)
+  }
   }
 
   const $ = cheerio.load(editHtml)
@@ -8959,6 +8976,10 @@ async function scrapeApenadoFichaFastLocked(
       console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} confirmada pela listagem do SIPE: ${celaDaListagem} (SIPE + AIP)`)
     }
   }
+
+  // Por último, com todos os parsers já gravados: espelha o apenado para o AIP.
+  // A ordem importa — é o que garante que a aba AIP mostre o mesmo que a SIAIP.
+  await sincronizarAIP()
 
   console.log(`[SCRAPER FAST] 🚀 Apenado #${sipeId} processado de forma sequencial-segura com sucesso!`)
 
