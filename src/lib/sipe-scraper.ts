@@ -8938,14 +8938,25 @@ async function scrapeApenadoFichaFastLocked(
       where: { id: apenado.id },
       select: { cela: true }
     })
+
+    await prisma.sipeApenadoImportado.update({
+      where: { id: apenado.id },
+      data: { cela: celaDaListagem }
+    }).catch(err => console.error(`Erro ao atualizar cela em SipeApenadoImportado:`, err))
+
+    // Propaga para o AIP, que mantém a própria cópia de `cela`. Sem isto, a aba
+    // SIAIP (que lê SipeApenadoImportado) mostraria a cela certa enquanto a aba
+    // AIP seguiria com a errada, gravada por parseAndSaveMudarCelaCheerio — que
+    // também propaga para o AIP e roda antes daqui.
+    await prisma.aIPApenado.updateMany({
+      where: { sipeId },
+      data: { cela: celaDaListagem }
+    }).catch(err => console.error(`Erro ao atualizar cela em AIPApenado:`, err))
+
     if (atual?.cela !== celaDaListagem) {
-      await prisma.sipeApenadoImportado.update({
-        where: { id: apenado.id },
-        data: { cela: celaDaListagem }
-      })
-      console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} corrigida pela listagem do SIPE: ${atual?.cela ?? '(vazia)'} -> ${celaDaListagem}`)
+      console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} corrigida pela listagem do SIPE: ${atual?.cela ?? '(vazia)'} -> ${celaDaListagem} (SIPE + AIP)`)
     } else {
-      console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} confirmada pela listagem do SIPE: ${celaDaListagem}`)
+      console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} confirmada pela listagem do SIPE: ${celaDaListagem} (SIPE + AIP)`)
     }
   }
 
