@@ -2009,8 +2009,15 @@ async function coletarIdsApenados(
         pagesToFetch.push(`/apenados/index?page=${i}`)
       }
 
-      // 3. Processar em lotes de 15 requisições concorrentes
-      const LOTE_SIZE = 15
+      // 3. Processar em lotes concorrentes, COM RITMO para não tropeçar no WAF (F5)
+      //    do SIPE. O backend serializa tudo num lock, então um lote grande vira N
+      //    requisições coladas (assinatura de bot) e as páginas fundas voltam como
+      //    desafio/login. Lote menor = menos requisições coladas antes de cada pausa.
+      //    Ajustável por env SEM redeploy: SIPE_GLOBAL_LOTE (nº por lote, padrão 4) e
+      //    SIPE_GLOBAL_PAUSA_MS (pausa-base entre lotes, padrão 600). Se ainda barrar,
+      //    baixe o lote p/ 2 e suba a pausa; se voar sem erro, suba o lote aos poucos.
+      const LOTE_SIZE = Math.max(1, Number(process.env.SIPE_GLOBAL_LOTE) || 4)
+      const PAUSA_LOTE_MS = Math.max(0, Number(process.env.SIPE_GLOBAL_PAUSA_MS) || 600)
       for (let i = 0; i < pagesToFetch.length; i += LOTE_SIZE) {
         if (globalThis.__sipeStopFlag) {
           log(jobId, '🛑 Coleta global do SDK Python interrompida.')
@@ -2107,8 +2114,8 @@ async function coletarIdsApenados(
           })
         }
 
-        // Polite delay entre lotes paralelos
-        await new Promise(r => setTimeout(r, 600 + Math.random() * 400))
+        // Ritmo entre lotes (com jitter) — evita a rajada que dispara o WAF do SIPE.
+        await new Promise(r => setTimeout(r, PAUSA_LOTE_MS + Math.random() * PAUSA_LOTE_MS))
       }
 
       const totalIds = Array.from(idsAcumulados)
