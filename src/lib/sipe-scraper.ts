@@ -7483,6 +7483,13 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     regime:         pick('REGIME'),
     dataEntrada:    pick('DATA DE ENTRADA', 'DATA ENTRADA', 'ENTRADA', 'DT ENTRADA'),
     presoOriundo:   pick('PRESO ORIUNDO', 'ORIUNDO', 'PROCEDÊNCIA', 'PROCEDENCIA'),
+    // Cela/unidade atuais vêm da seção "INFORMAÇÃO PRISIONAL" da Ficha Geral, que
+    // as declara explicitamente. Deduzi-las do histórico de /mudarcela é inconfiável:
+    // a coluna de data não traz hora, então mudanças no mesmo dia ficam empatadas e
+    // sem como desempatar (ex.: #57240 tinha A/01→D/02 e D/02→A/01 na mesma data).
+    // Este parse roda por último no scraper, então prevalece sobre aquele palpite.
+    cela:           pick('CELA'),
+    unidade:        pick('NOME DA UNIDADE', 'UNIDADE PRISIONAL'),
   }
 
   // qtdFilhos precisa de conversão para Int
@@ -7520,6 +7527,10 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
   }
 
   console.log(`[FICHA GERAL DP] apenadoId=${apenadoId} nomeMae="${dpData.nomeMae ?? 'NULL'}" campos encontrados:`, Object.keys(dpUpdate))
+
+  if (dpUpdate.cela) {
+    console.log(`[FICHA GERAL] 📍 Cela/unidade da Ficha Geral (fonte oficial): cela=${dpUpdate.cela} unidade=${dpUpdate.unidade ?? '(não informada)'}`)
+  }
 
   if (Object.keys(dpUpdate).length > 0) {
     await prisma.sipeApenadoImportado.update({
