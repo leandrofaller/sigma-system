@@ -104,23 +104,32 @@ export function MapaFaccoesRelatorioModal({ open, onClose }: Props) {
               body {
                 background: white !important;
                 color: black !important;
+                overflow: visible !important;
               }
               body > *:not(#mapa-faccoes-relatorio-modal-portal) {
                 display: none !important;
               }
               #mapa-faccoes-relatorio-modal-portal {
-                position: absolute !important;
-                left: 0 !important;
-                top: 0 !important;
+                position: relative !important;
+                display: block !important;
+                left: auto !important;
+                top: auto !important;
                 width: 100% !important;
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
                 padding: 0 !important;
                 margin: 0 !important;
                 background: white !important;
                 overflow: visible !important;
+                z-index: auto !important;
               }
               #mapa-faccoes-relatorio-modal-container {
+                position: relative !important;
+                display: block !important;
                 max-width: 100% !important;
                 width: 100% !important;
+                height: auto !important;
                 max-height: none !important;
                 overflow: visible !important;
                 border: none !important;
