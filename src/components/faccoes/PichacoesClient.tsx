@@ -124,11 +124,6 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
   const [municipioFilter, setMunicipioFilter] = useState('TODOS');
   const [faccaoFilter, setFaccaoFilter] = useState('TODAS');
 
-  // Distritos disponíveis para o município selecionado no formulário
-  const availableDistritos = useMemo(() => {
-    return getDistritosDoMunicipio(form.municipio);
-  }, [form.municipio]);
-
   // Memoized filtered list (moved up so territory visibility useMemo can depend on it)
   const filtered = useMemo(() => {
     return pichacoes.filter((p) => {
@@ -215,6 +210,11 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
   const [editingPichacao, setEditingPichacao] = useState<Pichacao | null>(null);
   const [viewerPichacao, setViewerPichacao] = useState<Pichacao | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+
+  // Distritos disponíveis para o município selecionado no formulário
+  const availableDistritos = useMemo(() => {
+    return getDistritosDoMunicipio(form.municipio);
+  }, [form.municipio]);
   
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
