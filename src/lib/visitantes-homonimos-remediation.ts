@@ -49,16 +49,19 @@ interface ApenadoAfetado {
  * pelo menos um desses vínculos é um homônimo fantasma.
  */
 export async function listarApenadosAfetados(): Promise<ApenadoAfetado[]> {
-  return prisma.$queryRaw<ApenadoAfetado[]>`
-    SELECT DISTINCT a."sipeId", a.nome, a.unidade
-    FROM sipe_apenados_importados a
-    JOIN sipe_vinculos_visitantes l1 ON l1."apenadoId" = a.id
-    JOIN sipe_visitantes v1          ON v1.id = l1."visitanteId"
-    JOIN sipe_vinculos_visitantes l2 ON l2."apenadoId" = a.id
-    JOIN sipe_visitantes v2          ON v2.id = l2."visitanteId"
-    WHERE v1.nome = v2.nome
-      AND v1.cpf <> v2.cpf
-    ORDER BY a."sipeId"`
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe('SET LOCAL max_parallel_workers_per_gather = 0;')
+    return tx.$queryRaw<ApenadoAfetado[]>`
+      SELECT DISTINCT a."sipeId", a.nome, a.unidade
+      FROM sipe_apenados_importados a
+      JOIN sipe_vinculos_visitantes l1 ON l1."apenadoId" = a.id
+      JOIN sipe_visitantes v1          ON v1.id = l1."visitanteId"
+      JOIN sipe_vinculos_visitantes l2 ON l2."apenadoId" = a.id
+      JOIN sipe_visitantes v2          ON v2.id = l2."visitanteId"
+      WHERE v1.nome = v2.nome
+        AND v1.cpf <> v2.cpf
+      ORDER BY a."sipeId"`
+  })
 }
 
 async function resyncApenado(a: ApenadoAfetado): Promise<void> {
