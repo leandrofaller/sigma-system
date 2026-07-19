@@ -74,7 +74,8 @@ export async function runScrapeFirecrawl(
     let ids: number[] = []
 
     if (job.idsColetados) {
-      ids = JSON.parse(job.idsColetados) as number[]
+      const parsed = JSON.parse(job.idsColetados)
+      ids = Array.isArray(parsed) ? parsed : (parsed.ids || [])
       const cursor = job.ultimoIdProcessado ?? null
       if (cursor !== null) {
         const cursorIndex = ids.indexOf(cursor)

@@ -891,7 +891,17 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
 
     if (job.idsColetados) {
       // Resume (or IDS_MANUAIS with pre-populated IDs): reuse previously collected list
-      ids = JSON.parse(job.idsColetados) as number[]
+      const parsed = JSON.parse(job.idsColetados)
+      if (Array.isArray(parsed)) {
+        ids = parsed as number[]
+      } else if (parsed && typeof parsed === 'object') {
+        ids = (parsed.ids || []) as number[]
+        if (parsed.metadata) {
+          for (const [idStr, meta] of Object.entries(parsed.metadata)) {
+            listagemInfoCache.set(Number(idStr), meta as any)
+          }
+        }
+      }
       const allIds = ids
       // Determine which IDs remain (after cursor)
       const cursor = job.ultimoIdProcessado ?? null
@@ -946,8 +956,12 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
         ids = await coletarIdsExtramuros(jobId)
 
         // Persist checkpoint
+        const payload = {
+          ids,
+          metadata: Object.fromEntries(listagemInfoCache.entries())
+        }
         await dbProgress(jobId, {
-          idsColetados: JSON.stringify(ids),
+          idsColetados: JSON.stringify(payload),
           total: ids.length,
           log: `${ids.length} apenados extramuros encontrados — iniciando scraping`,
           fase: 'Scraping extramuros',
@@ -964,8 +978,12 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
         ids = await coletarIdsApenados(page, 'GLOBAL', jobId, null, true)
 
         // Persist checkpoint
+        const payload = {
+          ids,
+          metadata: Object.fromEntries(listagemInfoCache.entries())
+        }
         await dbProgress(jobId, {
-          idsColetados: JSON.stringify(ids),
+          idsColetados: JSON.stringify(payload),
           total: ids.length,
           log: `${ids.length} apenados encontrados globalmente — iniciando scraping`,
           fase: 'Scraping global',
@@ -982,8 +1000,12 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
         ids = await coletarIdsApenados(page, unidadeId, jobId, job.unidadeNome)
 
         // Persist checkpoint
+        const payload = {
+          ids,
+          metadata: Object.fromEntries(listagemInfoCache.entries())
+        }
         await dbProgress(jobId, {
-          idsColetados: JSON.stringify(ids),
+          idsColetados: JSON.stringify(payload),
           total: ids.length,
           log: `${ids.length} apenados encontrados — iniciando scraping`,
           fase: 'Scraping apenados',
