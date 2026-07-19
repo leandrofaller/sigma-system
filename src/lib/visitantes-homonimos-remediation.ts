@@ -207,6 +207,9 @@ async function run(): Promise<void> {
           )
           return
         }
+      }
+    }
+
     if (global.gc) {
       try {
         global.gc()

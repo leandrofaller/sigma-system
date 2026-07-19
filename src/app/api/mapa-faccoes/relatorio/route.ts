@@ -34,6 +34,11 @@ export async function GET() {
       faccoesRanking,
       municipios: stats.municipios,
       unidades: stats.unidades,
+      porNivel: stats.totais.porNivel,
+      porRelevancia: stats.totais.porRelevancia,
+      porRegime: stats.totais.porRegime,
+      porSexo: stats.totais.porSexo,
+      liderancas: stats.totais.liderancas,
     })
   } catch (e) {
     console.error('[mapa-faccoes/relatorio]', e)

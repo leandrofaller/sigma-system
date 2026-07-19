@@ -160,6 +160,8 @@ async function executar(): Promise<void> {
           return
         }
       }
+    }
+
     if (global.gc) {
       try {
         global.gc()

@@ -100,8 +100,12 @@ export async function fetchMapaVinculosComAip() {
           faccao: true,
           facaoRealNome: true,
           facaoNivel: true,
+          facaoRelevancia: true,
           vulgo: true,
           photoPath: true,
+          regime: true,
+          sexo: true,
+          situacao: true,
         },
       },
     },
@@ -160,6 +164,76 @@ export async function buildMapaStats() {
     else porOrigem.manual++
   }
 
+  // Agregações de Inteligência
+  const porNivel = { confirmado: 0, suspeita: 0, negado: 0, naoInformado: 0 }
+  const porRelevancia = { lideranca: 0, relevancia: 0, membro: 0, exLideranca: 0, naoInformado: 0 }
+  const porRegime: Record<string, number> = {}
+  const porSexo = { masculino: 0, feminino: 0, naoInformado: 0 }
+  const liderancas: Array<{
+    id: string
+    sipeId: number
+    nome: string
+    vulgo: string
+    faccao: string
+    unidade: string
+    municipio: string
+    relevancia: string
+    nivel: string
+    photoPath: string | null
+  }> = []
+
+  for (const v of vinculos) {
+    const ap = v.aipApenado
+    if (!ap) continue
+
+    // Nível de certeza
+    const nivel = ap.facaoNivel?.toLowerCase() || 'nao_informado'
+    if (nivel.includes('confirm')) porNivel.confirmado++
+    else if (nivel.includes('suspei')) porNivel.suspeita++
+    else if (nivel.includes('nega')) porNivel.negado++
+    else porNivel.naoInformado++
+
+    // Relevância
+    const rel = ap.facaoRelevancia?.toLowerCase() || 'nao_informado'
+    if (rel.includes('lideran')) {
+      porRelevancia.lideranca++
+      liderancas.push({
+        id: ap.id,
+        sipeId: ap.sipeId,
+        nome: ap.nome,
+        vulgo: ap.vulgo || 'Não informado',
+        faccao: faccaoDisplay(ap),
+        unidade: v.unidadePrisional,
+        municipio: v.municipio,
+        relevancia: ap.facaoRelevancia || 'Liderança',
+        nivel: ap.facaoNivel || 'Não informado',
+        photoPath: ap.photoPath
+      })
+    }
+    else if (rel.includes('relevan')) porRelevancia.relevancia++
+    else if (rel.includes('membro')) porRelevancia.membro++
+    else if (rel.includes('ex') || rel.includes('exerc')) porRelevancia.exLideranca++
+    else porRelevancia.naoInformado++
+
+    // Regime
+    let regime = 'Outros'
+    if (ap.regime) {
+      const r = ap.regime.toUpperCase().trim()
+      if (r.includes('FECHADO')) regime = 'Fechado'
+      else if (r.includes('SEMI')) regime = 'Semiaberto'
+      else if (r.includes('ABERTO')) regime = 'Aberto'
+      else if (r.includes('PROVIS') || r.includes('PREVENT')) regime = 'Provisório'
+      else regime = r
+    }
+    porRegime[regime] = (porRegime[regime] || 0) + 1
+
+    // Sexo
+    const sexo = ap.sexo?.toUpperCase().trim() || 'N'
+    if (sexo === 'M' || sexo === 'MASCULINO') porSexo.masculino++
+    else if (sexo === 'F' || sexo === 'FEMININO') porSexo.feminino++
+    else porSexo.naoInformado++
+  }
+
   return {
     municipios,
     apenadosPorMunicipio,
@@ -172,6 +246,11 @@ export async function buildMapaStats() {
       faccoes: faccoesGlobais,
       manual: porOrigem.manual,
       aipAuto: porOrigem.aipAuto,
+      porNivel,
+      porRelevancia,
+      porRegime,
+      porSexo,
+      liderancas: liderancas.sort((a, b) => a.nome.localeCompare(b.nome)),
     },
     geradoEm: new Date().toISOString(),
   }
