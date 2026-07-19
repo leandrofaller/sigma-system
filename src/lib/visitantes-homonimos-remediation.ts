@@ -51,16 +51,13 @@ interface ApenadoAfetado {
 export async function listarApenadosAfetados(): Promise<ApenadoAfetado[]> {
   return prisma.$queryRaw<ApenadoAfetado[]>`
     SELECT DISTINCT a."sipeId", a.nome, a.unidade
-    FROM sipe_vinculos_visitantes l
-    JOIN sipe_apenados_importados a ON a.id = l."apenadoId"
-    JOIN sipe_visitantes v          ON v.id = l."visitanteId"
-    WHERE (a.id, v.nome) IN (
-      SELECT l2."apenadoId", v2.nome
-      FROM sipe_vinculos_visitantes l2
-      JOIN sipe_visitantes v2 ON v2.id = l2."visitanteId"
-      GROUP BY l2."apenadoId", v2.nome
-      HAVING COUNT(*) > 1 AND COUNT(DISTINCT v2.cpf) > 1
-    )
+    FROM sipe_apenados_importados a
+    JOIN sipe_vinculos_visitantes l1 ON l1."apenadoId" = a.id
+    JOIN sipe_visitantes v1          ON v1.id = l1."visitanteId"
+    JOIN sipe_vinculos_visitantes l2 ON l2."apenadoId" = a.id
+    JOIN sipe_visitantes v2          ON v2.id = l2."visitanteId"
+    WHERE v1.nome = v2.nome
+      AND v1.cpf <> v2.cpf
     ORDER BY a."sipeId"`
 }
 
@@ -210,6 +207,11 @@ async function run(): Promise<void> {
           )
           return
         }
+    if (global.gc) {
+      try {
+        global.gc()
+      } catch (e) {
+        console.error('Erro ao invocar global.gc() na remediação de visitantes:', e)
       }
     }
 

@@ -1074,6 +1074,12 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
           console.error(`Erro ao sincronizar #${sipeId} (estado inativo): ${err}`)
         }
       }
+
+      if (global.gc) {
+        try {
+          global.gc()
+        } catch (e) {}
+      }
     }
 
     // Final cursor flush — use the actual last processed ID, not ids[last]
@@ -1426,6 +1432,12 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
             }) : Promise.resolve(),
           ])
 
+          if (global.gc) {
+            try {
+              global.gc()
+            } catch (e) {}
+          }
+
           // Limpa do checkpoint local apenas os IDs processados com sucesso ou erro neste lote
           checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => !batch.includes(id))
 
@@ -1563,6 +1575,12 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
               log: msg,
               idsColetados: JSON.stringify(checkpoint),
             })
+          }
+
+          if (global.gc) {
+            try {
+              global.gc()
+            } catch (e) {}
           }
         }
       }

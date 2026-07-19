@@ -160,6 +160,12 @@ async function executar(): Promise<void> {
           return
         }
       }
+    if (global.gc) {
+      try {
+        global.gc()
+      } catch (e) {
+        console.error('Erro ao invocar global.gc() no sync AIP:', e)
+      }
     }
 
     await new Promise((r) => setTimeout(r, DELAY_ENTRE_APENADOS_MS))

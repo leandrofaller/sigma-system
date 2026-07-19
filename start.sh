@@ -25,4 +25,4 @@ echo "[5/5] Iniciando servicos..."
 PYTHONPATH=/app/backend/app gosu nextjs /opt/arcface-venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 
 echo "Iniciando servidor Next.js..."
-exec gosu nextjs env NODE_OPTIONS="--max-old-space-size=2048" node server.js
+exec gosu nextjs env NODE_OPTIONS="--max-old-space-size=2048 --expose-gc" node server.js
