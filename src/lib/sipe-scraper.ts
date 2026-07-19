@@ -604,11 +604,17 @@ async function dbProgress(
       select: { log: true }
     });
 
+    let newLog = current?.log ? current.log + '\n' + patch.log : patch.log;
+    const lines = newLog.split('\n');
+    if (lines.length > 500) {
+      newLog = '... (logs antigos resumidos para poupar memória) ...\n' + lines.slice(lines.length - 500).join('\n');
+    }
+
     await prisma.sipeSyncJob.update({
       where: { id: jobId },
       data: {
         ...patch,
-        log: current?.log ? current.log + '\n' + patch.log : patch.log,
+        log: newLog,
         ultimaAtividade: new Date(),
       },
     });
@@ -660,6 +666,8 @@ export function startSipeSync(jobId: string, unidadeId: string, engine: SipeEngi
     pct: 0,
   }
 
+  startLogFlushInterval(jobId)
+
   const runPromise = async () => {
     const job = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
     if (!job) throw new Error('Job não encontrado')
@@ -687,6 +695,7 @@ export function startSipeSync(jobId: string, unidadeId: string, engine: SipeEngi
   runPromise().catch(async (err) => {
     const msg = err?.message ?? String(err)
     globalThis.__sipeState = { ...globalThis.__sipeState!, status: 'FAILED', ultimoLog: msg }
+    await forceFlushLogBuffer(jobId)
     await dbProgress(jobId, {
       status: 'FAILED',
       finalizadoEm: new Date(),
@@ -1094,6 +1103,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
   } finally {
     listagemInfoCache.clear()
     await context.close()
+    await forceFlushLogBuffer(jobId)
   }
 }
 
@@ -1585,15 +1595,86 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
   } finally {
     listagemInfoCache.clear()
     await context.close()
+    await forceFlushLogBuffer(jobId)
   }
 }
 
-let logPromiseChain = Promise.resolve()
+let logBuffer: string[] = []
+let isWritingLog = false
+let logIntervalId: NodeJS.Timeout | null = null
+
+async function flushLogBuffer(jobId: string, force = false) {
+  if (logBuffer.length === 0) return
+  if (isWritingLog && !force) return
+  
+  isWritingLog = true
+  const toWrite = [...logBuffer]
+  logBuffer = []
+  
+  try {
+    const current = await prisma.sipeSyncJob.findUnique({
+      where: { id: jobId },
+      select: { log: true }
+    })
+    
+    let newLog = current?.log ? current.log + '\n' + toWrite.join('\n') : toWrite.join('\n')
+    const lines = newLog.split('\n')
+    if (lines.length > 500) {
+      newLog = '... (logs antigos resumidos para poupar memória) ...\n' + lines.slice(lines.length - 500).join('\n')
+    }
+
+    await prisma.sipeSyncJob.update({
+      where: { id: jobId },
+      data: {
+        log: newLog,
+        ultimaAtividade: new Date(),
+      }
+    })
+  } catch (err) {
+    console.error('Erro ao escrever lote de logs no banco:', err)
+    // Devolve os logs não gravados ao buffer (insere no início para manter ordem)
+    logBuffer = [...toWrite, ...logBuffer]
+  } finally {
+    isWritingLog = false
+  }
+}
+
+export function startLogFlushInterval(jobId: string) {
+  if (logIntervalId) clearInterval(logIntervalId)
+  logIntervalId = setInterval(() => {
+    flushLogBuffer(jobId).catch(() => {})
+  }, 3000)
+}
+
+export function stopLogFlushInterval() {
+  if (logIntervalId) {
+    clearInterval(logIntervalId)
+    logIntervalId = null
+  }
+}
+
+export async function forceFlushLogBuffer(jobId: string) {
+  stopLogFlushInterval()
+  let retries = 10
+  while (isWritingLog && retries > 0) {
+    await new Promise(r => setTimeout(r, 100))
+    retries--
+  }
+  await flushLogBuffer(jobId, true)
+}
 
 function log(jobId: string, msg: string) {
-  if (globalThis.__sipeState) globalThis.__sipeState.ultimoLog = msg
-  // Enfileira a escrita de log para evitar condições de corrida no banco de dados
-  logPromiseChain = logPromiseChain.then(() => dbProgress(jobId, { log: msg })).catch(() => {})
+  if (globalThis.__sipeState) {
+    globalThis.__sipeState.ultimoLog = msg
+  }
+  
+  console.log(`[JOB LOG] ${msg}`)
+  logBuffer.push(msg)
+  
+  // Se o buffer acumular muitos itens rapidamente, força flush imediato
+  if (logBuffer.length >= 30) {
+    flushLogBuffer(jobId).catch(() => {})
+  }
 }
 
 // 🔧 OTIMIZAÇÃO: Backoff exponencial com mais tentativas para servidores lentos
