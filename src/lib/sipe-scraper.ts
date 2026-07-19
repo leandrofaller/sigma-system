@@ -19,57 +19,6 @@
  *   as startSipeSync() regardless of which route called them.
  */
 
-// ── MockPage: substitui o Playwright sem precisar do Chromium ─────────────
-// Usa Proxy JavaScript para suportar qualquer chamada em cadeia sem erros TS.
-// O engine python-sdk nunca chama estes métodos em produção — são apenas stubs
-// para que o código legado de fallback compile sem erros.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function createMockProxy(): any {
-  return new Proxy(Object.create(null), {
-    get(_target, prop) {
-      if (prop === 'then') return undefined // não é Promise
-      if (prop === 'url') return () => ''
-      if (prop === 'isConnected') return () => true
-      if (prop === 'waitForTimeout') return (ms: number) => new Promise(r => setTimeout(r, ms))
-      if (prop === 'evaluate') return async () => []
-      if (prop === 'content') return async () => ''
-      if (prop === 'newContext') return async () => createMockProxy()
-      if (prop === 'newPage') return async () => createMockProxy()
-      if (prop === 'close') return async () => {}
-      // Qualquer outro acesso retorna uma função que devolve o próprio proxy
-      return (..._args: any[]) => createMockProxy()
-    },
-  })
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Page = any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type BrowserContext = any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Browser = any
-
-let browserInstance: Browser | null = null
-
-async function getBrowser(): Promise<Browser> {
-  if (!browserInstance) {
-    // Stub: sem Chromium. O engine python-sdk não usa navegador real.
-    browserInstance = {
-      newContext: async () => ({
-        newPage: async () => createMockProxy(),
-        close: async () => {},
-      }),
-      isConnected: () => true,
-    } as unknown as Browser
-  }
-  return browserInstance
-}
-
-async function createSession(): Promise<BrowserContext> {
-  const browser = await getBrowser()
-  return (browser as any).newContext()
-}
-
 import { existsSync } from 'fs'
 import { prisma } from './db'
 import sharp from 'sharp'
@@ -94,9 +43,8 @@ const SIPE_PERFIL = process.env.SIPE_PERFIL ?? '2'   // Master
 const SIPE_UNIDADE = process.env.SIPE_UNIDADE ?? '3'  // CDPPVH
 
 const SIPE_PYTHON_API_URL = process.env.SIPE_PYTHON_API_URL ?? 'http://localhost:8000'
-export type SipeEngine = 'playwright' | 'firecrawl' | 'python-sdk'
+export type SipeEngine = 'python-sdk' | 'firecrawl'
 const DEFAULT_SIPE_ENGINE: SipeEngine = (process.env.SIPE_SCRAPER_ENGINE as SipeEngine) ?? 'python-sdk'
-// Nota: 'playwright' é mantido no tipo para compatibilidade de API, mas o engine real não usa Chromium.
 
 type SipeProxyResponse = {
   content_type?: string
@@ -1917,112 +1865,7 @@ export async function resolveUnidadeIdByNome(nomeUnidade: string): Promise<strin
   return null
 }
 
-/**
- * Altera a unidade ativa da sessão no navegador Playwright se ela for diferente da desejada.
- */
-async function switchPlaywrightUnit(page: Page, unidadeId: string, jobId: string): Promise<boolean> {
-  try {
-    // Garante que o menu superior carregou completamente antes de inspecionar
-    await page.waitForSelector('a[name="btnMudaUnidade"]', { timeout: 5_000 }).catch(() => {})
 
-    let unidadeAtiva = await page.evaluate(() => {
-      const el = document.querySelector('a[name="btnMudaUnidade"]') as HTMLAnchorElement | null
-      return el ? el.getAttribute('title')?.toUpperCase().trim() || '' : ''
-    }).catch(() => '')
-
-    // Precisamos saber qual o nome esperado para esta unidadeId para comparar.
-    const unidades: { id: string; nome: string }[] = globalThis.__sipeUnidadesCache?.data ?? []
-    const unidadeDesejadaObj = unidades.find(u => u.id === unidadeId)
-    if (!unidadeDesejadaObj) {
-      return false
-    }
-    const esperadaClean = unidadeDesejadaObj.nome.toUpperCase().trim()
-
-    // Se a unidade ativa já for a esperada, não faz nada
-    if (unidadeAtiva && (unidadeAtiva.includes(esperadaClean) || esperadaClean.includes(unidadeAtiva))) {
-      return true
-    }
-
-    log(jobId, `⚠️ Troca de unidade necessária! Unidade ativa na sessão: "${unidadeAtiva}" | Desejada: "${esperadaClean}" (#${unidadeId}). Alterando...`)
-
-    // Vai para a tela de seleção de papel
-    await gotoSipeWithFallback(page, '/selectRole/1', { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(async () => {
-      await gotoSipeWithFallback(page, '/selectRole', { waitUntil: 'domcontentloaded', timeout: 20_000 })
-    })
-
-    await page.locator('select').nth(0).waitFor({ state: 'attached', timeout: 10_000 })
-    await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 10_000 })
-
-    // 1. Altera perfil
-    await page.evaluate((perfil) => {
-      const selects = document.querySelectorAll('select')
-      const selectPerfil = selects[0] as HTMLSelectElement
-      if (selectPerfil) {
-        selectPerfil.value = perfil
-        selectPerfil.dispatchEvent(new Event('change', { bubbles: true }))
-        const w = window as any
-        if (w.$) {
-          try {
-            w.$(selectPerfil).trigger('chosen:updated')
-            w.$(selectPerfil).trigger('change')
-          } catch {}
-        }
-      }
-    }, SIPE_PERFIL)
-
-    // 2. Aguarda o AJAX popular as unidades para este perfil
-    try {
-      await page.waitForFunction((unidade) => {
-        const selects = document.querySelectorAll('select')
-        const selectUnidade = selects[1] as HTMLSelectElement
-        if (!selectUnidade) return false
-        const options = Array.from(selectUnidade.options)
-        return options.some(opt => opt.value === unidade)
-      }, unidadeId, { timeout: 10_000 })
-    } catch (err) {
-      // Fallback
-    }
-
-    // 3. Altera a unidade
-    await page.evaluate((unidade) => {
-      const selects = document.querySelectorAll('select')
-      const selectUnidade = selects[1] as HTMLSelectElement
-      if (selectUnidade) {
-        selectUnidade.value = unidade
-        selectUnidade.dispatchEvent(new Event('change', { bubbles: true }))
-        const w = window as any
-        if (w.$) {
-          try {
-            w.$(selectUnidade).trigger('chosen:updated')
-            w.$(selectUnidade).trigger('change')
-          } catch {}
-        }
-      }
-    }, unidadeId)
-
-    // 4. Pequeno delay de propagação
-    await page.waitForTimeout(500)
-
-    const submitBtn = (await page.$('button[type="submit"]')) ?? (await page.$('input[type="submit"]'))
-    if (submitBtn) {
-      await submitBtn.click()
-      await page.waitForURL('**/home**', { timeout: 20_000 })
-      
-      // Validação final de confirmação
-      await page.waitForSelector('a[name="btnMudaUnidade"]', { timeout: 10_000 }).catch(() => {})
-      unidadeAtiva = await page.evaluate(() => {
-        const el = document.querySelector('a[name="btnMudaUnidade"]') as HTMLAnchorElement | null
-        return el ? el.getAttribute('title')?.toUpperCase().trim() || '' : ''
-      }).catch(() => '')
-      
-      log(jobId, `✅ Unidade após troca de papel no SIPE: "${unidadeAtiva}"`)
-      return true
-    }
-  } catch (err) {
-    log(jobId, `⚠️ Falha ao alterar unidade ativa no menu: ${err}`)
-  }
-  return false
-}
 
 async function coletarIdsApenados(
   page: Page,
@@ -2385,10 +2228,6 @@ async function coletarIdsApenados(
     log(jobId, '⚠️ SDK Python não conseguiu coletar IDs das listagens de unidade. Ativando rollback via Playwright.')
   }
 
-  // Validação da unidade ativa no menu superior do SIPE para garantir a troca correta
-  if (!globalMode && unidadeNomeEsperada) {
-    await switchPlaywrightUnit(page, unidadeId, jobId)
-  }
 
   if (globalMode) {
     log(jobId, `Acessando listagem global cross-unit: ${SIPE_URL}/apenados/index`)
@@ -2904,16 +2743,6 @@ async function scrapeApenadoFicha(
     }
   }
 
-  // Troca dinâmica de unidade ativa no Playwright se fornecida e diferente da atual
-  if (unidadeNome) {
-    if (unidadeNome.includes(' — ')) {
-      unidadeNome = unidadeNome.split(' — ')[1];
-    }
-    const unidadeId = await resolveUnidadeIdByNome(unidadeNome)
-    if (unidadeId) {
-      await switchPlaywrightUnit(page, unidadeId, 'FICHA')
-    }
-  }
 
   if (useSearch) {
     // ── Busca cross-unit: contorna restrição de unidade da sessão ──
@@ -9267,7 +9096,7 @@ function setupAutoSyncScheduler() {
       // engine perdeu o Chromium e hoje roda contra createMockProxy: o sync noturno
       // terminaria "com sucesso" sem trazer nada. Coage para o engine real.
       const engineSalvo = configVal?.engine ?? 'python-sdk'
-      const scrapingEngine: SipeEngine = engineSalvo === 'playwright' ? 'python-sdk' : engineSalvo
+      const scrapingEngine: SipeEngine = (engineSalvo === 'playwright' || engineSalvo === 'python-sdk') ? 'python-sdk' : engineSalvo
       if (engineSalvo === 'playwright') {
         console.warn('[AUTO-SYNC] Config tem engine "playwright", que não é mais funcional — usando python-sdk.')
       }

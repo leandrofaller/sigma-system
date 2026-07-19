@@ -70,9 +70,7 @@ export async function POST(req: NextRequest) {
   const engine: SipeEngine =
     engineParam === 'firecrawl'
       ? 'firecrawl'
-      : engineParam === 'playwright'
-        ? 'playwright'
-        : 'python-sdk'
+      : 'python-sdk'
 
   // Verificar disponibilidade do Firecrawl se solicitado
   if (engine === 'firecrawl') {
