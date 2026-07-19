@@ -460,17 +460,17 @@ export function MapaFaccoesRelatorioModal({ open, onClose }: Props) {
 
                 {/* 4. ATUAÇÃO POR MUNICÍPIOS E UNIDADES */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Top Municípios */}
+                  {/* Municípios */}
                   <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 p-5 shadow-sm print-border">
                     <h4 className="font-bold text-sm uppercase tracking-wider mb-3 text-gray-900 dark:text-white flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-red-500" />
-                      <span>Distribuição por Município (Top)</span>
+                      <span>Distribuição por Município</span>
                     </h4>
                     {(relatorio.topMunicipios?.length ?? 0) === 0 ? (
                       <p className="text-subtle text-xs">Nenhum município mapeado.</p>
                     ) : (
                       <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                        {relatorio.topMunicipios!.slice(0, 10).map((m) => (
+                        {relatorio.topMunicipios!.map((m) => (
                           <div key={m.nome} className="py-2.5 flex justify-between items-center gap-2 text-xs">
                             <span className="font-semibold text-gray-700 dark:text-gray-300">{m.nome}</span>
                             <div className="flex items-center gap-3">
@@ -492,17 +492,17 @@ export function MapaFaccoesRelatorioModal({ open, onClose }: Props) {
                     )}
                   </div>
 
-                  {/* Top Unidades */}
+                  {/* Unidades */}
                   <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 p-5 shadow-sm print-border">
                     <h4 className="font-bold text-sm uppercase tracking-wider mb-3 text-gray-900 dark:text-white flex items-center gap-2">
                       <Activity className="w-4 h-4 text-blue-500" />
-                      <span>Distribuição por Unidade (Top)</span>
+                      <span>Distribuição por Unidade</span>
                     </h4>
                     {(relatorio.topUnidades?.length ?? 0) === 0 ? (
                       <p className="text-subtle text-xs">Nenhuma unidade mapeada.</p>
                     ) : (
                       <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                        {relatorio.topUnidades!.slice(0, 10).map((u) => (
+                        {relatorio.topUnidades!.map((u) => (
                           <div key={`${u.unidade}-${u.municipio}`} className="py-2.5 flex justify-between items-center gap-2 text-xs">
                             <span className="font-semibold text-gray-700 dark:text-gray-300 truncate max-w-[65%]" title={u.unidade}>
                               {u.unidade} <span className="text-[10px] font-normal text-subtle">({u.municipio})</span>
