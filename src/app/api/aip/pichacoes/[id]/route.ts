@@ -77,6 +77,7 @@ export async function PATCH(
     const body = await req.json();
     const {
       municipio,
+      distrito,
       endereco,
       latitude,
       longitude,
@@ -107,6 +108,7 @@ export async function PATCH(
       where: { id },
       data: {
         ...(municipio !== undefined && { municipio }),
+        ...(distrito !== undefined && { distrito: distrito || null }),
         ...(endereco !== undefined && { endereco }),
         ...(latitude !== undefined && { latitude: latitude ? parseFloat(latitude) : null }),
         ...(longitude !== undefined && { longitude: longitude ? parseFloat(longitude) : null }),

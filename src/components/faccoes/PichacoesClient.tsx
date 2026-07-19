@@ -14,6 +14,7 @@ import {
   detectTerritoryConflicts,
   aggregateByMunicipio,
 } from './pichacoes-territory-utils';
+import { getDistritosDoMunicipio, getMunicipioDoDistrito } from '@/lib/distritos-rondonia';
 
 const PichacoesMap = dynamic(() => import('./PichacoesMap'), {
   ssr: false,
@@ -72,6 +73,7 @@ interface FaccaoOption {
 interface Pichacao {
   id: string;
   municipio: string;
+  distrito?: string | null;
   endereco: string;
   latitude: number | null;
   longitude: number | null;
@@ -92,6 +94,7 @@ interface PichacoesClientProps {
 
 const EMPTY_FORM = {
   municipio: '',
+  distrito: '',
   endereco: '',
   latitude: '',
   longitude: '',
@@ -121,12 +124,18 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
   const [municipioFilter, setMunicipioFilter] = useState('TODOS');
   const [faccaoFilter, setFaccaoFilter] = useState('TODAS');
 
+  // Distritos disponíveis para o município selecionado no formulário
+  const availableDistritos = useMemo(() => {
+    return getDistritosDoMunicipio(form.municipio);
+  }, [form.municipio]);
+
   // Memoized filtered list (moved up so territory visibility useMemo can depend on it)
   const filtered = useMemo(() => {
     return pichacoes.filter((p) => {
       const matchSearch =
         !search ||
         p.endereco.toLowerCase().includes(search.toLowerCase()) ||
+        (p.distrito && p.distrito.toLowerCase().includes(search.toLowerCase())) ||
         (p.descricao && p.descricao.toLowerCase().includes(search.toLowerCase())) ||
         (p.faccao?.nome && p.faccao.nome.toLowerCase().includes(search.toLowerCase())) ||
         (p.faccao?.sigla && p.faccao.sigla.toLowerCase().includes(search.toLowerCase()));
@@ -415,6 +424,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
     setEditingPichacao(p);
     setForm({
       municipio: p.municipio,
+      distrito: p.distrito || '',
       endereco: p.endereco,
       latitude: p.latitude !== null ? String(p.latitude) : '',
       longitude: p.longitude !== null ? String(p.longitude) : '',
@@ -974,7 +984,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                   <div className="p-4 flex-1 flex flex-col justify-between">
                     <div>
                       <h3 className="font-bold text-gray-900 dark:text-white text-sm uppercase tracking-wide truncate">
-                        {p.municipio}
+                        {p.municipio}{p.distrito ? ` • ${p.distrito}` : ''}
                       </h3>
                       <div className="flex items-center justify-between mt-0.5">
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate flex items-center gap-1 flex-1">
@@ -1051,12 +1061,54 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                 <select
                   required
                   value={form.municipio}
-                  onChange={e => setForm(prev => ({ ...prev, municipio: e.target.value }))}
+                  onChange={e => {
+                    const newMun = e.target.value;
+                    setForm(prev => {
+                      const newDistritos = getDistritosDoMunicipio(newMun);
+                      const keepDistrito = newDistritos.includes(prev.distrito) ? prev.distrito : '';
+                      return { ...prev, municipio: newMun, distrito: keepDistrito };
+                    });
+                  }}
                   className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                   <option value="">Selecione o município...</option>
                   {MUNICIPIOS_RO.map(m => (
                     <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Distrito */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1.5 flex items-center justify-between">
+                  <span>Distrito</span>
+                  <span className="text-[10px] font-normal text-gray-400 font-sans normal-case">(Opcional)</span>
+                </label>
+                <select
+                  value={form.distrito}
+                  onChange={e => {
+                    const newDist = e.target.value;
+                    setForm(prev => {
+                      const parentMun = getMunicipioDoDistrito(newDist);
+                      return {
+                        ...prev,
+                        distrito: newDist,
+                        municipio: parentMun || prev.municipio,
+                      };
+                    });
+                  }}
+                  disabled={!form.municipio && availableDistritos.length === 0}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {!form.municipio
+                      ? 'Selecione primeiro o município...'
+                      : availableDistritos.length > 0
+                        ? 'Selecione o distrito (se houver)...'
+                        : 'Nenhum distrito específico cadastrado'}
+                  </option>
+                  {availableDistritos.map(d => (
+                    <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
               </div>
@@ -1345,7 +1397,7 @@ export function PichacoesClient({ userRole, currentUserId, currentUserName }: Pi
                   <div>
                     <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Territorialidade</span>
                     <h4 className="font-extrabold text-gray-900 dark:text-white text-lg uppercase tracking-wide">
-                      {viewerPichacao.municipio} - RO
+                      {viewerPichacao.municipio}{viewerPichacao.distrito ? ` (${viewerPichacao.distrito})` : ''} - RO
                     </h4>
                   </div>
                   {viewerPichacao.faccao && (

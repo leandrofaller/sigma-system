@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get('search');
   const municipio = searchParams.get('municipio');
+  const distrito = searchParams.get('distrito');
   const faccaoId = searchParams.get('faccaoId');
 
   try {
@@ -24,6 +25,10 @@ export async function GET(req: NextRequest) {
 
     if (municipio && municipio !== 'TODOS') {
       where.municipio = municipio;
+    }
+
+    if (distrito && distrito !== 'TODOS') {
+      where.distrito = distrito;
     }
 
     if (faccaoId && faccaoId !== 'TODAS') {
@@ -34,6 +39,7 @@ export async function GET(req: NextRequest) {
       where.OR = [
         { descricao: { contains: search, mode: 'insensitive' } },
         { endereco: { contains: search, mode: 'insensitive' } },
+        { distrito: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -69,6 +75,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       municipio,
+      distrito,
       endereco,
       latitude,
       longitude,
@@ -87,6 +94,7 @@ export async function POST(req: NextRequest) {
     const pichacao = await prisma.pichacaoFacciosa.create({
       data: {
         municipio,
+        distrito: distrito || null,
         endereco,
         latitude: latitude ? parseFloat(latitude) : null,
         longitude: longitude ? parseFloat(longitude) : null,

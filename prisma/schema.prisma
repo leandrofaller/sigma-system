@@ -1639,6 +1639,7 @@ model Geofence {
 model PichacaoFacciosa {
   id              String      @id @default(cuid())
   municipio       String      // Município de RO onde foi localizada
+  distrito        String?     // Distrito de RO (opcional)
   endereco        String      // Endereço ou ponto de referência
   latitude        Float?
   longitude       Float?
@@ -1653,6 +1654,7 @@ model PichacaoFacciosa {
   updatedAt       DateTime    @updatedAt
 
   @@index([municipio])
+  @@index([distrito])
   @@index([faccaoId])
   @@index([cadastradoPorId])
   @@map("pichacoes_faccionados")

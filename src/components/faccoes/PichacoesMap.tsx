@@ -18,6 +18,7 @@ L.Icon.Default.mergeOptions({
 interface PichacaoData {
   id: string;
   municipio: string;
+  distrito?: string | null;
   endereco: string;
   latitude: number | null;
   longitude: number | null;
@@ -135,7 +136,7 @@ export default function PichacoesMap({ pichacoes, onSelect, center = [-10.9, -62
                     </div>
                   )}
                   <h4 className="font-bold text-gray-900 text-xs mb-1 uppercase tracking-wide">
-                    {p.municipio} - RO
+                    {p.municipio}{p.distrito ? ` (${p.distrito})` : ''} - RO
                   </h4>
                   <span
                     className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2 text-white border-0"
