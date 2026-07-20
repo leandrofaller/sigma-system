@@ -3327,7 +3327,17 @@ async function scrapeApenadoFicha(
   let validCacheSituacao = (listagemInfoCache.get(sipeId)?.situacao && !isCellFormat(listagemInfoCache.get(sipeId)?.situacao)) ? listagemInfoCache.get(sipeId)?.situacao : null;
   let validExistingSituacao = (existingApenado?.situacao && !isCellFormat(existingApenado.situacao)) ? existingApenado.situacao : null;
 
-  let situacao = validFichaSituacao ?? validCacheSituacao ?? validExistingSituacao ?? null;
+  const isGenericStatus = (s: string | null | undefined) => !s || s.toUpperCase() === 'ATIVO' || s.toUpperCase() === 'INATIVO';
+  let situacao = validFichaSituacao;
+  if (isGenericStatus(situacao)) {
+    if (!isGenericStatus(validExistingSituacao)) {
+      situacao = validExistingSituacao;
+    } else if (!isGenericStatus(validCacheSituacao)) {
+      situacao = validCacheSituacao;
+    } else {
+      situacao = situacao || validCacheSituacao || validExistingSituacao || null;
+    }
+  }
   let cela = cleanCela(listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? (isCellFormat(dados.situacao) ? dados.situacao : null) ?? existingApenado?.cela ?? null);
   let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null;
 
@@ -6569,7 +6579,20 @@ function parseApenadoFichaHtmlCheerio(html: string) {
   const estadoCivilValue = selVal('fk_estadocivil') || extractLabel('Estado Civil')
   const grauInstrucaoValue = selVal('fk_grauinstrucao') || extractLabel('Grau de Instrução') || extractLabel('Grau Instrução') || extractLabel('Instrução')
   const religiaoValue = selVal('fk_religiao') || extractLabel('Religião')
-  const situacaoValue = selVal('situacao') || extractLabel('Situação') || extractLabel('Situação:') || extractLabel('Status')
+  const situacaoValue =
+    selVal('situacao') ||
+    selVal('fk_situacao') ||
+    selVal('fk_situacaoprisional') ||
+    selVal('situacao_prisional') ||
+    selVal('situacaoprisional') ||
+    selVal('situacao_id') ||
+    selVal('fk_situacao_id') ||
+    extractLabel('Situação\\s+Prisional') ||
+    extractLabel('Situação\\s+do\\s+Apenado') ||
+    extractLabel('Situação') ||
+    extractLabel('Situação:') ||
+    extractLabel('Status\\s+Prisional') ||
+    extractLabel('Status')
 
   const imgs: { src: string; alt: string; id: string; className: string }[] = []
   $('img').each((_, img) => {
@@ -7631,15 +7654,16 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
   // --- Extração de Dados Pessoais da seção DP da Ficha Geral ---
   // Coleta todos os pares label→valor de elementos .input em todo o HTML do relatório
   const allFields: Record<string, string> = {}
-  $('.input').each((_, inputElem) => {
-    const label = $(inputElem).find('label').text().trim().toUpperCase().replace(/\s+/g, ' ').replace(/[:.]/g, '').trim()
+  $('.input, .form-group, .field, [class*="col-"]').each((_, inputElem) => {
+    const label = $(inputElem).find('label, .control-label, b, strong').first().text().trim().toUpperCase().replace(/\s+/g, ' ').replace(/[:.]/g, '').trim()
     const value = (
       $(inputElem).find('input').attr('value')?.trim() ||
       $(inputElem).find('input').val()?.toString().trim() ||
+      $(inputElem).find('select option:selected').text().trim() ||
       $(inputElem).find('span').text().trim() ||
       $(inputElem).find('p').text().trim()
     ) || ''
-    if (label && value && value.length > 0) {
+    if (label && value && value.length > 0 && !allFields[label]) {
       allFields[label] = value
     }
   })
@@ -7671,7 +7695,15 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     presoOriundo:   pick('ORIUNDO DA JUSTIÇA', 'ORIUNDO DA JUSTICA', 'PRESO ORIUNDO', 'ORIUNDO', 'PROCEDÊNCIA', 'PROCEDENCIA'),
   }
 
-  const rawSituacaoFicha = pick('SITUAÇÃO', 'SITUACAO', 'SITUAÇÃO PRISIONAL', 'SITUACAO PRISIONAL')
+  const rawSituacaoFicha = pick(
+    'SITUAÇÃO PRISIONAL', 'SITUACAO PRISIONAL',
+    'SITUAÇÃO DO APENADO', 'SITUACAO DO APENADO',
+    'SITUAÇÃO', 'SITUACAO',
+    'SITUAÇÃO ATUAL', 'SITUACAO ATUAL',
+    'STATUS PRISIONAL', 'STATUS DO APENADO',
+    'TIPO DE PRISÃO', 'TIPO DE PRISAO',
+    'SITUAÇÃO JURÍDICA', 'SITUACAO JURIDICA'
+  )
   if (rawSituacaoFicha) {
     if (isCellFormat(rawSituacaoFicha)) {
       const cleanedCell = cleanCela(rawSituacaoFicha)
@@ -7717,12 +7749,21 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
 
   console.log(`[FICHA GERAL DP] apenadoId=${apenadoId} nomeMae="${dpData.nomeMae ?? 'NULL'}" campos encontrados:`, Object.keys(dpUpdate))
 
-
   if (Object.keys(dpUpdate).length > 0) {
     await prisma.sipeApenadoImportado.update({
       where: { id: apenadoId },
       data: dpUpdate,
     })
+    const importado = await prisma.sipeApenadoImportado.findUnique({
+      where: { id: apenadoId },
+      select: { sipeId: true }
+    })
+    if (importado?.sipeId) {
+      await prisma.aIPApenado.updateMany({
+        where: { sipeId: importado.sipeId },
+        data: dpUpdate
+      }).catch(err => console.error(`Erro ao atualizar DP em AIPApenado:`, err))
+    }
   }
 
   // --- Extração de Facções da Ficha Geral consolidada ---
@@ -8679,7 +8720,17 @@ async function scrapeApenadoFichaFastLocked(
   let validCacheSituacao = (listagemInfoCache.get(sipeId)?.situacao && !isCellFormat(listagemInfoCache.get(sipeId)?.situacao)) ? listagemInfoCache.get(sipeId)?.situacao : null
   let validExistingSituacao = (existingApenado?.situacao && !isCellFormat(existingApenado.situacao)) ? existingApenado.situacao : null
 
-  let situacao = validFichaSituacao ?? validCacheSituacao ?? validExistingSituacao ?? null
+  const isGenericStatus = (s: string | null | undefined) => !s || s.toUpperCase() === 'ATIVO' || s.toUpperCase() === 'INATIVO'
+  let situacao = validFichaSituacao
+  if (isGenericStatus(situacao)) {
+    if (!isGenericStatus(validExistingSituacao)) {
+      situacao = validExistingSituacao
+    } else if (!isGenericStatus(validCacheSituacao)) {
+      situacao = validCacheSituacao
+    } else {
+      situacao = situacao || validCacheSituacao || validExistingSituacao || null
+    }
+  }
   let cela = cleanCela(listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? (isCellFormat(dados.situacao) ? dados.situacao : null) ?? existingApenado?.cela ?? null)
   let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null
 
