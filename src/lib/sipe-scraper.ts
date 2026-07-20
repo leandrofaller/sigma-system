@@ -17,6 +17,7 @@
  *   globalThis is the single shared namespace for the whole Node.js process,
  *   guaranteeing that getSipeState() and stopSipeJob() see the same object
  *   as startSipeSync() regardless of which route called them.
+ */
 // ── Helper Session Stubs (o engine python-sdk usa Cheerio + Proxy HTTP) ──
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createDummyProxy(): any {
@@ -6480,10 +6481,7 @@ async function scrapeAdvogadosDoApenado(
 }
 
 export async function closeBrowser(): Promise<void> {
-  if (browserInstance) {
-    await browserInstance.close()
-    browserInstance = null
-  }
+  // Stub de compatibilidade: Playwright removido em favor do engine python-sdk + Cheerio
 }
 
 // ── Funções de Aceleração com Cheerio (python-sdk-first) ──
