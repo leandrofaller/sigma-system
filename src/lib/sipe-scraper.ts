@@ -142,6 +142,26 @@ export function cleanCela(cela: string | null | undefined): string | null {
   ) {
     return null
   }
+
+  // Filtra nomes e palavras-chave de unidades prisionais para não substituir a cela pelo nome da penitenciária/presídio
+  const UNIDADE_KEYWORDS = [
+    'PENITENCIÁRIA', 'PENITENCIARIA',
+    'PRESÍDIO', 'PRESIDIO',
+    'CENTRO DE RESSOCIALIZAÇÃO', 'CENTRO DE RESSOCIALIZACAO',
+    'CASA DE DETENÇÃO', 'CASA DE DETENCAO',
+    'CASA DE PRISÃO', 'CASA DE PRISAO',
+    'UNIDADE PRISIONAL', 'UNIDADE DE INTERNAÇÃO', 'UNIDADE DE INTERNACAO',
+    'COLÔNIA AGRÍCOLA', 'COLONIA AGRICOLA',
+    'CADEIA PÚBLICA', 'CADEIA PUBLICA',
+    'COMPLEXO PENITENCIÁRIO', 'COMPLEXO PENITENCIARIO',
+    'PATRONATO', 'MINISTÉRIO', 'MINISTERIO',
+    'ESTABELECIMENTO', 'SECRETARIA', 'SEJUS'
+  ]
+
+  if (UNIDADE_KEYWORDS.some(k => celaUpper.includes(k))) {
+    return null
+  }
+
   return trimmed
 }
 

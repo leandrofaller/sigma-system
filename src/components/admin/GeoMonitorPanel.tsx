@@ -73,7 +73,7 @@ interface GeoStats {
 export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [tileStyle, setTileStyle] = useState<TileStyle>('standard');
+  const [tileStyle, setTileStyle] = useState<TileStyle>('satellite');
   const [userTrail, setUserTrail] = useState<LocationEntry[] | null>(null);
   const [trailLoading, setTrailLoading] = useState(false);
   const [geoStats, setGeoStats] = useState<GeoStats | null>(null);
@@ -92,8 +92,10 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((data: GeoStats) => {
-        setGeoStats(data);
+      .then((data: any) => {
+        if (data && data.stats && data.health) {
+          setGeoStats(data);
+        }
         setStatsLoading(false);
       })
       .catch((err) => {
@@ -226,7 +228,7 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
   return (
     <div className="space-y-4">
       {/* Health Status */}
-      {geoStats && (
+      {geoStats && geoStats.health && geoStats.stats && (
         <div className={`card p-4 border-l-4 ${
           geoStats.health.isHealthy
             ? 'border-l-green-500 bg-green-50 dark:bg-green-900/10'
@@ -242,7 +244,7 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
                   {geoStats.enabled ? '✓ Geolocalização ativa' : '⚠ Geolocalização desabilitada'}
                 </p>
                 <p className="text-xs text-body/70 mt-1">
-                  {geoStats.stats.recentRecords} pontos nas últimas 24h • {geoStats.stats.activeUsersInRange} usuários ativos
+                  {geoStats.stats.recentRecords ?? 0} pontos nas últimas 24h • {geoStats.stats.activeUsersInRange ?? 0} usuários ativos
                 </p>
               </div>
             </div>
@@ -415,21 +417,21 @@ export function GeoMonitorPanel({ locations, allUsers, onlineUsers }: Props) {
               </tr>
             </thead>
             <tbody>
-              {tableRows.slice(0, 200).map((loc) => (
-                <tr key={loc.id} className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+              {Array.isArray(tableRows) && tableRows.slice(0, 200).map((loc) => (
+                <tr key={loc?.id || Math.random()} className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
                   <td className="px-4 py-2.5">
-                    <span className="font-medium text-body">{loc.user.name}</span>
+                    <span className="font-medium text-body">{loc?.user?.name || loc?.userId || 'Usuário'}</span>
                   </td>
                   <td className="px-4 py-2.5 text-subtle whitespace-nowrap">
-                    {new Date(loc.timestamp).toLocaleString('pt-BR')}
+                    {loc?.timestamp ? new Date(loc.timestamp).toLocaleString('pt-BR') : '—'}
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-subtle">{loc.lat.toFixed(5)}</td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-subtle">{loc.lng.toFixed(5)}</td>
-                  <td className="px-4 py-2.5 text-subtle">{loc.accuracy ? `${loc.accuracy.toFixed(0)}m` : '—'}</td>
-                  <td className="px-4 py-2.5 text-subtle text-xs max-w-xs truncate">{loc.address || '—'}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-subtle">{typeof loc?.lat === 'number' ? loc.lat.toFixed(5) : '—'}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-subtle">{typeof loc?.lng === 'number' ? loc.lng.toFixed(5) : '—'}</td>
+                  <td className="px-4 py-2.5 text-subtle">{typeof loc?.accuracy === 'number' ? `${loc.accuracy.toFixed(0)}m` : '—'}</td>
+                  <td className="px-4 py-2.5 text-subtle text-xs max-w-xs truncate">{loc?.address || '—'}</td>
                 </tr>
               ))}
-              {tableRows.length === 0 && !trailLoading && (
+              {(!Array.isArray(tableRows) || tableRows.length === 0) && !trailLoading && (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-subtle text-sm">Nenhum dado de localização registrado ainda.</td></tr>
               )}
             </tbody>

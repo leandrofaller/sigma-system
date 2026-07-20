@@ -142,6 +142,7 @@ export default function GeoMap({ locations, userTrail, selectedUserId, onlineUse
     <MapContainer
       center={[-10, -53]}
       zoom={4}
+      maxZoom={20}
       style={{ height: '100%', width: '100%', borderRadius: 'inherit' }}
       zoomControl
     >
