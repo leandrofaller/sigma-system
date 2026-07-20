@@ -57,7 +57,13 @@ import { capsolverService } from './capsolver-service'
 import { AsyncLocalStorage } from 'async_hooks'
 import AsyncLock from 'async-lock'
 
-const sipeLock = new AsyncLock({ timeout: 60000 })
+function getSipeLock(): AsyncLock {
+  if (!(globalThis as any).__sipeLock) {
+    (globalThis as any).__sipeLock = new AsyncLock({ timeout: 60000 })
+  }
+  return (globalThis as any).__sipeLock
+}
+const sipeLock = getSipeLock()
 
 export const sipeAuthStorage = new AsyncLocalStorage<{ cpf: string; senha: string }>()
 
@@ -8168,7 +8174,7 @@ export async function scrapeApenadoFichaFast(
   unidadeNome?: string | null,
   useSearch = false
 ): Promise<void> {
-  return sipeLock.acquire('sipe-session', async () => {
+  return getSipeLock().acquire('sipe-session', async () => {
     await scrapeApenadoFichaFastLocked(sipeId, unidadeNome, useSearch)
   })
 }
