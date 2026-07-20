@@ -145,6 +145,29 @@ export function cleanCela(cela: string | null | undefined): string | null {
   return trimmed
 }
 
+export function isCellFormat(str: string | null | undefined): boolean {
+  if (!str) return false
+  const cleaned = cleanCela(str)
+  if (!cleaned) return false
+  const upper = cleaned.toUpperCase()
+
+  const STATUS_KEYWORDS = [
+    'PRESO', 'CUMPRINDO', 'FECHADO', 'SEMIABERTO', 'ABERTO', 'ALBERGADO',
+    'LIBERTADO', 'EVADIDO', 'FALECIDO', 'TRANSFERIDO', 'MONITORADO',
+    'PROVISÓRIO', 'PROVISORIO', 'CADEIA', 'JUSTIÇA', 'JUSTICA', 'DELEGACIA',
+    'SOLTO', 'EXTRADITADO', 'SITUAÇÃO', 'SITUACAO'
+  ]
+  if (STATUS_KEYWORDS.some(k => upper.includes(k))) {
+    return false
+  }
+
+  if (/^[A-Z0-9\s\-\/]{1,15}$/i.test(upper) && (/\d/.test(upper) || upper.includes('CELA') || upper.includes('PAV') || upper.includes('BLOCO'))) {
+    return true
+  }
+
+  return false
+}
+
 export async function sanitizeInvalidCelasInDB(): Promise<void> {
   try {
     await prisma.sipeApenadoImportado.updateMany({
@@ -8456,6 +8479,13 @@ async function scrapeApenadoFichaFastLocked(
 
   let cela = cleanCela(listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null)
   let situacao = listagemInfoCache.get(sipeId)?.situacao ?? existingApenado?.situacao ?? dados.situacao ?? null
+
+  if (situacao && isCellFormat(situacao)) {
+    if (!cela) {
+      cela = cleanCela(situacao)
+    }
+    situacao = (existingApenado?.situacao && !isCellFormat(existingApenado.situacao)) ? existingApenado.situacao : null
+  }
   let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null
 
   if (unidade && (unidade.includes('http') || unidade.includes('/fotos') || unidade.includes('.jpg') || unidade.includes('.png') || unidade.includes('uploads/'))) {
@@ -8931,16 +8961,23 @@ async function scrapeApenadoFichaFastLocked(
       console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} confirmada pela listagem do SIPE: ${celaCandidate} (SIPE + AIP)`)
     }
   } else {
-    // Se a cela for nula ou contiver gênero ("MASCULINO"), limpa celas inválidas no banco
-    await prisma.sipeApenadoImportado.update({
+    // Se celaCandidate for nula (ex: sync individual sem busca na listagem), limpa SOMENTE se a cela no banco for inválida (ex: contiver "MASCULINO")
+    const atual = await prisma.sipeApenadoImportado.findUnique({
       where: { id: apenado.id },
-      data: { cela: null }
-    }).catch(() => {})
+      select: { cela: true }
+    })
 
-    await prisma.aIPApenado.updateMany({
-      where: { sipeId },
-      data: { cela: null }
-    }).catch(() => {})
+    if (atual?.cela && cleanCela(atual.cela) === null) {
+      await prisma.sipeApenadoImportado.update({
+        where: { id: apenado.id },
+        data: { cela: null }
+      }).catch(() => {})
+
+      await prisma.aIPApenado.updateMany({
+        where: { sipeId },
+        data: { cela: null }
+      }).catch(() => {})
+    }
   }
 
   // Por último, com todos os parsers já gravados: espelha o apenado para o AIP.
