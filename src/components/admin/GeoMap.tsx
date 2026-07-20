@@ -145,7 +145,14 @@ export default function GeoMap({ locations, userTrail, selectedUserId, onlineUse
       style={{ height: '100%', width: '100%', borderRadius: 'inherit' }}
       zoomControl
     >
-      <TileLayer key={tile.url} url={tile.url} attribution={tile.attribution} />
+      <TileLayer
+        key={tile.url}
+        url={tile.url}
+        attribution={tile.attribution}
+        subdomains={(tile as any).subdomains}
+        maxZoom={(tile as any).maxZoom ?? 20}
+        maxNativeZoom={(tile as any).maxNativeZoom ?? 20}
+      />
       <MapController targets={targets} />
 
       {/* Overview mode: one marker per user */}

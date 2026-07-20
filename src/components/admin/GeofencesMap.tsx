@@ -37,9 +37,9 @@ interface GeofencesMapProps {
 }
 
 const TILE_LAYERS = {
-  standard: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-  satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+  standard: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', subdomains: ['a', 'b', 'c'] },
+  dark: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', subdomains: ['a', 'b', 'c'] },
+  satellite: { url: 'https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] }
 };
 
 // Componente para capturar os cliques no mapa
@@ -223,7 +223,13 @@ export default function GeofencesMap({
         zoom={12}
         style={{ width: '100%', height: '100%', background: '#f5f5f5' }}
       >
-        <TileLayer url={TILE_LAYERS[mapStyle]} attribution='&copy; OpenStreetMap contributors' />
+        <TileLayer
+          url={TILE_LAYERS[mapStyle].url}
+          subdomains={TILE_LAYERS[mapStyle].subdomains}
+          maxZoom={20}
+          maxNativeZoom={20}
+          attribution='&copy; Google Maps / OpenStreetMap'
+        />
         
         {/* Manipulador de cliques para criar marcador de nova cerca */}
         <MapClickHandler onMapClick={onMapClick} />

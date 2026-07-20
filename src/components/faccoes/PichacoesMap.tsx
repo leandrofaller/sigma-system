@@ -96,12 +96,16 @@ export default function PichacoesMap({ pichacoes, onSelect, center = [-10.9, -62
       <MapContainer
         center={center}
         zoom={zoom}
+        maxZoom={20}
         style={{ width: '100%', height: '100%' }}
         scrollWheelZoom={true}
       >
         <TileLayer
           attribution={UNIDADE_SATELLITE_TILE.attribution}
           url={UNIDADE_SATELLITE_TILE.url}
+          subdomains={UNIDADE_SATELLITE_TILE.subdomains}
+          maxZoom={UNIDADE_SATELLITE_TILE.maxZoom}
+          maxNativeZoom={UNIDADE_SATELLITE_TILE.maxNativeZoom}
         />
         
         <MapController center={center} zoom={zoom} />

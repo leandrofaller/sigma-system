@@ -1,11 +1,15 @@
 import L from 'leaflet'
 
-/** Camada de satélite Esri — já permitida no CSP (server.arcgisonline.com). */
-export const UNIDADE_SATELLITE_TILE = {
-  url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-  attribution:
-    '&copy; <a href="https://www.esri.com">Esri</a>, Maxar, Earthstar Geographics',
+/** Camada de satélite Híbrida do Google (Satélite + Nomes de Ruas/Bairros) com suporte a alto zoom. */
+export const GOOGLE_HYBRID_TILE = {
+  url: 'https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+  subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+  attribution: '&copy; Google Maps',
+  maxZoom: 20,
+  maxNativeZoom: 20,
 }
+
+export const UNIDADE_SATELLITE_TILE = GOOGLE_HYBRID_TILE
 
 let markerIcon: L.DivIcon | null = null
 

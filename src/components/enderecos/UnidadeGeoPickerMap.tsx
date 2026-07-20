@@ -41,10 +41,13 @@ export default function UnidadeGeoPickerMap({
     latitude != null && longitude != null ? [latitude, longitude] : DEFAULT_CENTER
 
   return (
-    <MapContainer center={center} zoom={latitude != null ? 16 : 7} className="h-full w-full" scrollWheelZoom>
+    <MapContainer center={center} zoom={latitude != null ? 16 : 7} maxZoom={20} className="h-full w-full" scrollWheelZoom>
       <TileLayer
         attribution={UNIDADE_SATELLITE_TILE.attribution}
         url={UNIDADE_SATELLITE_TILE.url}
+        subdomains={UNIDADE_SATELLITE_TILE.subdomains}
+        maxZoom={UNIDADE_SATELLITE_TILE.maxZoom}
+        maxNativeZoom={UNIDADE_SATELLITE_TILE.maxNativeZoom}
       />
       <ClickHandler onPick={onPick} />
       <FlyTo lat={latitude} lng={longitude} />

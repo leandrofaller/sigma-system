@@ -54,10 +54,13 @@ export default function UnidadeEnderecoMap({ unidade }: { unidade: UnidadeEndere
   const zoom = lat != null && lng != null ? (hasCoords ? 17 : 16) : 7
 
   return (
-    <MapContainer center={center} zoom={zoom} className="h-full w-full" scrollWheelZoom>
+    <MapContainer center={center} zoom={zoom} maxZoom={20} className="h-full w-full" scrollWheelZoom>
       <TileLayer
         attribution={UNIDADE_SATELLITE_TILE.attribution}
         url={UNIDADE_SATELLITE_TILE.url}
+        subdomains={UNIDADE_SATELLITE_TILE.subdomains}
+        maxZoom={UNIDADE_SATELLITE_TILE.maxZoom}
+        maxNativeZoom={UNIDADE_SATELLITE_TILE.maxNativeZoom}
       />
       {lat != null && lng != null && (
         <>
