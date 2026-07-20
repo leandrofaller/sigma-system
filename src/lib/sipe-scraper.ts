@@ -3323,9 +3323,12 @@ async function scrapeApenadoFicha(
     select: { situacao: true, cela: true, unidade: true }
   });
 
-  // Recupera cela, situação e unidade do cache obtido na listagem (prioridade) ou tenta ler do corpo do perfil, com higienização de URLs sujas
-  let cela = listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null;
-  let situacao = listagemInfoCache.get(sipeId)?.situacao ?? existingApenado?.situacao ?? dados.situacao ?? null;
+  let validFichaSituacao = (dados.situacao && !isCellFormat(dados.situacao)) ? dados.situacao : null;
+  let validCacheSituacao = (listagemInfoCache.get(sipeId)?.situacao && !isCellFormat(listagemInfoCache.get(sipeId)?.situacao)) ? listagemInfoCache.get(sipeId)?.situacao : null;
+  let validExistingSituacao = (existingApenado?.situacao && !isCellFormat(existingApenado.situacao)) ? existingApenado.situacao : null;
+
+  let situacao = validFichaSituacao ?? validCacheSituacao ?? validExistingSituacao ?? null;
+  let cela = cleanCela(listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? (isCellFormat(dados.situacao) ? dados.situacao : null) ?? existingApenado?.cela ?? null);
   let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null;
 
   if (unidade && (unidade.includes('http') || unidade.includes('/fotos') || unidade.includes('.jpg') || unidade.includes('.png') || unidade.includes('uploads/'))) {
@@ -6715,6 +6718,192 @@ function parseApenadoFichaHtmlCheerio(html: string) {
   }
 }
 
+export async function vincularFaccaoApenado(
+  apenadoId: string,
+  faccaoNomeRaw: string,
+  faccaoSipeId?: number | null,
+  alcunhaNaFaccao?: string | null
+): Promise<void> {
+  if (!faccaoNomeRaw) return
+  const nomeLimpo = faccaoNomeRaw.trim().toUpperCase()
+  if (!nomeLimpo || nomeLimpo === '-----' || nomeLimpo === 'NENHUMA' || nomeLimpo === 'NÃO INFORMADO' || nomeLimpo === 'NAO INFORMADO') return
+
+  console.log(`[FACCAO SYNC] Sincronizando pertencimento a facção para apenado ${apenadoId}: "${nomeLimpo}" (sipeId: ${faccaoSipeId ?? 'N/A'}, alcunha: ${alcunhaNaFaccao ?? 'N/A'})`)
+
+  // 1. Procurar SipeFaccao por sipeId, nome ou correspondência parcial
+  let faccaoObj = null
+  if (faccaoSipeId && faccaoSipeId > 0) {
+    faccaoObj = await prisma.sipeFaccao.findUnique({ where: { sipeId: faccaoSipeId } })
+  }
+  if (!faccaoObj) {
+    faccaoObj = await prisma.sipeFaccao.findFirst({
+      where: { nome: { equals: nomeLimpo, mode: 'insensitive' } }
+    })
+  }
+  if (!faccaoObj) {
+    const faccoes = await prisma.sipeFaccao.findMany()
+    faccaoObj = faccoes.find(f => {
+      const fNorm = f.nome.toUpperCase()
+      return fNorm.includes(nomeLimpo) || nomeLimpo.includes(fNorm)
+    }) || null
+  }
+
+  // Se a facção ainda não existir no catálogo SipeFaccao, cria automaticamente
+  if (!faccaoObj) {
+    let sigla: string | null = null
+    if (nomeLimpo.includes('CV') || nomeLimpo.includes('COMANDO VERMELHO')) {
+      sigla = 'CV'
+    } else if (nomeLimpo.includes('PCC') || nomeLimpo.includes('PRIMEIRO COMANDO')) {
+      sigla = 'PCC'
+    } else if (nomeLimpo.includes('FDN') || nomeLimpo.includes('FAMILIA DO NORTE')) {
+      sigla = 'FDN'
+    } else if (nomeLimpo.includes('-')) {
+      const parts = nomeLimpo.split('-')
+      sigla = parts[parts.length - 1].trim()
+    }
+
+    const nextSipeId = faccaoSipeId && faccaoSipeId > 0 ? faccaoSipeId : (Math.floor(Date.now() / 1000) % 1000000)
+    faccaoObj = await prisma.sipeFaccao.create({
+      data: {
+        sipeId: nextSipeId,
+        nome: nomeLimpo,
+        sigla: sigla || null,
+        cor: nomeLimpo.includes('CV') ? '#ef4444' : nomeLimpo.includes('PCC') ? '#10b981' : '#f59e0b'
+      }
+    }).catch(async () => {
+      return prisma.sipeFaccao.findFirst({ where: { nome: { equals: nomeLimpo, mode: 'insensitive' } } })
+    })
+  }
+
+  if (!faccaoObj) return
+
+  // 2. Atualizar SipeApenadoImportado com a FK da facção
+  const importado = await prisma.sipeApenadoImportado.update({
+    where: { id: apenadoId },
+    data: { faccaoId: faccaoObj.id }
+  }).catch(() => null)
+
+  // 3. Atualizar AIPApenado (campo faccao string com o nome da facção)
+  if (importado?.sipeId) {
+    await prisma.aIPApenado.updateMany({
+      where: { sipeId: importado.sipeId },
+      data: { faccao: faccaoObj.nome }
+    }).catch(() => {})
+  }
+
+  // 4. Atualizar Apenado local (campo faccao string)
+  if (importado?.apenadoLocalId) {
+    await prisma.apenado.update({
+      where: { id: importado.apenadoLocalId },
+      data: { faccao: faccaoObj.nome }
+    }).catch(() => {})
+  }
+
+  // 5. Se houver alcunha registrada na facção (ex: "TILANGO"), insere em SipeAlcunha
+  if (alcunhaNaFaccao) {
+    const alcunhaClean = alcunhaNaFaccao.trim().toUpperCase()
+    if (alcunhaClean && alcunhaClean.length > 1 && alcunhaClean !== '-----') {
+      const exists = await prisma.sipeAlcunha.findFirst({
+        where: { apenadoId, alcunha: alcunhaClean }
+      })
+      if (!exists) {
+        await prisma.sipeAlcunha.create({
+          data: { apenadoId, alcunha: alcunhaClean }
+        }).catch(() => {})
+      }
+    }
+  }
+}
+
+async function parseAndSaveFaccoesCheerio(html: string, apenadoId: string): Promise<boolean> {
+  const $ = cheerio.load(html)
+  let salvou = false
+
+  // 1. Procurar selects de facção (página de editar/facção)
+  const selOpt = $('select[name="faccao_id"] option:selected, select[name*="faccao"] option:selected')
+  if (selOpt.length) {
+    const valText = selOpt.text().trim()
+    const valId = parseInt(selOpt.val()?.toString() || '0')
+    if (valText && valText !== 'Selecione' && valText !== 'Nenhum' && !valText.includes('Selecione')) {
+      await vincularFaccaoApenado(apenadoId, valText, valId > 0 ? valId : null)
+      salvou = true
+    }
+  }
+
+  // 2. Procurar tabelas de facção (Ficha Geral / relatórios / subpágina de facção)
+  const tables = $('table').get()
+  for (const t of tables) {
+    const tableHtml = $(t).text().toUpperCase()
+    if (tableHtml.includes('FACÇÃO') || tableHtml.includes('FACCAO') || tableHtml.includes('FACÇÕES') || tableHtml.includes('FACCOES') || tableHtml.includes('APELIDO NA FACÇÃO') || tableHtml.includes('COMANDO VERMELHO') || tableHtml.includes('PCC')) {
+      let idIdx = -1
+      let faccaoIdx = -1
+      let alcunhaIdx = -1
+
+      $(t).find('thead tr th, thead tr td, tr:first-child th, tr:first-child td').each((idx, el) => {
+        const text = $(el).text().toUpperCase().trim()
+        if (text === '#' || text.includes('CÓDIGO') || text.includes('CODIGO') || text.includes('ID')) idIdx = idx
+        if (text.includes('FACÇÃO') || text.includes('FACCAO') || text === 'NOME') {
+          if (faccaoIdx === -1) faccaoIdx = idx
+        }
+        if (text.includes('APELIDO') || text.includes('ALCUNHA') || text.includes('VULGO')) alcunhaIdx = idx
+      })
+
+      if (faccaoIdx === -1) {
+        idIdx = 0
+        faccaoIdx = 1
+        alcunhaIdx = 2
+      }
+
+      const rows = $(t).find('tr').filter((_, el) => $(el).find('td').length > 0)
+      for (let i = 0; i < rows.length; i++) {
+        const cells = $(rows[i]).find('td, th')
+        if (cells.length <= faccaoIdx) continue
+
+        const faccaoNomeRaw = $(cells.get(faccaoIdx)).text().trim()
+        if (!faccaoNomeRaw || faccaoNomeRaw.toUpperCase().includes('FACÇÃO') || faccaoNomeRaw === '-----') continue
+
+        let faccaoSipeId: number | null = null
+        if (idIdx >= 0 && cells.length > idIdx) {
+          const idText = $(cells.get(idIdx)).text().replace(/[^0-9]/g, '').trim()
+          if (idText) faccaoSipeId = parseInt(idText, 10)
+        }
+
+        let alcunhaNaFaccao: string | null = null
+        if (alcunhaIdx >= 0 && cells.length > alcunhaIdx) {
+          alcunhaNaFaccao = $(cells.get(alcunhaIdx)).text().trim() || null
+          if (alcunhaNaFaccao === '-----') alcunhaNaFaccao = null
+        }
+
+        await vincularFaccaoApenado(apenadoId, faccaoNomeRaw, faccaoSipeId, alcunhaNaFaccao)
+        salvou = true
+      }
+    }
+  }
+
+  // 3. Fallback: procurar divs / blocos formatados com o título FACÇÕES (relatório visual SIPE)
+  if (!salvou) {
+    const titleFac = $('div, td, th, h1, h2, h3, h4, .title').filter((_, el) => {
+      const text = $(el).text().toUpperCase().trim()
+      return text === 'FACÇÕES' || text === 'FACCOES' || text === 'FACÇÃO' || text === 'FACCAO'
+    })
+
+    if (titleFac.length) {
+      const container = titleFac.first().parent()
+      const textBlock = container.text()
+      const knownFactions = ['COMANDO VERMELHO', 'PCC', 'PRIMEIRO COMANDO DA CAPITAL', 'FDN', 'FAMILIA DO NORTE', 'SINDICATO DO RN', 'TERCEIRO COMANDO', 'ADA']
+      for (const k of knownFactions) {
+        if (textBlock.toUpperCase().includes(k)) {
+          await vincularFaccaoApenado(apenadoId, k, null, null)
+          salvou = true
+          break
+        }
+      }
+    }
+  }
+
+  return salvou
+}
+
 async function parseAndSaveAlcunhasCheerio(html: string, apenadoId: string): Promise<void> {
   const $ = cheerio.load(html)
   const rows = $('table tr').filter((_, el) => $(el).find('td').length > 0)
@@ -7476,14 +7665,20 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     nomeConjuge:    sanitizeConjugeNome(pick('NOME DO CÔNJUGE', 'NOME DO CONJUGE', 'CÔNJUGE', 'CONJUGE', 'NOME DA ESPOSA', 'ESPOSA', 'NOME DO ESPOSO', 'ESPOSO')),
     nomeMae:        pick('NOME DA MÃE', 'NOME DA MAE', 'MÃE', 'MAE', 'NOME MÃE', 'NOME MAE'),
     nomePai:        pick('NOME DO PAI', 'PAI', 'NOME PAI'),
-    regime:         pick('REGIME'),
+    regime:         pick('REGIME', 'REGIME DE PENA'),
     dataEntrada:    pick('DATA DE ENTRADA', 'DATA ENTRADA', 'ENTRADA', 'DT ENTRADA'),
-    presoOriundo:   pick('PRESO ORIUNDO', 'ORIUNDO', 'PROCEDÊNCIA', 'PROCEDENCIA'),
-    // NÃO tente pegar cela/unidade aqui: a Ficha Geral montada com
-    // listar[]=DP,M,A,V não traz a seção "INFORMAÇÃO PRISIONAL" — os 30 labels
-    // disponíveis são só DADOS PESSOAIS, DOCUMENTOS, FILIAÇÃO e VISITANTES.
-    // A cela atual é aplicada por scrapeApenadoFichaFastLocked, a partir da
-    // coluna CELA da listagem de apenados.
+    oficioEntrada:  pick('OFÍCIO DE ENTRADA', 'OFICIO DE ENTRADA', 'OFÍCIO ENTRADA', 'OFICIO ENTRADA'),
+    presoOriundo:   pick('ORIUNDO DA JUSTIÇA', 'ORIUNDO DA JUSTICA', 'PRESO ORIUNDO', 'ORIUNDO', 'PROCEDÊNCIA', 'PROCEDENCIA'),
+  }
+
+  const rawSituacaoFicha = pick('SITUAÇÃO', 'SITUACAO', 'SITUAÇÃO PRISIONAL', 'SITUACAO PRISIONAL')
+  if (rawSituacaoFicha) {
+    if (isCellFormat(rawSituacaoFicha)) {
+      const cleanedCell = cleanCela(rawSituacaoFicha)
+      if (cleanedCell) dpData.cela = cleanedCell
+    } else {
+      dpData.situacao = rawSituacaoFicha
+    }
   }
 
   // qtdFilhos precisa de conversão para Int
@@ -7529,6 +7724,9 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
       data: dpUpdate,
     })
   }
+
+  // --- Extração de Facções da Ficha Geral consolidada ---
+  await parseAndSaveFaccoesCheerio(html, apenadoId)
 }
 
 async function parseAndSaveDocumentosCheerio(html: string, apenadoId: string, apenadoLocalId: string | null): Promise<void> {
@@ -8477,15 +8675,12 @@ async function scrapeApenadoFichaFastLocked(
 
   // Utiliza a busca de existingApenado já realizada no topo da função para preservar dados
 
-  let cela = cleanCela(listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null)
-  let situacao = listagemInfoCache.get(sipeId)?.situacao ?? existingApenado?.situacao ?? dados.situacao ?? null
+  let validFichaSituacao = (dados.situacao && !isCellFormat(dados.situacao)) ? dados.situacao : null
+  let validCacheSituacao = (listagemInfoCache.get(sipeId)?.situacao && !isCellFormat(listagemInfoCache.get(sipeId)?.situacao)) ? listagemInfoCache.get(sipeId)?.situacao : null
+  let validExistingSituacao = (existingApenado?.situacao && !isCellFormat(existingApenado.situacao)) ? existingApenado.situacao : null
 
-  if (situacao && isCellFormat(situacao)) {
-    if (!cela) {
-      cela = cleanCela(situacao)
-    }
-    situacao = (existingApenado?.situacao && !isCellFormat(existingApenado.situacao)) ? existingApenado.situacao : null
-  }
+  let situacao = validFichaSituacao ?? validCacheSituacao ?? validExistingSituacao ?? null
+  let cela = cleanCela(listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? (isCellFormat(dados.situacao) ? dados.situacao : null) ?? existingApenado?.cela ?? null)
   let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null
 
   if (unidade && (unidade.includes('http') || unidade.includes('/fotos') || unidade.includes('.jpg') || unidade.includes('.png') || unidade.includes('uploads/'))) {
@@ -8802,6 +8997,8 @@ async function scrapeApenadoFichaFastLocked(
     fetchSipeViaProxy(`/apenados/${sipeId}/credenciamento`),
     fetchSipeViaProxy(`/apenados/${sipeId}/atendimentos`),
     fetchSipeViaProxy(`/apenados/${sipeId}/credenciados`),
+    fetchSipeViaProxy(`/apenados/${sipeId}/faccao`).catch(() => null),
+    fetchSipeViaProxy(`/apenados/${sipeId}/faccoes`).catch(() => null),
   ]
 
   console.log(`[SCRAPER FAST] csrfToken para #${sipeId}: ${csrfToken ? csrfToken.substring(0, 12) + '…' : 'NÃO ENCONTRADO'}`)
@@ -8818,7 +9015,7 @@ async function scrapeApenadoFichaFastLocked(
       form: {
         _token: csrfToken,
         apenado_id: String(sipeId),
-        'listar[]': ['DP', 'M', 'A', 'V']
+        'listar[]': ['DP', 'M', 'A', 'V', 'F', 'FC', 'FAC', 'FACCAO', 'FACC']
       },
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
@@ -8837,6 +9034,8 @@ async function scrapeApenadoFichaFastLocked(
     credenciamentoData,
     atendimentosData,
     credenciadosData,
+    faccaoSubpageData,
+    faccoesSubpageData,
     fichaGeralData
   ] = await Promise.all([
     ...subPagesPromises,
@@ -8844,6 +9043,13 @@ async function scrapeApenadoFichaFastLocked(
   ])
 
   const independentPromises: Promise<any>[] = []
+
+  if (faccaoSubpageData?.html) {
+    independentPromises.push(parseAndSaveFaccoesCheerio(faccaoSubpageData.html, apenado.id))
+  }
+  if (faccoesSubpageData?.html) {
+    independentPromises.push(parseAndSaveFaccoesCheerio(faccoesSubpageData.html, apenado.id))
+  }
 
   if (processosData?.html) {
     independentPromises.push(parseAndSaveProcessosCheerio(processosData.html, apenado.id))
