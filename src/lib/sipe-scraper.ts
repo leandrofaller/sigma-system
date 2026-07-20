@@ -17,7 +17,34 @@
  *   globalThis is the single shared namespace for the whole Node.js process,
  *   guaranteeing that getSipeState() and stopSipeJob() see the same object
  *   as startSipeSync() regardless of which route called them.
- */
+// ── Helper Session Stubs (o engine python-sdk usa Cheerio + Proxy HTTP) ──
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function createDummyProxy(): any {
+  return new Proxy(Object.create(null), {
+    get(_target, prop) {
+      if (prop === 'then') return undefined
+      if (prop === 'url') return () => ''
+      if (prop === 'isConnected') return () => true
+      if (prop === 'waitForTimeout') return (ms: number) => new Promise(r => setTimeout(r, ms))
+      if (prop === 'evaluate') return async () => []
+      if (prop === 'content') return async () => ''
+      if (prop === 'newContext') return async () => createDummyProxy()
+      if (prop === 'newPage') return async () => createDummyProxy()
+      if (prop === 'close') return async () => {}
+      return (..._args: any[]) => createDummyProxy()
+    },
+  })
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Page = any
+
+async function createSession(): Promise<any> {
+  return {
+    newPage: async () => createDummyProxy(),
+    close: async () => {},
+  }
+}
 
 import { existsSync } from 'fs'
 import { prisma } from './db'
@@ -44,7 +71,7 @@ const SIPE_UNIDADE = process.env.SIPE_UNIDADE ?? '3'  // CDPPVH
 
 const SIPE_PYTHON_API_URL = process.env.SIPE_PYTHON_API_URL ?? 'http://localhost:8000'
 export type SipeEngine = 'python-sdk' | 'firecrawl'
-const DEFAULT_SIPE_ENGINE: SipeEngine = (process.env.SIPE_SCRAPER_ENGINE as SipeEngine) ?? 'python-sdk'
+export const DEFAULT_SIPE_ENGINE: SipeEngine = (process.env.SIPE_SCRAPER_ENGINE as SipeEngine) ?? 'python-sdk'
 
 type SipeProxyResponse = {
   content_type?: string
@@ -200,8 +227,8 @@ declare global {
 // Initialize once per process; no-op on hot-reloads
 if (globalThis.__sipeState === undefined) globalThis.__sipeState = null
 if (globalThis.__sipeStopFlag === undefined) globalThis.__sipeStopFlag = false
-if (globalThis.__sipeCurrentEngine === undefined) globalThis.__sipeCurrentEngine = DEFAULT_SIPE_ENGINE
-if (globalThis.__sipeFallbackUnidade === undefined) globalThis.__sipeFallbackUnidade = SIPE_UNIDADE
+if (globalThis.__sipeCurrentEngine === undefined) globalThis.__sipeCurrentEngine = (process.env.SIPE_SCRAPER_ENGINE as SipeEngine) ?? 'python-sdk'
+if (globalThis.__sipeFallbackUnidade === undefined) globalThis.__sipeFallbackUnidade = process.env.SIPE_UNIDADE ?? '3'
 if (globalThis.__sipeVisitantesOfficialProcessed === undefined) globalThis.__sipeVisitantesOfficialProcessed = false
 
 function setCurrentSipeEngine(engine: SipeEngine, fallbackUnidade?: string | null): void {
