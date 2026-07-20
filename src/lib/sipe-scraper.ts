@@ -736,10 +736,7 @@ export function startCnaAllSync(jobId: string): void {
       log: `Encontrados ${advogados.length} advogados com OAB para sincronizar. Preparando sessão...`,
     })
 
-    const browser = await getBrowser()
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    })
+    const context = await createSession()
     const page = await context.newPage()
 
     try {
