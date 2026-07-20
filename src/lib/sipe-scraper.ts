@@ -124,6 +124,53 @@ export function isPlaceholderPhoto(url: string | null | undefined): boolean {
   return placeholders.some(p => s.includes(p))
 }
 
+export function cleanCela(cela: string | null | undefined): string | null {
+  if (!cela) return null
+  const trimmed = cela.trim()
+  if (!trimmed || trimmed === '-----' || trimmed === '-') return null
+  const celaUpper = trimmed.toUpperCase()
+  if (
+    celaUpper === 'MASCULINO' ||
+    celaUpper === 'FEMININO' ||
+    celaUpper.includes('MASCULINO') ||
+    celaUpper.includes('FEMININO') ||
+    celaUpper.includes('HTTP') ||
+    celaUpper.includes('/FOTOS') ||
+    celaUpper.includes('.JPG') ||
+    celaUpper.includes('.PNG') ||
+    celaUpper.includes('UPLOADS/')
+  ) {
+    return null
+  }
+  return trimmed
+}
+
+export async function sanitizeInvalidCelasInDB(): Promise<void> {
+  try {
+    await prisma.sipeApenadoImportado.updateMany({
+      where: {
+        OR: [
+          { cela: { contains: 'MASCULINO', mode: 'insensitive' } },
+          { cela: { contains: 'FEMININO', mode: 'insensitive' } },
+        ]
+      },
+      data: { cela: null }
+    })
+    await prisma.aIPApenado.updateMany({
+      where: {
+        OR: [
+          { cela: { contains: 'MASCULINO', mode: 'insensitive' } },
+          { cela: { contains: 'FEMININO', mode: 'insensitive' } },
+        ]
+      },
+      data: { cela: null }
+    })
+  } catch (err) {
+    console.warn('[SANITY CELA] Erro ao sanitizar celas com gênero:', err)
+  }
+}
+
+
 /**
  * Tenta obter o HTML ou Imagem do SIPE através do Proxy Python FastAPI (curl_cffi).
  * Caso a chamada falhe ou o motor de scraping não seja "python-sdk", retorna null (para ativar o fallback).
@@ -362,7 +409,7 @@ async function login(page: Page, unidadeId: string): Promise<boolean> {
   await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 10_000 })
 
   // Select profile via page.evaluate to bypass Chosen hiding the select element
-  await page.evaluate((perfil) => {
+  await page.evaluate((perfil: any) => {
     const selects = document.querySelectorAll('select')
     const selectPerfil = selects[0] as HTMLSelectElement
     if (selectPerfil) {
@@ -380,7 +427,7 @@ async function login(page: Page, unidadeId: string): Promise<boolean> {
 
   // Aguarda dinamicamente até que a unidade desejada esteja disponível nas options do segundo select
   try {
-    await page.waitForFunction((unidade) => {
+    await page.waitForFunction((unidade: any) => {
       const selects = document.querySelectorAll('select')
       const selectUnidade = selects[1] as HTMLSelectElement
       if (!selectUnidade) return false
@@ -392,7 +439,7 @@ async function login(page: Page, unidadeId: string): Promise<boolean> {
   }
 
   // Select unit via page.evaluate
-  await page.evaluate((unidade) => {
+  await page.evaluate((unidade: any) => {
     const selects = document.querySelectorAll('select')
     const selectUnidade = selects[1] as HTMLSelectElement
     if (selectUnidade) {
@@ -1116,7 +1163,7 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
 
 async function setupFastPageIfNeeded(page: Page, fast: boolean): Promise<void> {
   if (!fast) return
-  await page.route('**/*', (route) => {
+  await page.route('**/*', (route: any) => {
     const url = route.request().url().toLowerCase();
     const resourceType = route.request().resourceType();
     
@@ -1929,7 +1976,7 @@ async function coletarIdsApenados(
         $first(table).find('thead tr th, thead tr td').each((i, el) => {
           const text = $first(el).text().toUpperCase().trim()
           if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = i
-          if (text === 'CELA') celaColIndex = i
+          if (text.includes('CELA') || text.includes('PAVILH') || text.includes('ALOCAÇ') || text.includes('ALOCAC')) celaColIndex = i
           if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) situacaoColIndex = i
           if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) unidadeColIndex = i
         })
@@ -1939,31 +1986,20 @@ async function coletarIdsApenados(
           if (cells.length > codigoColIndex) {
             const idVal = parseInt($first(cells.get(codigoColIndex)).text().trim(), 10)
             
-            // Detectar dinamicamente a presença da foto na linha
-            let fotoIdx = -1
-            cells.each((idx, td) => {
-              const text = $first(td).text().trim()
-              const html = $first(td).html() || ''
-              const hasImg = $first(td).find('img').length > 0
-              const hasPhotoLink = text.startsWith('http') || text.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png')
-              if (hasImg || hasPhotoLink) {
-                fotoIdx = idx
-              }
-            })
+            let cIdx = celaColIndex
+            let uIdx = unidadeColIndex
+            let sIdx = situacaoColIndex
 
-            let realUnidadeIdx = unidadeColIndex
-            let realCelaIdx = celaColIndex
-            let realSituacaoIdx = situacaoColIndex
-
-            if (fotoIdx !== -1) {
-              if (unidadeColIndex >= fotoIdx) realUnidadeIdx++
-              if (celaColIndex >= fotoIdx) realCelaIdx++
-              if (situacaoColIndex >= fotoIdx) realSituacaoIdx++
+            if (cIdx === -1 || uIdx === -1) {
+              const hasFotoCol = cells.length >= 7 || $first(row).find('img').length > 0
+              if (uIdx === -1) uIdx = hasFotoCol ? 4 : 3
+              if (cIdx === -1) cIdx = hasFotoCol ? 5 : 4
+              if (sIdx === -1) sIdx = hasFotoCol ? 6 : 5
             }
 
-            const celaText = realCelaIdx >= 0 && cells.length > realCelaIdx ? $first(cells.get(realCelaIdx)).text().trim() : undefined
-            const situacaoText = realSituacaoIdx >= 0 && cells.length > realSituacaoIdx ? $first(cells.get(realSituacaoIdx)).text().trim() : undefined
-            const unidadeText = realUnidadeIdx >= 0 && cells.length > realUnidadeIdx ? $first(cells.get(realUnidadeIdx)).text().trim() : undefined
+            const celaText = cleanCela(cIdx >= 0 && cells.length > cIdx ? $first(cells.get(cIdx)).text().trim() : undefined)
+            const situacaoText = sIdx >= 0 && cells.length > sIdx ? $first(cells.get(sIdx)).text().trim() : undefined
+            const unidadeText = uIdx >= 0 && cells.length > uIdx ? $first(cells.get(uIdx)).text().trim() : undefined
             
             if (!isNaN(idVal) && idVal > 0) {
               const cacheData: any = {}
@@ -2059,7 +2095,7 @@ async function coletarIdsApenados(
             $page(table).find('thead tr th, thead tr td').each((c, el) => {
               const text = $page(el).text().toUpperCase().trim()
               if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
-              if (text === 'CELA') celaColIndex = c
+              if (text.includes('CELA') || text.includes('PAVILH') || text.includes('ALOCAÇ') || text.includes('ALOCAC')) celaColIndex = c
               if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) situacaoColIndex = c
               if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) unidadeColIndex = c
             })
@@ -2069,31 +2105,20 @@ async function coletarIdsApenados(
               if (cells.length > codigoColIndex) {
                 const idVal = parseInt($page(cells.get(codigoColIndex)).text().trim(), 10)
                 
-                // Detectar dinamicamente a presença da foto na linha
-                let fotoIdx = -1
-                cells.each((idx, td) => {
-                  const text = $page(td).text().trim()
-                  const html = $page(td).html() || ''
-                  const hasImg = $page(td).find('img').length > 0
-                  const hasPhotoLink = text.startsWith('http') || text.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png')
-                  if (hasImg || hasPhotoLink) {
-                    fotoIdx = idx
-                  }
-                })
+                let cIdx = celaColIndex
+                let uIdx = unidadeColIndex
+                let sIdx = situacaoColIndex
 
-                let realUnidadeIdx = unidadeColIndex
-                let realCelaIdx = celaColIndex
-                let realSituacaoIdx = situacaoColIndex
-
-                if (fotoIdx !== -1) {
-                  if (unidadeColIndex >= fotoIdx) realUnidadeIdx++
-                  if (celaColIndex >= fotoIdx) realCelaIdx++
-                  if (situacaoColIndex >= fotoIdx) realSituacaoIdx++
+                if (cIdx === -1 || uIdx === -1) {
+                  const hasFotoCol = cells.length >= 7 || $page(row).find('img').length > 0
+                  if (uIdx === -1) uIdx = hasFotoCol ? 4 : 3
+                  if (cIdx === -1) cIdx = hasFotoCol ? 5 : 4
+                  if (sIdx === -1) sIdx = hasFotoCol ? 6 : 5
                 }
 
-                const celaText = realCelaIdx >= 0 && cells.length > realCelaIdx ? $page(cells.get(realCelaIdx)).text().trim() : undefined
-                const situacaoText = realSituacaoIdx >= 0 && cells.length > realSituacaoIdx ? $page(cells.get(realSituacaoIdx)).text().trim() : undefined
-                const unidadeText = realUnidadeIdx >= 0 && cells.length > realUnidadeIdx ? $page(cells.get(realUnidadeIdx)).text().trim() : undefined
+                const celaText = cleanCela(cIdx >= 0 && cells.length > cIdx ? $page(cells.get(cIdx)).text().trim() : undefined)
+                const situacaoText = sIdx >= 0 && cells.length > sIdx ? $page(cells.get(sIdx)).text().trim() : undefined
+                const unidadeText = uIdx >= 0 && cells.length > uIdx ? $page(cells.get(uIdx)).text().trim() : undefined
                 
                 if (!isNaN(idVal) && idVal > 0) {
                   const cacheData: any = {}
@@ -2162,7 +2187,7 @@ async function coletarIdsApenados(
           $page(table).find('thead tr th, thead tr td').each((c, el) => {
             const text = $page(el).text().toUpperCase().trim()
             if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
-            if (text === 'CELA') celaColIndex = c
+            if (text.includes('CELA') || text.includes('PAVILH') || text.includes('ALOCAÇ') || text.includes('ALOCAC')) celaColIndex = c
             if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) situacaoColIndex = c
             if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) unidadeColIndex = c
           })
@@ -2172,31 +2197,20 @@ async function coletarIdsApenados(
             if (cells.length > codigoColIndex) {
               const idVal = parseInt($page(cells.get(codigoColIndex)).text().trim(), 10)
               
-              // Detectar dinamicamente a presença da foto na linha
-              let fotoIdx = -1
-              cells.each((idx, td) => {
-                const text = $page(td).text().trim()
-                const html = $page(td).html() || ''
-                const hasImg = $page(td).find('img').length > 0
-                const hasPhotoLink = text.startsWith('http') || text.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png')
-                if (hasImg || hasPhotoLink) {
-                  fotoIdx = idx
-                }
-              })
+              let cIdx = celaColIndex
+              let uIdx = unidadeColIndex
+              let sIdx = situacaoColIndex
 
-              let realUnidadeIdx = unidadeColIndex
-              let realCelaIdx = celaColIndex
-              let realSituacaoIdx = situacaoColIndex
-
-              if (fotoIdx !== -1) {
-                if (unidadeColIndex >= fotoIdx) realUnidadeIdx++
-                if (celaColIndex >= fotoIdx) realCelaIdx++
-                if (situacaoColIndex >= fotoIdx) realSituacaoIdx++
+              if (cIdx === -1 || uIdx === -1) {
+                const hasFotoCol = cells.length >= 7 || $page(row).find('img').length > 0
+                if (uIdx === -1) uIdx = hasFotoCol ? 4 : 3
+                if (cIdx === -1) cIdx = hasFotoCol ? 5 : 4
+                if (sIdx === -1) sIdx = hasFotoCol ? 6 : 5
               }
 
-              const celaText = realCelaIdx >= 0 && cells.length > realCelaIdx ? $page(cells.get(realCelaIdx)).text().trim() : undefined
-              const situacaoText = realSituacaoIdx >= 0 && cells.length > realSituacaoIdx ? $page(cells.get(realSituacaoIdx)).text().trim() : undefined
-              const unidadeText = realUnidadeIdx >= 0 && cells.length > realUnidadeIdx ? $page(cells.get(realUnidadeIdx)).text().trim() : undefined
+              const celaText = cleanCela(cIdx >= 0 && cells.length > cIdx ? $page(cells.get(cIdx)).text().trim() : undefined)
+              const situacaoText = sIdx >= 0 && cells.length > sIdx ? $page(cells.get(sIdx)).text().trim() : undefined
+              const unidadeText = uIdx >= 0 && cells.length > uIdx ? $page(cells.get(uIdx)).text().trim() : undefined
               
               if (!isNaN(idVal) && idVal > 0) {
                 const cacheData: any = {}
@@ -2318,7 +2332,10 @@ async function coletarIdsApenados(
         const text = (h.textContent ?? '').toUpperCase().trim()
         return text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD'
       })
-      const celaIndex = headers.findIndex(h => (h.textContent ?? '').toUpperCase().trim() === 'CELA')
+      const celaIndex = headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text.includes('CELA') || text.includes('PAVILH') || text.includes('ALOCAÇ') || text.includes('ALOCAC')
+      })
       const situacaoIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
         return text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')
@@ -2336,29 +2353,21 @@ async function coletarIdsApenados(
           let situacao = ''
           let unidadeNome = ''
           if (Array.isArray(row)) {
-            // Detectar offset da foto na listagem em memória
-            let fotoIdx = -1;
-            row.forEach((cellText, idx) => {
-              const text = String(cellText ?? '').trim();
-              if (text.startsWith('http') || text.includes('/fotos') || text.includes('.jpg') || text.includes('.png') || text.includes('<img')) {
-                fotoIdx = idx;
-              }
-            });
+            let cIdx = celaIndex
+            let uIdx = unidadeIndex
+            let sIdx = situacaoIndex
 
-            let realUnidadeIdx = unidadeIndex;
-            let realCelaIdx = celaIndex;
-            let realSituacaoIdx = situacaoIndex;
-
-            if (fotoIdx !== -1) {
-              if (unidadeIndex >= fotoIdx) realUnidadeIdx++;
-              if (celaIndex >= fotoIdx) realCelaIdx++;
-              if (situacaoIndex >= fotoIdx) realSituacaoIdx++;
+            if (cIdx === -1 || uIdx === -1) {
+              const hasFotoCol = row.length >= 7
+              if (uIdx === -1) uIdx = hasFotoCol ? 4 : 3
+              if (cIdx === -1) cIdx = hasFotoCol ? 5 : 4
+              if (sIdx === -1) sIdx = hasFotoCol ? 6 : 5
             }
 
             id = parseInt(row[codigoIndex >= 0 ? codigoIndex : 0])
-            if (realCelaIdx >= 0) cela = (row[realCelaIdx] ?? '').toString().trim()
-            if (realSituacaoIdx >= 0) situacao = (row[realSituacaoIdx] ?? '').toString().trim()
-            if (realUnidadeIdx >= 0) unidadeNome = (row[realUnidadeIdx] ?? '').toString().trim()
+            if (cIdx >= 0) cela = (row[cIdx] ?? '').toString().trim()
+            if (sIdx >= 0) situacao = (row[sIdx] ?? '').toString().trim()
+            if (uIdx >= 0) unidadeNome = (row[uIdx] ?? '').toString().trim()
           } else if (row) {
             id = parseInt(row.id ?? row.sipeId ?? '')
             cela = (row.cela ?? '').toString().trim()
@@ -2374,7 +2383,7 @@ async function coletarIdsApenados(
   if (apenadosViaApi.length > 0) {
     // Modo teste: limitar a 150 IDs
     const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
-    let idsFinais = [...new Set(apenadosViaApi.map(item => item.id))]
+    let idsFinais: number[] = Array.from(new Set(apenadosViaApi.map((item: any) => item.id as number)))
 
     if (testMode && idsFinais.length > 150) {
       console.log(`[TESTE] Limitando de ${idsFinais.length} para 150 IDs`)
@@ -2416,7 +2425,10 @@ async function coletarIdsApenados(
         const text = (h.textContent ?? '').toUpperCase().trim()
         return text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD'
       })
-      const celaIndex = headers.findIndex(h => (h.textContent ?? '').toUpperCase().trim() === 'CELA')
+      const celaIndex = headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text.includes('CELA') || text.includes('PAVILH') || text.includes('ALOCAÇ') || text.includes('ALOCAC')
+      })
       const situacaoIndex = headers.findIndex(h => {
         const text = (h.textContent ?? '').toUpperCase().trim()
         return text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')
@@ -2484,29 +2496,21 @@ async function coletarIdsApenados(
           let situacao = ''
           let unidadeNome = ''
           if (Array.isArray(row)) {
-            // Detectar offset da foto na listagem em memória
-            let fotoIdx = -1;
-            row.forEach((cellText, idx) => {
-              const text = String(cellText ?? '').trim();
-              if (text.startsWith('http') || text.includes('/fotos') || text.includes('.jpg') || text.includes('.png') || text.includes('<img')) {
-                fotoIdx = idx;
-              }
-            });
+            let cIdx = celaIndex
+            let uIdx = unidadeIndex
+            let sIdx = situacaoIndex
 
-            let realUnidadeIdx = unidadeIndex;
-            let realCelaIdx = celaIndex;
-            let realSituacaoIdx = situacaoIndex;
-
-            if (fotoIdx !== -1) {
-              if (unidadeIndex >= fotoIdx) realUnidadeIdx++;
-              if (celaIndex >= fotoIdx) realCelaIdx++;
-              if (situacaoIndex >= fotoIdx) realSituacaoIdx++;
+            if (cIdx === -1 || uIdx === -1) {
+              const hasFotoCol = row.length >= 7
+              if (uIdx === -1) uIdx = hasFotoCol ? 4 : 3
+              if (cIdx === -1) cIdx = hasFotoCol ? 5 : 4
+              if (sIdx === -1) sIdx = hasFotoCol ? 6 : 5
             }
 
             id = parseInt(row[codigoIndex >= 0 ? codigoIndex : 0])
-            if (realCelaIdx >= 0) cela = (row[realCelaIdx] ?? '').toString().trim()
-            if (realSituacaoIdx >= 0) situacao = (row[realSituacaoIdx] ?? '').toString().trim()
-            if (realUnidadeIdx >= 0) unidadeNome = (row[realUnidadeIdx] ?? '').toString().trim()
+            if (cIdx >= 0) cela = (row[cIdx] ?? '').toString().trim()
+            if (sIdx >= 0) situacao = (row[sIdx] ?? '').toString().trim()
+            if (uIdx >= 0) unidadeNome = (row[uIdx] ?? '').toString().trim()
           } else if (row) {
             id = parseInt(row.id ?? row.sipeId ?? '')
             cela = (row.cela ?? '').toString().trim()
@@ -2522,7 +2526,7 @@ async function coletarIdsApenados(
   if (apenadosViaFetch.length > 0) {
     // Modo teste: limitar a 150 IDs
     const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
-    let idsFinais = [...new Set(apenadosViaFetch.map(item => item.id))]
+    let idsFinais: number[] = Array.from(new Set(apenadosViaFetch.map((item: any) => item.id as number)))
 
     if (testMode && idsFinais.length > 150) {
       console.log(`[TESTE] Limitando de ${idsFinais.length} para 150 IDs`)
@@ -2574,7 +2578,10 @@ async function coletarIdsApenados(
   const celaColIndex = await page.evaluate(() => {
     try {
       const headers = Array.from(document.querySelectorAll('table thead th, table thead td'))
-      return headers.findIndex(h => (h.textContent ?? '').toUpperCase().trim() === 'CELA')
+      return headers.findIndex(h => {
+        const text = (h.textContent ?? '').toUpperCase().trim()
+        return text.includes('CELA') || text.includes('PAVILH') || text.includes('ALOCAÇ') || text.includes('ALOCAC')
+      })
     } catch { return -1 }
   }).catch(() => -1)
 
@@ -2627,42 +2634,31 @@ async function coletarIdsApenados(
 
       ids.add(id)
 
-      // Detectar foto na linha
-      let fotoIdx = -1
-      for (let idx = 0; idx < cells.length; idx++) {
-        const tdText = (await cells[idx].innerText()).trim()
-        const html = await cells[idx].innerHTML().catch(() => '')
-        const hasImg = html.includes('<img')
-        const hasPhotoLink = tdText.startsWith('http') || tdText.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png')
-        if (hasImg || hasPhotoLink) {
-          fotoIdx = idx
-        }
-      }
+      let cIdx = celaColIndex
+      let uIdx = unidadeColIndex
+      let sIdx = situacaoColIndex
 
-      let realUnidadeIdx = unidadeColIndex
-      let realCelaIdx = celaColIndex
-      let realSituacaoIdx = situacaoColIndex
-
-      if (fotoIdx !== -1) {
-        if (unidadeColIndex >= fotoIdx) realUnidadeIdx++
-        if (celaColIndex >= fotoIdx) realCelaIdx++
-        if (situacaoColIndex >= fotoIdx) realSituacaoIdx++
+      if (cIdx === -1 || uIdx === -1) {
+        const hasFotoCol = cells.length >= 7
+        if (uIdx === -1) uIdx = hasFotoCol ? 4 : 3
+        if (cIdx === -1) cIdx = hasFotoCol ? 5 : 4
+        if (sIdx === -1) sIdx = hasFotoCol ? 6 : 5
       }
 
       const cacheObj: any = {}
       // Salva a cela correspondente no cache em memória
-      if (realCelaIdx >= 0 && cells.length > realCelaIdx) {
-        const celaText = (await cells[realCelaIdx].innerText()).trim()
+      if (cIdx >= 0 && cells.length > cIdx) {
+        const celaText = cleanCela((await cells[cIdx].innerText()).trim())
         if (celaText) cacheObj.cela = celaText
       }
       // Salva a situação correspondente no cache em memória
-      if (realSituacaoIdx >= 0 && cells.length > realSituacaoIdx) {
-        const situacaoText = (await cells[realSituacaoIdx].innerText()).trim()
+      if (sIdx >= 0 && cells.length > sIdx) {
+        const situacaoText = (await cells[sIdx].innerText()).trim()
         if (situacaoText) cacheObj.situacao = situacaoText
       }
       // Salva a unidade correspondente no cache em memória
-      if (realUnidadeIdx >= 0 && cells.length > realUnidadeIdx) {
-        const unidadeText = (await cells[realUnidadeIdx].innerText()).trim()
+      if (uIdx >= 0 && cells.length > uIdx) {
+        const unidadeText = (await cells[uIdx].innerText()).trim()
         if (unidadeText) cacheObj.unidadeNome = unidadeText
       }
 
@@ -2807,7 +2803,7 @@ async function scrapeApenadoFicha(
     }
 
     // Localizar link do apenado na tabela de resultados e colher dados da linha
-    const listagemInfo = await page.evaluate((id) => {
+    const listagemInfo = await page.evaluate((id: any) => {
       // 1. Identificar a tabela correta da listagem (a que contém o apenado em suas linhas)
       let table = document.querySelector('table');
       const tables = Array.from(document.querySelectorAll('table'));
@@ -2832,15 +2828,15 @@ async function scrapeApenadoFicha(
         }
       }
 
-      let unidadeIdx = 3;
-      let celaIdx = 4;
-      let situacaoIdx = 5;
+      let unidadeIdx = -1;
+      let celaIdx = -1;
+      let situacaoIdx = -1;
 
       if (headers.length > 0) {
         headers.forEach((text, idx) => {
           if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) {
             unidadeIdx = idx;
-          } else if (text === 'CELA') {
+          } else if (text.includes('CELA') || text.includes('PAVILH') || text.includes('ALOCAÇ') || text.includes('ALOCAC')) {
             celaIdx = idx;
           } else if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) {
             situacaoIdx = idx;
@@ -2864,49 +2860,37 @@ async function scrapeApenadoFicha(
         if (firstColText === String(id) || (firstColText.includes(String(id)) && text.includes(String(id)))) {
           const a = row.querySelector('a[href]') as HTMLAnchorElement | null;
           
-          // Detectar dinamicamente se e onde a foto está na linha (coluna fantasma)
-          let fotoIdx = -1;
-          tds.forEach((td, idx) => {
-            const tdText = (td.textContent ?? '').trim();
-            const html = td.innerHTML ?? '';
-            const hasImg = td.querySelector('img') !== null;
-            const hasPhotoLink = tdText.startsWith('http') || tdText.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png');
-            if (hasImg || hasPhotoLink) {
-              fotoIdx = idx;
-            }
-          });
+          let rawUnidade: string | null = null
+          let rawCela: string | null = null
+          let rawSituacao: string | null = null
 
-          // Aplicar offset dinamicamente
-          let realUnidadeIdx = unidadeIdx;
-          let realCelaIdx = celaIdx;
-          let realSituacaoIdx = situacaoIdx;
-
-          if (fotoIdx !== -1) {
-            if (unidadeIdx >= fotoIdx) realUnidadeIdx++;
-            if (celaIdx >= fotoIdx) realCelaIdx++;
-            if (situacaoIdx >= fotoIdx) realSituacaoIdx++;
+          if (unidadeIdx >= 0 && tds.length > unidadeIdx) {
+            rawUnidade = tds[unidadeIdx]?.textContent?.trim() || null
+          }
+          if (celaIdx >= 0 && tds.length > celaIdx) {
+            rawCela = tds[celaIdx]?.textContent?.trim() || null
+          }
+          if (situacaoIdx >= 0 && tds.length > situacaoIdx) {
+            rawSituacao = tds[situacaoIdx]?.textContent?.trim() || null
           }
 
-          // Se os índices reais couberem na linha
-          if (tds.length > Math.max(realUnidadeIdx, realCelaIdx, realSituacaoIdx)) {
-            return {
-              link: a?.href || null,
-              unidade: tds[realUnidadeIdx]?.textContent?.trim() || null,
-              cela: tds[realCelaIdx]?.textContent?.trim() || null,
-              situacao: tds[realSituacaoIdx]?.textContent?.trim() || null,
-            };
+          if (!rawUnidade || !rawCela) {
+            const hasFotoCol = tds.length >= 7 || row.querySelector('img') !== null
+            const uIdx = hasFotoCol ? 4 : 3
+            const cIdx = hasFotoCol ? 5 : 4
+            const sIdx = hasFotoCol ? 6 : 5
+
+            if (!rawUnidade && tds.length > uIdx) rawUnidade = tds[uIdx]?.textContent?.trim() || null
+            if (!rawCela && tds.length > cIdx) rawCela = tds[cIdx]?.textContent?.trim() || null
+            if (!rawSituacao && tds.length > sIdx) rawSituacao = tds[sIdx]?.textContent?.trim() || null
           }
 
-          // Fallback tolerante final com offset estático se necessário
-          if (tds.length >= 6) {
-            const offset = (fotoIdx !== -1) ? 1 : 0;
-            return {
-              link: a?.href || null,
-              unidade: tds[3 + offset]?.textContent?.trim() || null,
-              cela: tds[4 + offset]?.textContent?.trim() || null,
-              situacao: tds[5 + offset]?.textContent?.trim() || null,
-            };
-          }
+          return {
+            link: a?.href || null,
+            unidade: rawUnidade,
+            cela: rawCela,
+            situacao: rawSituacao,
+          };
         }
       }
 
@@ -3194,7 +3178,7 @@ async function scrapeApenadoFicha(
       photoSrc = null;
     }
 
-    complementaryPhotoSrcs = imagesInfo.allSrcs.filter(src => {
+    complementaryPhotoSrcs = imagesInfo.allSrcs.filter((src: string) => {
       const s = src.toLowerCase();
       const isPlaceholder = [
         'avatar.png', 'avatar.jpg', 'avatar.gif', 'avatar.jpeg', 'avatar.webp',
@@ -3225,7 +3209,7 @@ async function scrapeApenadoFicha(
           base64Data = proxyPhoto.data;
         } else {
           const absoluteUrl = new URL(cleanPhotoSrc, page.url()).href;
-          base64Data = await page.evaluate(async (url) => {
+          base64Data = await page.evaluate(async (url: any) => {
             try {
               const res = await fetch(url);
               if (!res.ok) return null;
@@ -3249,7 +3233,7 @@ async function scrapeApenadoFicha(
             base64Data = fallbackProxyPhoto.data;
           } else {
             const absoluteUrlFallback = new URL(photoSrc, page.url()).href;
-            base64Data = await page.evaluate(async (url) => {
+            base64Data = await page.evaluate(async (url: any) => {
               try {
                 const res = await fetch(url);
                 if (!res.ok) return null;
@@ -3711,7 +3695,7 @@ async function saveAndLinkComplementaryPhoto(
     if (proxyPhoto && proxyPhoto.is_binary && proxyPhoto.data) {
       base64Data = proxyPhoto.data;
     } else {
-      base64Data = await page.evaluate(async (url) => {
+      base64Data = await page.evaluate(async (url: any) => {
         try {
           const res = await fetch(url);
           if (!res.ok) return null;
@@ -3735,7 +3719,7 @@ async function saveAndLinkComplementaryPhoto(
         base64Data = proxyFallbackPhoto.data;
       } else {
         const absoluteUrlFallback = new URL(src, page.url()).href;
-        base64Data = await page.evaluate(async (url) => {
+        base64Data = await page.evaluate(async (url: any) => {
           try {
             const res = await fetch(url);
             if (!res.ok) return null;
@@ -4567,7 +4551,7 @@ async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]>
 
   if (advogadosViaApi.length > 0) {
     log(jobId, `⚡ Estratégia A (DataTables JS API): ${advogadosViaApi.length} IDs coletados`)
-    return [...new Set(advogadosViaApi)]
+    return Array.from(new Set(advogadosViaApi)) as number[]
   }
 
   log(jobId, '⚠️ Estratégia A sem resultado — tentando estratégia B (fetch direto paginado)')
@@ -4640,7 +4624,7 @@ async function coletarIdsAdvogados(page: Page, jobId: string): Promise<number[]>
 
   if (advogadosViaFetch.length > 0) {
     log(jobId, `⚡ Estratégia B (fetch direto paginado): ${advogadosViaFetch.length} IDs coletados`)
-    return [...new Set(advogadosViaFetch)]
+    return Array.from(new Set(advogadosViaFetch)) as number[]
   }
 
   log(jobId, '⚠️ Estratégia B sem resultado — usando estratégia C (DOM + paginação inteligente)')
@@ -5257,7 +5241,7 @@ export async function scrapeCnaOabDetails(
 
   // Monitorar respostas HTTP para detecção precisa e instantânea de CAPTCHA
   let apiCaptchaDetected = false
-  cnaPage.context().on('response', async (response) => {
+  cnaPage.context().on('response', async (response: any) => {
     const url = response.url()
     if (url.includes('/api/advogado/search')) {
       if (response.status() === 428) {
@@ -5296,7 +5280,7 @@ export async function scrapeCnaOabDetails(
     // Preencher campos forçando eventos reativos do Angular com delay entre ações
     if (jobId) log(jobId, `${logPrefix} Preenchendo campos de busca (OAB: ${oabString}, UF: ${uf})...`)
 
-    await cnaPage.evaluate(({ inscricao, uf }) => {
+    await cnaPage.evaluate(({ inscricao, uf }: any) => {
       const regInput = document.querySelector('input[name="registration"]') as HTMLInputElement
       if (regInput) {
         regInput.value = inscricao
@@ -5478,7 +5462,7 @@ export async function scrapeCnaOabDetails(
     }
 
     // Clicar no resultado correspondente ao advogado na lista do lado direito
-    const clicked = await cnaPage.evaluate((oabNum) => {
+    const clicked = await cnaPage.evaluate((oabNum: any) => {
       const items = Array.from(document.querySelectorAll('*')).filter(el => {
         const text = el.textContent || '';
         return text.includes(oabNum) && 
@@ -5777,7 +5761,7 @@ export async function scrapeFaccoes(jobId?: string, unidadeId = SIPE_UNIDADE, en
               )
 
               // Descartar select de gênero
-              const hasGender = testOptions.some(opt =>
+              const hasGender = testOptions.some((opt: string) =>
                 opt.toLowerCase().includes('masculino') ||
                 opt.toLowerCase().includes('feminino') ||
                 opt.toLowerCase().includes('não informado')
@@ -6077,8 +6061,8 @@ export async function scrapeHistorico(
     await page.waitForSelector('table, .empty-message, body', { timeout: 10_000 })
 
 
-    const headers = await page.$$eval('table thead tr th, table thead tr td, table tr:first-child th, table tr:first-child td', (elements) => {
-      return elements.map(el => el.textContent?.toUpperCase().trim() || '')
+    const headers = await page.$$eval('table thead tr th, table thead tr td, table tr:first-child th, table tr:first-child td', (elements: any[]) => {
+      return elements.map((el: any) => el.textContent?.toUpperCase().trim() || '')
     }).catch(() => [] as string[])
 
     let unidadeIndex = -1
@@ -6087,7 +6071,7 @@ export async function scrapeHistorico(
     let celaParaIndex = -1
     let motivoIndex = -1
 
-    headers.forEach((text, idx) => {
+    headers.forEach((text: string, idx: number) => {
       if (text.includes('UNIDADE') || text.includes('ESTABELECIMENTO')) unidadeIndex = idx
       if (text.includes('DATA')) {
         if (!text.includes('CELA') && !text.includes('MOTIVO')) dataIndex = idx
@@ -6216,7 +6200,7 @@ export async function scrapeHistorico(
       return
     }
 
-    const postResult = await page.evaluate(async ({ url, sipeId, token }) => {
+    const postResult = await page.evaluate(async ({ url, sipeId, token }: any) => {
       try {
         const bodyParams = new URLSearchParams()
         bodyParams.append('_token', token)
@@ -6334,7 +6318,7 @@ async function scrapeDocumentos(
 
       if (!nome) continue
 
-      const urlDownload = await row.evaluate((el) => {
+      const urlDownload = await row.evaluate((el: any) => {
         const anchor = el.querySelector('a[href*="download"], a[href*="documento"], a[href*="arquivo"]') as HTMLAnchorElement | null;
         return anchor ? anchor.getAttribute('href') : null;
       });
@@ -6525,7 +6509,7 @@ function parseApenadoFichaHtmlCheerio(html: string) {
   let celaFicha = null
   const celaMatch = bodyText.match(/Cela:\s*([^\n]+)/i) || bodyText.match(/Cela\s*-\s*([^\n]+)/i)
   if (celaMatch) {
-    celaFicha = celaMatch[1].trim()
+    celaFicha = cleanCela(celaMatch[1].trim())
   }
 
   let unidadeFicha = selVal('unidade_id') || selVal('fk_unidade') || selVal('estabelecimento') || selVal('unidade') || selVal('estabelecimento_id')
@@ -6971,8 +6955,9 @@ async function parseAndSaveMudarCelaCheerio(html: string, apenadoId: string): Pr
     if (!unidadeMaisRecente && unidadePrisional && unidadePrisional !== '-----') {
       unidadeMaisRecente = unidadePrisional
     }
-    if (!celaMaisRecente && celaPara && celaPara !== '-----') {
-      celaMaisRecente = celaPara
+    if (!celaMaisRecente && celaPara) {
+      const cleaned = cleanCela(celaPara)
+      if (cleaned) celaMaisRecente = cleaned
     }
 
     let datahora: Date | null = null
@@ -8198,6 +8183,7 @@ async function scrapeApenadoFichaFastLocked(
     globalThis.__sipeFallbackUnidade = null
   }
 
+  await sanitizeInvalidCelasInDB()
   let editHtml = ''
 
   // Cela lida da coluna CELA da listagem de apenados. É a única fonte direta que
@@ -8244,22 +8230,22 @@ async function scrapeApenadoFichaFastLocked(
       for (const tr of trs) {
         const cells = $(tr).find('th, td').get()
         const texts = cells.map(c => $(c).text().toUpperCase().trim())
-        if (texts.some(t => t.includes('NOME') || t.includes('CPF') || t.includes('UNID') || t.includes('CELA'))) {
+        if (texts.some(t => t.includes('NOME') || t.includes('CPF') || t.includes('UNID') || t.includes('CELA') || t.includes('PAVILH'))) {
           headers = texts
           break
         }
       }
     }
 
-    let unidadeIdx = 3
-    let celaIdx = 4
-    let situacaoIdx = 5
+    let unidadeIdx = -1
+    let celaIdx = -1
+    let situacaoIdx = -1
 
     if (headers.length > 0) {
       headers.forEach((text, idx) => {
         if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) {
           unidadeIdx = idx
-        } else if (text === 'CELA') {
+        } else if (text.includes('CELA') || text.includes('PAVILH') || text.includes('ALOCAÇ') || text.includes('ALOCAC')) {
           celaIdx = idx
         } else if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) {
           situacaoIdx = idx
@@ -8276,52 +8262,44 @@ async function scrapeApenadoFichaFastLocked(
       const tds = $(row).find('td')
       if (tds.length === 0) continue
 
-      const text = $(row).text()
       const firstColText = $(tds.get(0)).text().trim()
-
-      // Valida se esta linha representa o apenado procurado (correspondência numérica exata)
       const cleanFirstCol = firstColText.replace(/[^0-9]/g, '')
+
       if (cleanFirstCol === String(sipeId)) {
         const a = $(row).find('a[href]')
         if (a.length) {
           link = a.attr('href') || null
         }
         
-        // Detectar dinamicamente se e onde a foto está na linha (coluna fantasma)
-        let fotoIdx = -1
-        tds.each((idx, td) => {
-          const tdText = $(td).text().trim()
-          const html = $(td).html() || ''
-          const hasImg = $(td).find('img').length > 0
-          const hasPhotoLink = tdText.startsWith('http') || tdText.includes('/fotos') || html.includes('/fotos') || html.includes('.jpg') || html.includes('.png')
-          if (hasImg || hasPhotoLink) {
-            fotoIdx = idx
-          }
-        })
+        let rawUnidade: string | null = null
+        let rawCela: string | null = null
+        let rawSituacao: string | null = null
 
-        // Aplicar offset dinamicamente
-        let realUnidadeIdx = unidadeIdx
-        let realCelaIdx = celaIdx
-        let realSituacaoIdx = situacaoIdx
-
-        if (fotoIdx !== -1) {
-          if (unidadeIdx >= fotoIdx) realUnidadeIdx++
-          if (celaIdx >= fotoIdx) realCelaIdx++
-          if (situacaoIdx >= fotoIdx) realSituacaoIdx++
+        if (unidadeIdx >= 0 && tds.length > unidadeIdx) {
+          rawUnidade = $(tds.get(unidadeIdx)).text().trim() || null
+        }
+        if (celaIdx >= 0 && tds.length > celaIdx) {
+          rawCela = $(tds.get(celaIdx)).text().trim() || null
+        }
+        if (situacaoIdx >= 0 && tds.length > situacaoIdx) {
+          rawSituacao = $(tds.get(situacaoIdx)).text().trim() || null
         }
 
-        // Se os índices reais couberem na linha
-        if (tds.length > Math.max(realUnidadeIdx, realCelaIdx, realSituacaoIdx)) {
-          listagemUnidade = $(tds.get(realUnidadeIdx)).text().trim() || null
-          listagemCela = $(tds.get(realCelaIdx)).text().trim() || null
-          listagemSituacao = $(tds.get(realSituacaoIdx)).text().trim() || null
-        } else if (tds.length >= 6) {
-          // Fallback tolerante final com offset estático se necessário
-          const offset = (fotoIdx !== -1) ? 1 : 0
-          listagemUnidade = $(tds.get(3 + offset)).text().trim() || null
-          listagemCela = $(tds.get(4 + offset)).text().trim() || null
-          listagemSituacao = $(tds.get(5 + offset)).text().trim() || null
+        // Fallback tolerante se headers não batem
+        if (!rawUnidade || !rawCela) {
+          const hasFotoCol = tds.length >= 7 || $(row).find('img').length > 0
+          const uIdx = hasFotoCol ? 4 : 3
+          const cIdx = hasFotoCol ? 5 : 4
+          const sIdx = hasFotoCol ? 6 : 5
+
+          if (!rawUnidade && tds.length > uIdx) rawUnidade = $(tds.get(uIdx)).text().trim() || null
+          if (!rawCela && tds.length > cIdx) rawCela = $(tds.get(cIdx)).text().trim() || null
+          if (!rawSituacao && tds.length > sIdx) rawSituacao = $(tds.get(sIdx)).text().trim() || null
         }
+
+        listagemUnidade = rawUnidade
+        listagemCela = cleanCela(rawCela)
+        listagemSituacao = rawSituacao
         break
       }
     }
@@ -8476,7 +8454,7 @@ async function scrapeApenadoFichaFastLocked(
 
   // Utiliza a busca de existingApenado já realizada no topo da função para preservar dados
 
-  let cela = listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null
+  let cela = cleanCela(listagemInfoCache.get(sipeId)?.cela ?? existingApenado?.cela ?? dados.celaFicha ?? null)
   let situacao = listagemInfoCache.get(sipeId)?.situacao ?? existingApenado?.situacao ?? dados.situacao ?? null
   let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null
 
@@ -8484,20 +8462,6 @@ async function scrapeApenadoFichaFastLocked(
     unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? dados.unidadeFicha ?? null
     if (unidade && (unidade.includes('http') || unidade.includes('/fotos') || unidade.includes('.jpg') || unidade.includes('.png') || unidade.includes('uploads/'))) {
       unidade = null
-    }
-  }
-  if (cela) {
-    const celaUpper = cela.toUpperCase().trim()
-    if (
-      celaUpper.includes('MASCULINO') ||
-      celaUpper.includes('FEMININO') ||
-      celaUpper.includes('http') ||
-      celaUpper.includes('/fotos') ||
-      celaUpper.includes('.jpg') ||
-      celaUpper.includes('.png') ||
-      celaUpper.includes('uploads/')
-    ) {
-      cela = null
     }
   }
 
@@ -8634,17 +8598,18 @@ async function scrapeApenadoFichaFastLocked(
     photoPath,
     photoUrl: photoSrc || null,
     unidade: resolvedUnidade,
-    cela: cela || undefined,
+    cela: cleanCela(cela),
     apenadoLocalId: localApenado?.id || null,
     ultimaSyncAt: new Date(),
   }
 
   // Em re-sync, não sobrescrever campos com null — preserva dados existentes se o parser falhar.
-  // Exceção: nomeConjuge é extraído explicitamente e pode ser null para limpar valores antigos incorretos.
+  // Exceção: cela e nomeConjuge são extraídos explicitamente e podem ser null para limpar valores antigos incorretos.
   const updateData = {
     ...Object.fromEntries(
       Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
     ),
+    cela: cleanCela(cela),
     nomeConjuge: dados.nomeConjuge,
     photoUrl: photoSrc || undefined,
   }
@@ -8942,14 +8907,9 @@ async function scrapeApenadoFichaFastLocked(
   // listagem da unidade já foi lida e cacheada em listagemInfoCache, com a mesma
   // coluna CELA. Sem isto, o sync em massa ficava sem a correção e a cela
   // continuava vindo do palpite do histórico.
-  if (!celaDaListagem) {
-    const celaCacheada = listagemInfoCache.get(sipeId)?.cela
-    if (celaCacheada && celaCacheada !== '-----') {
-      celaDaListagem = celaCacheada
-    }
-  }
+  const celaCandidate = cleanCela(celaDaListagem || listagemInfoCache.get(sipeId)?.cela)
 
-  if (celaDaListagem) {
+  if (celaCandidate) {
     const atual = await prisma.sipeApenadoImportado.findUnique({
       where: { id: apenado.id },
       select: { cela: true }
@@ -8957,23 +8917,30 @@ async function scrapeApenadoFichaFastLocked(
 
     await prisma.sipeApenadoImportado.update({
       where: { id: apenado.id },
-      data: { cela: celaDaListagem }
+      data: { cela: celaCandidate }
     }).catch(err => console.error(`Erro ao atualizar cela em SipeApenadoImportado:`, err))
 
-    // Propaga para o AIP, que mantém a própria cópia de `cela`. Sem isto, a aba
-    // SIAIP (que lê SipeApenadoImportado) mostraria a cela certa enquanto a aba
-    // AIP seguiria com a errada, gravada por parseAndSaveMudarCelaCheerio — que
-    // também propaga para o AIP e roda antes daqui.
     await prisma.aIPApenado.updateMany({
       where: { sipeId },
-      data: { cela: celaDaListagem }
+      data: { cela: celaCandidate }
     }).catch(err => console.error(`Erro ao atualizar cela em AIPApenado:`, err))
 
-    if (atual?.cela !== celaDaListagem) {
-      console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} corrigida pela listagem do SIPE: ${atual?.cela ?? '(vazia)'} -> ${celaDaListagem} (SIPE + AIP)`)
+    if (atual?.cela !== celaCandidate) {
+      console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} corrigida pela listagem do SIPE: ${atual?.cela ?? '(vazia)'} -> ${celaCandidate} (SIPE + AIP)`)
     } else {
-      console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} confirmada pela listagem do SIPE: ${celaDaListagem} (SIPE + AIP)`)
+      console.log(`[SCRAPER FAST] 📍 Cela de #${sipeId} confirmada pela listagem do SIPE: ${celaCandidate} (SIPE + AIP)`)
     }
+  } else {
+    // Se a cela for nula ou contiver gênero ("MASCULINO"), limpa celas inválidas no banco
+    await prisma.sipeApenadoImportado.update({
+      where: { id: apenado.id },
+      data: { cela: null }
+    }).catch(() => {})
+
+    await prisma.aIPApenado.updateMany({
+      where: { sipeId },
+      data: { cela: null }
+    }).catch(() => {})
   }
 
   // Por último, com todos os parsers já gravados: espelha o apenado para o AIP.
