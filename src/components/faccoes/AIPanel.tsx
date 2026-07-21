@@ -1697,11 +1697,13 @@ export function AIPanel({
   onViewVinculos,
   onViewMapa,
   mapaRefreshKey = 0,
+  origemRegistroFilter = 'ALL',
 }: {
   userRole?: string
   onViewVinculos?: (sipeId: number) => void
   onViewMapa?: (apenado: AIPApenado) => void
   mapaRefreshKey?: number
+  origemRegistroFilter?: 'MANUAL' | 'SIPE' | 'ALL'
 }) {
   const [apenados, setApenados] = useState<AIPApenado[]>([])
   const [loading, setLoading] = useState(true)
@@ -1821,6 +1823,9 @@ export function AIPanel({
         limit: String(LIMIT)
       })
       if (q) params.set('q', q)
+      if (origemRegistroFilter && origemRegistroFilter !== 'ALL') {
+        params.set('origemRegistro', origemRegistroFilter)
+      }
 
       const res = await fetch(`/api/aip/apenados?${params}`)
       if (res.ok) {
@@ -1836,7 +1841,7 @@ export function AIPanel({
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [origemRegistroFilter])
 
   useEffect(() => {
     fetchApenados(1, searchQuery)
@@ -1874,9 +1879,13 @@ export function AIPanel({
         <div>
           <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Brain className="w-5 h-5 text-purple-500" />
-            Análise de Inteligência Penal
+            {origemRegistroFilter === 'MANUAL' ? 'Cadastros Externos' : 'Análise de Inteligência Penal'}
           </h2>
-          <p className="text-sm text-gray-500 mt-1">{total} apenado{total !== 1 ? 's' : ''} registrado{total !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {origemRegistroFilter === 'MANUAL'
+              ? `${total} pessoa${total !== 1 ? 's' : ''} externa${total !== 1 ? 's' : ''} registrada${total !== 1 ? 's' : ''}`
+              : `${total} apenado${total !== 1 ? 's' : ''} registrado${total !== 1 ? 's' : ''}`}
+          </p>
         </div>
 
         <div className="flex items-center gap-2">

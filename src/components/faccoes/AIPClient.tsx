@@ -8,7 +8,7 @@ import { AIPFaccoesPanel } from './AIPFaccoesPanel'
 import { AIPAdvogadosPanel } from './AIPAdvogadosPanel'
 import { AIPVisitantesPanel } from './AIPVisitantesPanel'
 import { AIPVinculosPanel } from './AIPVinculosPanel'
-import { Brain, BarChart2, Users, Shield, Briefcase, Camera, Link2, Map, ShieldCheck } from 'lucide-react'
+import { Brain, BarChart2, Users, Shield, Briefcase, Camera, Link2, Map, ShieldCheck, UserPlus } from 'lucide-react'
 import { MapaFaccoesClient, type PendingMapaLink } from '@/components/mapa-faccoes/MapaFaccoesClient'
 import type { AIPApenado } from './AIPanel'
 import { AIPDossierRequestsPanel } from './AIPDossierRequestsPanel'
@@ -112,6 +112,10 @@ export function AIPClient({ userRole }: AIPClientProps) {
                 <Users className="w-4 h-4" />
                 Apenados
               </TabsTrigger>
+              <TabsTrigger value="externos" className={triggerClass}>
+                <UserPlus className="w-4 h-4" />
+                Externos
+              </TabsTrigger>
               <TabsTrigger value="vinculos" className={triggerClass}>
                 <Link2 className="w-4 h-4" />
                 Vínculos
@@ -153,6 +157,17 @@ export function AIPClient({ userRole }: AIPClientProps) {
           <TabsContent value="apenados" className="flex-1 min-h-0 mt-0">
             <AIPanel
               userRole={userRole}
+              origemRegistroFilter="ALL"
+              onViewVinculos={handleViewVinculos}
+              onViewMapa={handleViewMapa}
+              mapaRefreshKey={mapaRefreshKey}
+            />
+          </TabsContent>
+
+          <TabsContent value="externos" className="flex-1 min-h-0 mt-0">
+            <AIPanel
+              userRole={userRole}
+              origemRegistroFilter="MANUAL"
               onViewVinculos={handleViewVinculos}
               onViewMapa={handleViewMapa}
               mapaRefreshKey={mapaRefreshKey}

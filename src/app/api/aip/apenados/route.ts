@@ -13,14 +13,6 @@ import { syncMapaFromAipAsync } from '@/lib/mapa-faccoes-aip-sync'
  *   sipeApenadoId: number (sipeId de SipeApenadoImportado)
  *   cadastradoPor: string (userId)
  * }
- *
- * Response:
- * {
- *   success: boolean
- *   apenadoId?: string
- *   message: string
- *   duplicate?: boolean
- * }
  */
 export async function POST(request: NextRequest) {
   const session = await auth()
@@ -80,6 +72,7 @@ export async function POST(request: NextRequest) {
       data: {
         sipeApenadoId,
         sipeId: sipeApenado.sipeId,
+        origemRegistro: 'SIPE',
 
         // ============ DADOS PESSOAIS ============
         nome: sipeApenado.nome,
@@ -183,14 +176,6 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/aip/apenados
  * Lista apenados em AIP com filtros e paginação
- *
- * Query params:
- * - page: number (default: 1)
- * - limit: number (default: 20)
- * - q: string (busca por nome, cpf)
- * - unidade: string (filtro por unidade)
- * - faccao: string (filtro por facção SIPE)
- * - facaoReal: string (filtro por facção de inteligência)
  */
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -206,6 +191,7 @@ export async function GET(request: NextRequest) {
     const faccao = unaccentParam(searchParams.get('faccao'))
     const facaoReal = unaccentParam(searchParams.get('facaoReal'))
     const sipeIdParam = searchParams.get('sipeId')
+    const origemRegistro = searchParams.get('origemRegistro')
     const skip = (page - 1) * limit
 
     // Busca direta por sipeId (retorno rápido sem paginação)
@@ -287,6 +273,12 @@ export async function GET(request: NextRequest) {
       whereClause += ` AND immutable_unaccent(COALESCE("facaoRealNome",'')) ILIKE immutable_unaccent($${idx})`
       params.push(`%${facaoReal}%`)
       idx++
+    }
+
+    if (origemRegistro === 'MANUAL') {
+      whereClause += ` AND (COALESCE("origemRegistro",'') = 'MANUAL' OR "sipeApenadoId" IS NULL OR "sipeId" < 0)`
+    } else if (origemRegistro === 'SIPE') {
+      whereClause += ` AND (COALESCE("origemRegistro",'') = 'SIPE' AND "sipeApenadoId" IS NOT NULL AND "sipeId" > 0)`
     }
 
     // Count + paginated IDs
