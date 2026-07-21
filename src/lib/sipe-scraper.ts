@@ -7697,8 +7697,10 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
   // --- Extração de Dados Pessoais da seção DP da Ficha Geral ---
   // Coleta todos os pares label→valor de elementos .input em todo o HTML do relatório
   const allFields: Record<string, string> = {}
-  $('.input, .form-group, .field, [class*="col-"]').each((_, inputElem) => {
-    const label = $(inputElem).find('label, .control-label, b, strong').first().text().trim().toUpperCase().replace(/\s+/g, ' ').replace(/[:.]/g, '').trim()
+  const isGenericVal = (v: string) => !v || v.toUpperCase() === 'ATIVO' || v.toUpperCase() === 'INATIVO' || v.trim() === '-----' || v.trim() === '-'
+
+  $('.input, .form-group, .field, [class*="col-"], div, td, fieldset').each((_, inputElem) => {
+    const label = $(inputElem).find('label, .control-label, b, strong, td.rotulo, th').first().text().trim().toUpperCase().replace(/\s+/g, ' ').replace(/[:.]/g, '').trim()
     const value = (
       $(inputElem).find('input').attr('value')?.trim() ||
       $(inputElem).find('input').val()?.toString().trim() ||
@@ -7706,8 +7708,33 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
       $(inputElem).find('span').text().trim() ||
       $(inputElem).find('p').text().trim()
     ) || ''
-    if (label && value && value.length > 0 && !allFields[label]) {
-      allFields[label] = value
+    if (label && value && value.length > 0) {
+      const existing = allFields[label]
+      if (!existing || (isGenericVal(existing) && !isGenericVal(value))) {
+        allFields[label] = value
+      }
+    }
+  })
+
+  $('label').each((_, labelElem) => {
+    const label = $(labelElem).text().trim().toUpperCase().replace(/\s+/g, ' ').replace(/[:.]/g, '').trim()
+    if (!label) return
+    const container = $(labelElem).parent()
+    const value = (
+      container.find('input').attr('value')?.trim() ||
+      container.find('input').val()?.toString().trim() ||
+      container.find('select option:selected').text().trim() ||
+      container.find('span').text().trim() ||
+      container.find('p').text().trim() ||
+      $(labelElem).next('input').val()?.toString().trim() ||
+      $(labelElem).next('input').attr('value')?.trim()
+    ) || ''
+
+    if (label && value && value.length > 0) {
+      const existing = allFields[label]
+      if (!existing || (isGenericVal(existing) && !isGenericVal(value))) {
+        allFields[label] = value
+      }
     }
   })
 
