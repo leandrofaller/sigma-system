@@ -4075,7 +4075,7 @@ async function fetchFichaGeralHtmlViaProxy(sipeId: number): Promise<string | nul
       form: {
         _token: csrfToken,
         apenado_id: String(sipeId),
-        'listar[]': ['DP', 'M', 'A', 'V']
+        'listar[]': ['DP', 'IP', 'P', 'IPR', 'INF', 'INF_PRISIONAL', 'INFORMACAO_PRISIONAL', 'M', 'A', 'V', 'F', 'FC', 'CL', 'C', 'FAC', 'FACCAO', 'FACC', 'DOC', 'END', 'ALC']
       },
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     })
@@ -6254,9 +6254,16 @@ export async function scrapeHistorico(
         bodyParams.append('_token', token)
         bodyParams.append('apenado_id', String(sipeId))
         bodyParams.append('listar[]', 'DP') // Dados Pessoais (requerido)
+        bodyParams.append('listar[]', 'IP') // Informação Prisional
+        bodyParams.append('listar[]', 'P')  // Prisional
+        bodyParams.append('listar[]', 'IPR')
+        bodyParams.append('listar[]', 'INF')
         bodyParams.append('listar[]', 'M')  // Movimentações
         bodyParams.append('listar[]', 'A')  // Advogados
         bodyParams.append('listar[]', 'V')  // Visitas
+        bodyParams.append('listar[]', 'F')  // Fotos
+        bodyParams.append('listar[]', 'FC') // Facções
+        bodyParams.append('listar[]', 'CL') // Classificações
 
         const res = await fetch(`${url}/relatorios/fichaGeral`, {
           method: 'POST',
@@ -7699,6 +7706,52 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
   const allFields: Record<string, string> = {}
   const isGenericVal = (v: string) => !v || v.toUpperCase() === 'ATIVO' || v.toUpperCase() === 'INATIVO' || v.trim() === '-----' || v.trim() === '-'
 
+  // 1. Processamento de Tabelas HTML de Relatórios (ex: INFORMAÇÃO PRISIONAL)
+  $('table').each((_, tableElem) => {
+    const trs = $(tableElem).find('tr')
+    for (let r = 0; r < trs.length; r++) {
+      const trCurrent = $(trs.get(r))
+      const ths = trCurrent.find('th')
+      
+      // Padrão A: Linha <tr> de <th>'s (cabeçalho) seguida por linha <tr> de <td>'s (valores)
+      if (ths.length > 0 && r + 1 < trs.length) {
+        const trNext = $(trs.get(r + 1))
+        const tds = trNext.find('td')
+        if (tds.length >= ths.length) {
+          ths.each((idx, thEl) => {
+            const label = $(thEl).text().trim().toUpperCase().replace(/\s+/g, ' ').replace(/[:.]/g, '').trim()
+            const value = $(tds.get(idx)).text().trim()
+            if (label && value && value.length > 0) {
+              const existing = allFields[label]
+              if (!existing || (isGenericVal(existing) && !isGenericVal(value))) {
+                allFields[label] = value
+              }
+            }
+          })
+        }
+      }
+
+      // Padrão B: <th> e <td> alternados na mesma linha <tr>
+      const children = trCurrent.children('th, td')
+      for (let c = 0; c < children.length - 1; c++) {
+        const child = $(children.get(c))
+        if (child.is('th') || child.hasClass('rotulo') || child.find('b, strong, label').length > 0) {
+          const nextChild = $(children.get(c + 1))
+          if (nextChild.is('td') || nextChild.hasClass('valor')) {
+            const label = child.text().trim().toUpperCase().replace(/\s+/g, ' ').replace(/[:.]/g, '').trim()
+            const value = nextChild.text().trim()
+            if (label && value && value.length > 0) {
+              const existing = allFields[label]
+              if (!existing || (isGenericVal(existing) && !isGenericVal(value))) {
+                allFields[label] = value
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+
   $('.input, .form-group, .field, [class*="col-"], div, td, fieldset').each((_, inputElem) => {
     const label = $(inputElem).find('label, .control-label, b, strong, td.rotulo, th').first().text().trim().toUpperCase().replace(/\s+/g, ' ').replace(/[:.]/g, '').trim()
     const value = (
@@ -7792,7 +7845,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
       'EM LIBERDADE', 'EVADIDO', 'FORAGIDO'
     ]
     
-    // Procura em todos os valores extraídos de allFields
+    // 1. Procura em todos os valores extraídos de allFields (incluindo STATUS e SITUAÇÃO lidos da tabela)
     let foundReal: string | null = null
     for (const val of Object.values(allFields)) {
       const vUpper = val.toUpperCase().trim()
@@ -7809,6 +7862,31 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
         break
       }
     }
+
+    // 2. Fallback: scanner do texto HTML total por regex
+    if (!foundReal) {
+      const rawText = $.root().text()
+      const matchSit = rawText.match(/SITUAÇ[ÃO|AO]\s*(?:PRISIONAL|JURÍDICA|PROCESSUAL)?\s*[:\-]?\s*(CONDENAD[OA]|PROVISÓRI[OA]|PROVISORI[OA]|PRISÃO\s+DOMICILIAR|PRISAO\s+DOMICILIAR|CUSTODIAD[OA]|SENTENCIAD[OA]|SEMIABERTO|SEMI-ABERTO|FECHADO|ABERTO|INTERNAD[OA]|EVADID[OA]|FORAGID[OA]|EM\s+LIBERDADE)/i)
+      if (matchSit) {
+        const found = matchSit[1].toUpperCase()
+        if (found.includes('CONDENAD')) foundReal = 'Condenado'
+        else if (found.includes('PROVISOR')) foundReal = 'Provisório'
+        else if (found.includes('PRISÃO DOMICILIAR') || found.includes('PRISAO DOMICILIAR')) foundReal = 'Prisão Domiciliar'
+        else if (found.includes('CUSTODIAD')) foundReal = 'Custodiado'
+        else if (found.includes('SENTENCIAD')) foundReal = 'Sentenciado'
+        else if (found.includes('SEMIABERTO') || found.includes('SEMI-ABERTO')) foundReal = 'Semiaberto'
+        else if (found.includes('FECHADO')) foundReal = 'Fechado'
+        else if (found.includes('ABERTO')) foundReal = 'Aberto'
+        else foundReal = found.charAt(0) + found.slice(1).toLowerCase()
+      } else {
+        const matchStatus = rawText.match(/STATUS\s*[:\-]?\s*(PRESO\s+CONDENADO|CONDENAD[OA]|PROVISÓRI[OA]|PROVISORI[OA])/i)
+        if (matchStatus) {
+          if (matchStatus[1].toUpperCase().includes('CONDENAD')) foundReal = 'Condenado'
+          else if (matchStatus[1].toUpperCase().includes('PROVISOR')) foundReal = 'Provisório'
+        }
+      }
+    }
+
     if (foundReal) {
       rawSituacaoFicha = foundReal
     }
@@ -8832,7 +8910,7 @@ async function scrapeApenadoFichaFastLocked(
   let validCacheSituacao = (listagemInfoCache.get(sipeId)?.situacao && !isCellFormat(listagemInfoCache.get(sipeId)?.situacao) && !isGenericStatus(listagemInfoCache.get(sipeId)?.situacao)) ? listagemInfoCache.get(sipeId)?.situacao : null
   let validExistingSituacao = (existingApenado?.situacao && !isCellFormat(existingApenado.situacao) && !isGenericStatus(existingApenado.situacao)) ? existingApenado.situacao : null
 
-  let situacao = validFichaSituacao ?? validExistingSituacao ?? validCacheSituacao ?? existingApenado?.situacao ?? null
+  let situacao = validFichaSituacao ?? validExistingSituacao ?? validCacheSituacao ?? (isGenericStatus(existingApenado?.situacao) ? null : existingApenado?.situacao) ?? null
   let cela = cleanCela(listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? (isCellFormat(dados.situacao) ? dados.situacao : null) ?? existingApenado?.cela ?? null)
   let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null
 
@@ -9168,7 +9246,7 @@ async function scrapeApenadoFichaFastLocked(
       form: {
         _token: csrfToken,
         apenado_id: String(sipeId),
-        'listar[]': ['DP', 'M', 'A', 'V', 'F', 'FC', 'FAC', 'FACCAO', 'FACC']
+        'listar[]': ['DP', 'IP', 'P', 'IPR', 'INF', 'INF_PRISIONAL', 'INFORMACAO_PRISIONAL', 'M', 'A', 'V', 'F', 'FC', 'CL', 'C', 'FAC', 'FACCAO', 'FACC', 'DOC', 'END', 'ALC']
       },
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
