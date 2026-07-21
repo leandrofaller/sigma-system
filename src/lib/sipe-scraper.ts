@@ -1179,6 +1179,11 @@ async function runScrape(jobId: string, unidadeId: string): Promise<void> {
       ...(lastProcessedId !== undefined ? { ultimoIdProcessado: lastProcessedId } : {}),
     })
 
+    // Desassociar apenados antigos da unidade que não vieram no scraping atual
+    if (job.tipo === 'APENADOS' && cleanUnidadeNome && ids && ids.length > 0) {
+      await desassociarApenadosAntigosUnidade(jobId, cleanUnidadeNome, ids)
+    }
+
     // ── Done ──────────────────────────────────────────────────
     const summary =
       job.tipo === 'ADVOGADOS'
@@ -1261,6 +1266,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
       unidades: Array<{ id: string; nome: string; concluida: boolean; totalApenados?: number }>;
       currentUnidadeId: string | null;
       currentApenadosIds: number[];
+      currentOriginalIds?: number[];
     }
 
     if (job.idsColetados) {
@@ -1347,7 +1353,8 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
       checkpoint = {
         unidades: options.map(u => ({ id: u.id, nome: u.nome, concluida: false })),
         currentUnidadeId: null,
-        currentApenadosIds: []
+        currentApenadosIds: [],
+        currentOriginalIds: []
       }
 
       await dbProgress(jobId, {
@@ -1394,6 +1401,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
       if (checkpoint.currentApenadosIds.length === 0) {
         try {
           checkpoint.currentApenadosIds = await coletarIdsApenados(page, u.id, jobId, u.nome)
+          checkpoint.currentOriginalIds = [...checkpoint.currentApenadosIds]
           u.totalApenados = checkpoint.currentApenadosIds.length
 
           // --- FILTRAGEM INCREMENTAL (Sugestão 1) ---
@@ -1676,9 +1684,15 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
         }
       }
 
+      // Desassociar apenados antigos da unidade que não vieram no scraping atual
+      if (checkpoint.currentOriginalIds && checkpoint.currentOriginalIds.length > 0) {
+        await desassociarApenadosAntigosUnidade(jobId, u.nome, checkpoint.currentOriginalIds)
+      }
+
       u.concluida = true
       checkpoint.currentUnidadeId = null
       checkpoint.currentApenadosIds = []
+      checkpoint.currentOriginalIds = []
 
       await dbProgress(jobId, {
         idsColetados: JSON.stringify(checkpoint),
@@ -9784,5 +9798,56 @@ async function saveApenadoUnidadePrisional(sipeId: number, apenadoId: string): P
     console.log(`[UNIDADES PRISIONAIS] ✅ Apenado #${sipeId} copiado de forma independente para a tabela de Unidades Prisionais`)
   } catch (err) {
     console.error(`[UNIDADES PRISIONAIS] ❌ Erro ao salvar cópia independente para #${sipeId}:`, err)
+  }
+}
+
+/**
+ * Desassocia (define unidade e cela como null) os apenados locais que estavam
+ * marcados na unidade informada, mas não foram retornados na lista oficial do SIPE atual.
+ */
+async function desassociarApenadosAntigosUnidade(jobId: string, unidadeNome: string, sipeIdsAtuais: number[]): Promise<void> {
+  if (!unidadeNome) return
+  try {
+    log(jobId, `🧹 [LIMPEZA] Verificando se há apenados antigos para desassociar da unidade "${unidadeNome}"...`)
+
+    // 1. Atualizar na tabela principal de apenados importados
+    const importadosResult = await prisma.sipeApenadoImportado.updateMany({
+      where: {
+        unidade: unidadeNome,
+        sipeId: {
+          notIn: sipeIdsAtuais,
+        },
+      },
+      data: {
+        unidade: null,
+        cela: null,
+        intramuro: false,
+      },
+    })
+
+    // 2. Atualizar na tabela isolada de unidades prisionais
+    const unidadesResult = await prisma.sipeApenadoUnidadePrisional.updateMany({
+      where: {
+        unidade: unidadeNome,
+        sipeId: {
+          notIn: sipeIdsAtuais,
+        },
+      },
+      data: {
+        unidade: null,
+        cela: null,
+        intramuro: false,
+      },
+    })
+
+    const total = importadosResult.count
+    log(
+      jobId,
+      `🧹 [LIMPEZA] Concluído! ${total} apenado(s) antigo(s) desassociado(s) da unidade "${unidadeNome}" (removidos da contagem da unidade, mas preservados no banco local).`
+    )
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    log(jobId, `🧹 [LIMPEZA] ❌ Erro ao desassociar apenados antigos da unidade "${unidadeNome}": ${errMsg}`)
+    console.error(`[LIMPEZA UNIDADE] ❌ Erro ao desassociar apenados da unidade ${unidadeNome}:`, err)
   }
 }
