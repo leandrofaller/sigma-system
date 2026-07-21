@@ -6599,20 +6599,51 @@ function parseApenadoFichaHtmlCheerio(html: string) {
   const estadoCivilValue = selVal('fk_estadocivil') || extractLabel('Estado Civil')
   const grauInstrucaoValue = selVal('fk_grauinstrucao') || extractLabel('Grau de Instrução') || extractLabel('Grau Instrução') || extractLabel('Instrução')
   const religiaoValue = selVal('fk_religiao') || extractLabel('Religião')
-  const situacaoValue =
-    selVal('situacao') ||
-    selVal('fk_situacao') ||
+  let situacaoValue =
     selVal('fk_situacaoprisional') ||
     selVal('situacao_prisional') ||
     selVal('situacaoprisional') ||
+    selVal('fk_situacao_juridica') ||
+    selVal('situacao_juridica') ||
+    extractLabel('Situação\\s+Prisional') ||
+    extractLabel('Situação\\s+Jurídica') ||
+    extractLabel('Situação\\s+Processual') ||
+    extractLabel('Situação\\s+Penal') ||
+    extractLabel('Situação\\s+do\\s+Apenado') ||
+    extractLabel('Status\\s+Prisional') ||
+    selVal('situacao') ||
+    selVal('fk_situacao') ||
     selVal('situacao_id') ||
     selVal('fk_situacao_id') ||
-    extractLabel('Situação\\s+Prisional') ||
-    extractLabel('Situação\\s+do\\s+Apenado') ||
     extractLabel('Situação') ||
     extractLabel('Situação:') ||
-    extractLabel('Status\\s+Prisional') ||
     extractLabel('Status')
+
+  const isGenericStatusStr = (s: string | null | undefined) => !s || s.toUpperCase() === 'ATIVO' || s.toUpperCase() === 'INATIVO'
+
+  if (isGenericStatusStr(situacaoValue)) {
+    const KNOWN_SITUATIONS = [
+      'CONDENADO', 'CONDENADA',
+      'PROVISÓRIO', 'PROVISORIO', 'PROVISÓRIA', 'PROVISORIA',
+      'FECHADO', 'SEMIABERTO', 'SEMI-ABERTO', 'ABERTO',
+      'CUSTODIADO', 'CUSTODIADA',
+      'PRISÃO DOMICILIAR', 'PRISAO DOMICILIAR',
+      'SENTENCIADO', 'SENTENCIADA',
+      'INTERNADO', 'INTERNADA',
+      'EM LIBERDADE', 'EVADIDO', 'FORAGIDO'
+    ]
+    const foundSpecific = KNOWN_SITUATIONS.find(st => bodyText.toUpperCase().includes(st))
+    if (foundSpecific) {
+      if (foundSpecific.includes('CONDENAD')) situacaoValue = 'Condenado'
+      else if (foundSpecific.includes('PROVISOR')) situacaoValue = 'Provisório'
+      else if (foundSpecific.includes('PRISÃO DOMICILIAR') || foundSpecific.includes('PRISAO DOMICILIAR')) situacaoValue = 'Prisão Domiciliar'
+      else if (foundSpecific === 'CUSTODIADO' || foundSpecific === 'CUSTODIADA') situacaoValue = 'Custodiado'
+      else if (foundSpecific === 'SENTENCIADO' || foundSpecific === 'SENTENCIADA') situacaoValue = 'Sentenciado'
+      else if (foundSpecific === 'SEMIABERTO' || foundSpecific === 'SEMI-ABERTO') situacaoValue = 'Semiaberto'
+      else if (foundSpecific === 'FECHADO') situacaoValue = 'Fechado'
+      else situacaoValue = foundSpecific.charAt(0) + foundSpecific.slice(1).toLowerCase()
+    }
+  }
 
   const imgs: { src: string; alt: string; id: string; className: string }[] = []
   $('img').each((_, img) => {
@@ -7715,15 +7746,55 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     presoOriundo:   pick('ORIUNDO DA JUSTIÇA', 'ORIUNDO DA JUSTICA', 'PRESO ORIUNDO', 'ORIUNDO', 'PROCEDÊNCIA', 'PROCEDENCIA'),
   }
 
-  const rawSituacaoFicha = pick(
+  let rawSituacaoFicha = pick(
     'SITUAÇÃO PRISIONAL', 'SITUACAO PRISIONAL',
+    'SITUAÇÃO JURÍDICA', 'SITUACAO JURIDICA',
+    'SITUAÇÃO PROCESSUAL', 'SITUACAO PROCESSUAL',
+    'SITUAÇÃO PENAL', 'SITUACAO PENAL',
+    'CONDIÇÃO JURÍDICA', 'CONDICAO JURIDICA',
     'SITUAÇÃO DO APENADO', 'SITUACAO DO APENADO',
-    'SITUAÇÃO', 'SITUACAO',
-    'SITUAÇÃO ATUAL', 'SITUACAO ATUAL',
     'STATUS PRISIONAL', 'STATUS DO APENADO',
     'TIPO DE PRISÃO', 'TIPO DE PRISAO',
-    'SITUAÇÃO JURÍDICA', 'SITUACAO JURIDICA'
+    'SITUAÇÃO ATUAL', 'SITUACAO ATUAL',
+    'SITUAÇÃO', 'SITUACAO'
   )
+
+  const isGenericStatusFg = (s: string | null | undefined) => !s || s.toUpperCase() === 'ATIVO' || s.toUpperCase() === 'INATIVO'
+
+  if (isGenericStatusFg(rawSituacaoFicha)) {
+    const KNOWN_SITUATIONS = [
+      'CONDENADO', 'CONDENADA',
+      'PROVISÓRIO', 'PROVISORIO', 'PROVISÓRIA', 'PROVISORIA',
+      'FECHADO', 'SEMIABERTO', 'SEMI-ABERTO', 'ABERTO',
+      'CUSTODIADO', 'CUSTODIADA',
+      'PRISÃO DOMICILIAR', 'PRISAO DOMICILIAR',
+      'SENTENCIADO', 'SENTENCIADA',
+      'INTERNADO', 'INTERNADA',
+      'EM LIBERDADE', 'EVADIDO', 'FORAGIDO'
+    ]
+    
+    // Procura em todos os valores extraídos de allFields
+    let foundReal: string | null = null
+    for (const val of Object.values(allFields)) {
+      const vUpper = val.toUpperCase().trim()
+      const match = KNOWN_SITUATIONS.find(st => vUpper === st || vUpper.includes(st))
+      if (match) {
+        if (match.includes('CONDENAD')) foundReal = 'Condenado'
+        else if (match.includes('PROVISOR')) foundReal = 'Provisório'
+        else if (match.includes('PRISÃO DOMICILIAR') || match.includes('PRISAO DOMICILIAR')) foundReal = 'Prisão Domiciliar'
+        else if (match === 'CUSTODIADO' || match === 'CUSTODIADA') foundReal = 'Custodiado'
+        else if (match === 'SENTENCIADO' || match === 'SENTENCIADA') foundReal = 'Sentenciado'
+        else if (match === 'SEMIABERTO' || match === 'SEMI-ABERTO') foundReal = 'Semiaberto'
+        else if (match === 'FECHADO') foundReal = 'Fechado'
+        else foundReal = match.charAt(0) + match.slice(1).toLowerCase()
+        break
+      }
+    }
+    if (foundReal) {
+      rawSituacaoFicha = foundReal
+    }
+  }
+
   if (rawSituacaoFicha) {
     if (isCellFormat(rawSituacaoFicha)) {
       const cleanedCell = cleanCela(rawSituacaoFicha)
