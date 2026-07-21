@@ -1904,10 +1904,10 @@ function extractIdsFromTableHtml(html: string): number[] {
 async function fetchPageWithRetry(
   path: string,
   jobId: string,
-  maxRetries = 5
+  maxRetries = 3
 ): Promise<string | null> {
   let attempt = 0
-  let delay = 1000
+  let delay = 300
   while (attempt < maxRetries) {
     try {
       const proxyData = await fetchSipeViaProxy(path)
@@ -1915,14 +1915,19 @@ async function fetchPageWithRetry(
       if (html && html.length > 500 && !html.includes('id="login-form"')) {
         return html
       }
-      log(jobId, `⚠️ [PYTHON PROXY] Página ${path} veio incompleta, vazia ou na tela de login. Tentativa ${attempt + 1}/${maxRetries}...`)
+      
+      // Se veio formulário de login ou página em branco, renova sessão antes de tentar novamente
+      if (attempt < maxRetries - 1) {
+        log(jobId, `⚠️ [PYTHON PROXY] Página ${path} veio incompleta/expirada. Renovando sessão e tentando novamente (${attempt + 1}/${maxRetries})...`)
+        await fetchSipeViaProxy('/home').catch(() => {})
+      }
     } catch (err: any) {
       log(jobId, `⚠️ [PYTHON PROXY] Erro ao carregar página ${path}: ${err?.message || err}. Tentativa ${attempt + 1}/${maxRetries}...`)
     }
     attempt++
     if (attempt < maxRetries) {
       await new Promise(r => setTimeout(r, delay))
-      delay = Math.min(delay * 2, 8000) // Backoff exponencial limitado a 8s
+      delay = Math.min(delay * 2, 2000) // Backoff exponencial limitado a 2s
     }
   }
   return null
@@ -2090,8 +2095,8 @@ async function coletarIdsApenados(
       //    Ajustável por env SEM redeploy: SIPE_GLOBAL_LOTE (nº por lote, padrão 4) e
       //    SIPE_GLOBAL_PAUSA_MS (pausa-base entre lotes, padrão 600). Se ainda barrar,
       //    baixe o lote p/ 2 e suba a pausa; se voar sem erro, suba o lote aos poucos.
-      const LOTE_SIZE = Math.max(1, Number(process.env.SIPE_GLOBAL_LOTE) || 4)
-      const PAUSA_LOTE_MS = Math.max(0, Number(process.env.SIPE_GLOBAL_PAUSA_MS) || 600)
+      const LOTE_SIZE = Math.max(1, Number(process.env.SIPE_GLOBAL_LOTE) || 2)
+      const PAUSA_LOTE_MS = Math.max(0, Number(process.env.SIPE_GLOBAL_PAUSA_MS) || 200)
       for (let i = 0; i < pagesToFetch.length; i += LOTE_SIZE) {
         if (globalThis.__sipeStopFlag) {
           log(jobId, '🛑 Coleta global do SDK Python interrompida.')
