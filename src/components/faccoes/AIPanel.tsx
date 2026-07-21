@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { listaEnderecosHrefFromUnidadeAip } from '@/lib/unidades-enderecos-resolver'
-import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, MapPinOff, CheckCircle2, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download, Link2, RefreshCw, FileText } from 'lucide-react'
+import { Search, Brain, Users, Loader2, X, Edit2, Save, ChevronLeft, ChevronRight, Trash2, User, Shield, MapPin, MapPinOff, CheckCircle2, Image, Briefcase, Settings, ArrowUp, ArrowDown, Eye, EyeOff, Paperclip, Download, Link2, RefreshCw, FileText, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { printAIPDossier } from './AIPDossierPrint'
+import { NovoCadastroAIPModal } from './NovoCadastroAIPModal'
+import { VincularSipeModal } from './VincularSipeModal'
 
 interface AIPFotoVisitante {
   id: string
@@ -22,6 +24,8 @@ interface AIPFotoVisitante {
 export interface AIPApenado {
   id: string
   sipeId: number
+  sipeApenadoId?: number | null
+  origemRegistro?: string | null
   nome: string
   cpf?: string
   unidade?: string
@@ -198,6 +202,11 @@ function AIApenadoCard({
                   COM VÍNCULO
                 </span>
               )}
+              {(apenado.origemRegistro === 'MANUAL' || apenado.sipeApenadoId === null || apenado.sipeId < 0) && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                  MANUAL AIP
+                </span>
+              )}
             </div>
 
             {temVinculos && onViewVinculos && (
@@ -252,13 +261,14 @@ function AIApenadoCard({
 
 // ── Modal de Detalhes do Apenado em AIP ──────────────────────────────
 
-export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpdate, onDelete, userRole }: {
+export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpdate, onDelete, userRole, onOpenVincularSipe }: {
   apenado: AIPApenado
   layout?: any
   onClose: () => void
   onUpdate: (apenado: AIPApenado) => void
   onDelete?: (id: string) => Promise<void>
   userRole?: string
+  onOpenVincularSipe?: (apenado: AIPApenado) => void
 }) {
   const [apenadoState, setApenadoState] = useState(initialApenado)
   const apenado = apenadoState // Mantém compatibilidade com todos os usos de 'apenado.' no componente
@@ -731,7 +741,22 @@ export function AIApenadoModal({ apenado: initialApenado, layout, onClose, onUpd
               <div className="min-w-0 flex-1">
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight truncate">{apenado.nome}</h2>
                 {apenado.nomeOutro && <p className="text-sm text-gray-500 mt-1 truncate">Também: {apenado.nomeOutro}</p>}
-                <p className="text-xs text-gray-500 mt-1">SIPE ID: {apenado.sipeId}</p>
+                { (apenado.origemRegistro === 'MANUAL' || apenado.sipeApenadoId === null || apenado.sipeId < 0) ? (
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                      Cadastro Manual AIP
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onOpenVincularSipe && onOpenVincularSipe(apenado)}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
+                    >
+                      <Link2 className="w-3.5 h-3.5" /> Vincular ao SIPE
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">SIPE ID: {apenado.sipeId}</p>
+                )}
                 
                 {/* Badge de Facção Real em Destaque */}
                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -1687,6 +1712,9 @@ export function AIPanel({
   const [totalPages, setTotalPages] = useState(1)
   const [layout, setLayout] = useState<any>(null)
   const [showLayoutConfig, setShowLayoutConfig] = useState(false)
+  const [showNovoCadastroModal, setShowNovoCadastroModal] = useState(false)
+  const [showVincularSipeModal, setShowVincularSipeModal] = useState(false)
+  const [apenadoParaVincular, setApenadoParaVincular] = useState<AIPApenado | null>(null)
 
   const LIMIT = 20
 
@@ -1851,8 +1879,17 @@ export function AIPanel({
           <p className="text-sm text-gray-500 mt-1">{total} apenado{total !== 1 ? 's' : ''} registrado{total !== 1 ? 's' : ''}</p>
         </div>
 
-        {isSuperAdmin && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNovoCadastroModal(true)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-purple-900/30 active:scale-95"
+          >
+            <UserPlus className="w-4 h-4" />
+            Novo Cadastro AIP
+          </button>
+
+          {isSuperAdmin && (
+            <div className="flex items-center gap-2">
             {syncTodos?.rodando ? (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded-lg border border-blue-200 dark:border-blue-900/50 shadow-sm">
                 <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
@@ -1897,6 +1934,7 @@ export function AIPanel({
             </button>
           </div>
         )}
+        </div>
       </div>
 
       {/* Search */}
@@ -1972,8 +2010,36 @@ export function AIPanel({
           onUpdate={handleUpdate}
           onDelete={handleDelete}
           userRole={userRole}
+          onOpenVincularSipe={(a) => {
+            setApenadoParaVincular(a)
+            setShowVincularSipeModal(true)
+          }}
         />
       )}
+
+      {/* Modal de Cadastro Manual AIP */}
+      <NovoCadastroAIPModal
+        isOpen={showNovoCadastroModal}
+        onClose={() => setShowNovoCadastroModal(false)}
+        onSuccess={(novo) => {
+          setApenados(prev => [novo, ...prev])
+          setTotal(t => t + 1)
+          setSelectedApenado(novo)
+        }}
+      />
+
+      {/* Modal de Vinculação ao SIPE */}
+      <VincularSipeModal
+        isOpen={showVincularSipeModal}
+        onClose={() => setShowVincularSipeModal(false)}
+        aipApenado={apenadoParaVincular}
+        onSuccess={(atualizado) => {
+          setApenados(prev => prev.map(a => a.id === atualizado.id ? atualizado : a))
+          if (selectedApenado?.id === atualizado.id) {
+            setSelectedApenado(atualizado)
+          }
+        }}
+      />
 
       {/* Modal de Configuração de Layout */}
       {showLayoutConfig && (

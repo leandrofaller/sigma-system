@@ -546,6 +546,7 @@ model Apenado {
   sipeImportacoes  SipeApenadoImportado[]
   fotosComplementares SipeFotoComplementar[]
   sanitizations    ImageSanitization[]
+  aipCadastros     AIPApenado[]
 
   @@index([name])
   @@index([matricula])
@@ -1060,8 +1061,11 @@ model AIPApenado {
   photoPath         String? // foto de identificação do apenado
   customPhotoPath   String? // foto enviada manualmente pelo usuário na AIP
 
-  // Identificadores SIPE
+  // Identificadores SIPE e Locais
   sipeId            Int     @unique
+  origemRegistro    String? @default("SIPE") // "SIPE" | "MANUAL"
+  apenadoLocalId    String?
+  apenadoLocal      Apenado? @relation(fields: [apenadoLocalId], references: [id], onDelete: SetNull)
 
   // ============ DADOS DE INTELIGÊNCIA (imutáveis pelo Limpar Tudo) ============
   // Adicionados manualmente pelo analista, nunca sobrescritos
