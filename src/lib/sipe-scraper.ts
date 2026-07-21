@@ -3343,21 +3343,13 @@ async function scrapeApenadoFicha(
     select: { situacao: true, cela: true, unidade: true }
   });
 
-  let validFichaSituacao = (dados.situacao && !isCellFormat(dados.situacao)) ? dados.situacao : null;
-  let validCacheSituacao = (listagemInfoCache.get(sipeId)?.situacao && !isCellFormat(listagemInfoCache.get(sipeId)?.situacao)) ? listagemInfoCache.get(sipeId)?.situacao : null;
-  let validExistingSituacao = (existingApenado?.situacao && !isCellFormat(existingApenado.situacao)) ? existingApenado.situacao : null;
-
   const isGenericStatus = (s: string | null | undefined) => !s || s.toUpperCase() === 'ATIVO' || s.toUpperCase() === 'INATIVO';
-  let situacao = validFichaSituacao;
-  if (isGenericStatus(situacao)) {
-    if (!isGenericStatus(validExistingSituacao)) {
-      situacao = validExistingSituacao;
-    } else if (!isGenericStatus(validCacheSituacao)) {
-      situacao = validCacheSituacao;
-    } else {
-      situacao = situacao || validCacheSituacao || validExistingSituacao || null;
-    }
-  }
+
+  let validFichaSituacao = (dados.situacao && !isCellFormat(dados.situacao) && !isGenericStatus(dados.situacao)) ? dados.situacao : null;
+  let validCacheSituacao = (listagemInfoCache.get(sipeId)?.situacao && !isCellFormat(listagemInfoCache.get(sipeId)?.situacao) && !isGenericStatus(listagemInfoCache.get(sipeId)?.situacao)) ? listagemInfoCache.get(sipeId)?.situacao : null;
+  let validExistingSituacao = (existingApenado?.situacao && !isCellFormat(existingApenado.situacao) && !isGenericStatus(existingApenado.situacao)) ? existingApenado.situacao : null;
+
+  let situacao = validFichaSituacao ?? validExistingSituacao ?? validCacheSituacao ?? existingApenado?.situacao ?? null;
   let cela = cleanCela(listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? (isCellFormat(dados.situacao) ? dados.situacao : null) ?? existingApenado?.cela ?? null);
   let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null;
 
@@ -7795,7 +7787,7 @@ async function parseAndSaveFichaGeralCheerio(html: string, apenadoId: string): P
     }
   }
 
-  if (rawSituacaoFicha) {
+  if (rawSituacaoFicha && !isGenericStatusFg(rawSituacaoFicha)) {
     if (isCellFormat(rawSituacaoFicha)) {
       const cleanedCell = cleanCela(rawSituacaoFicha)
       if (cleanedCell) dpData.cela = cleanedCell
@@ -8807,21 +8799,13 @@ async function scrapeApenadoFichaFastLocked(
 
   // Utiliza a busca de existingApenado já realizada no topo da função para preservar dados
 
-  let validFichaSituacao = (dados.situacao && !isCellFormat(dados.situacao)) ? dados.situacao : null
-  let validCacheSituacao = (listagemInfoCache.get(sipeId)?.situacao && !isCellFormat(listagemInfoCache.get(sipeId)?.situacao)) ? listagemInfoCache.get(sipeId)?.situacao : null
-  let validExistingSituacao = (existingApenado?.situacao && !isCellFormat(existingApenado.situacao)) ? existingApenado.situacao : null
-
   const isGenericStatus = (s: string | null | undefined) => !s || s.toUpperCase() === 'ATIVO' || s.toUpperCase() === 'INATIVO'
-  let situacao = validFichaSituacao
-  if (isGenericStatus(situacao)) {
-    if (!isGenericStatus(validExistingSituacao)) {
-      situacao = validExistingSituacao
-    } else if (!isGenericStatus(validCacheSituacao)) {
-      situacao = validCacheSituacao
-    } else {
-      situacao = situacao || validCacheSituacao || validExistingSituacao || null
-    }
-  }
+
+  let validFichaSituacao = (dados.situacao && !isCellFormat(dados.situacao) && !isGenericStatus(dados.situacao)) ? dados.situacao : null
+  let validCacheSituacao = (listagemInfoCache.get(sipeId)?.situacao && !isCellFormat(listagemInfoCache.get(sipeId)?.situacao) && !isGenericStatus(listagemInfoCache.get(sipeId)?.situacao)) ? listagemInfoCache.get(sipeId)?.situacao : null
+  let validExistingSituacao = (existingApenado?.situacao && !isCellFormat(existingApenado.situacao) && !isGenericStatus(existingApenado.situacao)) ? existingApenado.situacao : null
+
+  let situacao = validFichaSituacao ?? validExistingSituacao ?? validCacheSituacao ?? existingApenado?.situacao ?? null
   let cela = cleanCela(listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? (isCellFormat(dados.situacao) ? dados.situacao : null) ?? existingApenado?.cela ?? null)
   let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null
 
