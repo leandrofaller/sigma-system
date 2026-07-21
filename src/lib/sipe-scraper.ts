@@ -3717,9 +3717,7 @@ async function scrapeApenadoFicha(
   await scrapeVisitantes(page, sipeId, apenado.id).catch(() => {});
   await scrapeAdvogadosDoApenado(page, sipeId, apenado.id).catch(() => {});
 
-  if (globalThis.__sipeState && (globalThis.__sipeState.tipo === 'UNIDADES' || globalThis.__sipeState.tipo === 'UNIDADES_FAST')) {
-    await saveApenadoUnidadePrisional(sipeId, apenado.id)
-  }
+  await saveApenadoUnidadePrisional(sipeId, apenado.id)
 }
 
 async function saveAndLinkComplementaryPhoto(
@@ -6587,6 +6585,9 @@ function parseApenadoFichaHtmlCheerio(html: string) {
   }
 
   let unidadeFicha = selVal('unidade_id') || selVal('fk_unidade') || selVal('estabelecimento') || selVal('unidade') || selVal('estabelecimento_id')
+  if (unidadeFicha && (unidadeFicha.toUpperCase() === 'SIM' || unidadeFicha.toUpperCase() === 'NÃO' || unidadeFicha.toUpperCase() === 'NAO')) {
+    unidadeFicha = null
+  }
   if (!unidadeFicha) {
     const unidadeMatch = bodyText.match(/Unidade:\s*([^\n]+)/i) || bodyText.match(/Estabelecimento:\s*([^\n]+)/i) || bodyText.match(/Unidade\s*Prisional:\s*([^\n]+)/i)
     if (unidadeMatch) {
@@ -9084,6 +9085,7 @@ async function scrapeApenadoFichaFastLocked(
     ...Object.fromEntries(
       Object.entries(upsertData).map(([k, v]) => [k, v === null ? undefined : v])
     ),
+    unidade: resolvedUnidade ?? null,
     cela: cleanCela(cela),
     nomeConjuge: dados.nomeConjuge,
     photoUrl: photoSrc || undefined,
@@ -9442,9 +9444,7 @@ async function scrapeApenadoFichaFastLocked(
 
   console.log(`[SCRAPER FAST] 🚀 Apenado #${sipeId} processado de forma sequencial-segura com sucesso!`)
 
-  if (globalThis.__sipeState && (globalThis.__sipeState.tipo === 'UNIDADES' || globalThis.__sipeState.tipo === 'UNIDADES_FAST')) {
-    await saveApenadoUnidadePrisional(sipeId, apenado.id)
-  }
+  await saveApenadoUnidadePrisional(sipeId, apenado.id)
 }
 
 // ── Scraping de Unidades Prisionais ──────────────────────────
