@@ -381,18 +381,49 @@ export function ConfigPanel({ configs: initialConfigs }: Props) {
               tipo: (configs.sipe_auto_sync_unidades as any)?.tipo || 'UNIDADES_FAST',
               engine: (configs.sipe_auto_sync_unidades as any)?.engine || 'python-sdk'
             })} />
-          <Field label="Intervalo de Sincronização de Unidades">
-            <Select value={(configs.sipe_sync_unidades_interval_hours as any)?.hours || '24'}
-              onChange={(e: any) => update('sipe_sync_unidades_interval_hours', { hours: e.target.value })}>
-              <option value="6">A cada 6 horas</option>
-              <option value="12">A cada 12 horas</option>
-              <option value="24">A cada 24 horas (diário — recomendado)</option>
-              <option value="48">A cada 48 horas</option>
-              <option value="168">A cada 7 dias (semanal)</option>
-            </Select>
-          </Field>
           {(configs.sipe_auto_sync_unidades as any)?.enabled === true && (
             <>
+              <Field label="Modo de Agendamento">
+                <Select value={(configs.sipe_auto_sync_unidades as any)?.mode || 'interval'}
+                  onChange={(e: any) => update('sipe_auto_sync_unidades', {
+                    ...configs.sipe_auto_sync_unidades,
+                    mode: e.target.value
+                  })}>
+                  <option value="interval">Por Intervalo de Tempo</option>
+                  <option value="fixed">Horário Diário Fixo</option>
+                </Select>
+              </Field>
+
+              {((configs.sipe_auto_sync_unidades as any)?.mode || 'interval') === 'interval' ? (
+                <Field label="Intervalo de Sincronização">
+                  <Select value={(configs.sipe_sync_unidades_interval_hours as any)?.hours || '24'}
+                    onChange={(e: any) => update('sipe_sync_unidades_interval_hours', { hours: e.target.value })}>
+                    <option value="6">A cada 6 horas</option>
+                    <option value="12">A cada 12 horas</option>
+                    <option value="24">A cada 24 horas (diário — recomendado)</option>
+                    <option value="48">A cada 48 horas</option>
+                    <option value="168">A cada 7 dias (semanal)</option>
+                  </Select>
+                </Field>
+              ) : (
+                <Field label="Horário de Sincronização Diária">
+                  <Select value={(configs.sipe_auto_sync_unidades as any)?.fixedHour || '02:00'}
+                    onChange={(e: any) => update('sipe_auto_sync_unidades', {
+                      ...configs.sipe_auto_sync_unidades,
+                      fixedHour: e.target.value
+                    })}>
+                    {Array.from({ length: 24 }).map((_, i) => {
+                      const hourStr = String(i).padStart(2, '0') + ':00'
+                      return (
+                        <option key={hourStr} value={hourStr}>
+                          {hourStr}
+                        </option>
+                      )
+                    })}
+                  </Select>
+                </Field>
+              )}
+
               <Field label="Tipo de Scraping Automático">
                 <Select value={(configs.sipe_auto_sync_unidades as any)?.tipo || 'UNIDADES_FAST'}
                   onChange={(e: any) => update('sipe_auto_sync_unidades', {

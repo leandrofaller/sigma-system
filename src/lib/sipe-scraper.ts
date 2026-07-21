@@ -9591,10 +9591,8 @@ function setupAutoSyncScheduler() {
 
       if (!isEnabled) return
 
-      const intervalHoursConfig = await prisma.systemConfig.findUnique({
-        where: { key: 'sipe_sync_unidades_interval_hours' }
-      })
-      const intervalHours = parseInt((intervalHoursConfig?.value as any)?.hours ?? '24') || 24
+      const syncMode = configVal?.mode ?? 'interval'
+      const fixedHourStr = configVal?.fixedHour ?? '02:00'
 
       // 2. Busca o último job do tipo configurado que foi concluído com sucesso
       const ultimoJobCompleto = await prisma.sipeSyncJob.findFirst({
@@ -9602,9 +9600,33 @@ function setupAutoSyncScheduler() {
         orderBy: { finalizadoEm: 'desc' }
       })
 
-      const precisaRodar = !ultimoJobCompleto || 
-        (ultimoJobCompleto.finalizadoEm && 
-         Date.now() - new Date(ultimoJobCompleto.finalizadoEm).getTime() > intervalHours * 60 * 60 * 1000)
+      let precisaRodar = false
+
+      if (syncMode === 'fixed') {
+        const [schHour, schMin] = fixedHourStr.split(':').map(Number)
+        const agora = new Date()
+        const hojeAgendado = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), schHour, schMin, 0, 0)
+
+        if (agora.getTime() >= hojeAgendado.getTime()) {
+          if (!ultimoJobCompleto || !ultimoJobCompleto.finalizadoEm) {
+            precisaRodar = true
+          } else {
+            const ultimoFinalizado = new Date(ultimoJobCompleto.finalizadoEm)
+            if (ultimoFinalizado.getTime() < hojeAgendado.getTime()) {
+              precisaRodar = true
+            }
+          }
+        }
+      } else {
+        const intervalHoursConfig = await prisma.systemConfig.findUnique({
+          where: { key: 'sipe_sync_unidades_interval_hours' }
+        })
+        const intervalHours = parseInt((intervalHoursConfig?.value as any)?.hours ?? '24') || 24
+
+        precisaRodar = !ultimoJobCompleto || 
+          (!!ultimoJobCompleto.finalizadoEm && 
+           Date.now() - new Date(ultimoJobCompleto.finalizadoEm).getTime() > intervalHours * 60 * 60 * 1000)
+      }
 
       if (precisaRodar) {
         // Verifica se já existe algum job ativamente rodando
