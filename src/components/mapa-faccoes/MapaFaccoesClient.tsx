@@ -10,6 +10,7 @@ import JSZip from 'jszip'
 import {
   Map, Shield, Building2, Users, Search, Plus, Trash2, FileBarChart,
   Play, Pause, Download, Loader2, X, ChevronRight, Sparkles, MapPin, RefreshCw, Brain, List,
+  ChevronDown, Image as ImageIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { containsNormalized } from '@/lib/search'
@@ -41,6 +42,20 @@ const MapaFaccoesMap = dynamic(() => import('./MapaFaccoesMap'), {
     </div>
   ),
 })
+
+type ExportImageFormat = 'png' | 'jpeg' | 'webp'
+
+const EXPORT_FORMATS: Array<{
+  id: ExportImageFormat
+  label: string
+  ext: string
+  mime: string
+  hint: string
+}> = [
+  { id: 'png', label: 'PNG', ext: 'png', mime: 'image/png', hint: 'Sem perda · ideal p/ slides' },
+  { id: 'jpeg', label: 'JPG', ext: 'jpg', mime: 'image/jpeg', hint: 'Arquivo menor · fotos/docs' },
+  { id: 'webp', label: 'WebP', ext: 'webp', mime: 'image/webp', hint: 'Melhor compressão web' },
+]
 
 interface SearchResult {
   source: 'AIP' | 'SIPE'
@@ -130,6 +145,9 @@ export function MapaFaccoesClient({
   const [presentationIndex, setPresentationIndex] = useState(0)
   const [presentationPlaying, setPresentationPlaying] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const [exportFormat, setExportFormat] = useState<ExportImageFormat>('png')
+  const exportMenuRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -523,34 +541,110 @@ export function MapaFaccoesClient({
     }
   }
 
-  const exportPng = async () => {
+  const canvasToBlob = (
+    canvas: HTMLCanvasElement,
+    format: ExportImageFormat,
+    quality = 0.92
+  ): Promise<Blob | null> => {
+    const meta = EXPORT_FORMATS.find((f) => f.id === format) ?? EXPORT_FORMATS[0]
+    // JPEG/WebP não suportam transparência — fundo já é #0f172a no html2canvas
+    return new Promise((resolve) => {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob)
+            return
+          }
+          // Fallback: alguns browsers falham em webp/jpeg via toBlob
+          try {
+            const dataUrl = canvas.toDataURL(
+              meta.mime,
+              format === 'png' ? undefined : quality
+            )
+            const bin = atob(dataUrl.split(',')[1] ?? '')
+            const bytes = new Uint8Array(bin.length)
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+            resolve(new Blob([bytes], { type: meta.mime }))
+          } catch {
+            resolve(null)
+          }
+        },
+        meta.mime,
+        format === 'png' ? undefined : quality
+      )
+    })
+  }
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const buildExportFilename = (format: ExportImageFormat, kind: 'mapa' | 'frame', slug?: string) => {
+    const ext = EXPORT_FORMATS.find((f) => f.id === format)?.ext ?? 'png'
+    const stamp = Date.now()
+    const faccao = filtroFaccao
+      ? `-${(filtroFaccaoLabel ?? filtroFaccao).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
+      : ''
+    if (kind === 'frame' && slug) {
+      return `${slug}${faccao}.${ext}`
+    }
+    return `mapa-faccoes-ro${faccao}-${stamp}.${ext}`
+  }
+
+  useEffect(() => {
+    if (!exportMenuOpen) return
+    const onDoc = (e: MouseEvent) => {
+      if (!exportMenuRef.current?.contains(e.target as Node)) setExportMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExportMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [exportMenuOpen])
+
+  const exportMapImage = async (format: ExportImageFormat = exportFormat) => {
     if (!mapAreaRef.current) return
     setExporting(true)
+    setExportMenuOpen(false)
+    setExportFormat(format)
     try {
       const canvas = await html2canvas(mapAreaRef.current, {
         backgroundColor: '#0f172a',
         scale: 2,
         useCORS: true,
       })
-      const link = document.createElement('a')
-      link.download = `mapa-faccoes-ro-${Date.now()}.png`
-      link.href = canvas.toDataURL('image/png')
-      link.click()
-      toast.success('Imagem exportada')
+      const blob = await canvasToBlob(canvas, format)
+      if (!blob) throw new Error('Blob vazio')
+      const meta = EXPORT_FORMATS.find((f) => f.id === format)!
+      downloadBlob(blob, buildExportFilename(format, 'mapa'))
+      toast.success(`Mapa exportado em ${meta.label}`)
     } catch {
-      toast.error('Falha na exportação')
+      toast.error('Falha na exportação da imagem')
     } finally {
       setExporting(false)
     }
   }
 
-  const exportApresentacao = async () => {
+  const exportApresentacao = async (format: ExportImageFormat = exportFormat) => {
     if (!mapAreaRef.current || municipiosComDados.length === 0) return
     setExporting(true)
+    setExportMenuOpen(false)
+    setExportFormat(format)
     const zip = new JSZip()
     const wasPlaying = presentationPlaying
     setPresentationMode(true)
     setPresentationPlaying(false)
+    const meta = EXPORT_FORMATS.find((f) => f.id === format)!
 
     try {
       for (let i = 0; i < Math.min(municipiosComDados.length, 12); i++) {
@@ -561,21 +655,18 @@ export function MapaFaccoesClient({
           scale: 1.5,
           useCORS: true,
         })
-        const blob = await new Promise<Blob | null>((resolve) =>
-          canvas.toBlob(resolve, 'image/png')
-        )
+        const blob = await canvasToBlob(canvas, format)
         if (blob) {
           const m = municipiosComDados[i]
-          const slug = (m.nome || `ibge-${m.ibge}`).replace(/[^a-z0-9]+/gi, '-').toLowerCase()
-          zip.file(`${String(i + 1).padStart(2, '0')}-${slug}.png`, blob)
+          const slug = `${String(i + 1).padStart(2, '0')}-${(m.nome || `ibge-${m.ibge}`)
+            .replace(/[^a-z0-9]+/gi, '-')
+            .toLowerCase()}`
+          zip.file(buildExportFilename(format, 'frame', slug), blob)
         }
       }
       const content = await zip.generateAsync({ type: 'blob' })
-      const link = document.createElement('a')
-      link.href = URL.createObjectURL(content)
-      link.download = `apresentacao-faccoes-ro-${Date.now()}.zip`
-      link.click()
-      toast.success('Pacote de apresentação exportado (ZIP com frames)')
+      downloadBlob(content, `apresentacao-faccoes-ro-${meta.ext}-${Date.now()}.zip`)
+      toast.success(`ZIP exportado com frames em ${meta.label}`)
     } catch {
       toast.error('Falha ao gerar apresentação')
     } finally {
@@ -718,12 +809,88 @@ export function MapaFaccoesClient({
                 {presentationPlaying ? 'Pausar' : 'Animar'}
               </button>
             )}
-            <button type="button" onClick={exportPng} disabled={exporting} className="btn-secondary text-xs gap-1.5">
-              <Download className="w-3.5 h-3.5" /> PNG
-            </button>
-            <button type="button" onClick={exportApresentacao} disabled={exporting} className="btn-secondary text-xs gap-1.5">
-              <Download className="w-3.5 h-3.5" /> ZIP Frames
-            </button>
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                type="button"
+                onClick={() => setExportMenuOpen((o) => !o)}
+                disabled={exporting}
+                className="btn-secondary text-xs gap-1.5"
+                aria-haspopup="menu"
+                aria-expanded={exportMenuOpen}
+              >
+                {exporting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                Exportar
+                <ChevronDown className={`w-3 h-3 transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {exportMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full mt-1.5 z-[1200] w-64 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden"
+                >
+                  <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-subtle flex items-center gap-1.5">
+                      <ImageIcon className="w-3 h-3" /> Formato da imagem
+                    </p>
+                    <p className="text-[10px] text-subtle mt-0.5">
+                      Exporta o mapa visível (filtros e destaque incluídos)
+                    </p>
+                  </div>
+                  <div className="p-1.5 space-y-0.5">
+                    {EXPORT_FORMATS.map((fmt) => (
+                      <button
+                        key={fmt.id}
+                        type="button"
+                        role="menuitem"
+                        disabled={exporting}
+                        onClick={() => void exportMapImage(fmt.id)}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-start gap-2.5 hover:bg-sigma-500/10 ${
+                          exportFormat === fmt.id ? 'bg-sigma-500/5' : ''
+                        }`}
+                      >
+                        <span className="mt-0.5 font-black text-xs w-10 shrink-0 text-sigma-600 dark:text-sigma-400">
+                          {fmt.label}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-semibold text-gray-900 dark:text-white text-xs">
+                            Mapa · .{fmt.ext}
+                          </span>
+                          <span className="block text-[10px] text-subtle leading-snug">{fmt.hint}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-gray-100 dark:border-gray-800 p-1.5 space-y-0.5">
+                    <p className="px-3 pt-1 pb-0.5 text-[10px] font-black uppercase tracking-wider text-subtle">
+                      Apresentação (ZIP)
+                    </p>
+                    {EXPORT_FORMATS.map((fmt) => (
+                      <button
+                        key={`zip-${fmt.id}`}
+                        type="button"
+                        role="menuitem"
+                        disabled={exporting || municipiosComDados.length === 0}
+                        onClick={() => void exportApresentacao(fmt.id)}
+                        className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2.5 hover:bg-amber-500/10 disabled:opacity-40"
+                      >
+                        <Download className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <span className="min-w-0">
+                          <span className="block font-semibold text-gray-900 dark:text-white text-xs">
+                            ZIP frames · {fmt.label}
+                          </span>
+                          <span className="block text-[10px] text-subtle">
+                            Até 12 municípios · .{fmt.ext}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <button type="button" onClick={() => setShowRelatorio(true)} className="btn-primary text-xs gap-1.5">
               <FileBarChart className="w-3.5 h-3.5" /> Relatório
             </button>
