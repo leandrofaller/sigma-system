@@ -1411,7 +1411,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
 
             const apenadosExistentes = await prisma.sipeApenadoImportado.findMany({
               where: { sipeId: { in: checkpoint.currentApenadosIds } },
-              select: { sipeId: true, cela: true, situacao: true }
+              select: { id: true, sipeId: true, cela: true, situacao: true }
             })
 
             const apenadosMap = new Map(apenadosExistentes.map(a => [a.sipeId, a]))
@@ -1432,6 +1432,9 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
                     unidade: u.nome
                   }
                 }).catch(() => {})
+
+                // Garante que o apenado pulado também seja salvo na tabela isolada de unidades prisionais
+                await saveApenadoUnidadePrisional(sipeId, localApenado.id).catch(() => {})
 
                 if (globalThis.__sipeState) {
                   globalThis.__sipeState.processado++
