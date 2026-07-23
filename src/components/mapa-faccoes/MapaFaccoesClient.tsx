@@ -21,9 +21,16 @@ import {
 import { UNIDADES_ENDERECOS_RO } from '@/lib/unidades-enderecos-ro'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
 import type { ApenadosMunicipioUnidadesPrisionais } from '@/lib/unidades-prisionais-resumo'
+import {
+  aplicarFiltroFaccaoMunicipios,
+  rankFaccoesGlobais,
+  labelFaccaoFiltro,
+  matchesFaccaoFiltro,
+} from '@/lib/mapa-faccoes'
 
 import { FaccaoMapaBadge, PccStripeSwatch } from './FaccaoMapaBadge'
-import { PresentationMunicipioPanel } from './PresentationMunicipioPanel'
+import { MunicipioSpotlightPanel } from './MunicipioSpotlightPanel'
+import { MapaFaccoesFilters } from './MapaFaccoesFilters'
 import { MapaFaccoesRelatorioModal } from './MapaFaccoesRelatorioModal'
 
 const MapaFaccoesMap = dynamic(() => import('./MapaFaccoesMap'), {
@@ -65,7 +72,12 @@ interface Vinculo {
 }
 
 interface StatsPayload {
-  municipios: MunicipioMapStats[]
+  municipios: Array<MunicipioMapStats & {
+    faccoes: Record<string, number>
+    estiloMapa: NonNullable<MunicipioMapStats['estiloMapa']>
+    totalUnidades?: number
+    unidades?: string[]
+  }>
   apenadosPorMunicipio?: ApenadosMunicipioUnidadesPrisionais[]
   maxApenados: number
   totais: {
@@ -74,6 +86,7 @@ interface StatsPayload {
     unidadesComDados: number
     manual?: number
     aipAuto?: number
+    faccoes?: Record<string, number>
   }
 }
 
@@ -128,6 +141,9 @@ export function MapaFaccoesClient({
   const [linkingMapa, setLinkingMapa] = useState(false)
   const [loadingVinculos, setLoadingVinculos] = useState(false)
   const [filtroLocalVinculos, setFiltroLocalVinculos] = useState('')
+  /** Filtro de facção no mapa (CV/PCC/chave canônica) — só afeta visualização, não vínculos. */
+  const [filtroFaccao, setFiltroFaccao] = useState<string | null>(null)
+  const [soComAtuacao, setSoComAtuacao] = useState(false)
 
   const mapAreaRef = useRef<HTMLDivElement>(null)
   const presentationTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -159,32 +175,66 @@ export function MapaFaccoesClient({
     }
   }, [searchParams, loading])
 
+  /** Ranking global de facções (chips de filtro) a partir dos totais da API. */
+  const faccoesBandas = useMemo(
+    () => rankFaccoesGlobais(stats?.totais?.faccoes ?? {}),
+    [stats?.totais?.faccoes]
+  )
+
+  /**
+   * Stats visuais do mapa (filtrados por facção). Fonte de verdade dos vínculos
+   * permanece em `stats` / APIs — este recorte é apenas de apresentação.
+   */
+  const { municipiosMapa, maxApenadosMapa } = useMemo(() => {
+    const base = stats?.municipios ?? []
+    const { municipios, maxApenados } = aplicarFiltroFaccaoMunicipios(base, filtroFaccao)
+    return { municipiosMapa: municipios, maxApenadosMapa: maxApenados }
+  }, [stats?.municipios, filtroFaccao])
+
   const statsByIbge = useMemo(() => {
     const m: Record<number, MunicipioMapStats> = {}
-    for (const s of stats?.municipios ?? []) {
+    for (const s of municipiosMapa) {
       if (s.ibge) m[s.ibge] = s
     }
     return m
-  }, [stats])
+  }, [municipiosMapa])
 
   const statsByNome = useMemo(() => {
     const m: Record<string, MunicipioMapStats> = {}
-    for (const s of stats?.municipios ?? []) m[s.nome] = s
+    for (const s of municipiosMapa) m[s.nome] = s
     return m
-  }, [stats])
+  }, [municipiosMapa])
 
   const municipiosComDados = useMemo(
-    () => (stats?.municipios ?? []).filter((m) => m.totalApenados > 0),
-    [stats]
+    () => municipiosMapa.filter((m) => m.totalApenados > 0),
+    [municipiosMapa]
+  )
+
+  const totalIntegrantesFiltrado = useMemo(
+    () => municipiosMapa.reduce((s, m) => s + m.totalApenados, 0),
+    [municipiosMapa]
+  )
+
+  const filtroFaccaoLabel = useMemo(
+    () => (filtroFaccao ? labelFaccaoFiltro(filtroFaccao, faccoesBandas) : null),
+    [filtroFaccao, faccoesBandas]
   )
 
   const vinculosExibidos = useMemo(() => {
+    let list = vinculos
+    // Filtro visual de facção também refina a lista do município (sem alterar dados/API)
+    if (filtroFaccao) {
+      list = list.filter((v) => matchesFaccaoFiltro(v.apenado.faccaoDisplay, filtroFaccao))
+    }
     const q = filtroLocalVinculos.trim()
-    if (!q) return vinculos
-    return vinculos.filter((v) =>
-      containsNormalized(`${v.apenado.nome} ${v.apenado.vulgo ?? ''} ${v.apenado.sipeId} ${v.unidadePrisional} ${v.apenado.faccaoDisplay}`, q)
+    if (!q) return list
+    return list.filter((v) =>
+      containsNormalized(
+        `${v.apenado.nome} ${v.apenado.vulgo ?? ''} ${v.apenado.sipeId} ${v.unidadePrisional} ${v.apenado.faccaoDisplay}`,
+        q
+      )
     )
-  }, [vinculos, filtroLocalVinculos])
+  }, [vinculos, filtroLocalVinculos, filtroFaccao])
 
   const highlightIbge = presentationMode && municipiosComDados.length > 0
     ? municipiosComDados[presentationIndex % municipiosComDados.length]?.ibge ?? null
@@ -344,6 +394,11 @@ export function MapaFaccoesClient({
       if (presentationTimer.current) clearInterval(presentationTimer.current)
     }
   }, [presentationPlaying, presentationMode, municipiosComDados.length])
+
+  // Ao mudar o filtro, reinicia o carrossel de apresentação no primeiro município com dados
+  useEffect(() => {
+    setPresentationIndex(0)
+  }, [filtroFaccao, soComAtuacao])
 
   const linkPendingToMunicipio = useCallback(async (municipio: string, ibge: number | null) => {
     if (!pendingMapaLink || linkingMapa) return
@@ -529,7 +584,23 @@ export function MapaFaccoesClient({
     }
   }
 
-  const selectedStat = selectedIbge ? statsByIbge[selectedIbge] : null
+  const selectedStat = selectedIbge
+    ? statsByIbge[selectedIbge] ?? (selectedNome ? statsByNome[selectedNome] : null)
+    : selectedNome
+      ? statsByNome[selectedNome]
+      : null
+
+  /** Stats originais (sem filtro) para a lista lateral — não esconder vínculos por filtro visual. */
+  const selectedStatRaw = useMemo(() => {
+    if (!stats) return null
+    if (selectedIbge) {
+      const byIbge = stats.municipios.find((m) => m.ibge === selectedIbge)
+      if (byIbge) return byIbge
+    }
+    if (selectedNome) return stats.municipios.find((m) => m.nome === selectedNome) ?? null
+    return null
+  }, [stats, selectedIbge, selectedNome])
+
   const filteredUnidades = useMemo(() => {
     // 1. Filtrar as unidades com base no termo de busca (unidadeInput) se houver
     const list = unidadeInput
@@ -662,16 +733,38 @@ export function MapaFaccoesClient({
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3">
             {[
-              { icon: Users, label: 'Faccionados mapeados', value: stats.totais.vinculos, color: 'text-red-500' },
+              {
+                icon: Users,
+                label: filtroFaccao ? `Integrantes · ${filtroFaccaoLabel}` : 'Faccionados mapeados',
+                value: filtroFaccao ? totalIntegrantesFiltrado : stats.totais.vinculos,
+                color: 'text-red-500',
+              },
               { icon: Brain, label: 'Via AIP (auto)', value: stats.totais.aipAuto ?? 0, color: 'text-purple-500' },
-              { icon: MapPin, label: 'Municípios', value: stats.totais.municipiosComDados, color: 'text-blue-500' },
+              {
+                icon: MapPin,
+                label: filtroFaccao ? 'Mun. com a facção' : 'Municípios',
+                value: filtroFaccao ? municipiosComDados.length : stats.totais.municipiosComDados,
+                color: 'text-blue-500',
+              },
               { icon: Building2, label: 'Unidades', value: stats.totais.unidadesComDados, color: 'text-amber-500' },
-              { icon: Shield, label: 'Cobertura RO', value: `${Math.round((stats.totais.municipiosComDados / 52) * 100)}%`, color: 'text-emerald-500' },
+              {
+                icon: Shield,
+                label: 'Cobertura RO',
+                value: `${Math.round(((filtroFaccao ? municipiosComDados.length : stats.totais.municipiosComDados) / 52) * 100)}%`,
+                color: 'text-emerald-500',
+              },
             ].map((k) => (
-              <div key={k.label} className="rounded-xl bg-gray-50 dark:bg-gray-900/60 border border-gray-200/80 dark:border-gray-700/80 px-3 py-2">
+              <div
+                key={k.label}
+                className={`rounded-xl bg-gray-50 dark:bg-gray-900/60 border px-3 py-2 ${
+                  filtroFaccao
+                    ? 'border-amber-400/40 dark:border-amber-500/30'
+                    : 'border-gray-200/80 dark:border-gray-700/80'
+                }`}
+              >
                 <div className="flex items-center gap-2">
                   <k.icon className={`w-3.5 h-3.5 ${k.color}`} />
-                  <span className="text-[10px] font-bold uppercase text-subtle tracking-wide">{k.label}</span>
+                  <span className="text-[10px] font-bold uppercase text-subtle tracking-wide truncate">{k.label}</span>
                 </div>
                 <p className="text-lg font-black text-gray-900 dark:text-white mt-0.5">{k.value}</p>
               </div>
@@ -681,70 +774,132 @@ export function MapaFaccoesClient({
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-0 lg:gap-4 p-3 md:p-4">
-        <div
-          ref={mapAreaRef}
-          className="relative flex-1 min-h-[320px] lg:min-h-0 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-xl"
-        >
-          <MapaFaccoesMap
-            geojson={geojson}
-            municipios={stats?.municipios ?? []}
-            statsByIbge={statsByIbge}
-            statsByNome={statsByNome}
-            maxApenados={stats?.maxApenados ?? 1}
-            selectedIbge={selectedIbge}
-            highlightIbge={highlightIbge}
-            onSelect={handleSelectMunicipio}
-            presentationMode={presentationMode}
-            linkMode={!!pendingMapaLink}
+        <div className="relative flex-1 min-h-[320px] lg:min-h-0 flex flex-col gap-2.5 min-w-0">
+          <MapaFaccoesFilters
+            bandas={faccoesBandas}
+            filtroFaccao={filtroFaccao}
+            onFiltroFaccao={setFiltroFaccao}
+            soComAtuacao={soComAtuacao}
+            onSoComAtuacao={setSoComAtuacao}
+            totalFiltrado={totalIntegrantesFiltrado}
+            municipiosFiltrados={municipiosComDados.length}
           />
 
-          {pendingMapaLink && (
-            <div className="absolute top-3 right-3 z-[1000] max-w-sm bg-amber-500/95 text-amber-950 rounded-xl px-4 py-3 shadow-2xl border border-amber-300 animate-in fade-in slide-in-from-top-2">
-              <p className="text-[10px] font-black uppercase tracking-wider">Vinculação rápida</p>
-              <p className="font-bold text-sm mt-0.5 truncate">{pendingMapaLink.nome}</p>
-              <p className="text-xs mt-1 opacity-90">
-                {linkingMapa ? 'Salvando vínculo...' : 'Clique no município no mapa para confirmar'}
-              </p>
-              <button
-                type="button"
-                onClick={onClearPendingMapaLink}
-                disabled={linkingMapa}
-                className="mt-2 text-[10px] font-bold underline hover:no-underline disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-            </div>
-          )}
+          <div
+            ref={mapAreaRef}
+            className="relative flex-1 min-h-[280px] rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-xl"
+          >
+            <MapaFaccoesMap
+              geojson={geojson}
+              municipios={municipiosMapa}
+              statsByIbge={statsByIbge}
+              statsByNome={statsByNome}
+              maxApenados={maxApenadosMapa}
+              selectedIbge={selectedIbge}
+              highlightIbge={highlightIbge}
+              onSelect={handleSelectMunicipio}
+              presentationMode={presentationMode}
+              linkMode={!!pendingMapaLink}
+              hideEmpty={soComAtuacao}
+              filtroAtivo={!!filtroFaccao}
+            />
 
-          <AnimatePresence mode="wait">
-            {presentationMode && highlightIbge && statsByIbge[highlightIbge] && (
-              <PresentationMunicipioPanel
-                key={highlightIbge}
-                nome={statsByIbge[highlightIbge].nome || IBGE_PARA_NOME[highlightIbge] || 'Município'}
-                stat={statsByIbge[highlightIbge]}
-                apenadosGeral={
-                  apenadosUnidadesPrisionaisLookup.byIbge[highlightIbge]
-                  ?? apenadosUnidadesPrisionaisLookup.byNome[statsByIbge[highlightIbge].nome]
-                  ?? 0
-                }
-              />
+            {pendingMapaLink && (
+              <div className="absolute top-3 right-3 z-[1000] max-w-sm bg-amber-500/95 text-amber-950 rounded-xl px-4 py-3 shadow-2xl border border-amber-300 animate-in fade-in slide-in-from-top-2">
+                <p className="text-[10px] font-black uppercase tracking-wider">Vinculação rápida</p>
+                <p className="font-bold text-sm mt-0.5 truncate">{pendingMapaLink.nome}</p>
+                <p className="text-xs mt-1 opacity-90">
+                  {linkingMapa ? 'Salvando vínculo...' : 'Clique no município no mapa para confirmar'}
+                </p>
+                <button
+                  type="button"
+                  onClick={onClearPendingMapaLink}
+                  disabled={linkingMapa}
+                  className="mt-2 text-[10px] font-bold underline hover:no-underline disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
             )}
-          </AnimatePresence>
 
-          <div className="absolute top-3 left-3 z-[1000] bg-gray-950/80 backdrop-blur rounded-lg px-3 py-2 text-[10px] text-gray-300 border border-white/10 max-w-[200px]">
-            <p className="font-bold text-white mb-1.5">Legenda</p>
-            <p className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-[#dc2626]" /> Comando Vermelho</p>
-            <p className="flex items-center gap-1.5 mt-0.5">
-              <PccStripeSwatch />
-              <span className="text-white font-semibold">PCC</span>
-              <span className="text-gray-400">(listrado no mapa)</span>
-            </p>
-            <p className="flex items-center gap-1.5 mt-0.5"><span className="inline-block w-3 h-3 rounded-sm bg-[#7c3aed]" /> TCP</p>
-            <p className="mt-0.5 text-gray-400">Outras facções: cor própria</p>
-            <p className="mt-0.5 text-gray-400">Divisão = facções no mesmo município (proporcional)</p>
-            <p className={`mt-1.5 ${pendingMapaLink ? 'text-amber-300 font-bold' : 'text-amber-400'}`}>
-              {pendingMapaLink ? 'Modo vínculo: clique no município' : 'Clique no município para cadastrar'}
-            </p>
+            <AnimatePresence mode="wait">
+              {(() => {
+                // Apresentação tem prioridade; senão, seleção do usuário abre o spotlight cinematográfico
+                const focusIbge = presentationMode ? highlightIbge : selectedIbge
+                const focusStat = focusIbge
+                  ? statsByIbge[focusIbge]
+                  : selectedNome
+                    ? statsByNome[selectedNome]
+                    : null
+                if (!focusStat && !(selectedNome && !presentationMode)) return null
+                const nome =
+                  focusStat?.nome ||
+                  selectedNome ||
+                  (focusIbge ? IBGE_PARA_NOME[focusIbge] : null) ||
+                  'Município'
+                const ibgeKey = focusIbge ?? selectedIbge ?? nome
+                // Sem município em foco e sem seleção: mapa limpo a tela cheia
+                if (!presentationMode && !selectedNome) return null
+                if (presentationMode && !highlightIbge) return null
+                const statForPanel = focusStat ?? {
+                  ibge: selectedIbge,
+                  nome,
+                  totalApenados: 0,
+                  faccaoPredominante: '—',
+                  faccaoCor: '#6b7280',
+                  faccoes: {},
+                }
+                return (
+                  <MunicipioSpotlightPanel
+                    key={`${ibgeKey}-${filtroFaccao ?? 'all'}`}
+                    nome={nome}
+                    stat={statForPanel}
+                    presentationMode={presentationMode}
+                    filtroFaccaoLabel={filtroFaccaoLabel}
+                    apenadosGeral={
+                      (focusIbge && apenadosUnidadesPrisionaisLookup.byIbge[focusIbge]) ||
+                      apenadosUnidadesPrisionaisLookup.byNome[nome] ||
+                      0
+                    }
+                    onClose={
+                      presentationMode
+                        ? undefined
+                        : () => {
+                            setSelectedIbge(null)
+                            setSelectedNome(null)
+                          }
+                    }
+                  />
+                )
+              })()}
+            </AnimatePresence>
+
+            <div
+              className={`absolute top-3 left-3 z-[1000] bg-gray-950/85 backdrop-blur-md rounded-xl px-3 py-2.5 text-[10px] text-gray-300 border border-white/10 max-w-[210px] transition-opacity ${
+                (presentationMode && highlightIbge) || (!presentationMode && selectedNome)
+                  ? 'opacity-40 hover:opacity-100'
+                  : 'opacity-100'
+              }`}
+            >
+              <p className="font-bold text-white mb-1.5">Legenda</p>
+              <p className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-[#dc2626] ring-1 ring-white/40" /> Comando Vermelho</p>
+              <p className="flex items-center gap-1.5 mt-0.5">
+                <PccStripeSwatch />
+                <span className="text-white font-semibold">PCC</span>
+                <span className="text-gray-400">(listrado)</span>
+              </p>
+              <p className="flex items-center gap-1.5 mt-0.5"><span className="inline-block w-3 h-3 rounded-sm bg-[#7c3aed] ring-1 ring-white/40" /> TCP</p>
+              <p className="mt-0.5 text-gray-400">Outras: cor própria</p>
+              <p className="mt-0.5 text-gray-400">Contorno claro = divisão municipal</p>
+              <p className="mt-0.5 text-amber-400/90">Dourado = município em foco</p>
+              <p className={`mt-1.5 ${pendingMapaLink ? 'text-amber-300 font-bold' : 'text-sky-400'}`}>
+                {pendingMapaLink
+                  ? 'Modo vínculo: clique no município'
+                  : filtroFaccao
+                    ? `Filtro ativo: ${filtroFaccaoLabel}`
+                    : 'Clique no município para detalhar'}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -797,17 +952,22 @@ export function MapaFaccoesClient({
                   <div>
                     <p className="text-[10px] font-bold uppercase text-subtle tracking-wider">Município selecionado</p>
                     <h2 className="text-lg font-black text-gray-900 dark:text-white">{selectedNome}</h2>
-                    {selectedStat && (
+                    {(selectedStatRaw || selectedStat) && (
                       <div className="flex flex-wrap gap-2 mt-2">
                         <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold">
-                          {selectedStat.totalApenados} faccionados
+                          {(selectedStatRaw ?? selectedStat)!.totalApenados} faccionados
                         </span>
+                        {filtroFaccao && selectedStat && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold">
+                            {selectedStat.totalApenados} no filtro
+                          </span>
+                        )}
                         <FaccaoMapaBadge
-                          label={selectedStat.faccaoPredominante}
-                          cor={selectedStat.faccaoCor}
-                          estiloMapa={selectedStat.estiloMapa}
+                          label={(selectedStatRaw ?? selectedStat)!.faccaoPredominante}
+                          cor={(selectedStatRaw ?? selectedStat)!.faccaoCor}
+                          estiloMapa={(selectedStatRaw ?? selectedStat)!.estiloMapa}
                         />
-                        {(selectedStat.estiloMapa?.bandas ?? []).slice(1).map((b) => (
+                        {((selectedStatRaw ?? selectedStat)!.estiloMapa?.bandas ?? []).slice(1).map((b) => (
                           <span
                             key={b.label}
                             className="text-xs px-2 py-0.5 rounded-full font-bold"
@@ -1054,16 +1214,38 @@ export function MapaFaccoesClient({
 
       <style jsx global>{`
         .mapa-faccao-tooltip {
-          background: rgba(15, 23, 42, 0.92) !important;
-          border: 1px solid rgba(255,255,255,0.1) !important;
+          background: rgba(15, 23, 42, 0.94) !important;
+          border: 1px solid rgba(255,255,255,0.14) !important;
           color: #f8fafc !important;
-          border-radius: 8px !important;
+          border-radius: 10px !important;
           font-size: 11px !important;
-          padding: 6px 10px !important;
+          padding: 8px 12px !important;
+          box-shadow: 0 12px 40px rgba(0,0,0,0.45) !important;
         }
         .leaflet-container {
           background: #0f172a;
           font-family: inherit;
+        }
+        /* Contornos e glow do município em foco — melhora a leitura em apresentação */
+        .leaflet-interactive.mapa-mun {
+          stroke-linejoin: round;
+          stroke-linecap: round;
+        }
+        .leaflet-interactive.mapa-mun-focused {
+          filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.85))
+            drop-shadow(0 0 2px rgba(255, 255, 255, 0.9));
+          stroke-linejoin: round;
+          animation: mapa-mun-pulse 2.2s ease-in-out infinite;
+        }
+        @keyframes mapa-mun-pulse {
+          0%, 100% {
+            filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.7))
+              drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
+          }
+          50% {
+            filter: drop-shadow(0 0 16px rgba(251, 191, 36, 1))
+              drop-shadow(0 0 4px rgba(255, 255, 255, 1));
+          }
         }
       `}</style>
     </div>

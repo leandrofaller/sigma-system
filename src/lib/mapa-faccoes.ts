@@ -197,6 +197,77 @@ export function intensidadeCor(total: number, max: number): string {
   return `rgb(${r},${g},${b})`
 }
 
+/** ID estável de filtro (CV/PCC canônicos ou chave normalizada das demais). */
+export function faccaoFiltroId(nome: string): string {
+  const grupo = normalizeFaccaoGrupo(nome)
+  if (grupo) return grupo
+  return normalizeFaccaoKey(nome) || 'NAO_IDENTIFICADO'
+}
+
+export function matchesFaccaoFiltro(nome: string, filtroId: string): boolean {
+  return faccaoFiltroId(nome) === filtroId
+}
+
+/** Ranking de facções a partir de contagens livres (chips de filtro / legendas). */
+export function rankFaccoesGlobais(faccoes: Record<string, number>): FaccaoBanda[] {
+  return computeEstiloMapa(faccoes).bandas
+}
+
+export function labelFaccaoFiltro(filtroId: string, bandas?: FaccaoBanda[]): string {
+  if (filtroId === 'CV') return 'Comando Vermelho'
+  if (filtroId === 'PCC') return 'PCC'
+  const hit = bandas?.find((b) => faccaoFiltroId(b.label) === filtroId)
+  return hit?.label ?? filtroId
+}
+
+/**
+ * Recalcula stats de município filtrando por uma facção.
+ * Mantém todos os municípios no array (total 0 = sem atuação da facção) para o mapa
+ * continuar desenhando a malha completa — só a pintura/contagem muda.
+ * Não altera dados de backend nem vínculos.
+ */
+export function aplicarFiltroFaccaoMunicipios<
+  T extends {
+    totalApenados: number
+    faccoes: Record<string, number>
+    estiloMapa: FaccaoEstiloMapa
+    faccaoPredominante: string
+    faccaoCor: string
+    faccaoSecundaria?: string
+  },
+>(municipios: T[], filtroId: string | null): { municipios: T[]; maxApenados: number } {
+  if (!filtroId) {
+    const maxApenados = municipios.reduce((m, x) => Math.max(m, x.totalApenados), 0)
+    return { municipios, maxApenados: Math.max(1, maxApenados) }
+  }
+
+  const filtrados = municipios.map((m) => {
+    const faccoesFiltradas: Record<string, number> = {}
+    for (const [nome, qtd] of Object.entries(m.faccoes ?? {})) {
+      if (qtd > 0 && matchesFaccaoFiltro(nome, filtroId)) {
+        faccoesFiltradas[nome] = qtd
+      }
+    }
+    const totalApenados = Object.values(faccoesFiltradas).reduce((s, n) => s + n, 0)
+    const estiloMapa = computeEstiloMapa(faccoesFiltradas)
+    return {
+      ...m,
+      totalApenados,
+      faccoes: faccoesFiltradas,
+      estiloMapa,
+      faccaoPredominante: totalApenados > 0 ? estiloMapa.predominanteLabel : '—',
+      faccaoCor: totalApenados > 0 ? estiloMapa.predominanteCor : '#6b7280',
+      faccaoSecundaria:
+        estiloMapa.tipo === 'split' && estiloMapa.secundariaLabel
+          ? estiloMapa.secundariaLabel
+          : undefined,
+    }
+  })
+
+  const maxApenados = filtrados.reduce((m, x) => Math.max(m, x.totalApenados), 0)
+  return { municipios: filtrados, maxApenados: Math.max(1, maxApenados) }
+}
+
 export interface MunicipioStats {
   ibge: number | null
   nome: string

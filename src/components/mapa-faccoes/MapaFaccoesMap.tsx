@@ -38,18 +38,30 @@ interface Props {
   onSelect: (ibge: number, nome: string) => void
   presentationMode?: boolean
   linkMode?: boolean
+  /** Quando true, municípios sem total ficam quase invisíveis (filtro "só com atuação"). */
+  hideEmpty?: boolean
+  /** Facção filtrada — reforça contraste nos que têm atuação. */
+  filtroAtivo?: boolean
 }
 
 function FlyToMunicipio({
   ibge,
   geojson,
+  hasFocus,
 }: {
   ibge: number | null
   geojson: GeoJSON.FeatureCollection | null
+  hasFocus: boolean
 }) {
   const map = useMap()
   useEffect(() => {
-    if (!ibge || !geojson) return
+    if (!geojson) return
+
+    if (!hasFocus || !ibge) {
+      map.flyTo(CENTRO_RONDONIA, ZOOM_ESTADO, { duration: 1.1 })
+      return
+    }
+
     const feature = geojson.features.find(
       (f) => parseInt(String((f.properties as { codarea?: string })?.codarea), 10) === ibge
     )
@@ -57,9 +69,15 @@ function FlyToMunicipio({
     const layer = L.geoJSON(feature as GeoJSON.Feature)
     const bounds = layer.getBounds()
     if (bounds.isValid()) {
-      map.flyToBounds(bounds, { padding: [48, 48], maxZoom: 10, duration: 1.2 })
+      // Padding generoso embaixo para o spotlight panel não cobrir o município
+      map.flyToBounds(bounds, {
+        paddingTopLeft: [40, 40],
+        paddingBottomRight: [40, 220],
+        maxZoom: 10,
+        duration: 1.15,
+      })
     }
-  }, [ibge, geojson, map])
+  }, [ibge, geojson, map, hasFocus])
   return null
 }
 
@@ -92,8 +110,6 @@ function buildTooltip(stat: MunicipioMapStats | undefined, nome: string): string
   const estilo = stat.estiloMapa
   const bandas = estilo?.bandas ?? []
 
-  // Lista TODAS as facções com o próprio swatch/cor — nada fica escondido sob o
-  // predominante. PCC usa o swatch listrado; as demais, o ponto na cor da facção.
   if (bandas.length > 0) {
     const linhas = bandas
       .map((b) => {
@@ -125,19 +141,24 @@ export default function MapaFaccoesMap({
   onSelect,
   presentationMode,
   linkMode,
+  hideEmpty = false,
+  filtroAtivo = false,
 }: Props) {
   const geojson = useMemo(() => (rawGeo ? enrichGeoJson(rawGeo) : null), [rawGeo])
+  const focusIbge = highlightIbge ?? selectedIbge
+  const hasFocus = focusIbge != null
+
   const geoKey = useMemo(
     () =>
-      `${selectedIbge ?? ''}-${highlightIbge ?? ''}-${maxApenados}-${municipios
+      `${selectedIbge ?? ''}-${highlightIbge ?? ''}-${maxApenados}-${hideEmpty ? 1 : 0}-${filtroAtivo ? 1 : 0}-${municipios
         .map((m) => {
           const bandas = (m.estiloMapa?.bandas ?? [])
             .map((b) => `${b.label}:${b.count}`)
             .join(',')
-          return `${m.ibge}:${m.estiloMapa?.tipo ?? ''}:${m.faccaoCor}:${bandas}`
+          return `${m.ibge}:${m.estiloMapa?.tipo ?? ''}:${m.faccaoCor}:${m.totalApenados}:${bandas}`
         })
         .join('|')}`,
-    [selectedIbge, highlightIbge, maxApenados, municipios]
+    [selectedIbge, highlightIbge, maxApenados, hideEmpty, filtroAtivo, municipios]
   )
 
   const styleFeature = useCallback(
@@ -148,35 +169,73 @@ export default function MapaFaccoesMap({
       const total = stat?.totalApenados ?? 0
       const isSelected = selectedIbge === ibge
       const isHighlight = highlightIbge === ibge
+      const isFocused = isSelected || isHighlight
       const linkBase = !!(linkMode && !isSelected)
+      const empty = total <= 0
+      const dimOthers = hasFocus && !isFocused
 
-      const fillColor = resolveMapFillColor(
-        stat,
-        Number.isFinite(ibge) ? ibge : null,
-        total,
-        maxApenados,
-        linkBase
-      )
+      // Malha sempre legível: contorno claro no basemap escuro
+      let stroke = empty ? '#64748b' : '#e2e8f0'
+      let weight = empty ? 1 : 1.75
+      let fillOpacity = empty ? 0.08 : filtroAtivo ? 0.88 : 0.8
+      let dashArray: string | undefined
+
+      if (linkMode) {
+        stroke = isSelected ? '#fbbf24' : '#f59e0b'
+        weight = isSelected ? 3.5 : 1.4
+        fillOpacity = isSelected ? 0.92 : total > 0 ? 0.48 : 0.28
+      } else if (isFocused) {
+        stroke = isHighlight && !isSelected ? '#38bdf8' : '#fbbf24'
+        weight = 4.5
+        fillOpacity = 0.95
+      } else if (dimOthers) {
+        // Dimming forte: o município em foco "salta" na apresentação
+        stroke = '#475569'
+        weight = 0.9
+        fillOpacity = empty ? 0.04 : 0.14
+      } else if (hideEmpty && empty) {
+        fillOpacity = 0.03
+        stroke = '#334155'
+        weight = 0.7
+      } else if (filtroAtivo && empty) {
+        fillOpacity = 0.05
+        stroke = '#475569'
+        weight = 1
+        dashArray = '3 4'
+      }
+
+      const fillColor =
+        empty && (hideEmpty || filtroAtivo)
+          ? '#0f172a'
+          : resolveMapFillColor(
+              stat,
+              Number.isFinite(ibge) ? ibge : null,
+              total,
+              maxApenados,
+              linkBase
+            )
 
       return {
         fillColor,
-        fillOpacity: linkMode
-          ? (isSelected ? 0.9 : total > 0 ? 0.45 : 0.28)
-          : total > 0 ? (isSelected || isHighlight ? 0.9 : 0.78) : 0.12,
-        color: isSelected
-          ? '#0f172a'
-          : linkMode
-            ? '#f59e0b'
-            : isHighlight
-              ? '#0f172a'
-              : total > 0
-                ? '#1e293b'
-                : '#94a3b8',
-        weight: isSelected || isHighlight ? 3 : linkMode ? 1.2 : total > 0 ? 1.5 : 0.8,
+        fillOpacity,
+        color: stroke,
+        weight,
         opacity: 1,
+        dashArray,
+        className: isFocused ? 'mapa-mun-focused' : empty ? 'mapa-mun-empty' : 'mapa-mun',
       } as L.PathOptions
     },
-    [statsByIbge, statsByNome, maxApenados, selectedIbge, highlightIbge, linkMode]
+    [
+      statsByIbge,
+      statsByNome,
+      maxApenados,
+      selectedIbge,
+      highlightIbge,
+      linkMode,
+      hasFocus,
+      hideEmpty,
+      filtroAtivo,
+    ]
   )
 
   const onEachFeature = useCallback(
@@ -199,19 +258,31 @@ export default function MapaFaccoesMap({
         mouseover: (e) => {
           const l = e.target as L.Path
           const base = styleFeature(feature)
-          l.setStyle({ ...base, fillOpacity: 0.95, weight: 2.5 })
+          const isFocused =
+            selectedIbge === ibge || highlightIbge === ibge
+          if (isFocused) {
+            l.setStyle({ ...base, weight: 5, fillOpacity: 0.98 })
+          } else {
+            l.setStyle({
+              ...base,
+              fillOpacity: Math.min(0.95, (base.fillOpacity ?? 0.7) + 0.2),
+              weight: Math.max(2.5, (base.weight ?? 1.5) + 1),
+              color: '#f8fafc',
+            })
+            l.bringToFront()
+          }
         },
         mouseout: (e) => {
           const l = e.target as L.Path
           l.setStyle(styleFeature(feature))
+          // Mantém o focado na frente
+          if (selectedIbge === ibge || highlightIbge === ibge) l.bringToFront()
         },
         click: () => onSelect(ibge, nome),
       })
     },
-    [statsByIbge, statsByNome, onSelect, styleFeature, linkMode]
+    [statsByIbge, statsByNome, onSelect, styleFeature, linkMode, selectedIbge, highlightIbge]
   )
-
-  const flyIbge = highlightIbge ?? selectedIbge
 
   return (
     <div className="relative h-full w-full">
@@ -236,7 +307,7 @@ export default function MapaFaccoesMap({
             onEachFeature={onEachFeature}
           />
         )}
-        <FlyToMunicipio ibge={flyIbge} geojson={geojson} />
+        <FlyToMunicipio ibge={focusIbge} geojson={geojson} hasFocus={hasFocus} />
       </MapContainer>
     </div>
   )
