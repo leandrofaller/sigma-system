@@ -11,14 +11,14 @@ export interface UnidadePresosResumo {
 
 /**
  * Totais da aba Unidades Prisionais (tabela isolada sipeApenadoUnidadePrisional),
- * agregados por município — mesma base do dashboard de unidades.
+ * apenas com unidade prisional identificada no catálogo.
  */
 export interface ApenadosMunicipioUnidadesPrisionais {
   municipio: string
   municipioIbge: number | null
-  /** Soma de presos no município (filtro sexo not null, igual ao stats da aba). */
+  /** Soma de presos com unidade reconhecida no município. */
   totalApenados: number
-  /** Detalhamento por unidade — espelha o ranking da aba Unidades Prisionais. */
+  /** Detalhamento por unidade identificada. */
   unidades: UnidadePresosResumo[]
 }
 
@@ -39,26 +39,13 @@ function isUnidadeLixo(unidade: string | null | undefined): boolean {
   if (!unidade?.trim()) return true
   const key = normalizeSearch(unidade).replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
   if (UNIDADE_LIXO.has(key)) return true
-  // Unidades federais / fora de RO
-  if (key.includes('FEDERAL') && (key.includes('CAMPO GRANDE') || key.includes('BRASILIA') || key.includes('CATANDUVAS'))) {
+  if (
+    key.includes('FEDERAL') &&
+    (key.includes('CAMPO GRANDE') || key.includes('BRASILIA') || key.includes('CATANDUVAS'))
+  ) {
     return true
   }
   return false
-}
-
-function resolveMunicipioFromCidade(
-  cidade: string | null | undefined,
-  uf: string | null | undefined
-): { municipio: string; municipioIbge: number } | null {
-  if (!cidade?.trim()) return null
-  const ufNorm = (uf || '').trim().toUpperCase()
-  // Aceita RO, vazio ou nulo (muitos registros sem UF mas cidade de RO)
-  if (ufNorm && ufNorm !== 'RO' && ufNorm !== 'RONDONIA') return null
-
-  const municipio = normalizeMunicipioNome(cidade)
-  const municipioIbge = nomeParaIbge(municipio)
-  if (!municipioIbge) return null
-  return { municipio, municipioIbge }
 }
 
 function addToMunMap(
@@ -88,22 +75,22 @@ function addToMunMap(
 }
 
 /**
- * Total de presos por município a partir da aba Unidades Prisionais.
+ * Total de presos por município — somente com unidade prisional identificada.
  *
- * Estratégia (nessa ordem):
- * 1) Unidade prisional resolvida no catálogo → município da comarca/sede
- * 2) Fallback: campo `cidade` quando for município válido de RO
- *    (a maior parte dos registros da tabela vem com unidade nula)
- *
- * Mantém o mesmo filtro `sexo not null` do dashboard da aba.
+ * - Exige `unidade` preenchida e resolvida no catálogo de endereços
+ * - Não usa fallback por cidade / "Sem unidade informada"
+ * - Mesmo filtro `sexo not null` do dashboard da aba Unidades Prisionais
  */
 export async function buildApenadosUnidadesPrisionaisPorMunicipio(): Promise<
   ApenadosMunicipioUnidadesPrisionais[]
 > {
-  const [rows, customCatalog] = await Promise.all([
+  const [statsUnidade, customCatalog] = await Promise.all([
     prisma.sipeApenadoUnidadePrisional.groupBy({
-      by: ['unidade', 'cidade', 'uf'],
-      where: { sexo: { not: null } },
+      by: ['unidade'],
+      where: {
+        sexo: { not: null },
+        unidade: { not: null },
+      },
       _count: { id: true },
     }),
     loadCustomUnidadesAtivas(),
@@ -111,51 +98,25 @@ export async function buildApenadosUnidadesPrisionaisPorMunicipio(): Promise<
 
   const munMap = new Map<string, ApenadosMunicipioUnidadesPrisionais>()
 
-  for (const item of rows) {
-    const qtd = item._count.id
-    if (qtd <= 0) continue
+  for (const item of statsUnidade) {
+    const unidadeRaw = item.unidade?.trim()
+    if (!unidadeRaw || isUnidadeLixo(unidadeRaw)) continue
 
-    const unidadeRaw = item.unidade?.trim() || null
-    let mapped = false
+    const entry = resolveUnidadeEndereco(unidadeRaw, customCatalog)
+    if (!entry) continue
 
-    // 1) Via unidade no catálogo (fonte preferencial)
-    if (unidadeRaw && !isUnidadeLixo(unidadeRaw)) {
-      const entry = resolveUnidadeEndereco(unidadeRaw, customCatalog)
-      if (entry) {
-        const geo = geoMapaFromUnidadeEndereco(entry)
-        if (geo.municipio) {
-          const municipio = normalizeMunicipioNome(geo.municipio)
-          const municipioIbge = geo.municipioIbge ?? nomeParaIbge(municipio)
-          addToMunMap(
-            munMap,
-            municipio,
-            municipioIbge,
-            qtd,
-            entry.unidade || unidadeRaw
-          )
-          mapped = true
-        }
-      }
-    }
+    const geo = geoMapaFromUnidadeEndereco(entry)
+    if (!geo.municipio) continue
 
-    if (mapped) continue
-
-    // 2) Fallback: cidade residencial/local quando é município de RO
-    //    Cobre ~12k registros com unidade nula na base de Unidades Prisionais.
-    const viaCidade = resolveMunicipioFromCidade(item.cidade, item.uf)
-    if (viaCidade) {
-      const labelUnidade =
-        unidadeRaw && !isUnidadeLixo(unidadeRaw)
-          ? unidadeRaw
-          : 'Sem unidade informada'
-      addToMunMap(
-        munMap,
-        viaCidade.municipio,
-        viaCidade.municipioIbge,
-        qtd,
-        labelUnidade
-      )
-    }
+    const municipio = normalizeMunicipioNome(geo.municipio)
+    const municipioIbge = geo.municipioIbge ?? nomeParaIbge(municipio)
+    addToMunMap(
+      munMap,
+      municipio,
+      municipioIbge,
+      item._count.id,
+      entry.unidade || unidadeRaw
+    )
   }
 
   for (const row of munMap.values()) {

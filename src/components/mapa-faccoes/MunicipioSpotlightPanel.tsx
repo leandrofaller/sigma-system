@@ -148,7 +148,7 @@ export function MunicipioSpotlightPanel({
                     Presos nas unidades
                   </p>
                   <p className="text-[11px] text-gray-500 truncate">
-                    Aba Unidades Prisionais
+                    Só unidade identificada
                     {unidadesPresos.length > 0
                       ? ` · ${unidadesPresos.length} unid.`
                       : ''}
@@ -211,7 +211,7 @@ export function MunicipioSpotlightPanel({
               className="mt-4 pt-4 border-t border-white/10"
             >
               <p className="text-[10px] uppercase tracking-[0.18em] font-black text-blue-400/90 mb-3">
-                Presos por unidade · Unidades Prisionais
+                Por unidade identificada
               </p>
               <div className="space-y-2 max-h-[18vh] overflow-y-auto pr-1">
                 {unidadesPresos.map((u, idx) => {
