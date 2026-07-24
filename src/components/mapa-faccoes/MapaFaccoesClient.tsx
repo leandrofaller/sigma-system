@@ -14,7 +14,12 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { containsNormalized } from '@/lib/search'
-import { IBGE_PARA_NOME, nomeParaIbge, normalizeMunicipioNome } from '@/lib/municipios-rondonia'
+import {
+  IBGE_PARA_NOME,
+  nomeParaIbge,
+  normalizeMunicipioNome,
+  normalizeMunicipioKey,
+} from '@/lib/municipios-rondonia'
 import {
   inferMunicipioFromUnidadeAip,
   listaEnderecosHrefFromUnidadeAip,
@@ -258,15 +263,36 @@ export function MapaFaccoesClient({
     ? municipiosComDados[presentationIndex % municipiosComDados.length]?.ibge ?? null
     : null
 
-  const apenadosUnidadesPrisionaisLookup = useMemo(() => {
-    const byIbge: Record<number, number> = {}
-    const byNome: Record<string, number> = {}
+  /** Lookup de presos da aba Unidades Prisionais (não SIAIP/AIP faccionados). */
+  const unidadesPrisionaisLookup = useMemo(() => {
+    const byIbge: Record<number, ApenadosMunicipioUnidadesPrisionais> = {}
+    const byKey: Record<string, ApenadosMunicipioUnidadesPrisionais> = {}
     for (const m of stats?.apenadosPorMunicipio ?? []) {
-      if (m.municipioIbge != null) byIbge[m.municipioIbge] = m.totalApenados
-      byNome[m.municipio] = m.totalApenados
+      if (m.municipioIbge != null) byIbge[m.municipioIbge] = m
+      byKey[normalizeMunicipioKey(m.municipio)] = m
+      byKey[normalizeMunicipioKey(normalizeMunicipioNome(m.municipio))] = m
     }
-    return { byIbge, byNome }
+    return { byIbge, byKey }
   }, [stats?.apenadosPorMunicipio])
+
+  const resolveUnidadesPrisionaisMunicipio = useCallback(
+    (ibge: number | null | undefined, nome: string | null | undefined) => {
+      if (ibge != null && unidadesPrisionaisLookup.byIbge[ibge]) {
+        return unidadesPrisionaisLookup.byIbge[ibge]
+      }
+      if (nome) {
+        const key = normalizeMunicipioKey(nome)
+        const keyCanon = normalizeMunicipioKey(normalizeMunicipioNome(nome))
+        return (
+          unidadesPrisionaisLookup.byKey[key] ??
+          unidadesPrisionaisLookup.byKey[keyCanon] ??
+          null
+        )
+      }
+      return null
+    },
+    [unidadesPrisionaisLookup]
+  )
 
   const loadData = useCallback(async () => {
     try {
@@ -1016,6 +1042,7 @@ export function MapaFaccoesClient({
                   faccaoCor: '#6b7280',
                   faccoes: {},
                 }
+                const up = resolveUnidadesPrisionaisMunicipio(focusIbge, nome)
                 return (
                   <MunicipioSpotlightPanel
                     key={`${ibgeKey}-${filtroFaccao ?? 'all'}`}
@@ -1023,11 +1050,8 @@ export function MapaFaccoesClient({
                     stat={statForPanel}
                     presentationMode={presentationMode}
                     filtroFaccaoLabel={filtroFaccaoLabel}
-                    apenadosGeral={
-                      (focusIbge && apenadosUnidadesPrisionaisLookup.byIbge[focusIbge]) ||
-                      apenadosUnidadesPrisionaisLookup.byNome[nome] ||
-                      0
-                    }
+                    totalPresosUnidades={up?.totalApenados ?? 0}
+                    unidadesPresos={up?.unidades ?? []}
                     onClose={
                       presentationMode
                         ? undefined

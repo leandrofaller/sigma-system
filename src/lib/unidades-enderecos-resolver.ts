@@ -44,6 +44,9 @@ const ALIAS_PARA_ID: Record<string, string> = {
   UMESP: 'pv-umesp',
   USAFAM: 'pv-usafam',
   UPES: 'pv-medidas-seguranca',
+  'SEGURANCA ESPECIAL': 'pv-medidas-seguranca',
+  'MEDIDA DE SEGURANCA': 'pv-medidas-seguranca',
+  'MEDIDAS DE SEGURANCA': 'pv-medidas-seguranca',
   ENIO: 'pv-enio',
   'ANTIGO ENIO': 'pv-enio',
   PENFEN: 'pv-suely',
@@ -51,6 +54,7 @@ const ALIAS_PARA_ID: Record<string, string> = {
   SUELY: 'pv-suely',
   'JORGE THIAGO': 'pv-jorge-thiago',
   'EDIVAN MARIANO': 'pv-panda',
+  'EDVAN MARIANO': 'pv-panda',
   'MILTON SOARES': 'pv-milton',
   '470': 'pv-milton',
   'NOVA MAMORE': 'gm-nova-mamore',
@@ -58,8 +62,20 @@ const ALIAS_PARA_ID: Record<string, string> = {
   'JONAS FERRETI': 'buritis-cr',
   'AUGUSTO S KEMPE': 'jaru-crr',
   'AUGUSTO S. KEMPE': 'jaru-crr',
+  'AUGUSTO SIMON KEMPE': 'jaru-crr',
+  'AUGUSTO SIMON': 'jaru-crr',
+  KEMPE: 'jaru-crr',
   'CONE SUL': 'vilhena-cone-sul',
   'YOHAN FLAVIO': 'alvorada-cr',
+  CRA: 'ariq-cr',
+  // GME: só com GERENCIA/GME isolado — não usar "MONITORAMENTO ELETRONICO" genérico
+  // (há unidades de monitoramento em Ji-Paraná, Rolim, etc.)
+  'GERENCIA DE MONITORACAO': 'pv-umesp',
+  'GERENCIA DE MONITORAMENTO': 'pv-umesp',
+  'GME': 'pv-umesp',
+  'FEMININA E SEMIABERTO DE VILHENA': 'vilhena-colonia',
+  'PRESIDIO FEMININO DE VILHENA': 'vilhena-colonia',
+  'COLONIA PENAL DE VILHENA': 'vilhena-colonia',
 }
 
 const UNIDADE_POR_ID = Object.fromEntries(UNIDADES_ENDERECOS_RO.map((u) => [u.id, u]))
@@ -196,11 +212,18 @@ export function resolveUnidadeEndereco(
     if (normKey(entry.unidade) === norm) return entry
   }
 
+  // Aliases curtos (≤4) só batem como token isolado (evita "GME" dentro de outras palavras
+  // e "CRA" acidental). Aliases longos usam includes.
   for (const [alias, id] of Object.entries(ALIAS_PARA_ID)) {
     const aliasNorm = normKey(alias)
-    if (aliasNorm.length >= 3 && (norm.includes(aliasNorm) || norm.startsWith(aliasNorm))) {
-      const hit = UNIDADE_POR_ID[id]
-      if (hit) return hit
+    if (aliasNorm.length < 3) continue
+    const hit = UNIDADE_POR_ID[id]
+    if (!hit) continue
+    if (aliasNorm.length <= 4) {
+      const tokenRe = new RegExp(`(?:^|\\s)${aliasNorm}(?:\\s|$)`)
+      if (tokenRe.test(norm)) return hit
+    } else if (norm.includes(aliasNorm) || norm.startsWith(aliasNorm)) {
+      return hit
     }
   }
 

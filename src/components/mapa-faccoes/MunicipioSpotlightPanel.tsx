@@ -5,12 +5,16 @@ import { motion } from 'framer-motion'
 import { Users, Shield, Building2, X, MapPin, Sparkles } from 'lucide-react'
 import { faccaoCor } from '@/lib/mapa-faccoes'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
+import type { UnidadePresosResumo } from '@/lib/unidades-prisionais-resumo'
 import { FaccaoMapaBadge, PccStripeSwatch } from './FaccaoMapaBadge'
 
 interface Props {
   nome: string
   stat: MunicipioMapStats
-  apenadosGeral: number
+  /** Total de presos nas unidades do município (aba Unidades Prisionais). */
+  totalPresosUnidades: number
+  /** Detalhamento por unidade — mesma base da aba Unidades Prisionais. */
+  unidadesPresos?: UnidadePresosResumo[]
   presentationMode?: boolean
   filtroFaccaoLabel?: string | null
   onClose?: () => void
@@ -58,7 +62,8 @@ function AnimatedCount({ value, delay = 0 }: { value: number; delay?: number }) 
 export function MunicipioSpotlightPanel({
   nome,
   stat,
-  apenadosGeral,
+  totalPresosUnidades,
+  unidadesPresos = [],
   presentationMode,
   filtroFaccaoLabel,
   onClose,
@@ -66,6 +71,7 @@ export function MunicipioSpotlightPanel({
   const faccoes = Object.entries(stat.faccoes ?? {}).sort((a, b) => b[1] - a[1])
   const maxFac = Math.max(1, ...faccoes.map(([, q]) => q))
   const bandas = stat.estiloMapa?.bandas ?? []
+  const maxUnidade = Math.max(1, ...unidadesPresos.map((u) => u.totalApenados))
 
   return (
     <motion.div
@@ -131,21 +137,26 @@ export function MunicipioSpotlightPanel({
           >
             <motion.div
               variants={fadeUp}
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 flex items-center justify-between gap-3"
+              className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 flex items-center justify-between gap-3"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="p-2 rounded-xl bg-blue-500/15 text-blue-300">
-                  <Users className="w-4 h-4" />
+                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-300">
+                  <Building2 className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400">
-                    Apenados (unidades)
+                    Presos nas unidades
                   </p>
-                  <p className="text-[11px] text-gray-500 truncate">SIAIP — geral no município</p>
+                  <p className="text-[11px] text-gray-500 truncate">
+                    Aba Unidades Prisionais
+                    {unidadesPresos.length > 0
+                      ? ` · ${unidadesPresos.length} unid.`
+                      : ''}
+                  </p>
                 </div>
               </div>
               <p className="text-2xl font-black text-blue-300 shrink-0">
-                <AnimatedCount value={apenadosGeral} />
+                <AnimatedCount value={totalPresosUnidades} />
               </p>
             </motion.div>
 
@@ -177,7 +188,7 @@ export function MunicipioSpotlightPanel({
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="p-2 rounded-xl bg-amber-500/15 text-amber-300">
-                  <Building2 className="w-4 h-4" />
+                  <Users className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400">
@@ -191,6 +202,54 @@ export function MunicipioSpotlightPanel({
               </p>
             </motion.div>
           </motion.div>
+
+          {unidadesPresos.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.28 }}
+              className="mt-4 pt-4 border-t border-white/10"
+            >
+              <p className="text-[10px] uppercase tracking-[0.18em] font-black text-blue-400/90 mb-3">
+                Presos por unidade · Unidades Prisionais
+              </p>
+              <div className="space-y-2 max-h-[18vh] overflow-y-auto pr-1">
+                {unidadesPresos.map((u, idx) => {
+                  const pct = Math.round((u.totalApenados / maxUnidade) * 100)
+                  return (
+                    <motion.div
+                      key={u.unidade}
+                      initial={{ opacity: 0, x: -12 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.35, delay: 0.3 + idx * 0.06 }}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <p className="text-xs text-gray-200 font-medium leading-snug line-clamp-2 min-w-0">
+                          {u.unidade}
+                        </p>
+                        <span className="text-sm font-black tabular-nums text-blue-300 shrink-0">
+                          <AnimatedCount value={u.totalApenados} delay={280 + idx * 50} />
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden ring-1 ring-white/10">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${pct}%` }}
+                          transition={{
+                            duration: 0.7,
+                            delay: 0.32 + idx * 0.06,
+                            ease: [0.22, 1, 0.36, 1],
+                          }}
+                          className="h-full rounded-full bg-gradient-to-r from-blue-600 to-sky-400"
+                          style={{ boxShadow: '0 0 12px rgba(56, 189, 248, 0.35)' }}
+                        />
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            </motion.div>
+          )}
 
           {faccoes.length > 0 ? (
             <motion.div

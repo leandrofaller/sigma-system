@@ -23,16 +23,34 @@ export const MUNICIPIOS_RONDONIA = [
 
 export type MunicipioRondonia = (typeof MUNICIPIOS_RONDONIA)[number]
 
+/**
+ * Chave de comparação de município: ignora hífen, apóstrofo e pontuação.
+ * Ex.: "Ji Paraná" = "Ji-Paraná"; "Espigão D`Oeste" = "Espigão D'Oeste".
+ * Necessário porque o SIPE/Unidades Prisionais grava nomes sem a grafia canônica.
+ */
+export function normalizeMunicipioKey(nome: string): string {
+  let key = normalizeSearch(nome)
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  // SIPE grava "Espigão DOeste" / "Machadinho DOeste" sem apóstrofo nem espaço
+  key = key.replace(/([A-Z])DOESTE\b/g, '$1 D OESTE')
+  key = key.replace(/\bD\s*OESTE\b/g, 'D OESTE')
+  return key.replace(/\s+/g, ' ').trim()
+}
+
 const NOME_PARA_IBGE = Object.fromEntries(
-  Object.entries(IBGE_PARA_NOME).map(([ibge, nome]) => [normalizeSearch(nome), Number(ibge)])
+  Object.entries(IBGE_PARA_NOME).map(([ibge, nome]) => [normalizeMunicipioKey(nome), Number(ibge)])
 ) as Record<string, number>
 
+const NOME_CANONICO_POR_KEY = Object.fromEntries(
+  MUNICIPIOS_RONDONIA.map((m) => [normalizeMunicipioKey(m), m])
+) as Record<string, string>
+
 export function normalizeMunicipioNome(nome: string): string {
-  const key = normalizeSearch(nome)
-  for (const m of MUNICIPIOS_RONDONIA) {
-    if (normalizeSearch(m) === key) return m
-  }
-  return nome.trim()
+  const key = normalizeMunicipioKey(nome)
+  if (!key) return nome.trim()
+  return NOME_CANONICO_POR_KEY[key] ?? nome.trim()
 }
 
 export function ibgeParaNome(ibge: number | string | null | undefined): string | null {
@@ -42,7 +60,8 @@ export function ibgeParaNome(ibge: number | string | null | undefined): string |
 }
 
 export function nomeParaIbge(nome: string): number | null {
-  return NOME_PARA_IBGE[normalizeSearch(nome)] ?? null
+  const key = normalizeMunicipioKey(nome)
+  return key ? NOME_PARA_IBGE[key] ?? null : null
 }
 
 export const CENTRO_RONDONIA: [number, number] = [-10.83, -63.34]
