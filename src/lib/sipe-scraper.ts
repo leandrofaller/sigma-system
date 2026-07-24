@@ -2210,6 +2210,7 @@ async function coletarIdsApenados(
 
     // Modo não-global (por unidade) - Sequencial com Retries
     const candidatePaths = ['/listagem/geral', `/listagem/${unidadeId}/carceragem`]
+    let ultimoErro: any = null
 
     for (const basePath of candidatePaths) {
       try {
@@ -2227,8 +2228,7 @@ async function coletarIdsApenados(
           log(jobId, `🐍 SDK Python carregando página ${pageNum} da listagem por unidade: ${currentPath}`)
           const html = await fetchPageWithRetry(currentPath, jobId)
           if (!html) {
-            log(jobId, `⚠️ [PYTHON SDK] Falha ao carregar a listagem na página ${pageNum} para o path: ${currentPath}`)
-            break
+            throw new Error(`[PYTHON SDK] Falha crítica ao obter o HTML da listagem na página ${pageNum} no path: ${currentPath}`)
           }
 
           const idsPagina = extractIdsFromTableHtml(html)
@@ -2336,11 +2336,12 @@ async function coletarIdsApenados(
           return idsAcumulados
         }
       } catch (err: any) {
+        ultimoErro = err
         log(jobId, `⚠️ Erro no SDK Python na tentativa de carregar listagem para o path ${basePath}: ${err.message || err}`)
       }
     }
 
-    log(jobId, '⚠️ SDK Python não conseguiu coletar IDs das listagens de unidade. Ativando rollback via Playwright.')
+    throw new Error(ultimoErro ? `Falha na coleta via SDK Python: ${ultimoErro.message || ultimoErro}` : 'Nenhum ID pôde ser extraído via SDK Python (Playwright removido).')
   }
 
 
