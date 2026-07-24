@@ -2212,126 +2212,131 @@ async function coletarIdsApenados(
     const candidatePaths = ['/listagem/geral', `/listagem/${unidadeId}/carceragem`]
 
     for (const basePath of candidatePaths) {
-      const idsAcumulados: number[] = []
-      let currentPath: string | null = basePath
-      let pageNum = 1
-      const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
-      const maxIds = testMode ? 150 : Infinity
+      try {
+        const idsAcumulados: number[] = []
+        let currentPath: string | null = basePath
+        let pageNum = 1
+        const testMode = (globalThis as any).SCRAPING_TESTE_MODE === true
+        const maxIds = testMode ? 150 : Infinity
 
-      while (currentPath) {
-        if (globalThis.__sipeStopFlag) {
-          log(jobId, '🛑 Coleta por unidade do SDK Python interrompida.')
-          break
-        }
-        log(jobId, `🐍 SDK Python carregando página ${pageNum} da listagem por unidade: ${currentPath}`)
-        const html = await fetchPageWithRetry(currentPath, jobId)
-        if (!html) {
-          throw new Error(`Falha crítica ao obter o HTML da listagem por unidade no path: ${currentPath}`)
-        }
-
-        const idsPagina = extractIdsFromTableHtml(html)
-        if (idsPagina.length === 0) {
-          const idsRegex = extractIdsFromHtml(html, 'apenados')
-          if (idsRegex.length > 0) {
-            idsPagina.push(...idsRegex)
+        while (currentPath) {
+          if (globalThis.__sipeStopFlag) {
+            log(jobId, '🛑 Coleta por unidade do SDK Python interrompida.')
+            break
           }
-        }
-
-        for (const id of idsPagina) {
-          if (!idsAcumulados.includes(id)) {
-            idsAcumulados.push(id)
+          log(jobId, `🐍 SDK Python carregando página ${pageNum} da listagem por unidade: ${currentPath}`)
+          const html = await fetchPageWithRetry(currentPath, jobId)
+          if (!html) {
+            log(jobId, `⚠️ [PYTHON SDK] Falha ao carregar a listagem na página ${pageNum} para o path: ${currentPath}`)
+            break
           }
-        }
 
-        const $page = cheerio.load(html)
-        $page('table').first().each((_, table) => {
-          let codigoColIndex = -1
-          let celaColIndex = -1
-          let situacaoColIndex = -1
-          let unidadeColIndex = -1
-          $page(table).find('thead tr th, thead tr td').each((c, el) => {
-            const text = $page(el).text().toUpperCase().trim()
-            if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
-            if (text.includes('CELA') || text.includes('PAVILH') || text.includes('ALOCAÇ') || text.includes('ALOCAC')) celaColIndex = c
-            if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) situacaoColIndex = c
-            if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) unidadeColIndex = c
-          })
-          if (codigoColIndex === -1) codigoColIndex = 1
-          $page(table).find('tbody tr').each((_, row) => {
-            const cells = $page(row).find('td, th')
-            if (cells.length > codigoColIndex) {
-              const idVal = parseInt($page(cells.get(codigoColIndex)).text().trim(), 10)
-              
-              let cIdx = celaColIndex
-              let uIdx = unidadeColIndex
-              let sIdx = situacaoColIndex
+          const idsPagina = extractIdsFromTableHtml(html)
+          if (idsPagina.length === 0) {
+            const idsRegex = extractIdsFromHtml(html, 'apenados')
+            if (idsRegex.length > 0) {
+              idsPagina.push(...idsRegex)
+            }
+          }
 
-              if (cIdx === -1 || uIdx === -1) {
-                const hasFotoCol = cells.length >= 7 || $page(row).find('img').length > 0
-                if (uIdx === -1) uIdx = hasFotoCol ? 4 : 3
-                if (cIdx === -1) cIdx = hasFotoCol ? 5 : 4
-                if (sIdx === -1) sIdx = hasFotoCol ? 6 : 5
-              }
+          for (const id of idsPagina) {
+            if (!idsAcumulados.includes(id)) {
+              idsAcumulados.push(id)
+            }
+          }
 
-              const celaText = cleanCela(cIdx >= 0 && cells.length > cIdx ? $page(cells.get(cIdx)).text().trim() : undefined)
-              const situacaoText = sIdx >= 0 && cells.length > sIdx ? $page(cells.get(sIdx)).text().trim() : undefined
-              const unidadeText = uIdx >= 0 && cells.length > uIdx ? $page(cells.get(uIdx)).text().trim() : undefined
-              
-              if (!isNaN(idVal) && idVal > 0) {
-                const cacheData: any = {}
-                if (celaText) cacheData.cela = celaText
-                if (situacaoText) cacheData.situacao = situacaoText
-                if (unidadeText) cacheData.unidadeNome = unidadeText
+          const $page = cheerio.load(html)
+          $page('table').first().each((_, table) => {
+            let codigoColIndex = -1
+            let celaColIndex = -1
+            let situacaoColIndex = -1
+            let unidadeColIndex = -1
+            $page(table).find('thead tr th, thead tr td').each((c, el) => {
+              const text = $page(el).text().toUpperCase().trim()
+              if (text === 'CÓDIGO' || text === 'CODIGO' || text === 'CÓD' || text === 'COD') codigoColIndex = c
+              if (text.includes('CELA') || text.includes('PAVILH') || text.includes('ALOCAÇ') || text.includes('ALOCAC')) celaColIndex = c
+              if (text.includes('SITUAC') || text.includes('SITUAÇ') || text.includes('STATUS') || text.includes('SITUAT')) situacaoColIndex = c
+              if (text.includes('UNID') || text.includes('ESTAB') || text.includes('LOCAL') || text.includes('ORGAO') || text.includes('ORGÃO')) unidadeColIndex = c
+            })
+            if (codigoColIndex === -1) codigoColIndex = 1
+            $page(table).find('tbody tr').each((_, row) => {
+              const cells = $page(row).find('td, th')
+              if (cells.length > codigoColIndex) {
+                const idVal = parseInt($page(cells.get(codigoColIndex)).text().trim(), 10)
                 
-                const existing = listagemInfoCache.get(idVal) || {}
-                listagemInfoCache.set(idVal, { ...existing, ...cacheData })
+                let cIdx = celaColIndex
+                let uIdx = unidadeColIndex
+                let sIdx = situacaoColIndex
+
+                if (cIdx === -1 || uIdx === -1) {
+                  const hasFotoCol = cells.length >= 7 || $page(row).find('img').length > 0
+                  if (uIdx === -1) uIdx = hasFotoCol ? 4 : 3
+                  if (cIdx === -1) cIdx = hasFotoCol ? 5 : 4
+                  if (sIdx === -1) sIdx = hasFotoCol ? 6 : 5
+                }
+
+                const celaText = cleanCela(cIdx >= 0 && cells.length > cIdx ? $page(cells.get(cIdx)).text().trim() : undefined)
+                const situacaoText = sIdx >= 0 && cells.length > sIdx ? $page(cells.get(sIdx)).text().trim() : undefined
+                const unidadeText = uIdx >= 0 && cells.length > uIdx ? $page(cells.get(uIdx)).text().trim() : undefined
+                
+                if (!isNaN(idVal) && idVal > 0) {
+                  const cacheData: any = {}
+                  if (celaText) cacheData.cela = celaText
+                  if (situacaoText) cacheData.situacao = situacaoText
+                  if (unidadeText) cacheData.unidadeNome = unidadeText
+                  
+                  const existing = listagemInfoCache.get(idVal) || {}
+                  listagemInfoCache.set(idVal, { ...existing, ...cacheData })
+                }
+              }
+            })
+          })
+
+          if (testMode && idsAcumulados.length >= maxIds) {
+            log(jobId, `🧪 [TESTE] Limite de 150 IDs atingido na listagem por unidade.`)
+            break
+          }
+
+          // Extração robusta do próximo link
+          let nextLinkEl = $page('ul.pagination li a[rel="next"]')
+          if (!nextLinkEl.length) nextLinkEl = $page('a:contains("Próxima")')
+          if (!nextLinkEl.length) nextLinkEl = $page('a:contains("Next")')
+          if (!nextLinkEl.length) nextLinkEl = $page('li.next a, li.next > a')
+          if (!nextLinkEl.length) nextLinkEl = $page('[data-dt-idx="next"] a, [data-dt-idx="next"]')
+          if (!nextLinkEl.length) nextLinkEl = $page('a:contains("»")')
+          if (!nextLinkEl.length) nextLinkEl = $page('a:contains(">>")')
+
+          const nextUrl = nextLinkEl.first().attr('href')
+          const parentLi = nextLinkEl.first().closest('li')
+          const isDisabled = parentLi.hasClass('disabled') || nextLinkEl.first().hasClass('disabled')
+
+          if (nextUrl && !isDisabled) {
+            let relPath = nextUrl
+            if (relPath.startsWith('http://') || relPath.startsWith('https://')) {
+              try {
+                const parsed = new URL(relPath)
+                relPath = parsed.pathname + parsed.search
+              } catch {
+                relPath = relPath.replace(SIPE_URL, '').replace('http://sipe.sejus.ro.gov.br', '')
               }
             }
-          })
-        })
-
-        if (testMode && idsAcumulados.length >= maxIds) {
-          log(jobId, `🧪 [TESTE] Limite de 150 IDs atingido na listagem por unidade.`)
-          break
-        }
-
-        // Extração robusta do próximo link
-        let nextLinkEl = $page('ul.pagination li a[rel="next"]')
-        if (!nextLinkEl.length) nextLinkEl = $page('a:contains("Próxima")')
-        if (!nextLinkEl.length) nextLinkEl = $page('a:contains("Next")')
-        if (!nextLinkEl.length) nextLinkEl = $page('li.next a, li.next > a')
-        if (!nextLinkEl.length) nextLinkEl = $page('[data-dt-idx="next"] a, [data-dt-idx="next"]')
-        if (!nextLinkEl.length) nextLinkEl = $page('a:contains("»")')
-        if (!nextLinkEl.length) nextLinkEl = $page('a:contains(">>")')
-
-        const nextUrl = nextLinkEl.first().attr('href')
-        const parentLi = nextLinkEl.first().closest('li')
-        const isDisabled = parentLi.hasClass('disabled') || nextLinkEl.first().hasClass('disabled')
-
-        if (nextUrl && !isDisabled) {
-          let relPath = nextUrl
-          if (relPath.startsWith('http://') || relPath.startsWith('https://')) {
-            try {
-              const parsed = new URL(relPath)
-              relPath = parsed.pathname + parsed.search
-            } catch {
-              relPath = relPath.replace(SIPE_URL, '').replace('http://sipe.sejus.ro.gov.br', '')
-            }
+            currentPath = relPath
+            pageNum++
+            await new Promise(r => setTimeout(r, 800 + Math.random() * 500))
+          } else {
+            currentPath = null
           }
-          currentPath = relPath
-          pageNum++
-          await new Promise(r => setTimeout(r, 800 + Math.random() * 500))
-        } else {
-          currentPath = null
         }
-      }
 
-      if (idsAcumulados.length > 0) {
-        if (testMode && idsAcumulados.length > 150) {
-          idsAcumulados.splice(150)
+        if (idsAcumulados.length > 0) {
+          if (testMode && idsAcumulados.length > 150) {
+            idsAcumulados.splice(150)
+          }
+          log(jobId, `🐍 SDK Python concluiu a coleta por unidade. Total: ${idsAcumulados.length} IDs obtidos.`)
+          return idsAcumulados
         }
-        log(jobId, `🐍 SDK Python concluiu a coleta por unidade. Total: ${idsAcumulados.length} IDs obtidos.`)
-        return idsAcumulados
+      } catch (err: any) {
+        log(jobId, `⚠️ Erro no SDK Python na tentativa de carregar listagem para o path ${basePath}: ${err.message || err}`)
       }
     }
 
@@ -9638,6 +9643,43 @@ function setupAutoSyncScheduler() {
         })
         if (jobAtivo) {
           console.log('[AUTO-SYNC] Ignorando sincronização automática: já existe outro job em execução')
+          return
+        }
+
+        // Tenta buscar se há algum job interrompido recente (nas últimas 24h) para retomar
+        const jobInterrompidoRecente = await prisma.sipeSyncJob.findFirst({
+          where: {
+            tipo: scrapingTipo,
+            unidade: 'ALL',
+            status: 'INTERRUPTED',
+            idsColetados: { not: null },
+            createdAt: {
+              gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+
+        if (jobInterrompidoRecente) {
+          console.log(`[AUTO-SYNC] Retomando sincronização automática interrompida (Job ID: ${jobInterrompidoRecente.id})...`)
+          await prisma.sipeSyncJob.update({
+            where: { id: jobInterrompidoRecente.id },
+            data: {
+              status: 'RUNNING',
+              ultimaAtividade: new Date(),
+              log: `${jobInterrompidoRecente.log || ''}\n[AUTO-SYNC] Retomando job via scheduler automático.`
+            }
+          })
+
+          if (scrapingEngine === 'firecrawl') {
+            const { runScrapeFirecrawl } = await import('./firecrawl-scraper')
+            runScrapeFirecrawl(jobInterrompidoRecente.id, 'ALL')
+              .catch((err) => {
+                console.error(`[AUTO-SYNC] [FIRECRAWL] ❌ Erro ao retomar: ${err}`)
+              })
+          } else {
+            startSipeSync(jobInterrompidoRecente.id, 'ALL', scrapingEngine)
+          }
           return
         }
 
