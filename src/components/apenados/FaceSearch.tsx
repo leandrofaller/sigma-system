@@ -8,6 +8,7 @@ import { useServidorIndexing } from '@/contexts/ServidorIndexingContext';
 import {
   X, ScanFace, Upload, Loader2, AlertTriangle, RefreshCw,
   Database, Search, CheckCircle, Trash2, Users, ZoomIn, ZoomOut, Pencil,
+  FileText, Check, Plus, Printer, ClipboardList, Info,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -26,6 +27,14 @@ interface FaceMatch {
   targetType?: 'apenados' | 'visitantes' | 'servidores';
   cargo?: string | null;
   lotacao?: string | null;
+}
+
+interface ReportPoolItem {
+  match: FaceMatch;
+  originalPhotoUrl: string | null; // A foto usada na busca correspondente
+  similarity: number;
+  addedAt: string;
+  notes?: string; // Anotações do analista sobre este apenado específico
 }
 
 interface DetectedFace {
@@ -57,7 +66,7 @@ interface IndexStatus {
   };
 }
 
-type Tab = 'search' | 'index' | 'no-face';
+type Tab = 'search' | 'index' | 'no-face' | 'report-pool';
 type SearchState = 'ready' | 'analyzing' | 'results' | 'no-face' | 'error';
 
 const BATCH_SIZE = 30;   // IDs por requisição de indexação
@@ -93,7 +102,23 @@ function fmtTime(seconds: number): string {
 
 // ─── MatchCard ────────────────────────────────────────────────────────────────
 
-function MatchCard({ match, rank, onEdit, onViewPhoto, showSourceBadge }: { match: FaceMatch; rank: number; onEdit?: (id: string) => void; onViewPhoto?: (match: FaceMatch) => void; showSourceBadge?: boolean }) {
+function MatchCard({
+  match,
+  rank,
+  onEdit,
+  onViewPhoto,
+  showSourceBadge,
+  inPool,
+  onTogglePool,
+}: {
+  match: FaceMatch;
+  rank: number;
+  onEdit?: (id: string) => void;
+  onViewPhoto?: (match: FaceMatch) => void;
+  showSourceBadge?: boolean;
+  inPool?: boolean;
+  onTogglePool?: () => void;
+}) {
   const isVisitante = match.targetType === 'visitantes';
   const isServidor = match.targetType === 'servidores';
   const photoUrl = isVisitante
@@ -103,10 +128,14 @@ function MatchCard({ match, rank, onEdit, onViewPhoto, showSourceBadge }: { matc
     : `/api/apenados/${match.id}/foto`;
 
   return (
-    <div className={`rounded-xl border overflow-hidden ${
-      match.similarity >= 70 ? 'border-green-200 dark:border-green-800'
-      : match.similarity >= 45 ? 'border-yellow-200 dark:border-yellow-800'
-      : 'border-gray-200 dark:border-gray-700'
+    <div className={`rounded-xl border overflow-hidden transition-all duration-200 ${
+      inPool
+        ? 'border-green-500 dark:border-green-500 shadow-md ring-1 ring-green-500 bg-green-500/5'
+        : match.similarity >= 70
+        ? 'border-green-200 dark:border-green-800'
+        : match.similarity >= 45
+        ? 'border-yellow-200 dark:border-yellow-800'
+        : 'border-gray-200 dark:border-gray-700'
     }`}>
       <div className="flex items-center gap-3 p-3 bg-gray-50/60 dark:bg-gray-800/50">
         <span className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-subtle flex-shrink-0">
@@ -170,15 +199,38 @@ function MatchCard({ match, rank, onEdit, onViewPhoto, showSourceBadge }: { matc
             <span className={`text-xl font-black tabular-nums ${simColor(match.similarity)}`}>{match.similarity}%</span>
             <span className={`text-[10px] font-semibold ${simColor(match.similarity)}`}>{simLabel(match.similarity)}</span>
           </div>
-          {onEdit && !isVisitante && !isServidor && (
-            <button
-              onClick={() => onEdit(match.id)}
-              title="Editar registro"
-              className="flex items-center gap-1 text-[10px] font-medium text-sigma-600 hover:text-sigma-700 bg-sigma-50 dark:bg-sigma-900/30 hover:bg-sigma-100 dark:hover:bg-sigma-900/50 px-2 py-0.5 rounded-lg transition-colors"
-            >
-              <Pencil className="w-2.5 h-2.5" /> Editar
-            </button>
-          )}
+          <div className="flex gap-1.5">
+            {onTogglePool && (
+              <button
+                onClick={onTogglePool}
+                title={inPool ? "Remover do relatório unificado" : "Selecionar para relatório unificado"}
+                className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg transition-colors ${
+                  inPool
+                    ? 'bg-green-500 hover:bg-green-600 text-white'
+                    : 'bg-sigma-600 hover:bg-sigma-700 text-white'
+                }`}
+              >
+                {inPool ? (
+                  <>
+                    <Check className="w-2.5 h-2.5" /> Selecionado
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-2.5 h-2.5" /> + Relatório
+                  </>
+                )}
+              </button>
+            )}
+            {onEdit && !isVisitante && !isServidor && (
+              <button
+                onClick={() => onEdit(match.id)}
+                title="Editar registro"
+                className="flex items-center gap-1 text-[10px] font-medium text-sigma-600 hover:text-sigma-700 bg-sigma-50 dark:bg-sigma-900/30 hover:bg-sigma-100 dark:hover:bg-sigma-900/50 px-2 py-0.5 rounded-lg transition-colors"
+              >
+                <Pencil className="w-2.5 h-2.5" /> Editar
+              </button>
+            )}
+          </div>
         </div>
       </div>
       <div className="h-1.5 bg-gray-100 dark:bg-gray-800">
@@ -291,6 +343,78 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [tab, setTab] = useState<Tab>('search');
   const [targetType, setTargetType] = useState<'apenados' | 'visitantes' | 'servidores' | 'all'>('apenados');
 
+  // Search
+  const [queryURL, setQueryURL] = useState<string | null>(null);
+  const [queryFile, setQueryFile] = useState<File | null>(null);
+
+  // Estados da Cesta de Relatório (Pool)
+  const [reportPool, setReportPool] = useState<ReportPoolItem[]>([]);
+  const [reportTitle, setReportTitle] = useState('Relatório de Reconhecimento Facial');
+  const [reportDescription, setReportDescription] = useState('');
+
+  // Carrega do LocalStorage na montagem (rodando apenas no cliente)
+  useEffect(() => {
+    try {
+      const savedPool = localStorage.getItem('sigma:face-search:report-pool');
+      if (savedPool) setReportPool(JSON.parse(savedPool));
+      const savedTitle = localStorage.getItem('sigma:face-search:report-title');
+      if (savedTitle) setReportTitle(savedTitle);
+      const savedDesc = localStorage.getItem('sigma:face-search:report-description');
+      if (savedDesc) setReportDescription(savedDesc);
+    } catch (e) {
+      console.warn('Erro ao carregar pool do localStorage:', e);
+    }
+  }, []);
+
+  // Salva no LocalStorage sempre que houver alterações
+  useEffect(() => {
+    try {
+      localStorage.setItem('sigma:face-search:report-pool', JSON.stringify(reportPool));
+    } catch (e) {
+      console.warn('Erro ao salvar pool no localStorage:', e);
+    }
+  }, [reportPool]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sigma:face-search:report-title', reportTitle);
+    } catch (e) {}
+  }, [reportTitle]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sigma:face-search:report-description', reportDescription);
+    } catch (e) {}
+  }, [reportDescription]);
+
+  const isMatchInPool = useCallback((match: FaceMatch) => {
+    const mType = match.targetType || (targetType === 'all' ? 'apenados' : targetType);
+    return reportPool.some(item => item.match.id === match.id && item.match.targetType === mType);
+  }, [reportPool, targetType]);
+
+  const handleTogglePool = useCallback((match: FaceMatch) => {
+    const mType = match.targetType || (targetType === 'all' ? 'apenados' : targetType);
+    const matchWithCorrectType = { ...match, targetType: mType };
+
+    setReportPool(prev => {
+      const exists = prev.some(item => item.match.id === match.id && item.match.targetType === mType);
+      if (exists) {
+        return prev.filter(item => !(item.match.id === match.id && item.match.targetType === mType));
+      } else {
+        return [
+          ...prev,
+          {
+            match: matchWithCorrectType,
+            originalPhotoUrl: queryURL,
+            similarity: match.similarity,
+            addedAt: new Date().toISOString(),
+            notes: ''
+          }
+        ];
+      }
+    });
+  }, [queryURL, targetType]);
+
   // Visualizar foto ampliada
   const [viewingPhotoMatch, setViewingPhotoMatch] = useState<FaceMatch | null>(null);
 
@@ -298,8 +422,6 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [searchState, setSearchState] = useState<SearchState>('ready');
   const [errorMsg, setErrorMsg] = useState('');
   const [analyzeMsg, setAnalyzeMsg] = useState('Analisando rosto no servidor...');
-  const [queryURL, setQueryURL] = useState<string | null>(null);
-  const [queryFile, setQueryFile] = useState<File | null>(null);
   const [result, setResult] = useState<SearchResult | null>(null);
   const [selectedFaceIdx, setSelectedFaceIdx] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -691,11 +813,11 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const selectedFace = result?.faces.find(f => f.index === selectedFaceIdx);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:absolute print:inset-0 print:block print:p-0 print:bg-white print:overflow-visible">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm print:hidden" onClick={onClose} />
 
       <div
-        className="relative z-10 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col"
+        className="relative z-10 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col print:hidden"
         style={{ maxHeight: '92vh' }}
       >
         {/* Header */}
@@ -719,16 +841,17 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+        <div className="flex border-b border-gray-100 dark:border-gray-800 flex-shrink-0 overflow-x-auto">
           {([
             ['search', Search, 'Busca Clássica (ArcFace)'],
+            ['report-pool', FileText, `Relatório (${reportPool.length})`],
             ...(isAdmin ? [
               ['index', Database, 'Indexar ArcFace'] as const,
               ['no-face', AlertTriangle, 'Sem Rosto'] as const
             ] : [])
           ] as const).map(([key, Icon, label]) => (
             <button key={key} onClick={() => setTab(key)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                 tab === key ? 'border-sigma-600 text-sigma-600 dark:text-sigma-400' : 'border-transparent text-subtle hover:text-body'
               }`}>
               <Icon className="w-4 h-4" /> {label}
@@ -1032,12 +1155,183 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {selectedFace?.matches.map((m, i) => <MatchCard key={m.id} match={m} rank={i + 1} onEdit={onEditApenado} onViewPhoto={setViewingPhotoMatch} showSourceBadge={targetType === 'all'} />)}
+                      {selectedFace?.matches.map((m, i) => (
+                        <MatchCard
+                          key={m.id}
+                          match={m}
+                          rank={i + 1}
+                          onEdit={onEditApenado}
+                          onViewPhoto={setViewingPhotoMatch}
+                          showSourceBadge={targetType === 'all'}
+                          inPool={isMatchInPool(m)}
+                          onTogglePool={() => handleTogglePool(m)}
+                        />
+                      ))}
                     </div>
                   )}
                 </>
               )}
             </>
+          )}
+
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              ABA: RELATÓRIO (POOL)
+          ════════════════════════════════════════════════════════════════════ */}
+          {tab === 'report-pool' && (
+            <div className="space-y-6 animate-fade-in">
+              {/* Informações Gerais do Relatório */}
+              <div className="bg-gray-50/50 dark:bg-gray-800/30 border border-gray-200/60 dark:border-gray-850 p-5 rounded-2xl space-y-4">
+                <div className="flex items-center gap-2 text-title font-bold text-sigma-600 dark:text-sigma-400">
+                  <ClipboardList className="w-5 h-5" />
+                  <span>Configurações Gerais do Relatório</span>
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-subtle block mb-1">Título do Relatório</label>
+                    <input
+                      type="text"
+                      value={reportTitle}
+                      onChange={(e) => setReportTitle(e.target.value)}
+                      placeholder="Ex: Relatório de Reconhecimento Facial - Investigação Pavilhão B"
+                      className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-3 py-2 text-title focus:border-sigma-500 focus:ring-1 focus:ring-sigma-500 transition-all font-semibold"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-xs font-semibold text-subtle block mb-1">Notas do Analista (Síntese Geral)</label>
+                    <textarea
+                      value={reportDescription}
+                      onChange={(e) => setReportDescription(e.target.value)}
+                      placeholder="Descreva o contexto das identificações, localidade, data do fato, ou observações gerais de inteligência..."
+                      rows={3}
+                      className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-3 py-2 text-title focus:border-sigma-500 focus:ring-1 focus:ring-sigma-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 justify-end pt-2">
+                  {reportPool.length > 0 && (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (confirm('Deseja realmente limpar toda a cesta de apenados selecionados?')) {
+                            setReportPool([]);
+                          }
+                        }}
+                        className="flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 px-3 py-2 rounded-xl transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Limpar Cesta
+                      </button>
+                      <button
+                        onClick={() => window.print()}
+                        className="flex items-center gap-1.5 text-xs font-bold text-white bg-sigma-600 hover:bg-sigma-700 px-4 py-2 rounded-xl transition-colors shadow-sm"
+                      >
+                        <Printer className="w-3.5 h-3.5" /> Imprimir / Salvar PDF
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Lista de Registros Selecionados */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-subtle">
+                    Itens Selecionados ({reportPool.length})
+                  </span>
+                </div>
+
+                {reportPool.length === 0 ? (
+                  <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-2xl p-12 text-center bg-gray-50/10">
+                    <FileText className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
+                    <p className="text-title font-semibold">Cesta do Relatório Vazia</p>
+                    <p className="text-subtle text-sm mt-1 max-w-xs mx-auto">
+                      Faça buscas faciais na aba "Busca Clássica" e clique em "+ Relatório" nas fichas que deseja incluir aqui.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {reportPool.map((item, index) => {
+                      const isVisitante = item.match.targetType === 'visitantes';
+                      const isServidor = item.match.targetType === 'servidores';
+                      const photoUrl = isVisitante
+                        ? `/api/sipe/visitantes/${item.match.id}/foto`
+                        : isServidor
+                        ? `/api/sejus/servidores/${item.match.id}/foto`
+                        : `/api/apenados/${item.match.id}/foto`;
+
+                      return (
+                        <div key={`${item.match.id}-${item.match.targetType}`} className="border border-gray-200 dark:border-gray-800 rounded-2xl p-4 bg-white dark:bg-gray-950 space-y-4 shadow-sm hover:shadow-md transition-shadow">
+                          <div className="flex items-center gap-3">
+                            <span className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-xs font-bold text-subtle flex-shrink-0">
+                              {index + 1}
+                            </span>
+                            <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
+                              {item.match.photoPath ? (
+                                <img src={photoUrl} alt={item.match.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center"><ScanFace className="w-5 h-5 text-gray-400" /></div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-title truncate">{item.match.name}</p>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${
+                                  isVisitante
+                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                                    : isServidor
+                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                    : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                }`}>
+                                  {isVisitante ? 'Visitante' : isServidor ? 'Servidor' : 'Apenado'}
+                                </span>
+                                <span className="text-xs text-subtle">
+                                  {isVisitante ? item.match.parentesco : isServidor ? item.match.cargo : item.match.unidade}
+                                </span>
+                                <span className="text-xs text-subtle font-semibold text-sigma-600 dark:text-sigma-400">
+                                  Similaridade: {item.similarity}%
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <button
+                              onClick={() => {
+                                setReportPool(prev => prev.filter(p => !(p.match.id === item.match.id && p.match.targetType === item.match.targetType)));
+                              }}
+                              className="text-subtle hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
+                              title="Remover da cesta"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-semibold text-subtle block mb-1">Notas Individuais do Analista sobre este Registro</label>
+                            <textarea
+                              value={item.notes || ''}
+                              onChange={(e) => {
+                                const newNotes = e.target.value;
+                                setReportPool(prev => prev.map(p => {
+                                  if (p.match.id === item.match.id && p.match.targetType === item.match.targetType) {
+                                    return { ...p, notes: newNotes };
+                                  }
+                                  return p;
+                                }));
+                              }}
+                              placeholder="Adicione informações específicas, tais como: hora em que apareceu, conduta observada, etc..."
+                              rows={2}
+                              className="w-full text-xs bg-gray-50/50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-3 py-1.5 text-title focus:border-sigma-500 focus:ring-1 focus:ring-sigma-500 transition-all"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
 
@@ -2195,6 +2489,162 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
           </div>
         </div>
       )}
+
+      {/* Relatório Impresso (Visível apenas na impressão) */}
+      <div className="hidden print:block bg-white text-black p-8 font-sans w-full min-h-screen overflow-visible">
+        {/* Cabeçalho do Relatório */}
+        <div className="text-center border-b-2 border-black pb-4 mb-6">
+          <h1 className="text-lg font-extrabold uppercase tracking-wide">Secretaria de Estado da Justiça - SEJUS</h1>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-gray-600">Sistema de Inteligência Sigma</h2>
+          <h3 className="text-xl font-black mt-4 uppercase text-black">{reportTitle}</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Documento gerado em: {new Date().toLocaleString('pt-BR')} · Sigilo: RESERVADO
+          </p>
+        </div>
+
+        {/* Descrição Geral */}
+        {reportDescription && (
+          <div className="mb-6 border border-black p-4 bg-gray-50/50 rounded-xl">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-800 mb-1">1. Considerações Iniciais / Resumo do Analista</h4>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap text-black">{reportDescription}</p>
+          </div>
+        )}
+
+        {/* Lista de Alvos */}
+        <div className="space-y-6">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-gray-800 border-b border-black pb-1 mb-3">
+            2. Fichas de Identificação Facial ({reportPool.length} alvos)
+          </h4>
+          
+          {reportPool.length === 0 ? (
+            <p className="text-sm italic text-gray-500">Nenhum alvo selecionado para este relatório.</p>
+          ) : (
+            <div className="space-y-6">
+              {reportPool.map((item, index) => {
+                const isVisitante = item.match.targetType === 'visitantes';
+                const isServidor = item.match.targetType === 'servidores';
+                const photoUrl = isVisitante
+                  ? `/api/sipe/visitantes/${item.match.id}/foto`
+                  : isServidor
+                  ? `/api/sejus/servidores/${item.match.id}/foto`
+                  : `/api/apenados/${item.match.id}/foto`;
+
+                return (
+                  <div key={`${item.match.id}-${item.match.targetType}`} className="border border-black p-4 rounded-xl space-y-4 page-break-inside-avoid">
+                    <div className="flex gap-4 items-start">
+                      {/* Número do Alvo */}
+                      <span className="w-6 h-6 rounded-full border border-black flex items-center justify-center text-xs font-bold text-black flex-shrink-0">
+                        {index + 1}
+                      </span>
+                      
+                      {/* Fotos de Comparação Lado a Lado */}
+                      <div className="flex gap-3 flex-shrink-0">
+                        {item.originalPhotoUrl && (
+                          <div className="flex flex-col items-center">
+                            <div className="w-24 h-28 border border-black rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
+                              <img src={item.originalPhotoUrl} alt="Foto da Busca" className="w-full h-full object-cover" />
+                            </div>
+                            <span className="text-[8px] font-bold text-gray-600 mt-1 uppercase">Face da Busca</span>
+                          </div>
+                        )}
+                        <div className="flex flex-col items-center">
+                          <div className="w-24 h-28 border border-black rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
+                            {item.match.photoPath ? (
+                              <img src={photoUrl} alt="Cadastro" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400">Sem Foto</div>
+                            )}
+                          </div>
+                          <span className="text-[8px] font-bold text-gray-600 mt-1 uppercase">Foto Oficial</span>
+                        </div>
+                      </div>
+
+                      {/* Informações */}
+                      <div className="flex-1 min-w-0 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                        <div className="col-span-2 border-b border-gray-300 pb-1 mb-1">
+                          <span className="text-[10px] font-bold uppercase text-gray-500">Nome do Alvo</span>
+                          <p className="text-sm font-bold text-black uppercase">{item.match.name}</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-gray-500">Tipo de Registro</span>
+                          <p className="font-semibold text-black uppercase">{isVisitante ? 'Visitante' : isServidor ? 'Servidor' : 'Apenado'}</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-gray-500">Similaridade Facial</span>
+                          <p className="font-extrabold text-green-700">{item.similarity}% (Grau {simLabel(item.similarity)})</p>
+                        </div>
+                        {isVisitante ? (
+                          <>
+                            <div>
+                              <span className="text-[10px] font-bold uppercase text-gray-500">Parentesco</span>
+                              <p className="font-semibold text-black">{item.match.parentesco || 'Sem parentesco'}</p>
+                            </div>
+                            {item.match.cpf && (
+                              <div>
+                                <span className="text-[10px] font-bold uppercase text-gray-500">CPF</span>
+                                <p className="font-semibold text-black">{item.match.cpf}</p>
+                              </div>
+                            )}
+                          </>
+                        ) : isServidor ? (
+                          <>
+                            <div>
+                              <span className="text-[10px] font-bold uppercase text-gray-500">Cargo / Lotação</span>
+                              <p className="font-semibold text-black">{item.match.cargo || 'Não especificado'} · {item.match.lotacao || 'Não especificado'}</p>
+                            </div>
+                            {item.match.matricula && (
+                              <div>
+                                <span className="text-[10px] font-bold uppercase text-gray-500">Matrícula</span>
+                                <p className="font-semibold text-black">{item.match.matricula}</p>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              <span className="text-[10px] font-bold uppercase text-gray-500">Matrícula</span>
+                              <p className="font-semibold text-black">{item.match.matricula || 'Sem matrícula'}</p>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold uppercase text-gray-500">Unidade Prisional</span>
+                              <p className="font-semibold text-black">{item.match.unidade || 'Sem unidade'}</p>
+                            </div>
+                            {item.match.faccao && (
+                              <div className="col-span-2">
+                                <span className="text-[10px] font-bold uppercase text-gray-500">Facção</span>
+                                <p className="font-bold text-orange-600 uppercase">{item.match.faccao}</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Notas do Analista */}
+                    {item.notes && (
+                      <div className="border border-gray-300 p-2.5 rounded-lg bg-gray-50/50">
+                        <span className="text-[9px] font-bold uppercase text-gray-500">Anotações do Analista</span>
+                        <p className="text-xs text-black leading-relaxed whitespace-pre-wrap">{item.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Assinatura e Rodapé */}
+        <div className="mt-16 pt-8 border-t border-black text-center max-w-sm mx-auto page-break-inside-avoid">
+          <div className="h-10 border-b border-black/30 border-dashed mb-1"></div>
+          <p className="text-xs font-bold text-black uppercase">Analista Responsável pela Identificação</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">Emitido digitalmente via Sistema Sigma</p>
+        </div>
+
+        <div className="mt-8 text-center text-[9px] font-bold text-gray-500 uppercase tracking-widest print:absolute print:bottom-4 print:left-0 print:right-0">
+          DOCUMENTO CONFIDENCIAL - USO RESTRITO DE INTELIGÊNCIA PENAL
+        </div>
+      </div>
     </div>
   );
 }
