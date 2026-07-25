@@ -69,6 +69,13 @@ export async function getPgVectorStats(): Promise<{
  */
 export async function initPgVector(): Promise<{ ok: boolean; error?: string }> {
   try {
+    // Configura statement_timeout para 10s no boot para evitar travamentos por locks nos índices HNSW
+    try {
+      await prisma.$executeRawUnsafe('SET statement_timeout = 10000');
+    } catch (e: any) {
+      console.warn('[pgvector] Nao foi possivel definir statement_timeout:', e.message || e);
+    }
+
     await prisma.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS vector`);
     
     // Inicializa colunas clássicas (Buffalo)
@@ -93,38 +100,38 @@ export async function initPgVector(): Promise<{ ok: boolean; error?: string }> {
       `ALTER TABLE sejus_servidores ADD COLUMN IF NOT EXISTS "faceVectorAdvanced" vector(512)`,
     );
 
-    // Cria índices HNSW para Buffalo
+    // Cria índices HNSW para Buffalo (m=8 conserva memoria vs m=32, ef=32 mais rápido)
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS apenados_face_hnsw_idx
       ON apenados USING hnsw ("faceVector" vector_cosine_ops)
-      WITH (m = 32, ef_construction = 128)
+      WITH (m = 8, ef_construction = 32)
     `);
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS visitantes_face_hnsw_idx
       ON sipe_visitantes USING hnsw ("faceVector" vector_cosine_ops)
-      WITH (m = 32, ef_construction = 128)
+      WITH (m = 8, ef_construction = 32)
     `);
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS servidores_face_hnsw_idx
       ON sejus_servidores USING hnsw ("faceVector" vector_cosine_ops)
-      WITH (m = 32, ef_construction = 128)
+      WITH (m = 8, ef_construction = 32)
     `);
 
     // Cria índices HNSW para Antelope
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS apenados_face_advanced_hnsw_idx
       ON apenados USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
-      WITH (m = 32, ef_construction = 128)
+      WITH (m = 8, ef_construction = 32)
     `);
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS visitantes_face_advanced_hnsw_idx
       ON sipe_visitantes USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
-      WITH (m = 32, ef_construction = 128)
+      WITH (m = 8, ef_construction = 32)
     `);
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS servidores_face_advanced_hnsw_idx
       ON sejus_servidores USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
-      WITH (m = 32, ef_construction = 128)
+      WITH (m = 8, ef_construction = 32)
     `);
 
     // Cria função de trigger para sincronização clássica (Buffalo)
