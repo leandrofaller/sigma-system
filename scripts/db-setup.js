@@ -129,12 +129,27 @@ const steps = [
 async function run() {
   let ok = 0;
   let warn = 0;
+
+  // Configura statement_timeout para 30 segundos (30000 ms) para evitar que queries fiquem travadas aguardando locks
+  try {
+    await p.$executeRawUnsafe('SET statement_timeout = 30000');
+    console.log('  [Config] Limite de tempo de execucao (statement_timeout) definido para 30s.');
+  } catch (e) {
+    console.error(`  AVISO [timeout-config]: ${e.message.split('\n')[0]}`);
+  }
+
   for (const [name, sql] of steps) {
+    const start = Date.now();
+    console.log(`  [Executando] ${name}...`);
     try {
       await p.$executeRawUnsafe(sql);
+      const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+      console.log(`  [OK] ${name} (${elapsed}s)`);
       ok++;
     } catch (e) {
-      console.error(`  AVISO [${name}]: ${e.message.split('\n')[0]}`);
+      const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+      const errMsg = e.message ? e.message.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 2).join(' | ') : 'Erro desconhecido';
+      console.error(`  [AVISO] [${name}] falhou apos ${elapsed}s: ${errMsg}`);
       warn++;
     }
   }
