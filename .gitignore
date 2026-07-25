@@ -58,3 +58,7 @@ scratch/
 # Bytecode Python gerado ao rodar scripts localmente
 scripts/__pycache__/
 **/__pycache__/
+
+# SIPE Session cookies (contêm credenciais de tempo de execução, nunca commitar)
+**/sipe_cookies.json
+sipe_cookies.json
