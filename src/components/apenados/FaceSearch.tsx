@@ -32,6 +32,8 @@ interface FaceMatch {
 interface ReportPoolItem {
   match: FaceMatch;
   originalPhotoUrl: string | null; // A foto usada na busca correspondente
+  faceThumbnailUrl: string | null;       // Rosto cortado (Base64)
+  searchPhotoThumbnailUrl: string | null; // Foto completa reduzida com o retângulo vermelho (Base64)
   similarity: number;
   addedAt: string;
   notes?: string; // Anotações do analista sobre este apenado específico
@@ -98,6 +100,61 @@ function fmtTime(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
   return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+}
+
+// Gera miniaturas em Base64 para a face recortada e para a imagem de busca completa
+function createThumbnails(imageUrl: string, bbox: number[]): Promise<{ face: string | null; search: string | null }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvasFace = document.createElement('canvas');
+        const ctxFace = canvasFace.getContext('2d');
+        
+        // 1. Rosto recortado (proporção vertical clássica 3x4)
+        const [x1, y1, x2, y2] = bbox;
+        const w = x2 - x1;
+        const h = y2 - y1;
+        
+        canvasFace.width = 96;
+        canvasFace.height = 112;
+        
+        if (ctxFace) {
+          ctxFace.drawImage(img, x1, y1, w, h, 0, 0, 96, 112);
+        }
+        const faceBase64 = canvasFace.toDataURL('image/jpeg', 0.85);
+
+        // 2. Foto completa reduzida com o destaque em retângulo vermelho
+        const canvasSearch = document.createElement('canvas');
+        const ctxSearch = canvasSearch.getContext('2d');
+        
+        // Redimensiona mantendo proporção com largura fixa de 160px
+        const scale = 160 / img.width;
+        canvasSearch.width = 160;
+        canvasSearch.height = img.height * scale;
+        
+        if (ctxSearch) {
+          ctxSearch.drawImage(img, 0, 0, canvasSearch.width, canvasSearch.height);
+          
+          // Desenha retângulo vermelho demarcando o rosto
+          ctxSearch.strokeStyle = '#ef4444';
+          ctxSearch.lineWidth = 2;
+          ctxSearch.strokeRect(x1 * scale, y1 * scale, w * scale, h * scale);
+        }
+        const searchBase64 = canvasSearch.toDataURL('image/jpeg', 0.75);
+
+        resolve({ face: faceBase64, search: searchBase64 });
+      } catch (e) {
+        console.error('Erro ao processar canvas para miniaturas:', e);
+        resolve({ face: null, search: null });
+      }
+    };
+    img.onerror = () => {
+      resolve({ face: null, search: null });
+    };
+    img.src = imageUrl;
+  });
 }
 
 // ─── MatchCard ────────────────────────────────────────────────────────────────
@@ -346,6 +403,8 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   // Search
   const [queryURL, setQueryURL] = useState<string | null>(null);
   const [queryFile, setQueryFile] = useState<File | null>(null);
+  const [result, setResult] = useState<SearchResult | null>(null);
+  const [selectedFaceIdx, setSelectedFaceIdx] = useState(0);
 
   // Estados da Cesta de Relatório (Pool)
   const [reportPool, setReportPool] = useState<ReportPoolItem[]>([]);
@@ -392,28 +451,45 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
     return reportPool.some(item => item.match.id === match.id && item.match.targetType === mType);
   }, [reportPool, targetType]);
 
-  const handleTogglePool = useCallback((match: FaceMatch) => {
+  const handleTogglePool = useCallback(async (match: FaceMatch) => {
     const mType = match.targetType || (targetType === 'all' ? 'apenados' : targetType);
     const matchWithCorrectType = { ...match, targetType: mType };
 
-    setReportPool(prev => {
-      const exists = prev.some(item => item.match.id === match.id && item.match.targetType === mType);
-      if (exists) {
-        return prev.filter(item => !(item.match.id === match.id && item.match.targetType === mType));
-      } else {
-        return [
-          ...prev,
-          {
-            match: matchWithCorrectType,
-            originalPhotoUrl: queryURL,
-            similarity: match.similarity,
-            addedAt: new Date().toISOString(),
-            notes: ''
-          }
-        ];
+    const exists = reportPool.some(item => item.match.id === match.id && item.match.targetType === mType);
+    if (exists) {
+      setReportPool(prev => prev.filter(item => !(item.match.id === match.id && item.match.targetType === mType)));
+      return;
+    }
+
+    // Se não existe, vamos adicionar. Primeiro criamos as miniaturas em Base64
+    let faceThumbnailUrl: string | null = null;
+    let searchPhotoThumbnailUrl: string | null = null;
+
+    const activeFace = result?.faces.find(f => f.index === selectedFaceIdx);
+
+    if (queryURL && activeFace) {
+      try {
+        const thumbnails = await createThumbnails(queryURL, activeFace.bbox);
+        faceThumbnailUrl = thumbnails.face;
+        searchPhotoThumbnailUrl = thumbnails.search;
+      } catch (e) {
+        console.warn('Erro ao gerar miniaturas:', e);
       }
-    });
-  }, [queryURL, targetType]);
+    }
+
+    setReportPool(prev => [
+      ...prev,
+      {
+        match: matchWithCorrectType,
+        originalPhotoUrl: queryURL,
+        faceThumbnailUrl,
+        searchPhotoThumbnailUrl,
+        similarity: match.similarity,
+        addedAt: new Date().toISOString(),
+        notes: ''
+      }
+    ]);
+  }, [queryURL, result, selectedFaceIdx, targetType, reportPool]);
 
   // Visualizar foto ampliada
   const [viewingPhotoMatch, setViewingPhotoMatch] = useState<FaceMatch | null>(null);
@@ -422,8 +498,6 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
   const [searchState, setSearchState] = useState<SearchState>('ready');
   const [errorMsg, setErrorMsg] = useState('');
   const [analyzeMsg, setAnalyzeMsg] = useState('Analisando rosto no servidor...');
-  const [result, setResult] = useState<SearchResult | null>(null);
-  const [selectedFaceIdx, setSelectedFaceIdx] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [minSimilarity, setMinSimilarity] = useState(30);
   const [faceDisplayHeight, setFaceDisplayHeight] = useState(380);
@@ -1268,12 +1342,41 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                             <span className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-xs font-bold text-subtle flex-shrink-0">
                               {index + 1}
                             </span>
-                            <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
-                              {item.match.photoPath ? (
-                                <img src={photoUrl} alt={item.match.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center"><ScanFace className="w-5 h-5 text-gray-400" /></div>
+                            {/* Tríade de Imagens (Busca, Recorte, Cadastro) */}
+                            <div className="flex gap-2 items-center flex-shrink-0">
+                              {/* 1. Foto de Busca completa com o retângulo */}
+                              {item.searchPhotoThumbnailUrl ? (
+                                <div className="relative w-12 h-14 rounded-xl overflow-hidden bg-gray-105 dark:bg-gray-800 border border-gray-200 dark:border-gray-800" title="Foto completa da busca (destacada)">
+                                  <img src={item.searchPhotoThumbnailUrl} alt="Busca Completa" className="w-full h-full object-cover" />
+                                  <span className="absolute bottom-0 inset-x-0 text-[7px] bg-black/60 text-white text-center font-bold uppercase tracking-widest py-0.5">Origem</span>
+                                </div>
+                              ) : item.originalPhotoUrl ? (
+                                <div className="relative w-12 h-14 rounded-xl overflow-hidden bg-gray-105 dark:bg-gray-800 border border-gray-200 dark:border-gray-800">
+                                  <img src={item.originalPhotoUrl} alt="Busca" className="w-full h-full object-cover" />
+                                  <span className="absolute bottom-0 inset-x-0 text-[7px] bg-black/60 text-white text-center font-bold uppercase tracking-widest py-0.5">Origem</span>
+                                </div>
+                              ) : null}
+
+                              {/* 2. Rosto recortado da busca */}
+                              {item.faceThumbnailUrl && (
+                                <div className="relative w-10 h-12 rounded-lg overflow-hidden bg-gray-105 dark:bg-gray-800 border border-gray-200 dark:border-gray-800" title="Rosto recortado da busca">
+                                  <img src={item.faceThumbnailUrl} alt="Rosto Busca" className="w-full h-full object-cover" />
+                                  <span className="absolute bottom-0 inset-x-0 text-[6px] bg-sigma-600/80 text-white text-center font-bold uppercase tracking-wider py-0.5">Face</span>
+                                </div>
                               )}
+
+                              {/* Símbolo de comparação */}
+                              <span className="text-subtle text-xs px-0.5">➔</span>
+
+                              {/* 3. Foto oficial de cadastro */}
+                              <div className="relative w-12 h-14 rounded-xl overflow-hidden bg-gray-105 dark:bg-gray-800 border border-gray-200 dark:border-gray-800" title="Foto oficial de cadastro">
+                                {item.match.photoPath ? (
+                                  <img src={photoUrl} alt={item.match.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center"><ScanFace className="w-5 h-5 text-gray-400" /></div>
+                                )}
+                                <span className="absolute bottom-0 inset-x-0 text-[7px] bg-green-600/80 text-white text-center font-bold uppercase tracking-widest py-0.5">Cadastro</span>
+                              </div>
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-bold text-title truncate">{item.match.name}</p>
@@ -2537,16 +2640,39 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                         {index + 1}
                       </span>
                       
-                      {/* Fotos de Comparação Lado a Lado */}
-                      <div className="flex gap-3 flex-shrink-0">
-                        {item.originalPhotoUrl && (
+                      {/* Fotos de Comparação Lado a Lado (Tríade Científica) */}
+                      <div className="flex gap-3 flex-shrink-0 items-end">
+                        {/* 1. Origem completa com o destaque vermelho */}
+                        {item.searchPhotoThumbnailUrl ? (
+                          <div className="flex flex-col items-center">
+                            <div className="w-24 h-28 border border-black rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
+                              <img src={item.searchPhotoThumbnailUrl} alt="Origem Busca" className="w-full h-full object-cover" />
+                            </div>
+                            <span className="text-[7px] font-bold text-gray-600 mt-1 uppercase">1. Origem (Destaque)</span>
+                          </div>
+                        ) : item.originalPhotoUrl ? (
                           <div className="flex flex-col items-center">
                             <div className="w-24 h-28 border border-black rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
                               <img src={item.originalPhotoUrl} alt="Foto da Busca" className="w-full h-full object-cover" />
                             </div>
-                            <span className="text-[8px] font-bold text-gray-600 mt-1 uppercase">Face da Busca</span>
+                            <span className="text-[7px] font-bold text-gray-600 mt-1 uppercase">1. Origem (Destaque)</span>
+                          </div>
+                        ) : null}
+
+                        {/* 2. Rosto recortado */}
+                        {item.faceThumbnailUrl && (
+                          <div className="flex flex-col items-center">
+                            <div className="w-20 h-24 border border-black rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
+                              <img src={item.faceThumbnailUrl} alt="Face Busca" className="w-full h-full object-cover" />
+                            </div>
+                            <span className="text-[7px] font-bold text-gray-600 mt-1 uppercase">2. Face Detectada</span>
                           </div>
                         )}
+
+                        {/* Setinha de comparação */}
+                        <div className="flex items-center justify-center pb-12 text-sm font-bold text-gray-500">➔</div>
+
+                        {/* 3. Foto de Cadastro */}
                         <div className="flex flex-col items-center">
                           <div className="w-24 h-28 border border-black rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
                             {item.match.photoPath ? (
@@ -2555,7 +2681,7 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
                               <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400">Sem Foto</div>
                             )}
                           </div>
-                          <span className="text-[8px] font-bold text-gray-600 mt-1 uppercase">Foto Oficial</span>
+                          <span className="text-[7px] font-bold text-gray-600 mt-1 uppercase">3. Foto Oficial</span>
                         </div>
                       </div>
 
