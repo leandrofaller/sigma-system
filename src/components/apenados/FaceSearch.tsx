@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useIndexing } from '@/contexts/IndexingContext';
 import { useAntelopeIndexing } from '@/contexts/AntelopeIndexingContext';
 import { useVisitanteIndexing } from '@/contexts/VisitanteIndexingContext';
@@ -397,6 +398,11 @@ function FaceCanvas({
 interface Props { onClose: () => void; userRole: string; onEditApenado?: (id: string) => void }
 
 export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [tab, setTab] = useState<Tab>('search');
   const [targetType, setTargetType] = useState<'apenados' | 'visitantes' | 'servidores' | 'all'>('apenados');
 
@@ -2594,7 +2600,9 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
       )}
 
       {/* Relatório Impresso (Visível apenas na impressão) */}
-      <div className="hidden print:block print-report-container bg-white text-black p-8 font-sans w-full min-h-screen overflow-visible">
+      <div className="hidden print:block print-report-container">
+        {mounted && typeof window !== 'undefined' && createPortal(
+          <div id="relint-print-area" className="bg-white text-black p-8 font-sans w-full min-h-screen overflow-visible">
         {/* Cabeçalho do Relatório */}
         <div className="text-center border-b-2 border-black pb-4 mb-6">
           <h1 className="text-lg font-extrabold uppercase tracking-wide">Secretaria de Estado da Justiça - SEJUS</h1>
@@ -2770,65 +2778,68 @@ export function FaceSearch({ onClose, userRole, onEditApenado }: Props) {
         <div className="mt-8 text-center text-[9px] font-bold text-gray-500 uppercase tracking-widest print:absolute print:bottom-4 print:left-0 print:right-0">
           DOCUMENTO CONFIDENCIAL - USO RESTRITO DE INTELIGÊNCIA PENAL
         </div>
-      </div>
+      </div>,
+      document.body
+    )}
+  </div>
 
-      <style>{`
-        @media print {
-          /* Oculta tudo na página por padrão */
-          body * {
-            visibility: hidden !important;
-          }
-          
-          /* Garante que o relatório e seus filhos fiquem visíveis */
-          .print-report-container,
-          .print-report-container * {
-            visibility: visible !important;
-          }
-          
-          /* Remove restrições e estilizações dos containers pais do modal */
-          .fixed.inset-0 {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: transparent !important;
-            overflow: visible !important;
-            display: block !important;
-          }
-          
-          .relative.z-10 {
-            position: relative !important;
-            max-height: none !important;
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            overflow: visible !important;
-            display: block !important;
-          }
-          
-          /* Posiciona o relatório no topo absoluto da página de impressão */
-          .print-report-container {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            margin: 0 !important;
-            padding: 24px !important;
-            background: white !important;
-            color: black !important;
-            display: block !important;
-          }
-          
-          .page-break-inside-avoid {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-        }
-      `}</style>
-    </div>
-  );
+  <style>{`
+    @media print {
+      /* Oculta tudo na página por padrão */
+      body * {
+        visibility: hidden !important;
+      }
+      
+      /* Garante que o relatório e seus filhos fiquem visíveis */
+      #relint-print-area,
+      #relint-print-area * {
+        visibility: visible !important;
+      }
+      
+      /* Remove restrições e estilizações dos containers pais do modal */
+      .fixed.inset-0 {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+        overflow: visible !important;
+        display: block !important;
+      }
+      
+      .relative.z-10 {
+        position: relative !important;
+        max-height: none !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        overflow: visible !important;
+        display: block !important;
+      }
+      
+      /* Posiciona o relatório no topo absoluto da página de impressão */
+      #relint-print-area {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 24px !important;
+        background: white !important;
+        color: black !important;
+        display: block !important;
+      }
+      
+      .page-break-inside-avoid {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+    }
+  `}</style>
+</div>
+);
 }
