@@ -70,8 +70,9 @@ export async function getPgVectorStats(): Promise<{
 export async function initPgVector(): Promise<{ ok: boolean; error?: string }> {
   try {
     // Configura statement_timeout para 10s no boot para evitar travamentos por locks nos índices HNSW
+    // Configura statement_timeout para 120s em background para permitir recriação segura dos índices HNSW
     try {
-      await prisma.$executeRawUnsafe('SET statement_timeout = 10000');
+      await prisma.$executeRawUnsafe('SET statement_timeout = 120000');
     } catch (e: any) {
       console.warn('[pgvector] Nao foi possivel definir statement_timeout:', e.message || e);
     }
@@ -100,39 +101,74 @@ export async function initPgVector(): Promise<{ ok: boolean; error?: string }> {
       `ALTER TABLE sejus_servidores ADD COLUMN IF NOT EXISTS "faceVectorAdvanced" vector(512)`,
     );
 
-    // Cria índices HNSW para Buffalo (m=8 conserva memoria vs m=32, ef=32 mais rápido)
-    await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS apenados_face_hnsw_idx
-      ON apenados USING hnsw ("faceVector" vector_cosine_ops)
-      WITH (m = 8, ef_construction = 32)
-    `);
-    await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS visitantes_face_hnsw_idx
-      ON sipe_visitantes USING hnsw ("faceVector" vector_cosine_ops)
-      WITH (m = 8, ef_construction = 32)
-    `);
-    await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS servidores_face_hnsw_idx
-      ON sejus_servidores USING hnsw ("faceVector" vector_cosine_ops)
-      WITH (m = 8, ef_construction = 32)
-    `);
+    // Cria índices HNSW de alta acurácia para Buffalo (m=16, ef_construction=64)
+    // Dropa os índices m=8 anteriores para forçar a reconstrução com parâmetros de alta precisão
+    try {
+      await prisma.$executeRawUnsafe('DROP INDEX IF EXISTS apenados_face_hnsw_idx');
+      await prisma.$executeRawUnsafe(`
+        CREATE INDEX apenados_face_hnsw_idx
+        ON apenados USING hnsw ("faceVector" vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64)
+      `);
+    } catch (e) {
+      console.warn('[pgvector] Erro ao recriar apenados_face_hnsw_idx:', e);
+    }
 
-    // Cria índices HNSW para Antelope
-    await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS apenados_face_advanced_hnsw_idx
-      ON apenados USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
-      WITH (m = 8, ef_construction = 32)
-    `);
-    await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS visitantes_face_advanced_hnsw_idx
-      ON sipe_visitantes USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
-      WITH (m = 8, ef_construction = 32)
-    `);
-    await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS servidores_face_advanced_hnsw_idx
-      ON sejus_servidores USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
-      WITH (m = 8, ef_construction = 32)
-    `);
+    try {
+      await prisma.$executeRawUnsafe('DROP INDEX IF EXISTS visitantes_face_hnsw_idx');
+      await prisma.$executeRawUnsafe(`
+        CREATE INDEX visitantes_face_hnsw_idx
+        ON sipe_visitantes USING hnsw ("faceVector" vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64)
+      `);
+    } catch (e) {
+      console.warn('[pgvector] Erro ao recriar visitantes_face_hnsw_idx:', e);
+    }
+
+    try {
+      await prisma.$executeRawUnsafe('DROP INDEX IF EXISTS servidores_face_hnsw_idx');
+      await prisma.$executeRawUnsafe(`
+        CREATE INDEX servidores_face_hnsw_idx
+        ON sejus_servidores USING hnsw ("faceVector" vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64)
+      `);
+    } catch (e) {
+      console.warn('[pgvector] Erro ao recriar servidores_face_hnsw_idx:', e);
+    }
+
+    // Cria índices HNSW de alta acurácia para Antelope
+    try {
+      await prisma.$executeRawUnsafe('DROP INDEX IF EXISTS apenados_face_advanced_hnsw_idx');
+      await prisma.$executeRawUnsafe(`
+        CREATE INDEX apenados_face_advanced_hnsw_idx
+        ON apenados USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64)
+      `);
+    } catch (e) {
+      console.warn('[pgvector] Erro ao recriar apenados_face_advanced_hnsw_idx:', e);
+    }
+
+    try {
+      await prisma.$executeRawUnsafe('DROP INDEX IF EXISTS visitantes_face_advanced_hnsw_idx');
+      await prisma.$executeRawUnsafe(`
+        CREATE INDEX visitantes_face_advanced_hnsw_idx
+        ON sipe_visitantes USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64)
+      `);
+    } catch (e) {
+      console.warn('[pgvector] Erro ao recriar visitantes_face_advanced_hnsw_idx:', e);
+    }
+
+    try {
+      await prisma.$executeRawUnsafe('DROP INDEX IF EXISTS servidores_face_advanced_hnsw_idx');
+      await prisma.$executeRawUnsafe(`
+        CREATE INDEX servidores_face_advanced_hnsw_idx
+        ON sejus_servidores USING hnsw ("faceVectorAdvanced" vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64)
+      `);
+    } catch (e) {
+      console.warn('[pgvector] Erro ao recriar servidores_face_advanced_hnsw_idx:', e);
+    }
 
     // Cria função de trigger para sincronização clássica (Buffalo)
     await prisma.$executeRawUnsafe(`
