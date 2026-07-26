@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Users, Shield, Building2, X, MapPin, Sparkles } from 'lucide-react'
+import { Users, Shield, Building2, X, MapPin, Sparkles, FileBarChart } from 'lucide-react'
 import { faccaoCor } from '@/lib/mapa-faccoes'
 import type { MunicipioMapStats } from './MapaFaccoesMap'
 import type { UnidadePresosResumo } from '@/lib/unidades-prisionais-resumo'
@@ -20,6 +20,7 @@ interface Props {
   onClose?: () => void
   vinculos?: any[]
   loadingVinculos?: boolean
+  onOpenRelatorio?: () => void
 }
 
 const stagger = {
@@ -71,6 +72,7 @@ export function MunicipioSpotlightPanel({
   onClose,
   vinculos = [],
   loadingVinculos = false,
+  onOpenRelatorio,
 }: Props) {
   const faccoes = Object.entries(stat.faccoes ?? {}).sort((a, b) => b[1] - a[1])
   const maxFac = Math.max(1, ...faccoes.map(([, q]) => q))
@@ -137,14 +139,28 @@ export function MunicipioSpotlightPanel({
               )}
             </div>
             {onClose && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="shrink-0 p-2 rounded-xl bg-white/5 hover:bg-white/15 text-gray-300 hover:text-white border border-white/10 transition-colors"
-                aria-label="Fechar destaque"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {onOpenRelatorio && (
+                  <button
+                    type="button"
+                    onClick={onOpenRelatorio}
+                    className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-gray-300 hover:text-white border border-white/10 transition-colors flex items-center gap-1.5 text-[11px] font-semibold no-print"
+                    aria-label="Gerar Relatório do Município"
+                  >
+                    <FileBarChart className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden sm:inline">Relatório</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-gray-300 hover:text-white border border-white/10 transition-colors no-print"
+                  aria-label="Fechar destaque"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             )}
           </div>
 

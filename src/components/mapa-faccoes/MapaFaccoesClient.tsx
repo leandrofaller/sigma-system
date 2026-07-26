@@ -146,6 +146,7 @@ export function MapaFaccoesClient({
   const [selectedNome, setSelectedNome] = useState<string | null>(null)
   const [showCadastro, setShowCadastro] = useState(false)
   const [showRelatorio, setShowRelatorio] = useState(false)
+  const [relatorioMunicipioNome, setRelatorioMunicipioNome] = useState<string | null>(null)
   const [presentationMode, setPresentationMode] = useState(false)
   const [presentationIndex, setPresentationIndex] = useState(0)
   const [presentationPlaying, setPresentationPlaying] = useState(false)
@@ -1084,6 +1085,10 @@ export function MapaFaccoesClient({
                     unidadesPresos={up?.unidades ?? []}
                     vinculos={vinculos}
                     loadingVinculos={loadingVinculos}
+                    onOpenRelatorio={() => {
+                      setRelatorioMunicipioNome(nome)
+                      setShowRelatorio(true)
+                    }}
                     onClose={
                       presentationMode
                         ? undefined
@@ -1433,7 +1438,14 @@ export function MapaFaccoesClient({
         )}
       </AnimatePresence>
 
-      <MapaFaccoesRelatorioModal open={showRelatorio} onClose={() => setShowRelatorio(false)} />
+      <MapaFaccoesRelatorioModal
+        open={showRelatorio}
+        municipioNome={relatorioMunicipioNome}
+        onClose={() => {
+          setShowRelatorio(false)
+          setRelatorioMunicipioNome(null)
+        }}
+      />
 
       <style jsx global>{`
         .mapa-faccao-tooltip {

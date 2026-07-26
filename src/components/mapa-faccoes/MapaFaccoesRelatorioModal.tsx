@@ -41,9 +41,10 @@ interface RelatorioPayload {
 interface Props {
   open: boolean
   onClose: () => void
+  municipioNome?: string | null
 }
 
-export function MapaFaccoesRelatorioModal({ open, onClose }: Props) {
+export function MapaFaccoesRelatorioModal({ open, onClose, municipioNome = null }: Props) {
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -64,7 +65,11 @@ export function MapaFaccoesRelatorioModal({ open, onClose }: Props) {
     setError(null)
     setRelatorio(null)
 
-    fetch('/api/mapa-faccoes/relatorio')
+    const url = municipioNome
+      ? `/api/mapa-faccoes/relatorio?municipio=${encodeURIComponent(municipioNome)}`
+      : '/api/mapa-faccoes/relatorio'
+
+    fetch(url)
       .then(async (res) => {
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Erro ao gerar relatório')
@@ -83,7 +88,7 @@ export function MapaFaccoesRelatorioModal({ open, onClose }: Props) {
       cancelled = true
       document.body.style.overflow = prev
     }
-  }, [open])
+  }, [open, municipioNome])
 
   if (!mounted) return null
 
@@ -459,38 +464,40 @@ export function MapaFaccoesRelatorioModal({ open, onClose }: Props) {
                 )}
 
                 {/* 4. ATUAÇÃO POR MUNICÍPIOS E UNIDADES */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className={relatorio.topMunicipios && relatorio.topMunicipios.length > 1 ? "grid grid-cols-1 md:grid-cols-2 gap-6" : "grid grid-cols-1 gap-6"}>
                   {/* Municípios */}
-                  <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 p-5 shadow-sm print-border">
-                    <h4 className="font-bold text-sm uppercase tracking-wider mb-3 text-gray-900 dark:text-white flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-red-500" />
-                      <span>Distribuição por Município</span>
-                    </h4>
-                    {(relatorio.topMunicipios?.length ?? 0) === 0 ? (
-                      <p className="text-subtle text-xs">Nenhum município mapeado.</p>
-                    ) : (
-                      <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                        {relatorio.topMunicipios!.map((m) => (
-                          <div key={m.nome} className="py-2.5 flex justify-between items-center gap-2 text-xs">
-                            <span className="font-semibold text-gray-700 dark:text-gray-300">{m.nome}</span>
-                            <div className="flex items-center gap-3">
-                              {/* Divisão percentual interna do município */}
-                              <div className="flex gap-2 text-[10px] font-bold text-subtle">
-                                {Object.entries(m.faccoes ?? {}).sort((a, b) => b[1] - a[1]).map(([fac, count]) => (
-                                  <span key={fac} style={{ color: faccaoCor(fac) }}>
-                                    {count}{fac.split(' ')[0][0]}
-                                  </span>
-                                ))}
+                  {relatorio.topMunicipios && relatorio.topMunicipios.length > 1 && (
+                    <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 p-5 shadow-sm print-border">
+                      <h4 className="font-bold text-sm uppercase tracking-wider mb-3 text-gray-900 dark:text-white flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-red-500" />
+                        <span>Distribuição por Município</span>
+                      </h4>
+                      {(relatorio.topMunicipios?.length ?? 0) === 0 ? (
+                        <p className="text-subtle text-xs">Nenhum município mapeado.</p>
+                      ) : (
+                        <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                          {relatorio.topMunicipios!.map((m) => (
+                            <div key={m.nome} className="py-2.5 flex justify-between items-center gap-2 text-xs">
+                              <span className="font-semibold text-gray-700 dark:text-gray-300">{m.nome}</span>
+                              <div className="flex items-center gap-3">
+                                {/* Divisão percentual interna do município */}
+                                <div className="flex gap-2 text-[10px] font-bold text-subtle">
+                                  {Object.entries(m.faccoes ?? {}).sort((a, b) => b[1] - a[1]).map(([fac, count]) => (
+                                    <span key={fac} style={{ color: faccaoCor(fac) }}>
+                                      {count}{fac.split(' ')[0][0]}
+                                    </span>
+                                  ))}
+                                </div>
+                                <span className="font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white">
+                                  {m.totalApenados}
+                                </span>
                               </div>
-                              <span className="font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white">
-                                {m.totalApenados}
-                              </span>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Unidades */}
                   <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 p-5 shadow-sm print-border">

@@ -113,11 +113,17 @@ export async function fetchMapaVinculosComAip() {
   })
 }
 
-export async function buildMapaStats() {
-  const [vinculos, apenadosPorMunicipio] = await Promise.all([
+export async function buildMapaStats(municipioQuery?: string | null) {
+  let [vinculos, apenadosPorMunicipio] = await Promise.all([
     fetchMapaVinculosComAip(),
     buildApenadosUnidadesPrisionaisPorMunicipio(),
   ])
+
+  if (municipioQuery) {
+    const normalizedQuery = normalizeMunicipioNome(municipioQuery)
+    vinculos = vinculos.filter(v => normalizeMunicipioNome(v.municipio) === normalizedQuery)
+    apenadosPorMunicipio = apenadosPorMunicipio.filter(ap => normalizeMunicipioNome(ap.municipio) === normalizedQuery)
+  }
   const municipios = agregarPorMunicipio(vinculos, (nome, ibge) => ibge ?? nomeParaIbge(nome))
   const maxApenados = municipios.reduce((m, x) => Math.max(m, x.totalApenados), 0)
 
