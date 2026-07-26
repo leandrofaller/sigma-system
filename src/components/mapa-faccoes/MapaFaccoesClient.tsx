@@ -1052,6 +1052,8 @@ export function MapaFaccoesClient({
                     filtroFaccaoLabel={filtroFaccaoLabel}
                     totalPresosUnidades={up?.totalApenados ?? 0}
                     unidadesPresos={up?.unidades ?? []}
+                    vinculos={vinculos}
+                    loadingVinculos={loadingVinculos}
                     onClose={
                       presentationMode
                         ? undefined

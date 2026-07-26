@@ -18,6 +18,8 @@ interface Props {
   presentationMode?: boolean
   filtroFaccaoLabel?: string | null
   onClose?: () => void
+  vinculos?: any[]
+  loadingVinculos?: boolean
 }
 
 const stagger = {
@@ -67,6 +69,8 @@ export function MunicipioSpotlightPanel({
   presentationMode,
   filtroFaccaoLabel,
   onClose,
+  vinculos = [],
+  loadingVinculos = false,
 }: Props) {
   const faccoes = Object.entries(stat.faccoes ?? {}).sort((a, b) => b[1] - a[1])
   const maxFac = Math.max(1, ...faccoes.map(([, q]) => q))
@@ -203,53 +207,7 @@ export function MunicipioSpotlightPanel({
             </motion.div>
           </motion.div>
 
-          {unidadesPresos.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.28 }}
-              className="mt-4 pt-4 border-t border-white/10"
-            >
-              <p className="text-[10px] uppercase tracking-[0.18em] font-black text-blue-400/90 mb-3">
-                Por unidade identificada
-              </p>
-              <div className="space-y-2 max-h-[18vh] overflow-y-auto pr-1">
-                {unidadesPresos.map((u, idx) => {
-                  const pct = Math.round((u.totalApenados / maxUnidade) * 100)
-                  return (
-                    <motion.div
-                      key={u.unidade}
-                      initial={{ opacity: 0, x: -12 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.35, delay: 0.3 + idx * 0.06 }}
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <p className="text-xs text-gray-200 font-medium leading-snug line-clamp-2 min-w-0">
-                          {u.unidade}
-                        </p>
-                        <span className="text-sm font-black tabular-nums text-blue-300 shrink-0">
-                          <AnimatedCount value={u.totalApenados} delay={280 + idx * 50} />
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden ring-1 ring-white/10">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${pct}%` }}
-                          transition={{
-                            duration: 0.7,
-                            delay: 0.32 + idx * 0.06,
-                            ease: [0.22, 1, 0.36, 1],
-                          }}
-                          className="h-full rounded-full bg-gradient-to-r from-blue-600 to-sky-400"
-                          style={{ boxShadow: '0 0 12px rgba(56, 189, 248, 0.35)' }}
-                        />
-                      </div>
-                    </motion.div>
-                  )
-                })}
-              </div>
-            </motion.div>
-          )}
+
 
           {faccoes.length > 0 ? (
             <motion.div
@@ -271,6 +229,10 @@ export function MunicipioSpotlightPanel({
                     stat.totalApenados > 0
                       ? Math.round((qtd / stat.totalApenados) * 100)
                       : 0
+
+                  const integrantesDaFaccao = vinculos.filter(
+                    (v: any) => v.apenado.faccaoDisplay === faccao
+                  )
 
                   return (
                     <motion.div
@@ -300,7 +262,7 @@ export function MunicipioSpotlightPanel({
                           <AnimatedCount value={qtd} delay={400 + idx * 100} />
                         </span>
                       </div>
-                      <div className="h-2.5 rounded-full bg-white/5 overflow-hidden ring-1 ring-white/10">
+                      <div className="h-2.5 rounded-full bg-white/5 overflow-hidden ring-1 ring-white/10 mb-2">
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${pct}%` }}
@@ -320,6 +282,47 @@ export function MunicipioSpotlightPanel({
                           }}
                         />
                       </div>
+
+                      {/* Lista de Integrantes da Facção */}
+                      {loadingVinculos ? (
+                        <p className="text-[10px] text-gray-500 italic mt-2 ml-2 pl-3">Carregando integrantes...</p>
+                      ) : integrantesDaFaccao.length > 0 ? (
+                        <div className="mt-2.5 ml-2 pl-3 border-l border-white/10 space-y-1.5 mb-4">
+                          <p className="text-[9px] uppercase tracking-wider font-bold text-gray-500 mb-1">
+                            Integrantes ({integrantesDaFaccao.length})
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[140px] overflow-y-auto pr-1">
+                            {integrantesDaFaccao.map((v: any) => (
+                              <div 
+                                key={v.id} 
+                                className="flex items-center gap-2 p-1.5 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition text-[11px] text-gray-300"
+                              >
+                                {v.apenado.photoPath ? (
+                                  <img 
+                                    src={v.apenado.photoPath} 
+                                    alt={v.apenado.nome} 
+                                    className="w-5 h-5 rounded-full object-cover border border-white/10 flex-shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold text-gray-400 flex-shrink-0">
+                                    {v.apenado.nome.charAt(0)}
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-semibold text-gray-200 truncate leading-none">
+                                    {v.apenado.nome}
+                                  </p>
+                                  {v.apenado.vulgo && (
+                                    <p className="text-[9px] text-amber-400/80 truncate mt-0.5 leading-none">
+                                      Vulgo: {v.apenado.vulgo}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                     </motion.div>
                   )
                 })}
