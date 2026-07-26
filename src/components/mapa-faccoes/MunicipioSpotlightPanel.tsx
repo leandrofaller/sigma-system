@@ -85,7 +85,7 @@ export function MunicipioSpotlightPanel({
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       className="absolute inset-x-3 bottom-3 md:inset-x-6 md:bottom-5 z-[1100] pointer-events-none"
     >
-      <div className="pointer-events-auto relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-slate-950/98 shadow-[0_25px_80px_-12px_rgba(0,0,0,0.95)]">
+      <div className="pointer-events-auto relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-gray-800 bg-gray-950 shadow-[0_30px_100px_-15px_rgba(0,0,0,0.98)]">
         {/* Accent line */}
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-400 via-red-500 to-violet-500" />
 
@@ -148,12 +148,19 @@ export function MunicipioSpotlightPanel({
             )}
           </div>
 
+          {/* Caixa expansível que abre após destacar o município */}
           <motion.div
-            variants={stagger}
-            initial="hidden"
-            animate="show"
-            className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            transition={{ delay: 0.35, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
           >
+            <motion.div
+              variants={stagger}
+              initial="hidden"
+              animate="show"
+              className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3"
+            >
             <motion.div
               variants={fadeUp}
               className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 flex items-center justify-between gap-3"
@@ -295,30 +302,16 @@ export function MunicipioSpotlightPanel({
                                 {list.map((v: any) => (
                                   <div 
                                     key={v.id} 
-                                    className="flex items-center gap-2 p-1.5 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition text-[11px] text-gray-300"
+                                    className="p-2 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition text-[11px] flex flex-col justify-center min-h-[38px]"
                                   >
-                                    <div className="w-5.5 h-5.5 rounded-full overflow-hidden bg-white/10 flex items-center justify-center flex-shrink-0 text-[9px] font-bold text-gray-400 border border-white/10">
-                                      {v.apenado.photoPath ? (
-                                        <img 
-                                          src={`/api/aip/apenados/${v.apenado.id}/foto`}
-                                          alt="" 
-                                          className="w-full h-full object-cover"
-                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                                        />
-                                      ) : (
-                                        v.apenado.nome.charAt(0)
-                                      )}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                      <p className="font-semibold text-gray-200 truncate leading-none">
-                                        {v.apenado.nome}
+                                    <p className="font-bold text-gray-200 truncate leading-none">
+                                      {v.apenado.nome}
+                                    </p>
+                                    {v.apenado.vulgo && (
+                                      <p className="text-[9px] text-amber-400/80 truncate mt-1 leading-none">
+                                        Vulgo: {v.apenado.vulgo}
                                       </p>
-                                      {v.apenado.vulgo && (
-                                        <p className="text-[9px] text-amber-400/80 truncate mt-0.5 leading-none">
-                                          Vulgo: {v.apenado.vulgo}
-                                        </p>
-                                      )}
-                                    </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -347,9 +340,10 @@ export function MunicipioSpotlightPanel({
           {bandas.some((b) => b.striped) && (
             <p className="mt-3 flex items-center gap-1.5 text-[10px] text-gray-500">
               <PccStripeSwatch className="w-2.5 h-2.5" />
-              PCC representado em listras preto/branco no mapa e nas barras
+              PCC representado in listras preto/branco no mapa e nas barras
             </p>
           )}
+          </motion.div>
         </div>
       </div>
     </motion.div>
