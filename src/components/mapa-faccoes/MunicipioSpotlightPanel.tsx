@@ -85,13 +85,9 @@ export function MunicipioSpotlightPanel({
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       className="absolute inset-x-3 bottom-3 md:inset-x-6 md:bottom-5 z-[1100] pointer-events-none"
     >
-      <div className="pointer-events-auto relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-br from-slate-950/96 via-slate-900/95 to-slate-950/96 shadow-[0_25px_80px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+      <div className="pointer-events-auto relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-slate-950/98 shadow-[0_25px_80px_-12px_rgba(0,0,0,0.95)]">
         {/* Accent line */}
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-400 via-red-500 to-violet-500" />
-
-        {/* Soft glow blobs */}
-        <div className="pointer-events-none absolute -top-20 -right-16 h-48 w-48 rounded-full bg-red-500/15 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-16 -left-12 h-40 w-40 rounded-full bg-amber-400/10 blur-3xl" />
 
         <div className="relative p-4 sm:p-6 md:p-7">
           <div className="flex items-start justify-between gap-3">
@@ -120,6 +116,25 @@ export function MunicipioSpotlightPanel({
               >
                 {nome}
               </motion.h3>
+
+              {/* Quantitativos Gerais por Facção logo abaixo do nome do município */}
+              {faccoes.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {faccoes.map(([faccao, qtd]) => {
+                    const cor = faccaoCor(faccao)
+                    return (
+                      <span
+                        key={faccao}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-white/5 border border-white/10 text-gray-200"
+                        style={{ borderLeft: `3px solid ${cor}` }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cor }} />
+                        {faccao}: <strong className="text-white tabular-nums">{qtd}</strong>
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
             </div>
             {onClose && (
               <button
@@ -137,33 +152,8 @@ export function MunicipioSpotlightPanel({
             variants={stagger}
             initial="hidden"
             animate="show"
-            className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3"
+            className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3"
           >
-            <motion.div
-              variants={fadeUp}
-              className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 flex items-center justify-between gap-3"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-300">
-                  <Building2 className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400">
-                    Presos nas unidades
-                  </p>
-                  <p className="text-[11px] text-gray-500 truncate">
-                    Só unidade identificada
-                    {unidadesPresos.length > 0
-                      ? ` · ${unidadesPresos.length} unid.`
-                      : ''}
-                  </p>
-                </div>
-              </div>
-              <p className="text-2xl font-black text-blue-300 shrink-0">
-                <AnimatedCount value={totalPresosUnidades} />
-              </p>
-            </motion.div>
-
             <motion.div
               variants={fadeUp}
               className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 flex items-center justify-between gap-3"
@@ -283,44 +273,57 @@ export function MunicipioSpotlightPanel({
                         />
                       </div>
 
-                      {/* Lista de Integrantes da Facção */}
+                      {/* Lista de Integrantes da Facção por Unidade Prisional */}
                       {loadingVinculos ? (
                         <p className="text-[10px] text-gray-500 italic mt-2 ml-2 pl-3">Carregando integrantes...</p>
                       ) : integrantesDaFaccao.length > 0 ? (
-                        <div className="mt-2.5 ml-2 pl-3 border-l border-white/10 space-y-1.5 mb-4">
-                          <p className="text-[9px] uppercase tracking-wider font-bold text-gray-500 mb-1">
-                            Integrantes ({integrantesDaFaccao.length})
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[140px] overflow-y-auto pr-1">
-                            {integrantesDaFaccao.map((v: any) => (
-                              <div 
-                                key={v.id} 
-                                className="flex items-center gap-2 p-1.5 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition text-[11px] text-gray-300"
-                              >
-                                {v.apenado.photoPath ? (
-                                  <img 
-                                    src={v.apenado.photoPath} 
-                                    alt={v.apenado.nome} 
-                                    className="w-5 h-5 rounded-full object-cover border border-white/10 flex-shrink-0"
-                                  />
-                                ) : (
-                                  <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold text-gray-400 flex-shrink-0">
-                                    {v.apenado.nome.charAt(0)}
+                        <div className="mt-2.5 ml-2 pl-3 border-l border-white/10 space-y-4 mb-4">
+                          {Object.entries(
+                            integrantesDaFaccao.reduce((acc: Record<string, any[]>, v: any) => {
+                              const unidade = v.apenado.unidade || v.unidadePrisional || 'Unidade não informada'
+                              if (!acc[unidade]) acc[unidade] = []
+                              acc[unidade].push(v)
+                              return acc
+                            }, {})
+                          ).map(([unidade, list]: [string, any]) => (
+                            <div key={unidade} className="space-y-1.5">
+                              <p className="text-[9px] uppercase tracking-wider font-extrabold text-amber-500/90 flex items-center gap-1.5">
+                                <Building2 className="w-3.5 h-3.5 text-amber-500/70" />
+                                {unidade} ({list.length})
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[140px] overflow-y-auto pr-1">
+                                {list.map((v: any) => (
+                                  <div 
+                                    key={v.id} 
+                                    className="flex items-center gap-2 p-1.5 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition text-[11px] text-gray-300"
+                                  >
+                                    <div className="w-5.5 h-5.5 rounded-full overflow-hidden bg-white/10 flex items-center justify-center flex-shrink-0 text-[9px] font-bold text-gray-400 border border-white/10">
+                                      {v.apenado.photoPath ? (
+                                        <img 
+                                          src={`/api/aip/apenados/${v.apenado.id}/foto`}
+                                          alt="" 
+                                          className="w-full h-full object-cover"
+                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                        />
+                                      ) : (
+                                        v.apenado.nome.charAt(0)
+                                      )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-semibold text-gray-200 truncate leading-none">
+                                        {v.apenado.nome}
+                                      </p>
+                                      {v.apenado.vulgo && (
+                                        <p className="text-[9px] text-amber-400/80 truncate mt-0.5 leading-none">
+                                          Vulgo: {v.apenado.vulgo}
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-semibold text-gray-200 truncate leading-none">
-                                    {v.apenado.nome}
-                                  </p>
-                                  {v.apenado.vulgo && (
-                                    <p className="text-[9px] text-amber-400/80 truncate mt-0.5 leading-none">
-                                      Vulgo: {v.apenado.vulgo}
-                                    </p>
-                                  )}
-                                </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
+                            </div>
+                          ))}
                         </div>
                       ) : null}
                     </motion.div>
