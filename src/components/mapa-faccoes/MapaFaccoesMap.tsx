@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useCallback, useEffect } from 'react'
-import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, GeoJSON, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { IBGE_PARA_NOME, CENTRO_RONDONIA, ZOOM_ESTADO } from '@/lib/municipios-rondonia'
@@ -42,6 +42,9 @@ interface Props {
   hideEmpty?: boolean
   /** Facção filtrada — reforça contraste nos que têm atuação. */
   filtroAtivo?: boolean
+  mapZoom?: number
+  lockZoom?: boolean
+  onZoomChange?: (zoom: number) => void
 }
 
 function FlyToMunicipio({
@@ -78,6 +81,45 @@ function FlyToMunicipio({
       })
     }
   }, [ibge, geojson, map, hasFocus])
+  return null
+}
+
+function MapZoomController({ zoom }: { zoom: number }) {
+  const map = useMap()
+  useEffect(() => {
+    if (map.getZoom() !== zoom) {
+      map.setZoom(zoom)
+    }
+  }, [zoom, map])
+  return null
+}
+
+function ScrollWheelZoomController({ lockZoom }: { lockZoom: boolean }) {
+  const map = useMap()
+  useEffect(() => {
+    if (lockZoom) {
+      map.scrollWheelZoom.disable()
+      map.doubleClickZoom.disable()
+      map.boxZoom.disable()
+      map.touchZoom.disable()
+    } else {
+      map.scrollWheelZoom.enable()
+      map.doubleClickZoom.enable()
+      map.boxZoom.enable()
+      map.touchZoom.enable()
+    }
+  }, [lockZoom, map])
+  return null
+}
+
+function SyncMapZoom({ onZoomChange }: { onZoomChange?: (zoom: number) => void }) {
+  const map = useMapEvents({
+    zoomend() {
+      if (onZoomChange) {
+        onZoomChange(map.getZoom())
+      }
+    }
+  })
   return null
 }
 
@@ -143,6 +185,9 @@ export default function MapaFaccoesMap({
   linkMode,
   hideEmpty = false,
   filtroAtivo = false,
+  mapZoom = 8,
+  lockZoom = false,
+  onZoomChange,
 }: Props) {
   const geojson = useMemo(() => (rawGeo ? enrichGeoJson(rawGeo) : null), [rawGeo])
   const focusIbge = highlightIbge ?? selectedIbge
@@ -291,7 +336,7 @@ export default function MapaFaccoesMap({
         center={CENTRO_RONDONIA}
         zoom={ZOOM_ESTADO}
         className="h-full w-full rounded-2xl z-0"
-        scrollWheelZoom
+        scrollWheelZoom={!lockZoom}
         zoomControl={!presentationMode}
         attributionControl={!presentationMode}
       >
@@ -308,6 +353,9 @@ export default function MapaFaccoesMap({
           />
         )}
         <FlyToMunicipio ibge={focusIbge} geojson={geojson} hasFocus={hasFocus} />
+        <MapZoomController zoom={mapZoom} />
+        <ScrollWheelZoomController lockZoom={lockZoom} />
+        <SyncMapZoom onZoomChange={onZoomChange} />
       </MapContainer>
     </div>
   )

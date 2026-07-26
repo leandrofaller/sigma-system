@@ -213,115 +213,179 @@ export function MunicipioSpotlightPanel({
               transition={{ delay: 0.35 }}
               className="mt-5 pt-4 border-t border-white/10"
             >
-              <p className="text-[10px] uppercase tracking-[0.18em] font-black text-amber-400/90 mb-3">
+              <p className="text-[10px] uppercase tracking-[0.18em] font-black text-amber-400/90 mb-4">
                 Atuação por facção
               </p>
-              <div className="space-y-3 max-h-[28vh] overflow-y-auto pr-1">
-                {faccoes.map(([faccao, qtd], idx) => {
-                  const cor = faccaoCor(faccao)
-                  const banda = bandas.find((b) => b.label === faccao)
-                  const striped = banda?.striped ?? false
-                  const pct = Math.round((qtd / maxFac) * 100)
-                  const share =
-                    stat.totalApenados > 0
-                      ? Math.round((qtd / stat.totalApenados) * 100)
-                      : 0
 
-                  const integrantesDaFaccao = vinculos.filter(
-                    (v: any) => v.apenado.faccaoDisplay === faccao
-                  )
+              <div className="flex flex-col md:flex-row gap-6 items-start justify-between">
+                {/* Lista de Facções e Integrantes */}
+                <div className="flex-1 w-full space-y-4 max-h-[32vh] overflow-y-auto pr-1 custom-scrollbar">
+                  {faccoes.map(([faccao, qtd], idx) => {
+                    const cor = faccaoCor(faccao)
+                    const banda = bandas.find((b) => b.label === faccao)
+                    const striped = banda?.striped ?? false
+                    const pct = Math.round((qtd / maxFac) * 100)
+                    const share =
+                      stat.totalApenados > 0
+                        ? Math.round((qtd / stat.totalApenados) * 100)
+                        : 0
 
-                  return (
-                    <motion.div
-                      key={faccao}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{
-                        duration: 0.4,
-                        delay: 0.4 + idx * 0.1,
-                        ease: [0.22, 1, 0.36, 1],
-                      }}
-                      className="group"
-                    >
-                      <div className="flex items-center justify-between gap-3 mb-1.5">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FaccaoMapaBadge
-                            label={faccao}
-                            cor={cor}
-                            estiloMapa={stat.estiloMapa}
-                            size="sm"
-                          />
-                          <span className="text-[11px] text-gray-500 font-medium tabular-nums">
-                            {share}% do total
+                    const integrantesDaFaccao = vinculos.filter(
+                      (v: any) => v.apenado.faccaoDisplay === faccao
+                    )
+
+                    return (
+                      <motion.div
+                        key={faccao}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{
+                          duration: 0.4,
+                          delay: 0.4 + idx * 0.1,
+                          ease: [0.22, 1, 0.36, 1],
+                        }}
+                        className="group"
+                      >
+                        <div className="flex items-center justify-between gap-3 mb-1.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FaccaoMapaBadge
+                              label={faccao}
+                              cor={cor}
+                              estiloMapa={stat.estiloMapa}
+                              size="sm"
+                            />
+                            <span className="text-[11px] text-gray-500 font-medium tabular-nums">
+                              {share}% do total
+                            </span>
+                          </div>
+                          <span className="text-lg sm:text-xl font-black text-white tabular-nums shrink-0">
+                            <AnimatedCount value={qtd} delay={400 + idx * 100} />
                           </span>
                         </div>
-                        <span className="text-lg sm:text-xl font-black text-white tabular-nums shrink-0">
-                          <AnimatedCount value={qtd} delay={400 + idx * 100} />
-                        </span>
-                      </div>
-                      <div className="h-2.5 rounded-full bg-white/5 overflow-hidden ring-1 ring-white/10 mb-2">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${pct}%` }}
-                          transition={{
-                            duration: 0.85,
-                            delay: 0.45 + idx * 0.12,
-                            ease: [0.22, 1, 0.36, 1],
-                          }}
-                          className="h-full rounded-full relative"
-                          style={{
-                            background: striped
-                              ? 'repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 4px,#f8fafc 4px,#f8fafc 8px)'
-                              : `linear-gradient(90deg, ${cor}cc, ${cor})`,
-                            boxShadow: striped
-                              ? '0 0 12px rgba(248,250,252,0.25)'
-                              : `0 0 16px ${cor}66`,
-                          }}
-                        />
-                      </div>
-
-                      {/* Lista de Integrantes da Facção por Unidade Prisional */}
-                      {loadingVinculos ? (
-                        <p className="text-[10px] text-gray-500 italic mt-2 ml-2 pl-3">Carregando integrantes...</p>
-                      ) : integrantesDaFaccao.length > 0 ? (
-                        <div className="mt-2.5 ml-2 pl-3 border-l border-white/10 space-y-4 mb-4">
-                          {Object.entries(
-                            integrantesDaFaccao.reduce((acc: Record<string, any[]>, v: any) => {
-                              const unidade = v.apenado.unidade || v.unidadePrisional || 'Unidade não informada'
-                              if (!acc[unidade]) acc[unidade] = []
-                              acc[unidade].push(v)
-                              return acc
-                            }, {})
-                          ).map(([unidade, list]: [string, any]) => (
-                            <div key={unidade} className="space-y-1.5">
-                              <p className="text-[9px] uppercase tracking-wider font-extrabold text-amber-500/90 flex items-center gap-1.5">
-                                <Building2 className="w-3.5 h-3.5 text-amber-500/70" />
-                                {unidade} ({list.length})
-                              </p>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[140px] overflow-y-auto pr-1">
-                                {list.map((v: any) => (
-                                  <div 
-                                    key={v.id} 
-                                    className="p-2 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition text-[11px] flex flex-col justify-center min-h-[38px]"
-                                  >
-                                    <p className="font-bold text-gray-200 truncate leading-none">
-                                      {v.apenado.nome}
-                                    </p>
-                                    {v.apenado.vulgo && (
-                                      <p className="text-[9px] text-amber-400/80 truncate mt-1 leading-none">
-                                        Vulgo: {v.apenado.vulgo}
-                                      </p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
+                        <div className="h-2.5 rounded-full bg-white/5 overflow-hidden ring-1 ring-white/10 mb-2">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: pct + '%' }}
+                            transition={{
+                              duration: 0.85,
+                              delay: 0.45 + idx * 0.12,
+                              ease: [0.22, 1, 0.36, 1],
+                            }}
+                            className="h-full rounded-full relative"
+                            style={{
+                              background: striped
+                                ? 'repeating-linear-gradient(45deg,#0a0a0a,#0a0a0a 4px,#f8fafc 4px,#f8fafc 8px)'
+                                : 'linear-gradient(90deg, ' + cor + 'cc, ' + cor + ')',
+                              boxShadow: striped
+                                ? '0 0 12px rgba(248,250,252,0.25)'
+                                : '0 0 16px ' + cor + '66',
+                            }}
+                          />
                         </div>
-                      ) : null}
-                    </motion.div>
-                  )
-                })}
+
+                        {/* Lista de Integrantes da Facção por Unidade Prisional */}
+                        {loadingVinculos ? (
+                          <p className="text-[10px] text-gray-500 italic mt-2 ml-2 pl-3">Carregando integrantes...</p>
+                        ) : integrantesDaFaccao.length > 0 ? (
+                          <div className="mt-2.5 ml-2 pl-3 border-l border-white/10 space-y-4 mb-4">
+                            {Object.entries(
+                              integrantesDaFaccao.reduce((acc: Record<string, any[]>, v: any) => {
+                                const unidade = v.apenado.unidade || v.unidadePrisional || 'Unidade não informada'
+                                if (!acc[unidade]) acc[unidade] = []
+                                acc[unidade].push(v)
+                                return acc
+                              }, {})
+                            ).map(([unidade, list]: [string, any]) => (
+                              <div key={unidade} className="space-y-1.5">
+                                <p className="text-[9px] uppercase tracking-wider font-extrabold text-amber-500/90 flex items-center gap-1.5">
+                                  <Building2 className="w-3.5 h-3.5 text-amber-500/70" />
+                                  {unidade} ({list.length})
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[140px] overflow-y-auto pr-1 custom-scrollbar">
+                                  {list.map((v: any) => (
+                                    <div 
+                                      key={v.id} 
+                                      className="p-2 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition text-[11px] flex flex-col justify-center min-h-[38px]"
+                                    >
+                                      <p className="font-bold text-gray-200 truncate leading-none">
+                                        {v.apenado.nome}
+                                      </p>
+                                      {v.apenado.vulgo && (
+                                        <p className="text-[9px] text-amber-400/80 truncate mt-1 leading-none">
+                                          Vulgo: {v.apenado.vulgo}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </motion.div>
+                    )
+                  })}
+                </div>
+
+                {/* Gráfico de Pizza/Rosca Donut */}
+                <div className="shrink-0 w-full md:w-auto flex flex-col items-center justify-center p-4 bg-white/[0.02] border border-white/5 rounded-2xl min-w-[180px]">
+                  <p className="text-[9px] uppercase tracking-wider font-extrabold text-gray-500 mb-3 text-center">
+                    Proporção Relativa
+                  </p>
+                  <div className="relative w-28 h-28 flex items-center justify-center">
+                    <svg viewBox="0 0 42 42" className="w-full h-full transform -rotate-90">
+                      {(() => {
+                        let accumulatedOffset = 0
+                        return faccoes.map(([faccao, qtd]) => {
+                          const share = stat.totalApenados > 0 ? (qtd / stat.totalApenados) * 100 : 0
+                          const cor = faccaoCor(faccao)
+                          const offset = accumulatedOffset
+                          accumulatedOffset -= share
+                          return (
+                            <circle
+                              key={faccao}
+                              cx="21"
+                              cy="21"
+                              r="15.91549430918954"
+                              fill="transparent"
+                              stroke={cor}
+                              strokeWidth="5"
+                              strokeDasharray={share + ' ' + (100 - share)}
+                              strokeDashoffset={offset}
+                              className="transition-all duration-700 ease-out origin-center"
+                            />
+                          )
+                        })
+                      })()}
+                      {/* Círculo interno donut */}
+                      <circle cx="21" cy="21" r="13.4" fill="#030712" />
+                    </svg>
+                    
+                    {/* Texto interno */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                      <span className="text-[8px] uppercase font-bold text-gray-500 tracking-wider leading-none">Total</span>
+                      <span className="text-lg font-black text-white leading-none mt-0.5 tabular-nums">{stat.totalApenados}</span>
+                      <span className="text-[8px] text-gray-400 font-medium leading-none mt-0.5">presos</span>
+                    </div>
+                  </div>
+
+                  {/* Legendas coloridas */}
+                  <div className="mt-3 w-full space-y-1 text-[10px] text-gray-400 font-medium">
+                    {faccoes.map(([faccao, qtd]) => {
+                      const cor = faccaoCor(faccao)
+                      const share = stat.totalApenados > 0 ? Math.round((qtd / stat.totalApenados) * 100) : 0
+                      return (
+                        <div key={faccao} className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: cor }} />
+                            <span className="truncate text-gray-300">{faccao}</span>
+                          </div>
+                          <span className="font-bold text-white tabular-nums shrink-0">{share}%</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
             </motion.div>
           ) : (

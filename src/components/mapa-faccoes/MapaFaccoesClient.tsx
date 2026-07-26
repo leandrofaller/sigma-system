@@ -167,6 +167,8 @@ export function MapaFaccoesClient({
   /** Filtro de facção no mapa (CV/PCC/chave canônica) — só afeta visualização, não vínculos. */
   const [filtroFaccao, setFiltroFaccao] = useState<string | null>(null)
   const [soComAtuacao, setSoComAtuacao] = useState(false)
+  const [mapZoom, setMapZoom] = useState(8)
+  const [lockZoom, setLockZoom] = useState(false)
 
   const mapAreaRef = useRef<HTMLDivElement>(null)
   const presentationTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -982,6 +984,31 @@ export function MapaFaccoesClient({
             ref={mapAreaRef}
             className="relative flex-1 min-h-[280px] rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-xl"
           >
+            {/* Controle de Zoom Flutuante (Barra ajustável e Trava de Zoom) */}
+            <div className={`absolute ${pendingMapaLink ? 'top-28' : 'top-3'} right-3 z-[1000] flex items-center gap-3 bg-gray-950/85 backdrop-blur-md rounded-xl px-3 py-2 border border-white/10 text-xs shadow-xl transition-all duration-300`}>
+              <span className="text-[10px] uppercase font-bold text-gray-400">Zoom:</span>
+              <input
+                type="range"
+                min="7"
+                max="12"
+                step="0.5"
+                value={mapZoom}
+                onChange={(e) => setMapZoom(parseFloat(e.target.value))}
+                className="w-20 accent-sky-500 cursor-pointer h-1 rounded-lg bg-white/10 appearance-none"
+              />
+              <button
+                type="button"
+                onClick={() => setLockZoom(!lockZoom)}
+                className={`px-2 py-1 rounded text-[10px] font-bold transition-colors ${
+                  lockZoom 
+                    ? 'bg-red-500/20 text-red-300 border border-red-500/40' 
+                    : 'bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10'
+                }`}
+              >
+                {lockZoom ? '🔒 Travar Zoom' : '🔓 Zoom Livre'}
+              </button>
+            </div>
+
             <MapaFaccoesMap
               geojson={geojson}
               municipios={municipiosMapa}
@@ -995,6 +1022,9 @@ export function MapaFaccoesClient({
               linkMode={!!pendingMapaLink}
               hideEmpty={soComAtuacao}
               filtroAtivo={!!filtroFaccao}
+              mapZoom={mapZoom}
+              lockZoom={lockZoom}
+              onZoomChange={setMapZoom}
             />
 
             {pendingMapaLink && (
