@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Trash2, Eye, Download, X, FileText, FileSpreadsheet, FileArchive, Calendar, Pencil } from 'lucide-react'
+import { Loader2, Trash2, Eye, Download, X, FileText, FileSpreadsheet, FileArchive, Calendar, Pencil, Video } from 'lucide-react'
 import { EventEditModal } from './EventEditModal'
 
 interface EventListProps {
@@ -18,6 +18,9 @@ function getAttachmentIcon(mime: string, tipo: string) {
   const m = mime.toLowerCase()
   if (m.includes('pdf') || tipo === 'pdf') {
     return <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
+  }
+  if (m.includes('video') || tipo === 'video') {
+    return <Video className="w-4 h-4 text-amber-500 flex-shrink-0" />
   }
   if (m.includes('word') || m.includes('document') || tipo === 'documento') {
     return <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />

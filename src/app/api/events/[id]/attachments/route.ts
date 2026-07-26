@@ -124,6 +124,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       let tipo = 'outro'
       if (contentType.startsWith('image/')) {
         tipo = 'foto'
+      } else if (contentType.startsWith('video/')) {
+        tipo = 'video'
       } else if (contentType === 'application/pdf') {
         tipo = 'pdf'
       } else if (

@@ -234,11 +234,12 @@ export function validateFile(
     }
   }
 
-  // Verificar tipo MIME
-  if (!ALLOWED_TYPES.includes(contentType)) {
+  // Verificar tipo MIME (permite imagens, PDFs, documentos e qualquer vídeo)
+  const isVideo = contentType.startsWith('video/')
+  if (!ALLOWED_TYPES.includes(contentType) && !isVideo) {
     return {
       valid: false,
-      error: `Tipo de arquivo não permitido: ${contentType}. Permitidos: imagens, PDFs, documentos.`,
+      error: `Tipo de arquivo não permitido: ${contentType}. Permitidos: imagens, vídeos, PDFs, documentos.`,
     }
   }
 
@@ -250,6 +251,7 @@ export function validateFile(
     'doc', 'docx',
     'xls', 'xlsx',
     'txt',
+    'mp4', 'webm', 'ogg', 'avi', 'mov', 'mkv', 'flv', 'wmv', 'm4v', '3gp',
   ]
 
   if (!ext || !allowedExts.includes(ext)) {

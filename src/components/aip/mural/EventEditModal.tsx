@@ -13,6 +13,7 @@ import {
   FileArchive,
   Save,
   Pencil,
+  Video,
 } from 'lucide-react'
 
 interface Anexo {
@@ -44,6 +45,8 @@ function getAttachmentIcon(mime: string, tipo: string) {
   const m = mime?.toLowerCase() || ''
   if (m.includes('pdf') || tipo === 'pdf')
     return <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
+  if (m.includes('video') || tipo === 'video')
+    return <Video className="w-4 h-4 text-amber-500 flex-shrink-0" />
   if (m.includes('word') || m.includes('document') || tipo === 'documento')
     return <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
   if (m.includes('sheet') || m.includes('excel') || m.includes('xls') || m.includes('csv'))
@@ -401,7 +404,7 @@ export function EventEditModal({
                   type="file"
                   multiple
                   className="hidden"
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
                   onChange={handleFileInput}
                 />
               </div>
@@ -418,6 +421,8 @@ export function EventEditModal({
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       {arquivo.type.startsWith('image/') ? (
                         <ImageIcon className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                      ) : arquivo.type.startsWith('video/') ? (
+                        <Video className="w-4 h-4 text-amber-500 flex-shrink-0" />
                       ) : (
                         <Upload className="w-4 h-4 text-amber-500 flex-shrink-0" />
                       )}

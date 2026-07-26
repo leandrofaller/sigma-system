@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Upload, Loader2, Image as ImageIcon, AlertCircle } from 'lucide-react'
+import { X, Upload, Loader2, Image as ImageIcon, AlertCircle, Video } from 'lucide-react'
 
 interface EventModalProps {
   isOpen: boolean
@@ -217,7 +217,7 @@ export function EventModal({ isOpen, onClose, onEventCreated, initialDate }: Eve
                 onChange={handleFileInput}
                 className="hidden"
                 id="file-input"
-                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
               />
               <label
                 htmlFor="file-input"
@@ -243,6 +243,8 @@ export function EventModal({ isOpen, onClose, onEventCreated, initialDate }: Eve
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       {arquivo.type.startsWith('image/') ? (
                         <ImageIcon className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                      ) : arquivo.type.startsWith('video/') ? (
+                        <Video className="w-4 h-4 text-amber-500 flex-shrink-0" />
                       ) : (
                         <Upload className="w-4 h-4 text-gray-500 flex-shrink-0" />
                       )}
