@@ -658,6 +658,16 @@ export function SyncPanel() {
           </button>
 
           <button
+            onClick={() => startSync('UNIDADES_DIARIO')}
+            disabled={isActive || loading}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 text-white rounded-lg text-sm font-medium transition-all shadow-sm hover:shadow"
+            title="Sincronização otimizada de todas as unidades prisionais com correção de perfil ativo para a aba de Unidades Prisionais."
+          >
+            <Zap className="w-4 h-4 text-cyan-200 animate-pulse" />
+            Sincronizar Unidades Diário
+          </button>
+
+          <button
             onClick={() => startSync('EXTRAMUROS')}
             disabled={isActive || loading}
             title="Atualiza apenados com situações: Em Liberdade, Solto, Fuga, Prisão Domiciliar, etc."

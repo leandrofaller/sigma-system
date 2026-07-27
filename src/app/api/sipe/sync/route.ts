@@ -246,6 +246,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
   }
 
+  // ── Unidades-only sync (Diário com Correção de Perfil) ──
+  if (tipo === 'UNIDADES_DIARIO') {
+    const job = await prisma.sipeSyncJob.create({
+      data: {
+        tipo: 'UNIDADES_DIARIO',
+        unidade: 'ALL',
+        unidadeNome: 'TODAS AS UNIDADES (DIÁRIO)',
+        status: 'RUNNING',
+        iniciadoEm: new Date(),
+        criadoPor: session.user.id,
+      },
+    })
+
+    startSipeSyncWithEngine(job.id, 'ALL', engine)
+    return NextResponse.json({ jobId: job.id, status: 'RUNNING' })
+  }
+
   // ── Advogados-only sync ──
   if (tipo === 'ADVOGADOS') {
     const job = await prisma.sipeSyncJob.create({

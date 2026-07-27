@@ -760,6 +760,8 @@ export function startSipeSync(jobId: string, unidadeId: string, engine: SipeEngi
       await runScrapeTodasUnidades(jobId, false)
     } else if (job.tipo === 'UNIDADES_FAST' || job.tipo === 'UNIDADES_INCREMENTAL_FAST') {
       await runScrapeTodasUnidades(jobId, true)
+    } else if (job.tipo === 'UNIDADES_DIARIO') {
+      await runScrapeTodasUnidadesDiario(jobId)
     } else {
       await runScrape(jobId, unidadeId)
     }
@@ -1706,6 +1708,436 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
     }
 
     const summary = `Concluído: Sincronização de todas as ${totalUnidades} unidades finalizada. Total de ${globalThis.__sipeState?.processado ?? 0} apenados processados, ${globalThis.__sipeState?.erros ?? 0} erros.`
+    globalThis.__sipeState = {
+      ...globalThis.__sipeState!,
+      status: 'COMPLETED',
+      fase: 'Concluído',
+      ultimoLog: summary,
+    }
+    await dbProgress(jobId, {
+      status: 'COMPLETED',
+      finalizadoEm: new Date(),
+      log: summary,
+      fase: 'Concluído',
+    })
+
+  } finally {
+    listagemInfoCache.clear()
+    await context.close()
+    await forceFlushLogBuffer(jobId)
+  }
+}
+
+async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
+  const job = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
+  if (!job) throw new Error('Job não encontrado')
+
+  await dbProgress(jobId, {
+    log: 'Iniciando sessão no SIPE para sincronização diária de todas as unidades...',
+    fase: 'Login',
+  })
+  refreshMemory(jobId, { fase: 'Login', ultimoLog: 'Iniciando sessão no SIPE...' })
+
+  const context = await createSession()
+  let page = await context.newPage()
+  await setupFastPageIfNeeded(page, true)
+  markFallbackSessionDirty(page)
+
+  try {
+    setCurrentSipeEngine(globalThis.__sipeCurrentEngine, SIPE_UNIDADE)
+    if (isPythonSdkEngine()) {
+      log(jobId, 'SDK Python ativado para sincronização diária. Playwright ficará em rollback.')
+    } else {
+      const ok = await login(page, SIPE_UNIDADE)
+      if (!ok) throw new Error('Falha no login do SIPE')
+      ;(page as any).__sipeAuthenticated = true
+      log(jobId, 'Login realizado com sucesso')
+    }
+
+    let checkpoint: {
+      unidades: Array<{ id: string; nome: string; concluida: boolean; totalApenados?: number }>;
+      currentUnidadeId: string | null;
+      currentApenadosIds: number[];
+      currentOriginalIds?: number[];
+    }
+
+    if (job.idsColetados) {
+      try {
+        checkpoint = JSON.parse(job.idsColetados)
+      } catch {
+        throw new Error('Falha ao parsear o checkpoint de unidades no banco de dados')
+      }
+      
+      const pendentes = checkpoint.unidades.filter(u => !u.concluida).length
+      log(jobId, `Retomando sincronização diária. Restam ${pendentes} de ${checkpoint.unidades.length} unidades.`)
+      
+      const alreadyDone = job.processado ?? 0
+      const totalEstimado = alreadyDone + checkpoint.currentApenadosIds.length
+      
+      refreshMemory(jobId, {
+        processado: alreadyDone,
+        total: totalEstimado,
+        ultimoLog: `Retomando do ID #${job.ultimoIdProcessado ?? 'início'} — ${checkpoint.currentApenadosIds.length} apenados pendentes na unidade atual`,
+      })
+      await dbProgress(jobId, {
+        log: `Retomando da unidade #${checkpoint.currentUnidadeId ?? 'início'} — ${checkpoint.currentApenadosIds.length} apenados pendentes`,
+        fase: 'Retomando',
+      })
+    } else {
+      let options: Array<{ id: string; nome: string }> = []
+
+      if (isPythonSdkEngine()) {
+        log(jobId, '🐍 Coletando lista de unidades via SDK Python...')
+        let html = await fetchPageWithRetry('/selectRole', jobId)
+        if (!html) {
+          html = await fetchPageWithRetry('/selectRole/1', jobId)
+        }
+        if (!html) {
+          throw new Error('Falha crítica ao obter página selectRole via SDK Python')
+        }
+        const $ = cheerio.load(html)
+        const selects = $('select')
+        if (selects.length >= 2) {
+          const unitSelect = selects.eq(1)
+          unitSelect.find('option').each((_, opt) => {
+            const val = $(opt).attr('value')
+            const text = $(opt).text().trim()
+            if (val && val !== '' && val !== '0') {
+              options.push({ id: val, nome: text })
+            }
+          })
+        }
+      } else {
+        log(jobId, 'Coletando lista completa de unidades prisionais no SIPE...')
+        await gotoSipeWithFallback(page, '/selectRole', { waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(async () => {
+          await gotoSipeWithFallback(page, '/selectRole/1', { waitUntil: 'domcontentloaded' })
+        })
+        await page.locator('select').nth(1).waitFor({ state: 'attached', timeout: 15_000 })
+
+        options = await page.evaluate(() => {
+          const selects = document.querySelectorAll('select')
+          if (selects.length < 2) return [] as Array<{ id: string; nome: string }>
+          const unitSelect = selects[1] as HTMLSelectElement
+          return Array.from(unitSelect.options)
+            .filter((o) => o.value && o.value !== '' && o.value !== '0')
+            .map((o) => ({ id: o.value, nome: (o.textContent ?? '').trim() }))
+        })
+      }
+
+      if (options.length === 0) {
+        throw new Error('Nenhuma unidade prisional encontrada no select do SIPE')
+      }
+
+      globalThis.__sipeUnidadesCache = { data: options, fetchedAt: Date.now() }
+      await prisma.systemConfig.upsert({
+        where: { key: 'sipe_unidades' },
+        create: {
+          key: 'sipe_unidades',
+          value: options,
+          description: 'Cache persistente das unidades prisionais do SIPE',
+        },
+        update: {
+          value: options,
+        },
+      }).catch(() => {})
+
+      checkpoint = {
+        unidades: options.map(u => ({ id: u.id, nome: u.nome, concluida: false })),
+        currentUnidadeId: null,
+        currentApenadosIds: [],
+        currentOriginalIds: []
+      }
+
+      await dbProgress(jobId, {
+        idsColetados: JSON.stringify(checkpoint),
+        total: 0,
+        processado: 0,
+        log: `${options.length} unidades prisionais encontradas. Iniciando varredura sequencial.`,
+      })
+      refreshMemory(jobId, {
+        total: 0,
+        processado: 0,
+        ultimoLog: `${options.length} unidades encontradas`,
+      })
+    }
+
+    const totalUnidades = checkpoint.unidades.length
+    for (let index = 0; index < totalUnidades; index++) {
+      const u = checkpoint.unidades[index]
+      if (u.concluida) continue
+
+      if (globalThis.__sipeStopFlag) {
+        await dbProgress(jobId, {
+          status: 'INTERRUPTED',
+          finalizadoEm: new Date(),
+          log: 'Sincronização de unidades interrompida pelo usuário',
+        })
+        refreshMemory(jobId, { status: 'INTERRUPTED' })
+        return
+      }
+
+      checkpoint.currentUnidadeId = u.id
+      const faseMsg = `[${index + 1}/${totalUnidades}] ${u.nome}`
+      await dbProgress(jobId, {
+        idsColetados: JSON.stringify(checkpoint),
+        fase: faseMsg,
+        log: `Iniciando processamento da unidade: "${u.nome}" [${index + 1}/${totalUnidades}]`,
+      })
+      refreshMemory(jobId, {
+        fase: faseMsg,
+        ultimoLog: `Processando unidade: ${u.nome}`,
+      })
+
+      // 📍 CORREÇÃO CRUCIAL: Troca a unidade ativa da sessão/proxy antes da coleta de IDs
+      globalThis.__sipeFallbackUnidade = u.id
+
+      // Coleta os IDs de apenados para a unidade atual se ainda não coletou
+      if (checkpoint.currentApenadosIds.length === 0) {
+        try {
+          checkpoint.currentApenadosIds = await coletarIdsApenados(page, u.id, jobId, u.nome)
+          checkpoint.currentOriginalIds = [...checkpoint.currentApenadosIds]
+          u.totalApenados = checkpoint.currentApenadosIds.length
+
+          // --- FILTRAGEM INCREMENTAL MANDATÓRIA PARA UNIDADES_DIARIO ---
+          log(jobId, `🔍 [INCREMENTAL DIÁRIO] Comparando dados de listagem para ${checkpoint.currentApenadosIds.length} apenados no banco local...`)
+          let puladosCount = 0
+
+          const apenadosExistentes = await prisma.sipeApenadoImportado.findMany({
+            where: { sipeId: { in: checkpoint.currentApenadosIds } },
+            select: { id: true, sipeId: true, cela: true, situacao: true }
+          })
+
+          const apenadosMap = new Map(apenadosExistentes.map(a => [a.sipeId, a]))
+          const idsFiltrados: number[] = []
+
+          for (const sipeId of checkpoint.currentApenadosIds) {
+            const localApenado = apenadosMap.get(sipeId)
+            const cacheData = listagemInfoCache.get(sipeId)
+
+            if (localApenado && cacheData && localApenado.cela === cacheData.cela && localApenado.situacao === cacheData.situacao) {
+              puladosCount++
+              
+              await prisma.sipeApenadoImportado.update({
+                where: { sipeId },
+                data: {
+                  ultimaSyncAt: new Date(),
+                  unidade: u.nome
+                }
+              }).catch(() => {})
+
+              // Garante que o apenado pulado seja salvo na tabela isolada de unidades prisionais
+              await saveApenadoUnidadePrisional(sipeId, localApenado.id).catch(() => {})
+
+              if (globalThis.__sipeState) {
+                globalThis.__sipeState.processado++
+              }
+            } else {
+              idsFiltrados.push(sipeId)
+            }
+          }
+
+          log(jobId, `⚡ [INCREMENTAL DIÁRIO] ${puladosCount} apenados inalterados foram pulados. Fila de sync profunda: ${idsFiltrados.length} apenados.`)
+          checkpoint.currentApenadosIds = idsFiltrados
+          
+          const totalEstimado = (globalThis.__sipeState?.processado ?? 0) + checkpoint.currentApenadosIds.length
+          await dbProgress(jobId, {
+            idsColetados: JSON.stringify(checkpoint),
+            total: totalEstimado,
+            log: `Coletados ${checkpoint.currentApenadosIds.length} apenados na unidade "${u.nome}".`,
+          })
+          refreshMemory(jobId, {
+            total: totalEstimado,
+            ultimoLog: `Coletados ${checkpoint.currentApenadosIds.length} apenados`,
+          })
+        } catch (err) {
+          const msg = `Erro ao coletar apenados da unidade "${u.nome}" (ID #${u.id}): ${err}`
+          log(jobId, msg)
+          
+          u.concluida = true
+          checkpoint.currentUnidadeId = null
+          checkpoint.currentApenadosIds = []
+          
+          const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
+          if (globalThis.__sipeState) globalThis.__sipeState.erros = errosCount
+          
+          await dbProgress(jobId, {
+            idsColetados: JSON.stringify(checkpoint),
+            erros: errosCount,
+          })
+          continue
+        }
+      }
+
+      // Processa apenados da unidade atual
+      const apenadosIds = [...checkpoint.currentApenadosIds]
+      let lastProcessedId: number | undefined
+      let checkpointBatchCount = 0
+      
+      const loginA = { cpf: SIPE_CPF, senha: SIPE_SENHA }
+      const loginB = { cpf: '77032055249', senha: 'ZHW5pmq3njh1bdb-vyr' }
+
+      if (isPythonSdkEngine()) {
+        log(jobId, `🚀 Iniciando processamento acelerado (SDK + 2 Logins Paralelos) de ${apenadosIds.length} apenados para a unidade "${u.nome}"...`)
+        
+        while (apenadosIds.length > 0) {
+          if (globalThis.__sipeStopFlag) {
+            await dbProgress(jobId, {
+              status: 'INTERRUPTED',
+              finalizadoEm: new Date(),
+              log: 'Sincronização de unidades interrompida pelo usuário',
+            })
+            refreshMemory(jobId, { status: 'INTERRUPTED' })
+            return
+          }
+
+          const batch = apenadosIds.splice(0, 2)
+          
+          // Garante a unidade ativa correta no início do lote do proxy
+          globalThis.__sipeFallbackUnidade = u.id
+
+          await Promise.all([
+            batch[0] ? sipeAuthStorage.run(loginA, async () => {
+              const sipeId = batch[0]
+              try {
+                const apenadoCache = listagemInfoCache.get(sipeId)
+                const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? u.nome
+                await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome)
+                lastProcessedId = sipeId
+              } catch (err) {
+                console.error(`Erro no worker A para o apenado #${sipeId}:`, err)
+                if (globalThis.__sipeState) globalThis.__sipeState.erros++
+                log(jobId, `Erro apenado #${sipeId} na unidade "${u.nome}" (Worker A): ${err}`)
+              }
+            }) : Promise.resolve(),
+
+            batch[1] ? sipeAuthStorage.run(loginB, async () => {
+              const sipeId = batch[1]
+              try {
+                const apenadoCache = listagemInfoCache.get(sipeId)
+                const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? u.nome
+                await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome)
+                lastProcessedId = sipeId
+              } catch (err) {
+                console.error(`Erro no worker B para o apenado #${sipeId}:`, err)
+                if (globalThis.__sipeState) globalThis.__sipeState.erros++
+                log(jobId, `Erro apenado #${sipeId} na unidade "${u.nome}" (Worker B): ${err}`)
+              }
+            }) : Promise.resolve(),
+          ])
+
+          if (global.gc) {
+            try {
+              global.gc()
+            } catch (e) {}
+          }
+
+          checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => !batch.includes(id))
+
+          if (globalThis.__sipeState) {
+            globalThis.__sipeState.processado += batch.length
+            if (globalThis.__sipeState.total > 0) {
+              globalThis.__sipeState.pct = Math.round(
+                (globalThis.__sipeState.processado / globalThis.__sipeState.total) * 100
+              )
+            }
+          }
+
+          checkpointBatchCount += batch.length
+          const lastIdInBatch = batch[batch.length - 1]
+
+          if (checkpointBatchCount % 10 === 0 || apenadosIds.length === 0) {
+            await dbProgress(jobId, {
+              processado: globalThis.__sipeState?.processado ?? 0,
+              erros: globalThis.__sipeState?.erros ?? 0,
+              ultimoIdProcessado: lastIdInBatch,
+              idsColetados: JSON.stringify(checkpoint),
+            })
+          } else {
+            await dbProgress(jobId, {
+              processado: globalThis.__sipeState?.processado ?? 0,
+              erros: globalThis.__sipeState?.erros ?? 0,
+              ultimoIdProcessado: lastIdInBatch,
+            })
+          }
+
+          await new Promise(r => setTimeout(r, 20))
+        }
+      } else {
+        for (const sipeId of apenadosIds) {
+          if (globalThis.__sipeStopFlag) {
+            await dbProgress(jobId, {
+              status: 'INTERRUPTED',
+              finalizadoEm: new Date(),
+              log: 'Sincronização de unidades interrompida pelo usuário',
+            })
+            refreshMemory(jobId, { status: 'INTERRUPTED' })
+            return
+          }
+
+          globalThis.__sipeFallbackUnidade = u.id
+
+          try {
+            const currentIdx = apenadosIds.indexOf(sipeId) + 1
+            const progressMsg = `[${currentIdx}/${apenadosIds.length}] Scraping apenado SIPE ID #${sipeId} na unidade "${u.nome}"...`
+            if (currentIdx % 10 === 0 || currentIdx === 1 || currentIdx === apenadosIds.length) {
+              log(jobId, progressMsg)
+            }
+
+            await withRetry(async () => {
+              const apenadoCache = listagemInfoCache.get(sipeId)
+              const apenadoUnidadeNome = apenadoCache?.unidadeNome ?? u.nome
+              await scrapeApenadoFicha(page, sipeId, apenadoUnidadeNome)
+            })
+
+            lastProcessedId = sipeId
+            checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
+
+            if (globalThis.__sipeState) {
+              globalThis.__sipeState.processado++
+              if (globalThis.__sipeState.total > 0) {
+                globalThis.__sipeState.pct = Math.round(
+                  (globalThis.__sipeState.processado / globalThis.__sipeState.total) * 100
+                )
+              }
+            }
+
+            await dbProgress(jobId, {
+              processado: globalThis.__sipeState?.processado ?? 0,
+              ultimoIdProcessado: sipeId,
+              idsColetados: JSON.stringify(checkpoint),
+            })
+
+            await new Promise(r => setTimeout(r, 100))
+          } catch (err) {
+            const errosCount = (globalThis.__sipeState?.erros ?? 0) + 1
+            if (globalThis.__sipeState) globalThis.__sipeState.erros = errosCount
+            log(jobId, `Erro ao processar apenado #${sipeId} na unidade "${u.nome}": ${err}`)
+
+            checkpoint.currentApenadosIds = checkpoint.currentApenadosIds.filter(id => id !== sipeId)
+            await dbProgress(jobId, {
+              erros: errosCount,
+              ultimoIdProcessado: sipeId,
+              idsColetados: JSON.stringify(checkpoint),
+            })
+          }
+        }
+      }
+
+      u.concluida = true
+      checkpoint.currentUnidadeId = null
+      checkpoint.currentApenadosIds = []
+
+      await desassociarApenadosAntigosUnidade(jobId, u.nome, checkpoint.currentOriginalIds || [])
+      checkpoint.currentOriginalIds = []
+
+      await dbProgress(jobId, {
+        idsColetados: JSON.stringify(checkpoint),
+        log: `Concluído processamento da unidade "${u.nome}".`,
+      })
+      log(jobId, `Unidade "${u.nome}" concluída!`)
+    }
+
+    const summary = `Concluído: Sincronização diária de todas as ${totalUnidades} unidades finalizada. Total de ${globalThis.__sipeState?.processado ?? 0} apenados processados, ${globalThis.__sipeState?.erros ?? 0} erros.`
     globalThis.__sipeState = {
       ...globalThis.__sipeState!,
       status: 'COMPLETED',
