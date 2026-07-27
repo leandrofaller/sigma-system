@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { isUnidadeLixo } from '@/lib/unidades-lixo'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -18,8 +19,9 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  // Format as Array<{ id: string; nome: string }>
+  // Format as Array<{ id: string; nome: string }> and filter out invalid units
   const unidades = statsUnidade
+    .filter(item => item.unidade && !isUnidadeLixo(item.unidade))
     .map((item, index) => ({
       id: String(index + 1),
       nome: item.unidade as string

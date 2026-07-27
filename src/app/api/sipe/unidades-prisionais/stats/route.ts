@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { isUnidadeLixo } from '@/lib/unidades-lixo'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -56,6 +57,7 @@ export async function GET(req: NextRequest) {
 
     // Processamento dos dados de unidades
     const unidadesData = statsUnidade
+      .filter(item => item.unidade && !isUnidadeLixo(item.unidade))
       .map(item => ({
         nome: item.unidade || 'Não Informada',
         quantidade: item._count.id
@@ -83,7 +85,7 @@ export async function GET(req: NextRequest) {
     if (unidadesConfig && Array.isArray(unidadesConfig.value)) {
       totalUnidadesCadastradas = unidadesConfig.value.length
     } else {
-      totalUnidadesCadastradas = statsUnidade.filter(item => item.unidade).length
+      totalUnidadesCadastradas = statsUnidade.filter(item => item.unidade && !isUnidadeLixo(item.unidade)).length
     }
 
     return NextResponse.json({

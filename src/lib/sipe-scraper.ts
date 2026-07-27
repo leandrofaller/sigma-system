@@ -57,6 +57,7 @@ import { createHash } from 'crypto'
 import { capsolverService } from './capsolver-service'
 import { AsyncLocalStorage } from 'async_hooks'
 import AsyncLock from 'async-lock'
+import { isUnidadeLixo } from './unidades-lixo'
 
 function getSipeLock(): AsyncLock {
   if (!(globalThis as any).__sipeLock) {
@@ -3510,6 +3511,9 @@ async function scrapeApenadoFicha(
     if (resolvedUnidade && (resolvedUnidade.includes('http') || resolvedUnidade.includes('/fotos') || resolvedUnidade.includes('.jpg') || resolvedUnidade.includes('.png') || resolvedUnidade.includes('uploads/'))) {
       resolvedUnidade = undefined;
     }
+  }
+  if (resolvedUnidade && isUnidadeLixo(resolvedUnidade)) {
+    resolvedUnidade = undefined;
   }
 
   // DEBUG: Log para verificar qual fallback foi usado
@@ -9045,6 +9049,9 @@ async function scrapeApenadoFichaFastLocked(
     if (resolvedUnidade && (resolvedUnidade.includes('http') || resolvedUnidade.includes('/fotos') || resolvedUnidade.includes('.jpg') || resolvedUnidade.includes('.png') || resolvedUnidade.includes('uploads/'))) {
       resolvedUnidade = undefined;
     }
+  }
+  if (resolvedUnidade && isUnidadeLixo(resolvedUnidade)) {
+    resolvedUnidade = undefined;
   }
 
   const upsertData = {
