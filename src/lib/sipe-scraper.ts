@@ -166,6 +166,12 @@ export function cleanCela(cela: string | null | undefined): string | null {
   return trimmed
 }
 
+export function normalizeCompareString(s: string | null | undefined): string | null {
+  if (!s) return null
+  const cleaned = s.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  return cleaned === '-----' || cleaned === '-' || cleaned === '' ? null : cleaned
+}
+
 export function isCellFormat(str: string | null | undefined): boolean {
   if (!str) return false
   const cleaned = cleanCela(str)
@@ -1424,7 +1430,12 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
               const localApenado = apenadosMap.get(sipeId)
               const cacheData = listagemInfoCache.get(sipeId)
 
-              if (localApenado && cacheData && localApenado.cela === cacheData.cela && localApenado.situacao === cacheData.situacao) {
+              const localCela = normalizeCompareString(localApenado?.cela)
+              const cacheCela = normalizeCompareString(cacheData?.cela)
+              const localSituacao = normalizeCompareString(localApenado?.situacao)
+              const cacheSituacao = normalizeCompareString(cacheData?.situacao)
+
+              if (localApenado && localCela === cacheCela && localSituacao === cacheSituacao) {
                 puladosCount++
                 
                 // Atualiza em lote a data de sincronização no banco de dados local
@@ -1914,7 +1925,12 @@ async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
             const localApenado = apenadosMap.get(sipeId)
             const cacheData = listagemInfoCache.get(sipeId)
 
-            if (localApenado && cacheData && localApenado.cela === cacheData.cela && localApenado.situacao === cacheData.situacao) {
+            const localCela = normalizeCompareString(localApenado?.cela)
+            const cacheCela = normalizeCompareString(cacheData?.cela)
+            const localSituacao = normalizeCompareString(localApenado?.situacao)
+            const cacheSituacao = normalizeCompareString(cacheData?.situacao)
+
+            if (localApenado && localCela === cacheCela && localSituacao === cacheSituacao) {
               puladosCount++
               
               await prisma.sipeApenadoImportado.update({
