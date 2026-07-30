@@ -264,7 +264,7 @@ async function scrapeApenadoFichaFirecrawl(
 
     // FIX: Para GLOBAL scraping, usar unidade extraída do HTML como fallback
     // Se não encontrar "Unidade:", tenta usar "cela" (que contém o nome da unidade prisional)
-    const resolvedUnidade = unidade || dados.unidadeFicha || dados.celaFicha || undefined
+    const resolvedUnidade = unidade || dados.unidadeFicha || undefined
 
     // DEBUG: Log para verificar qual fallback foi usado
     if (!unidade) {

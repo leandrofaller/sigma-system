@@ -3991,7 +3991,7 @@ async function scrapeApenadoFicha(
 
   // FIX: Para GLOBAL scraping, usar unidade extraída do formulário como fallback
   // Se não encontrar "Unidade:", tenta usar "cela" (que contém o nome da unidade prisional)
-  let resolvedUnidade = unidade || dados.unidadeFicha || cela || undefined;
+  let resolvedUnidade = unidade || dados.unidadeFicha || undefined;
   if (resolvedUnidade && (resolvedUnidade.includes('http') || resolvedUnidade.includes('/fotos') || resolvedUnidade.includes('.jpg') || resolvedUnidade.includes('.png') || resolvedUnidade.includes('uploads/'))) {
     resolvedUnidade = listagemInfoCache.get(sipeId)?.unidadeNome || undefined;
     if (resolvedUnidade && (resolvedUnidade.includes('http') || resolvedUnidade.includes('/fotos') || resolvedUnidade.includes('.jpg') || resolvedUnidade.includes('.png') || resolvedUnidade.includes('uploads/'))) {
@@ -9545,7 +9545,7 @@ async function scrapeApenadoFichaFastLocked(
     }
   }
 
-  let resolvedUnidade = unidade || dados.unidadeFicha || cela || undefined;
+  let resolvedUnidade = unidade || dados.unidadeFicha || undefined;
   if (resolvedUnidade && (resolvedUnidade.includes('http') || resolvedUnidade.includes('/fotos') || resolvedUnidade.includes('.jpg') || resolvedUnidade.includes('.png') || resolvedUnidade.includes('uploads/'))) {
     resolvedUnidade = listagemInfoCache.get(sipeId)?.unidadeNome || undefined;
     if (resolvedUnidade && (resolvedUnidade.includes('http') || resolvedUnidade.includes('/fotos') || resolvedUnidade.includes('.jpg') || resolvedUnidade.includes('.png') || resolvedUnidade.includes('uploads/'))) {
