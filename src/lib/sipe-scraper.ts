@@ -1245,6 +1245,20 @@ async function setupFastPageIfNeeded(page: Page, fast: boolean): Promise<void> {
   });
 }
 
+function serializeCheckpoint(checkpoint: any): string {
+  if (checkpoint && checkpoint.currentApenadosIds && Array.isArray(checkpoint.currentApenadosIds)) {
+    const cacheEntries: [number, any][] = [];
+    for (const id of checkpoint.currentApenadosIds) {
+      const cache = listagemInfoCache.get(Number(id));
+      if (cache) {
+        cacheEntries.push([Number(id), cache]);
+      }
+    }
+    checkpoint.currentCache = Object.fromEntries(cacheEntries);
+  }
+  return JSON.stringify(checkpoint);
+}
+
 async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void> {
   const job = await prisma.sipeSyncJob.findUnique({ where: { id: jobId } })
   if (!job) throw new Error('Job não encontrado')
@@ -1276,6 +1290,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
       currentUnidadeId: string | null;
       currentApenadosIds: number[];
       currentOriginalIds?: number[];
+      currentCache?: Record<number, { cela?: string; situacao?: string; unidadeNome?: string }>;
     }
 
     if (job.idsColetados) {
@@ -1285,6 +1300,13 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
         throw new Error('Falha ao parsear o checkpoint de unidades no banco de dados')
       }
       
+      if (checkpoint.currentCache) {
+        for (const [idStr, cacheData] of Object.entries(checkpoint.currentCache)) {
+          listagemInfoCache.set(Number(idStr), cacheData as any)
+        }
+        log(jobId, `[RESTORE] Restauradas ${Object.keys(checkpoint.currentCache).length} entradas de celas/situações do checkpoint.`)
+      }
+
       const pendentes = checkpoint.unidades.filter(u => !u.concluida).length
       log(jobId, `Retomando sincronização de unidades. Restam ${pendentes} de ${checkpoint.unidades.length} unidades.`)
       
@@ -1367,7 +1389,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
       }
 
       await dbProgress(jobId, {
-        idsColetados: JSON.stringify(checkpoint),
+        idsColetados: serializeCheckpoint(checkpoint),
         total: 0,
         processado: 0,
         log: `${options.length} unidades prisionais encontradas. Iniciando varredura sequencial.`,
@@ -1397,7 +1419,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
       checkpoint.currentUnidadeId = u.id
       const faseMsg = `[${index + 1}/${totalUnidades}] ${u.nome}`
       await dbProgress(jobId, {
-        idsColetados: JSON.stringify(checkpoint),
+        idsColetados: serializeCheckpoint(checkpoint),
         fase: faseMsg,
         log: `Iniciando processamento da unidade: "${u.nome}" [${index + 1}/${totalUnidades}]`,
       })
@@ -1464,7 +1486,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
           
           const totalEstimado = (globalThis.__sipeState?.processado ?? 0) + checkpoint.currentApenadosIds.length
           await dbProgress(jobId, {
-            idsColetados: JSON.stringify(checkpoint),
+            idsColetados: serializeCheckpoint(checkpoint),
             total: totalEstimado,
             log: `Coletados ${checkpoint.currentApenadosIds.length} apenados na unidade "${u.nome}".`,
           })
@@ -1484,7 +1506,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
           if (globalThis.__sipeState) globalThis.__sipeState.erros = errosCount
           
           await dbProgress(jobId, {
-            idsColetados: JSON.stringify(checkpoint),
+            idsColetados: serializeCheckpoint(checkpoint),
             erros: errosCount,
           })
           continue
@@ -1574,7 +1596,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
               processado: globalThis.__sipeState?.processado ?? 0,
               erros: globalThis.__sipeState?.erros ?? 0,
               ultimoIdProcessado: lastIdInBatch,
-              idsColetados: JSON.stringify(checkpoint),
+              idsColetados: serializeCheckpoint(checkpoint),
             })
           } else {
             await dbProgress(jobId, {
@@ -1661,7 +1683,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
               await dbProgress(jobId, {
                 processado: globalThis.__sipeState?.processado ?? 0,
                 ultimoIdProcessado: sipeId,
-                idsColetados: JSON.stringify(checkpoint),
+                idsColetados: serializeCheckpoint(checkpoint),
               })
             } else {
               // Update rápido sem checkpoint JSON
@@ -1689,7 +1711,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
             await dbProgress(jobId, {
               erros: errosCount,
               log: msg,
-              idsColetados: JSON.stringify(checkpoint),
+              idsColetados: serializeCheckpoint(checkpoint),
             })
           }
 
@@ -1712,7 +1734,7 @@ async function runScrapeTodasUnidades(jobId: string, fast = false): Promise<void
       checkpoint.currentOriginalIds = []
 
       await dbProgress(jobId, {
-        idsColetados: JSON.stringify(checkpoint),
+        idsColetados: serializeCheckpoint(checkpoint),
         log: `Concluído processamento da unidade "${u.nome}".`,
       })
       log(jobId, `Unidade "${u.nome}" concluída!`)
@@ -1770,6 +1792,7 @@ async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
       currentUnidadeId: string | null;
       currentApenadosIds: number[];
       currentOriginalIds?: number[];
+      currentCache?: Record<number, { cela?: string; situacao?: string; unidadeNome?: string }>;
     }
 
     if (job.idsColetados) {
@@ -1779,6 +1802,13 @@ async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
         throw new Error('Falha ao parsear o checkpoint de unidades no banco de dados')
       }
       
+      if (checkpoint.currentCache) {
+        for (const [idStr, cacheData] of Object.entries(checkpoint.currentCache)) {
+          listagemInfoCache.set(Number(idStr), cacheData as any)
+        }
+        log(jobId, `[RESTORE] Restauradas ${Object.keys(checkpoint.currentCache).length} entradas de celas/situações do checkpoint.`)
+      }
+
       const pendentes = checkpoint.unidades.filter(u => !u.concluida).length
       log(jobId, `Retomando sincronização diária. Restam ${pendentes} de ${checkpoint.unidades.length} unidades.`)
       
@@ -1860,7 +1890,7 @@ async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
       }
 
       await dbProgress(jobId, {
-        idsColetados: JSON.stringify(checkpoint),
+        idsColetados: serializeCheckpoint(checkpoint),
         total: 0,
         processado: 0,
         log: `${options.length} unidades prisionais encontradas. Iniciando varredura sequencial.`,
@@ -1890,7 +1920,7 @@ async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
       checkpoint.currentUnidadeId = u.id
       const faseMsg = `[${index + 1}/${totalUnidades}] ${u.nome}`
       await dbProgress(jobId, {
-        idsColetados: JSON.stringify(checkpoint),
+        idsColetados: serializeCheckpoint(checkpoint),
         fase: faseMsg,
         log: `Iniciando processamento da unidade: "${u.nome}" [${index + 1}/${totalUnidades}]`,
       })
@@ -1957,7 +1987,7 @@ async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
           
           const totalEstimado = (globalThis.__sipeState?.processado ?? 0) + checkpoint.currentApenadosIds.length
           await dbProgress(jobId, {
-            idsColetados: JSON.stringify(checkpoint),
+            idsColetados: serializeCheckpoint(checkpoint),
             total: totalEstimado,
             log: `Coletados ${checkpoint.currentApenadosIds.length} apenados na unidade "${u.nome}".`,
           })
@@ -1977,7 +2007,7 @@ async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
           if (globalThis.__sipeState) globalThis.__sipeState.erros = errosCount
           
           await dbProgress(jobId, {
-            idsColetados: JSON.stringify(checkpoint),
+            idsColetados: serializeCheckpoint(checkpoint),
             erros: errosCount,
           })
           continue
@@ -2066,7 +2096,7 @@ async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
               processado: globalThis.__sipeState?.processado ?? 0,
               erros: globalThis.__sipeState?.erros ?? 0,
               ultimoIdProcessado: lastIdInBatch,
-              idsColetados: JSON.stringify(checkpoint),
+              idsColetados: serializeCheckpoint(checkpoint),
             })
           } else {
             await dbProgress(jobId, {
@@ -2120,7 +2150,7 @@ async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
             await dbProgress(jobId, {
               processado: globalThis.__sipeState?.processado ?? 0,
               ultimoIdProcessado: sipeId,
-              idsColetados: JSON.stringify(checkpoint),
+              idsColetados: serializeCheckpoint(checkpoint),
             })
 
             await new Promise(r => setTimeout(r, 100))
@@ -2133,7 +2163,7 @@ async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
             await dbProgress(jobId, {
               erros: errosCount,
               ultimoIdProcessado: sipeId,
-              idsColetados: JSON.stringify(checkpoint),
+              idsColetados: serializeCheckpoint(checkpoint),
             })
           }
         }
@@ -2147,7 +2177,7 @@ async function runScrapeTodasUnidadesDiario(jobId: string): Promise<void> {
       checkpoint.currentOriginalIds = []
 
       await dbProgress(jobId, {
-        idsColetados: JSON.stringify(checkpoint),
+        idsColetados: serializeCheckpoint(checkpoint),
         log: `Concluído processamento da unidade "${u.nome}".`,
       })
       log(jobId, `Unidade "${u.nome}" concluída!`)
@@ -3286,7 +3316,15 @@ async function scrapeApenadoFicha(
       await scrapeApenadoFichaFast(sipeId, unidadeNome, useSearch)
       return
     } catch (err) {
-      console.warn(`[SCRAPER FAST] ⚠️ Falha na aceleração Cheerio para o apenado #${sipeId}: ${err}. Ativando fallback via Playwright tradicional.`)
+      console.warn(`[SCRAPER FAST] ⚠️ Falha na aceleração Cheerio para o apenado #${sipeId}: ${err}.`)
+      const isBatchJob = !!(
+        globalThis.__sipeState &&
+        ['UNIDADES', 'UNIDADES_FAST', 'UNIDADES_INCREMENTAL_FAST', 'UNIDADES_DIARIO'].includes(globalThis.__sipeState.tipo || '')
+      )
+      if (isBatchJob) {
+        throw err
+      }
+      console.warn(`Ativando fallback via Playwright tradicional.`)
     }
   }
 
@@ -9088,7 +9126,9 @@ export async function scrapeApenadoFichaFast(
   unidadeNome?: string | null,
   useSearch = false
 ): Promise<void> {
-  return getSipeLock().acquire('sipe-session', async () => {
+  const credentials = sipeAuthStorage.getStore()
+  const lockKey = credentials?.cpf ? `sipe-session-${credentials.cpf}` : 'sipe-session-default'
+  return getSipeLock().acquire(lockKey, async () => {
     await scrapeApenadoFichaFastLocked(sipeId, unidadeNome, useSearch)
   })
 }
@@ -9393,10 +9433,24 @@ async function scrapeApenadoFichaFastLocked(
 
   let situacao = validFichaSituacao ?? validExistingSituacao ?? validCacheSituacao ?? (isGenericStatus(existingApenado?.situacao) ? null : existingApenado?.situacao) ?? null
   let cela = cleanCela(listagemInfoCache.get(sipeId)?.cela ?? dados.celaFicha ?? (isCellFormat(dados.situacao) ? dados.situacao : null) ?? existingApenado?.cela ?? null)
-  let unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? unidadeNome ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null
+  let cacheUnidade = listagemInfoCache.get(sipeId)?.unidadeNome
+  if (cacheUnidade && isUnidadeLixo(cacheUnidade)) {
+    cacheUnidade = undefined
+  }
+
+  let argUnidade = unidadeNome
+  if (argUnidade && isUnidadeLixo(argUnidade)) {
+    argUnidade = undefined
+  }
+
+  let unidade = cacheUnidade ?? argUnidade ?? existingApenado?.unidade ?? dados.unidadeFicha ?? null
 
   if (unidade && (unidade.includes('http') || unidade.includes('/fotos') || unidade.includes('.jpg') || unidade.includes('.png') || unidade.includes('uploads/'))) {
-    unidade = listagemInfoCache.get(sipeId)?.unidadeNome ?? dados.unidadeFicha ?? null
+    let fallbackCacheUnidade = listagemInfoCache.get(sipeId)?.unidadeNome
+    if (fallbackCacheUnidade && isUnidadeLixo(fallbackCacheUnidade)) {
+      fallbackCacheUnidade = undefined
+    }
+    unidade = fallbackCacheUnidade ?? dados.unidadeFicha ?? null
     if (unidade && (unidade.includes('http') || unidade.includes('/fotos') || unidade.includes('.jpg') || unidade.includes('.png') || unidade.includes('uploads/'))) {
       unidade = null
     }
