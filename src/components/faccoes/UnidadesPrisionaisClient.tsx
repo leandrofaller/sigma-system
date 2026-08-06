@@ -8,7 +8,8 @@ import { FaccoesPanel } from './FaccoesPanel'
 import { AdvogadosImportados } from './AdvogadosImportados'
 import { UnidadesPanel } from './UnidadesPanel'
 import { SipeVisitantesPanel } from './SipeVisitantesPanel'
-import { Building2, Users, BarChart2, Shield, Briefcase, Camera } from 'lucide-react'
+import { Building2, Users, BarChart2, Shield, Briefcase, Camera, Map } from 'lucide-react'
+import { UnidadesMapaClient } from '@/components/unidades-mapa/UnidadesMapaClient'
 
 export function UnidadesPrisionaisClient() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -39,6 +40,10 @@ export function UnidadesPrisionaisClient() {
                 <BarChart2 className="w-4 h-4" />
                 Dashboard
               </TabsTrigger>
+              <TabsTrigger value="mapa" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
+                <Map className="w-4 h-4" />
+                Mapa
+              </TabsTrigger>
               <TabsTrigger value="apenados" className="gap-2 flex-shrink-0 py-2.5 md:py-1.5 px-4 rounded-xl text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-gray-900 dark:text-white data-[state=active]:shadow-sm snap-start">
                 <Users className="w-4 h-4" />
                 Apenados
@@ -64,6 +69,10 @@ export function UnidadesPrisionaisClient() {
 
           <TabsContent value="dashboard" className="flex-1 min-h-0 mt-0 overflow-y-auto">
             <UnidadesDashboard endpoint="/api/sipe/unidades-prisionais/stats" />
+          </TabsContent>
+
+          <TabsContent value="mapa" className="flex-1 min-h-0 mt-0">
+            <UnidadesMapaClient />
           </TabsContent>
 
           <TabsContent value="apenados" className="flex-1 min-h-0 mt-0">
